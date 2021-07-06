@@ -1,41 +1,44 @@
 // Lisp in JavaScript
 "use strict";
 
-const { rootCertificates } = require('tls');
+// Atoms are Symbols
+function Atom(name) { return Atom.ATOMS.get(name) ?? Atom._defineAtom(name) }
+Atom.ATOMS = new Map();
+Atom._defineAtom = function(...names) {
+  let atom = Symbol(names[0]);
+  for (let name of names)
+    Atom.ATOMS.set(name, atom);
+  return atom;
+}
+Atom.QUOTE = Atom._defineAtom("quote", "'");
+Atom.LAMBDA = Atom._defineAtom("lambda", "\\", "\u03BB");
 
-class Nil {  // could have used undefined, but nah.
-  static NIL = new Nil;
-  constructor() {
-    if (Nil.NIL) return Nil.NIL;
+// It's VERY tempting to use JS undefined for NIL but I want NIL (the empty list)
+// to be iterable in JavaScript like any other list. The cheapest way
+// to make NIL is to use a distinguished Cons object. That way the JIT
+// will only ever see one shape in a list. The downside is that
+// NIL is not JavaScript falsey.
+//
+class Cons {
+  constructor(car, cdr) {
+    this.car = car;
+    this.cdr = cdr;
     Object.freeze(this);
   }
-  *[Symbol.iterator]() {
-  }
+
   toString() {
     return lispToString(this);
   }
 }
-const nil = Nil.NIL;
-// const nil = undefined;  // Maybe try it anyway
 
-class Cons {
-  constructor(car, cdr) {
-    this.car = car ?? nil;
-    this.cdr = cdr ?? nil;
-    Object.freeze(this);
-  }
+const NIL = new Cons("*nil*", null);
 
-  *[Symbol.iterator]() {
-    let next = this;
-    while (next !== nil) {
-      const nextNext = next.cdr;
-      yield next.car;
-      next = nextNext;
-    }
-  }
-
-  toString() {
-    return lispToString(this);
+Cons.prototype[Symbol.iterator] = function* ListIterator() {
+  let next = this;
+  while (next !== NIL) {
+    const nextNext = next.cdr;
+    yield next.car;
+    next = nextNext;
   }
 }
 
@@ -43,38 +46,32 @@ const cons = (car, cdr) => new Cons(car, cdr);
 const car = (cons) => cons.car, first = car;
 const cdr = (cons) => cons.cdr, rest = cdr;
 
-class Atom {
-  name;
-  constructor(name) {
-    let mapped = Atom.ATOMS.get(name);
-    if (mapped) return mapped;
-    this.name = name;
-    Object.freeze(this);
-    Atom.ATOMS.set(name, this);
+
+/*
+class Scope {
+  // Optomize this!
+  parent;
+  _defs = new Map();
+  constructor(parent) {
+    this.parent = parent;
   }
-
-  static ATOMS = new Map();
-
-  static _systemAtom(name, ...aliases) {
-    let atom = new Atom(name);
-    for (let alias of aliases)
-      Atom.ATOMS.set(alias, atom);
-    return atom;
-  }
-
-  static QUOTE = Atom._systemAtom("quote", "'");
-  static LAMBDA = Atom._systemAtom("lambda", "\\", "\u03BB");
-
-  toString() {
-    return lispToString(this);
+  resolve(atom) {
   }
 }
 
+function evalExpr(expr, scope, opts) {
+  if (expr instanceof Cons) {
+    // This is where the magic happens
+    let car = expr.car;
+  }
+  return expr;
+}
+*/
+
 function lispToString(obj, opts, moreList, quoted) {
   let objType = typeof obj;
+  if (obj === NIL) return "()";
   if (objType === 'object') {
-    let tailCons = obj.cdr instanceof Cons;
-    let tailNil = !tailCons && obj.cdr instanceof Nil;
     if (obj instanceof Cons) {
       let before = "(", after = ")";
       if (quoted)
@@ -85,24 +82,22 @@ function lispToString(obj, opts, moreList, quoted) {
         before = moreList ? " " : "";
         return before + "'" + lispToString(obj.cdr, opts, true, true);
       }
-      if (tailNil)
+      if (obj.cdr === NIL)
         return before + lispToString(obj.car, opts) + after;
-      if (tailCons)
+      if (obj.cdr instanceof Cons)
         return before +
             lispToString(obj.car, opts) +
             lispToString(obj.cdr, opts, true) +
             after;
       return before + lispToString(obj.car, opts) + " . " + lispToString(obj.cdr, opts) + after;
     }
-    if (obj instanceof Nil) {
-      return "()";
-    }
-    if (obj instanceof Atom) {
-      return obj.name;
-    }
+  }
+  if (objType === 'symbol') {
+    return obj.description;
   }
   if (objType === 'string') {
     let str = '"';
+    // XXX use map
     for (let ch of obj) {
       switch (ch) {
         case '"':
@@ -133,7 +128,7 @@ const toLispSym = Symbol("toLisp");
 
 function toLisp(obj, opts) {
   if (obj == null) // deliberately using == to check null and undefined
-    return nil;
+    return NIL;
   let objType = typeof obj;  // I respect the JIT; this is for me :)
   if (objType === 'string') {
     if (!(opts?.string === 'expand'))
@@ -155,7 +150,7 @@ function toLisp(obj, opts) {
     let next = iterator.next();
     if (typeof (next?.done) === 'boolean') {
       if (next.done)
-        return nil;
+        return NIL;
       let value = toLisp(next.value, opts);
       return new Cons(value, toLisp(iterator));
     }
@@ -373,7 +368,7 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
         token().type === 'number' || token().type === 'operator')) {
       let thisToken = consumeToken();
       if (thisToken.type === 'atom' || thisToken.type === 'operator')
-        return new Atom(thisToken.value);
+        return Atom(thisToken.value);
       return thisToken.value;
     }
 
@@ -390,7 +385,7 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
         if (token().type === ')') {
           depthReporter.parseDepth = --parseDepth;
           consumeToken();
-          return nil;
+          return NIL;
         }
         let first = parseExpr();
         let rest = parseListBody();
@@ -404,7 +399,7 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
       depthReporter.parseDepth = ++parseDepth;
       let quoted = parseExpr();
       depthReporter.parseDepth = --parseDepth;
-     return cons(Atom.QUOTE, cons(quoted, nil));
+     return cons(Atom.QUOTE, cons(quoted, NIL));
     }
 
     throw new Error(`Unexpected token ${token().type} ${token().value}`);
@@ -474,11 +469,11 @@ let x = toLisp(['a', 'b', [ 1, 2, 3 ], 'c']);
 console.log(x);
 console.log(String(x));
 console.log([...x]);
-console.log([...nil]);
-console.log(String(cons('x', cons('y', nil))));
+console.log([...NIL]);
+console.log(String(cons('x', cons('y', NIL))));
 console.log(String(cons('x', 'y')));
 console.log(String(cons('x', cons('y', 'z'))));
-console.log(String(nil));
+console.log(String(NIL));
 let str = `(+ b (- 1 2)) ${'\n'} 12 ( .) . 1.23 ' .23 .23.4 .23e+234 a bc b21 "asd"`;
 let tokens = lispTokenGenerator(str);
 let tokenList = [ ...tokens ];
