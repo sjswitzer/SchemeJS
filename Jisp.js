@@ -462,8 +462,8 @@ function lispREPL(readline, opts = {}) {
   let name = opts.name ?? "Jisp";
   let prompt = opts.prompt ?? name + "> ";
   let evaluater = opts.eval ?? (x => x);
-  let print = opts.print ?? (x => console.log(name + " REPL: ", String(x), x));
-  let reportError = opts.reportError ??  (x => console.log(name + " REPL ERROR: ", String(x), x));;
+  let print = opts.print ?? (x => console.log(name + " REPL:", String(x), x));
+  let reportError = opts.reportError ??  (x => console.log(name + " REPL ERROR:", String(x), x));;
   let replHints = { prompt };
   function* charStreamPromptInput() {
     for(;;) {
