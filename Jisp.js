@@ -167,9 +167,9 @@ const DIGITS = "0123456789";
 const ALPHA =
   "abcdefghijklmnopqrstuvwxyz" +
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const IDENT1 = ALPHA + "_$";
+const IDENT1 = ALPHA + "_$+-*/%\\!&|=<>";
 const IDENT2 = IDENT1 + DIGITS;
-const OPERATORS = "()+-*/%\\!&|=<>";
+const OPERATORS = "+-*/%\\!&|=<>";
 
 function* lispTokenGenerator(characterGenerator) {
   if (!(typeof characterGenerator.next === 'function')) {
@@ -223,12 +223,6 @@ function* lispTokenGenerator(characterGenerator) {
 
     if (ch === "." && !DIGITS.includes(peekc())) {
       yield { type: ch };
-      nextc();
-      continue;
-    }
-
-    if (OPERATORS.includes(ch)) {
-      yield { type: 'operator', value: ch };
       nextc();
       continue;
     }
@@ -296,7 +290,7 @@ function* lispTokenGenerator(characterGenerator) {
       let str = "";
       while (IDENT2.includes(ch))
         str += ch, nextc();
-      yield { type: 'atom', value: str };
+      yield { type: 'symbol', value: str };
       continue;
     }
 
@@ -367,10 +361,10 @@ function parseSExpr(tokenGenerator, opts = {}) {
     // This will not peek across a linebreak because the newline token will foil it
     let dotNext = peekToken().type === '.';
 
-    if (!dotNext && (token().type === 'atom' || token().type === 'string' ||
-        token().type === 'number' || token().type === 'operator')) {
+    if (!dotNext && (token().type === 'symbol' || token().type === 'string' ||
+        token().type === 'number')) {
       let thisToken = consumeToken();
-      if (thisToken.type === 'atom' || thisToken.type === 'operator')
+      if (thisToken.type === 'symbol')
         return Atom(thisToken.value);
       return thisToken.value;
     }
