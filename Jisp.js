@@ -42,14 +42,61 @@ function nextCons() {
   return { done, value };
 }
 
-Cons.prototype[Symbol.iterator] = function MakeListIterator() {
-  return { next: nextCons, _current: this };
-};
+Cons.prototype[Symbol.iterator] = function() { return { next: nextCons, _current: this } };
+
+class LazyCons {
+  _carFn; _cdrFn;
+  constructor(carFn, cdrFn) {
+    this._carFn = carFn;
+    this._cdrFn = cdrFn;
+    Object.freeze(this);
+  }
+
+  get car() { return this._carFn(); }
+  get cdr() { return this._carFn(); }
+  [Symbol.iterator] = function() { return { next: nextCons, _current: this } };
+
+  toString() {
+    return lispToString(this);
+  }
+}
+
+class LazyCarCons {
+  _carFn; cdr;
+  constructor(carFn, cdr) {
+    this._carFn = carFn;
+    this.cdr = cdr;
+    Object.freeze(this);
+  }
+
+  get car() { return this._carFn(); }
+  [Symbol.iterator] = function() { return { next: nextCons, _current: this } };
+
+  toString() {
+    return lispToString(this);
+  }
+}
+
+class LazyCdrCons {
+  car; _cdrFn;
+  constructor(car, cdrFn) {
+    this.car = car;
+    this._cdrFn = cdrFn;
+    Object.freeze(this);
+  }
+
+  get cdr() { return this._carFn(); }
+  [Symbol.iterator] = function() { return { next: nextCons, _current: this } };
+
+  toString() {
+    return lispToString(this);
+  }
+}
+
 
 const cons = (car, cdr) => new Cons(car, cdr);
 const car = (cons) => cons.car, first = car;
 const cdr = (cons) => cons.cdr, rest = cdr;
-
 
 /*
 class Scope {
@@ -72,7 +119,8 @@ function evalExpr(expr, scope, opts) {
 }
 */
 
-function lispToString(obj, opts, moreList, quoted) {
+function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
+  if (maxDepth <= 0) return "...";
   let objType = typeof obj;
   if (obj === NIL) return "()";
   if (objType === 'object') {
@@ -84,16 +132,17 @@ function lispToString(obj, opts, moreList, quoted) {
         before = " ", after = "";
       if (opts?.quoteNotation && obj.car === Atom.QUOTE) {
         before = moreList ? " " : "";
-        return before + "'" + lispToString(obj.cdr, opts, true, true);
+        return before + "'" + lispToString(obj.cdr, maxDepth-1, opts, true, true);
       }
       if (obj.cdr === NIL)
-        return before + lispToString(obj.car, opts) + after;
+        return before + lispToString(obj.car, maxDepth-1, opts) + after;
       if (obj.cdr instanceof Cons)
         return before +
-            lispToString(obj.car, opts) +
-            lispToString(obj.cdr, opts, true) +
+            lispToString(obj.car, maxDepth-1, opts) +
+            lispToString(obj.cdr, maxDepth-1, opts, true) +
             after;
-      return before + lispToString(obj.car, opts) + " . " + lispToString(obj.cdr, opts) + after;
+      return before + lispToString(obj.car, maxDepth-1, opts) + " . " + 
+          lispToString(obj.cdr, maxDepth-1, opts) + after;
     }
   }
   if (objType === 'symbol') {
