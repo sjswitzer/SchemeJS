@@ -179,35 +179,26 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
 
 const toLispSym = Symbol("toLisp");
 
-function toLisp(obj, opts) {
-  if (obj == null) // deliberately using == to check null and undefined
-    return NIL;
-  let objType = typeof obj;  // I respect the JIT; this is for me :)
-  if (objType === 'string') {
-    if (!(opts?.string === 'expand'))
-      return obj;
-    // Don't keep expanding and expanding the string's characters.
-    // A one-character string is still a string.
-    opts = { ...opts, string: undefined };
-  }
-  let iterator;
-  if (objType === 'object') {
+//
+// Turn iterables objects into lists
+//
+function toList(obj, opts) { 
+  if (typeof obj === 'object') {
+    let iterator = obj;
     if (typeof obj[toLispSym] === 'function')
-      return obj[toLispSym]().call(obj);
+      return obj[toLispSym](opts);
     if (typeof obj[Symbol.iterator] === 'function')
-      iterator = obj[Symbol.iterator].call(obj);
-    else
-      iterator = obj;
-  }
-  if (iterator && typeof iterator.next == 'function') {
-    let next = iterator.next();
-    if (typeof (next?.done) === 'boolean') {
-      if (next.done)
-        return NIL;
-      let value = toLisp(next.value, opts);
-      return new Cons(value, toLisp(iterator));
+      iterator = obj[Symbol.iterator]();
+    if (typeof iterator.next == 'function') {
+      let next = iterator.next();
+      if (typeof (next?.done) === 'boolean') {
+        if (next.done)
+          return NIL;
+        let value = toList(next.value, opts);
+        return new Cons(value, toList(iterator));
+      }
     }
-    // guess it wasn't an iterator after all! Oh well!
+    // guess it wasn't an iterator after all. Oh well!
   }
   return obj;
 }
@@ -517,27 +508,27 @@ function lispREPL(readline, opts = {}) {
   return true;  // continue REPL
 }
 
-let x = toLisp(['a', 'b', [ 1, 2, 3 ], 'c']);
-console.log(x);
-console.log(String(x));
-console.log([...x]);
-console.log([...NIL]);
-console.log(String(cons('x', cons('y', NIL))));
-console.log(String(cons('x', 'y')));
-console.log(String(cons('x', cons('y', 'z'))));
-console.log(String(NIL));
+let x = toList(['a', 'b', [ 1, 2, 3 ], 'c']);
+console.log("Test toList", x);
+console.log("Test toString", String(x));
+console.log("Test NIL toString", String(NIL));
+console.log("Test iterable", [...x]);
+console.log("Test NIL iterable", [...NIL]);
+console.log("Test cons", String(cons('x', cons('y', NIL))));
+console.log("Test cons", String(cons('x', 'y')));
+console.log("Test cons", String(cons('x', cons('y', 'z'))));
 let str = `(+ b (- 1 2)) ${'\n'} 12 ( .) . 1.23 ' .23 .23.4 .23e+234 a bc b21 "asd"`;
 let tokens = lispTokenGenerator(str);
 let tokenList = [ ...tokens ];
-console.log("tokens", tokenList);
+console.log("Test lispTokenGenerator", tokenList);
 
 let sExpr = parseSExpr(`(+ b (- 1 2))`);
-console.log("sExpr", String(sExpr), sExpr);
+console.log("Test parseSExpr", String(sExpr), sExpr);
 
 sExpr = parseSExpr(`(a b 'c '(abc def))`);
-console.log("sExpr", String(sExpr), sExpr);
+console.log("parseSExpr", String(sExpr), sExpr);
 
-{
+{ // Run the REPL on some "input"
   let input = [ `(a b`, ` 'c '(abc`, ` def))` ];
   lispREPL(() => input.shift());
 }
@@ -553,6 +544,7 @@ if (nodejs) {
   let inputFd, closeFd;
   try {
     try {
+      // Good tips for this in "promot-sync" package
       if (process.platform === 'win32') {
         inputFd = process.stdin.fd;
       } else {
@@ -563,7 +555,7 @@ if (nodejs) {
     }
     if (inputFd !== undefined) {
       let ok = true;
-      let buffer = Buffer.alloc(2000); // big enough?
+      let buffer = Buffer.alloc(2000);
       do {
         let nl = "\n";
         function getLine(prompt) {
