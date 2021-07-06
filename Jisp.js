@@ -54,7 +54,16 @@ class Atom {
   }
 
   static ATOMS = new Map();
-  static QUOTE = new Atom("'");
+
+  static _systemAtom(name, ...aliases) {
+    let atom = new Atom(name);
+    for (let alias of aliases)
+      Atom.ATOMS.set(alias, atom);
+    return atom;
+  }
+
+  static QUOTE = Atom._systemAtom("quote", "'");
+  static LAMBDA = Atom._systemAtom("lambda", "\\", "\u03BB");
 
   toString() {
     return lispToString(this);
@@ -72,7 +81,7 @@ function lispToString(obj, opts, moreList, quoted) {
         before = after = "";
       else if (moreList)
         before = " ", after = "";
-      if (obj.car === Atom.QUOTE) {
+      if (opts?.quoteNotation && obj.car === Atom.QUOTE) {
         before = moreList ? " " : "";
         return before + "'" + lispToString(obj.cdr, opts, true, true);
       }
@@ -165,6 +174,7 @@ const ALPHA =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const IDENT1 = ALPHA + "_$";
 const IDENT2 = IDENT1 + DIGITS;
+const OPERATORS = "()+-*/%\\!&|=<>";
 
 function* lispTokenGenerator(characterGenerator) {
   if (!(typeof characterGenerator.next === 'function')) {
@@ -222,7 +232,7 @@ function* lispTokenGenerator(characterGenerator) {
       continue;
     }
 
-    if ("()+-*/%)".includes(ch)) {
+    if (OPERATORS.includes(ch)) {
       yield { type: 'operator', value: ch };
       nextc();
       continue;
@@ -356,18 +366,6 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
   }
 
   function parseExpr() {
-    depthReporter.parseDepth = parseDepth;
-    ++parseDepth;
-
-    let expr = parseExpr2();
-
-    --parseDepth;
-    depthReporter.parseDepth = parseDepth;
-
-    return expr;
-  }
-
-  function parseExpr2() {
     // This will not peek across a linebreak because the newline token will foil it
     let dotNext = peekToken().type === '.';
 
@@ -386,9 +384,11 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
     }
 
     if (token().type === '(') {
+      depthReporter.parseDepth = ++parseDepth;
       consumeToken();
       function parseListBody() {
         if (token().type === ')') {
+          depthReporter.parseDepth = --parseDepth;
           consumeToken();
           return nil;
         }
