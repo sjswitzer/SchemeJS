@@ -1,6 +1,8 @@
 // Lisp in JavaScript
 "use strict";
 
+const { rootCertificates } = require('tls');
+
 class Nil {  // could have used undefined, but nah.
   static NIL = new Nil;
   constructor() {
@@ -90,6 +92,30 @@ function lispToString(obj, opts, moreList, quoted) {
       return obj.name;
     }
   }
+  if (objType === 'string') {
+    let str = '"';
+    for (let ch of obj) {
+      switch (ch) {
+        case '"':
+          str += "\\" + ch;
+          break;
+        case "\r":
+          str += "\\r";
+          break;
+        case "\n":
+          str += "\\n";
+          break;
+        case "\t":
+          srt += "\\t";
+          break;
+        default:
+          str += ch;
+          break;
+      }
+    }
+    str += '"';
+    return str;
+  }
   // XXX there must be more to do here
   return String(obj);
 }
@@ -178,8 +204,11 @@ function* lispTokenGenerator(characterGenerator) {
     while (ch === ' ' || ch === '\t')
       nextc();
 
-    if (ch === '\n' || ch === '\r')
-      return { type: 'newline' };
+    if (ch === '\n' || ch === '\r') {
+      yield { type: 'newline' };
+      nextc();
+      continue;
+    }
 
     if ("()'".includes(ch)) {
       yield { type: ch };
@@ -225,8 +254,31 @@ function* lispTokenGenerator(characterGenerator) {
     if (ch === '"') {
       let str = "";
       nextc();
-      while (ch && !'"\r\n'.includes(ch))
-        str += ch, nextc();
+      while (ch && !'"\r\n'.includes(ch)) {
+        if (ch === '\\' ) {
+          nextc();
+          switch (ch) {
+            case "t":
+              str += "\t";
+              break;
+            case "n":
+              str += "\n";
+              break;
+            case "r":
+              str += "\r";
+              break;
+            case "\n": case "\r":
+              // eat newline
+              break;
+            default:
+              str += "\\" + ch;
+          }
+          nextc();
+          continue;
+        }
+        str += ch;
+        nextc();
+      }
       if (ch === '"')
         yield { type: 'string', value: str };
       else
@@ -261,7 +313,6 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
   }
 
   let parseDepth = 0;
-  depthReporter.parseDepth = parseDepth;
   let _token = null, _peek = [], _done = false;
   function token() {
     // Prevent fetching a new line prematurely and detect viable end points
@@ -305,8 +356,8 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
   }
 
   function parseExpr() {
-    ++parseDepth;
     depthReporter.parseDepth = parseDepth;
+    ++parseDepth;
 
     let expr = parseExpr2();
 
@@ -361,7 +412,43 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
   let viable = peek.type === 'end' || peek.type === 'newline';
   if (viable)
     return expr;
-  return new Error("Unparsed: ${peek.type} ${peek.value}"); // XXX better message?
+  return new Error(`Unparsed: ${peek.type} ${peek.value}`); // XXX better message?
+}
+
+function lispREPL(promptInput, opts = {}) {
+  // promptInput(prompt) => str
+  let name = opts.name ?? "Jisp";
+  let prompt = opts.prompt ?? name + "> ";
+  let evaluater = opts.eval ?? (x => x);
+  let print = opts.print ?? (x => console.log(name + " REPL", String(x), x));
+  let reportError = opts.reportError ?? print;
+  let depthReporter = { parseDepth: 0 };
+  function* charStreamPromptInput() {
+    for(;;) {
+      let line = promptInput(prompt + ("  ".repeat(depthReporter.parseDepth)));
+      if (line == null) return; // == intended
+      while (line.endsWith('\n') || line.endsWith('\r'))
+        line = line.substr(0, line.length-1);
+      if (line.length === 0) return;  // End with any blank line
+      for (let ch of line)
+        yield ch;
+      yield '\n';
+    }
+  }
+  let charStream = charStreamPromptInput();
+  let tokenGenerator = lispTokenGenerator(charStream);
+  // depthReporter.parseDepth = 0; // XXX is this necessary?
+  // XXX try/catch?
+  let expr = parseSExpr(tokenGenerator, depthReporter);
+  if (!expr) return false;
+  if (expr instanceof Error) {
+    reportError(expr);
+    return false;
+  }
+  // XXX try/catch?
+  let evaled = evaluater(expr);
+  print(evaled);
+  return true;
 }
 
 let x = toLisp(['a', 'b', [ 1, 2, 3 ], 'c']);
@@ -383,5 +470,51 @@ console.log("sExpr", String(sExpr), sExpr);
 
 sExpr = parseSExpr(`(a b 'c '(abc def))`);
 console.log("sExpr", String(sExpr), sExpr);
+
+{
+  let input = [ `(a b`, ` 'c '(abc`, ` def))` ];
+  lispREPL(() => input.shift());
+}
+
+let nodejs = false;
+if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
+  console.log("node.js");
+  nodejs = true;
+}
+
+if (nodejs) {
+  let fs = require('fs');
+  let inputFd, closeFd;
+  try {
+    try {
+      if (process.platform === 'win32') {
+        inputFd = process.stdin.fd;
+      } else {
+        inputFd = closeFd = fs.openSync('/dev/tty', 'rs')
+      }
+    } catch(e) {
+      console.info("Can't open termnal", e);
+    }
+    if (inputFd !== undefined) {
+      let ok = true;
+      let buffer = Buffer.alloc(2000); // big enough?
+      do {
+        let nl = "\n";
+        function getLine(prompt) {
+          process.stdout.write(prompt);
+          let read = fs.readSync(inputFd, buffer);
+          let line = buffer.slice(0, read).toString();
+          while (line.endsWith('\n') || line.endsWith('\r'))
+            line = line.substr(0, line.length-1);
+          return line;
+        }
+        ok = lispREPL(getLine);
+      } while (ok);
+    }
+  } finally {
+    if (closeFd !== undefined)
+      fs.closeSync(closeFd);
+  }
+}
 
 console.log("done");  // breakpoint spot
