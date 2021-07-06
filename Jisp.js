@@ -305,7 +305,11 @@ function* lispTokenGenerator(characterGenerator) {
   }
 }
 
-function parseSExpr(tokenGenerator, depthReporter = {}) {
+function parseSExpr(tokenGenerator, opts = {}) {
+  let replHints = opts.replHints ?? {};
+  let prompt = opts.prompt ?? "Jisp > ";
+  let promptMore = opts.promptMore = "  ";
+  let quotePromptMore = opts.quotePromptMore ?? promptMore;
   if (typeof tokenGenerator === 'string')
     tokenGenerator = lispTokenGenerator(tokenGenerator);
   if (!(typeof tokenGenerator.next === 'function')) {
@@ -317,7 +321,6 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
     }
   }
 
-  let parseDepth = 0;
   let _token = null, _peek = [], _done = false;
   function token() {
     // Prevent fetching a new line prematurely and detect viable end points
@@ -360,7 +363,7 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
     return _peek[n];
   }
 
-  function parseExpr() {
+  function parseExpr(promptStr) {
     // This will not peek across a linebreak because the newline token will foil it
     let dotNext = peekToken().type === '.';
 
@@ -379,15 +382,16 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
     }
 
     if (token().type === '(') {
-      depthReporter.parseDepth = ++parseDepth;
+      let newPrompt = promptStr + promptMore;
+      replHints.prompt = newPrompt;
       consumeToken();
       function parseListBody() {
         if (token().type === ')') {
-          depthReporter.parseDepth = --parseDepth;
+          replHints.prompt = promptStr;
           consumeToken();
           return NIL;
         }
-        let first = parseExpr();
+        let first = parseExpr(newPrompt);
         let rest = parseListBody();
         return cons(first, rest);
       }
@@ -395,10 +399,11 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
     }
 
     if (token().type === "'") {
+      let newPrompt = promptStr + quotePromptMore;
       consumeToken();
-      depthReporter.parseDepth = ++parseDepth;
-      let quoted = parseExpr();
-      depthReporter.parseDepth = --parseDepth;
+      replHints.prompt = newPrompt;
+      let quoted = parseExpr(newPrompt);
+      replHints.prompt = promptStr;
      return cons(Atom.QUOTE, cons(quoted, NIL));
     }
 
@@ -406,7 +411,7 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
   }
   if (peekToken().type === 'end')
     return null;
-  let expr = parseExpr();
+  let expr = parseExpr(prompt);
   let peek = peekToken();
   let viable = peek.type === 'end' || peek.type === 'newline';
   if (viable)
@@ -421,10 +426,10 @@ function lispREPL(readline, opts = {}) {
   let evaluater = opts.eval ?? (x => x);
   let print = opts.print ?? (x => console.log(name + " REPL", String(x), x));
   let reportError = opts.reportError ?? print;
-  let depthReporter = { parseDepth: 0 };
+  let replHints = { prompt };
   function* charStreamPromptInput() {
     for(;;) {
-      let line = readline(prompt + ("  ".repeat(depthReporter.parseDepth)));
+      let line = readline(replHints.prompt);
       if (line == null) return; // == intended
       // strip any line endings; we'll add our own
       while (line.endsWith('\n') || line.endsWith('\r'))
@@ -442,7 +447,7 @@ function lispREPL(readline, opts = {}) {
   let tokenGenerator = lispTokenGenerator(charStream);
   let expr;
   try {
-    expr = parseSExpr(tokenGenerator, depthReporter);
+    expr = parseSExpr(tokenGenerator, { ...opts, replHints });
     if (!expr) return false;  // end REPL
   } catch (error) {
     expr = error;
