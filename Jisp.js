@@ -401,12 +401,16 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
 
     if (token().type === "'") {
       consumeToken();
+      depthReporter.parseDepth = ++parseDepth;
       let quoted = parseExpr();
-      return cons(Atom.QUOTE, cons(quoted, nil));
+      depthReporter.parseDepth = --parseDepth;
+     return cons(Atom.QUOTE, cons(quoted, nil));
     }
 
     throw new Error(`Unexpected token ${token().type} ${token().value}`);
   }
+  if (peekToken().type === 'end')
+    return null;
   let expr = parseExpr();
   let peek = peekToken();
   let viable = peek.type === 'end' || peek.type === 'newline';
@@ -415,8 +419,8 @@ function parseSExpr(tokenGenerator, depthReporter = {}) {
   return new Error(`Unparsed: ${peek.type} ${peek.value}`); // XXX better message?
 }
 
-function lispREPL(promptInput, opts = {}) {
-  // promptInput(prompt) => str
+function lispREPL(readline, opts = {}) {
+  // readline(prompt) => str || nullish
   let name = opts.name ?? "Jisp";
   let prompt = opts.prompt ?? name + "> ";
   let evaluater = opts.eval ?? (x => x);
@@ -425,30 +429,45 @@ function lispREPL(promptInput, opts = {}) {
   let depthReporter = { parseDepth: 0 };
   function* charStreamPromptInput() {
     for(;;) {
-      let line = promptInput(prompt + ("  ".repeat(depthReporter.parseDepth)));
+      let line = readline(prompt + ("  ".repeat(depthReporter.parseDepth)));
       if (line == null) return; // == intended
+      // strip any line endings; we'll add our own
       while (line.endsWith('\n') || line.endsWith('\r'))
         line = line.substr(0, line.length-1);
-      if (line.length === 0) return;  // End with any blank line
+      // End REPL with any blank line
+      if (line.length === 0) return;
+      // Feed the charachers
       for (let ch of line)
         yield ch;
+      // And then a newline
       yield '\n';
     }
   }
   let charStream = charStreamPromptInput();
   let tokenGenerator = lispTokenGenerator(charStream);
-  // depthReporter.parseDepth = 0; // XXX is this necessary?
-  // XXX try/catch?
-  let expr = parseSExpr(tokenGenerator, depthReporter);
-  if (!expr) return false;
+  let expr;
+  try {
+    expr = parseSExpr(tokenGenerator, depthReporter);
+    if (!expr) return false;  // end REPL
+  } catch (error) {
+    expr = error;
+  }
   if (expr instanceof Error) {
     reportError(expr);
-    return false;
+    return true;  // contine REPL
   }
-  // XXX try/catch?
-  let evaled = evaluater(expr);
-  print(evaled);
-  return true;
+  let evaluated;
+  try {
+    evaluated = evaluater(expr);
+  } catch (e) {
+    evaluated = error;
+  }
+  if (expr instanceof Error) {
+    reportError(expr);
+    return true;  // continue REPL
+  }
+  print(evaluated);
+  return true;  // continue REPL
 }
 
 let x = toLisp(['a', 'b', [ 1, 2, 3 ], 'c']);
