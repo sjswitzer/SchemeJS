@@ -33,14 +33,18 @@ class Cons {
 
 const NIL = new Cons("*nil*", null);
 
-Cons.prototype[Symbol.iterator] = function* ListIterator() {
-  let next = this;
-  while (next !== NIL) {
-    const nextNext = next.cdr;
-    yield next.car;
-    next = nextNext;
+function nextCons() {
+  let current = this._current, done = current === NIL, value = undefined;
+  if (!done) {
+    this._current = current.cdr;
+    value = current.car;
   }
+  return { done, value };
 }
+
+Cons.prototype[Symbol.iterator] = function MakeListIterator() {
+  return { next: nextCons, _current: this };
+};
 
 const cons = (car, cdr) => new Cons(car, cdr);
 const car = (cons) => cons.car, first = car;
@@ -418,8 +422,8 @@ function lispREPL(readline, opts = {}) {
   let name = opts.name ?? "Jisp";
   let prompt = opts.prompt ?? name + "> ";
   let evaluater = opts.eval ?? (x => x);
-  let print = opts.print ?? (x => console.log(name + " REPL", String(x), x));
-  let reportError = opts.reportError ?? print;
+  let print = opts.print ?? (x => console.log(name + " REPL: ", String(x), x));
+  let reportError = opts.reportError ??  (x => console.log(name + " REPL ERROR: ", String(x), x));;
   let replHints = { prompt };
   function* charStreamPromptInput() {
     for(;;) {
