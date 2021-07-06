@@ -12,6 +12,7 @@ Atom._defineAtom = function(...names) {
 }
 Atom.QUOTE = Atom._defineAtom("quote", "'");
 Atom.LAMBDA = Atom._defineAtom("lambda", "\\", "\u03BB");
+Atom.SLAMBDA = Atom._defineAtom("special-lambda", "\\\\");
 
 // It's VERY tempting to use JS undefined for NIL but I want NIL (the empty list)
 // to be iterable in JavaScript like any other list. The cheapest way
@@ -93,31 +94,104 @@ class LazyCdrCons {
   }
 }
 
-
 const cons = (car, cdr) => new Cons(car, cdr);
 const car = (cons) => cons.car, first = car;
 const cdr = (cons) => cons.cdr, rest = cdr;
 
-/*
-class Scope {
-  // Optomize this!
-  parent;
-  _defs = new Map();
-  constructor(parent) {
-    this.parent = parent;
+//
+// An environment is simply a Map.
+// A Scope is a list of environments.
+//
+const Env = Map;
+const Scope = Cons;
+const GlobalEnv = new Env;
+const GlobalScope = new Scope(GlobalEnv);
+const specialSymbol = Symbol("*special*");
+const liftSymbol = Symbol("*lift*");
+class LispError extends Error {
+  constructor(...args) {
+    super(...args);
   }
-  resolve(atom) {
+  toString() { return this.message; }   // no type prefix on the error string
+};
+class EvalError extends LispError {};
+class ResolveError extends LispError {};
+
+function lispEval(expr, scope = GlobalScope) {
+  if (expr === NIL || typeof expr !== 'object') return expr;
+  if (!(obj instanceof Cons)) return obj;  // Worry about evaluating lazy lists later. Or not!
+  let op = obj.car, args = obj.cdr;
+  if (typeof op === 'symbol') {
+    op = resolveSymbol(op, scope);
+    if (!op) throw new ResolveError(`Can't resolve ${op}`);
+  }
+  if (op === Atom.QUOTE)
+    return args;
+  if (op instanceof Function) {
+    if (!op[specialSymbol])
+      args = evalArgs(args, scope);
+    let lift = op[liftSymbol] ?? 0, jsArgs = [];
+    while (lift > 0) {
+      if (args !== NIL && args instanceof Cons) {
+        jsArgs.push(args.car);
+        args = args.cdr;
+      } else {
+        jsArgs.push(NIL);
+      }
+      --lift;
+    }
+    if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
+      jsArgs.push(args);
+    return op.apply(scope, args);  // "this" is the scope!
+  }
+  // (\ args body)
+  if (op instanceof Cons)  {
+    if (op.car === Atom.LAMBDA || op.car === Atom.SLAMBDA) {
+      if (op.car !== Atom.SLAMBDA)
+        args = evalArgs(args, scope);
+      let formalParams = op.cdr;
+      if (!formalParams) throw new EvalError(`Lambda has no parameters`);
+      let body = formalParams.cdr;
+      if (typeof formalParams === 'symbol') // allow lambda x . body notation. Why not?
+        formalParams = cons(formalParams, NIL);
+      let newEnv = new Env;
+      let newScope = new Scope(newEnv, scope);
+      while (formalParams instanceof Cons) {
+        let param = formalParams.car;
+        if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
+        if (args !== NIL) {
+          newEnv[param] = args.car;
+          args = arg.cdr
+        } else {
+          newEnv[param] = NIL;
+        }
+      }
+      if (typeof formalParams === 'symbol')  // Neat trick for 'rest' params!
+        newEnv[formalParams] = args;
+      return lispEval(body, newScope);
+    }
+  }
+  throw new EvalError(`Cannot eval ${op}`);
+}
+
+function resolveSymbol(sym, scope) {
+  while (scope !== NIL) {
+    let val = scope.car.get(sym);
+    if (val !== undefined)
+      return val;
+    scope = scope.cdr;
   }
 }
 
-function evalExpr(expr, scope, opts) {
-  if (expr instanceof Cons) {
-    // This is where the magic happens
-    let car = expr.car;
-  }
-  return expr;
+function evalArgs(args, scope) {
+  if (args === NIL)
+    return args;
+  if (!(args instanceof Cons))
+    return args;
+  let val = lispEval(args.car, scope);
+  return cons(val, evalArgs(args.cdr));
 }
-*/
+
 
 function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   if (maxDepth <= 0) return "...";
@@ -177,7 +251,7 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   return String(obj);
 }
 
-const toLispSym = Symbol("toLisp");
+const toLispSymbol = Symbol("toLisp");
 
 //
 // Turn iterables objects into lists
@@ -185,8 +259,8 @@ const toLispSym = Symbol("toLisp");
 function toList(obj, opts) { 
   if (typeof obj === 'object') {
     let iterator = obj;
-    if (typeof obj[toLispSym] === 'function')
-      return obj[toLispSym](opts);
+    if (typeof obj[toLispSymbol] === 'function')
+      return obj[toLispSymbol](opts);
     if (typeof obj[Symbol.iterator] === 'function')
       iterator = obj[Symbol.iterator]();
     if (typeof iterator.next == 'function') {
@@ -195,7 +269,7 @@ function toList(obj, opts) {
         if (next.done)
           return NIL;
         let value = toList(next.value, opts);
-        return new Cons(value, toList(iterator));
+        return cons(value, toList(iterator));
       }
     }
     // guess it wasn't an iterator after all. Oh well!
