@@ -2,7 +2,11 @@
 "use strict";
 
 // Atoms are Symbols
-function Atom(name) { return Atom.ATOMS.get(name) ?? Atom._defineAtom(name) }
+function Atom(name) {
+  let val = Atom.ATOMS.get(name);
+  if (val !== undefined) return val;
+  return Atom._defineAtom(name);
+}
 Atom.ATOMS = new Map();
 Atom._defineAtom = function(...names) {
   let atom = Symbol(names[0]);
@@ -10,7 +14,7 @@ Atom._defineAtom = function(...names) {
     Atom.ATOMS.set(name, atom);
   return atom;
 }
-Atom.QUOTE = Atom._defineAtom("quote", "'");
+
 Atom.LAMBDA = Atom._defineAtom("lambda", "\\", "\u03BB");
 Atom.SLAMBDA = Atom._defineAtom("special-lambda", "\\\\");
 
@@ -32,7 +36,7 @@ class Cons {
   }
 }
 
-const NIL = new Cons("*nil*", null);
+const NIL = new Cons(null, null);
 
 function nextCons() {
   let current = this._current, done = current === NIL, value = undefined;
@@ -105,9 +109,32 @@ const cdr = (cons) => cons.cdr, rest = cdr;
 const Env = Map;
 const Scope = Cons;
 const GlobalEnv = new Env;
-const GlobalScope = new Scope(GlobalEnv);
+const GlobalScope = new Scope(GlobalEnv, NIL);
 const specialSymbol = Symbol("*special*");
 const liftSymbol = Symbol("*lift*");
+
+function defineGlobalSymbol(val, special, lift, ...names) {
+  if (special) val[specialSymbol] = special;
+  if (lift > 0) val[liftSymbol] = lift;
+  let atom = Atom._defineAtom(...names);
+  GlobalEnv.set(atom, val);
+  return atom;
+}
+Atom.NIL = defineGlobalSymbol(NIL, false, 0, "nil");
+Atom.QUOTE = defineGlobalSymbol((x) => x, true, false, "quote", "'");
+defineGlobalSymbol(car, false, 1, "car");
+defineGlobalSymbol(cdr, false, 1, "cdr");
+defineGlobalSymbol(cons, false, 2, "cons");
+defineGlobalSymbol((a,b) => a + b, false, 2, "add", "+"); // XXX should do arbirary many
+defineGlobalSymbol((a,b) => a - b, false, 2, "sub", "-");
+defineGlobalSymbol((a,b) => a * b, false, 2, "mul", "*");
+defineGlobalSymbol((a,b) => a / b, false, 2, "div", "/");
+defineGlobalSymbol((a,b) => a % b, false, 2, "mod", "%");
+defineGlobalSymbol((a,b) => a | b, false, 2, "bit-or", "|");
+defineGlobalSymbol((a,b) => a & b, false, 2, "bit-and", "&");
+defineGlobalSymbol((a,b) => a && b, false, 2, "and", "&&");  // XXX this sb special form
+defineGlobalSymbol((a,b) => a || b, false, 2, "or", "||");
+
 class LispError extends Error {
   constructor(...args) {
     super(...args);
@@ -119,14 +146,16 @@ class ResolveError extends LispError {};
 
 function lispEval(expr, scope = GlobalScope) {
   if (expr === NIL || typeof expr !== 'object') return expr;
-  if (!(obj instanceof Cons)) return obj;  // Worry about evaluating lazy lists later. Or not!
-  let op = obj.car, args = obj.cdr;
+  if (!(expr instanceof Cons)) return expr;  // Worry about evaluating lazy lists later. Or not!
+  let op = expr.car, args = expr.cdr;
+  if (op === Atom.QUOTE) {  // this is just an optimization; the quote function will do this too
+    if (!(args instanceof Cons)) throw new EvalError(`Bad argument list ${args}`);
+    return args.car;
+  }
   if (typeof op === 'symbol') {
     op = resolveSymbol(op, scope);
     if (!op) throw new ResolveError(`Can't resolve ${op}`);
   }
-  if (op === Atom.QUOTE)
-    return args;
   if (op instanceof Function) {
     if (!op[specialSymbol])
       args = evalArgs(args, scope);
@@ -142,7 +171,7 @@ function lispEval(expr, scope = GlobalScope) {
     }
     if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
       jsArgs.push(args);
-    return op.apply(scope, args);  // "this" is the scope!
+    return op.apply(scope, jsArgs);  // "this" is the scope!
   }
   // (\ args body)
   if (op instanceof Cons)  {
@@ -191,7 +220,6 @@ function evalArgs(args, scope) {
   let val = lispEval(args.car, scope);
   return cons(val, evalArgs(args.cdr));
 }
-
 
 function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   if (maxDepth <= 0) return "...";
@@ -534,10 +562,10 @@ function parseSExpr(tokenGenerator, opts = {}) {
 function lispREPL(readline, opts = {}) {
   // readline(prompt) => str || nullish
   let name = opts.name ?? "Jisp";
-  let prompt = opts.prompt ?? name + "> ";
-  let evaluater = opts.eval ?? (x => x);
-  let print = opts.print ?? (x => console.log(name + " REPL:", String(x), x));
-  let reportError = opts.reportError ??  (x => console.log(name + " REPL ERROR:", String(x), x));;
+  let prompt = opts.prompt ?? name + " > ";
+  let evaluate = opts.evaluate ?? (x => x);
+  let print = opts.print ?? (x => console.log(name + ":", String(x)));
+  let reportError = opts.reportError ??  (x => console.log(name + " ERROR:", String(x), x));;
   let replHints = { prompt };
   function* charStreamPromptInput() {
     for(;;) {
@@ -570,8 +598,8 @@ function lispREPL(readline, opts = {}) {
   }
   let evaluated;
   try {
-    evaluated = evaluater(expr);
-  } catch (e) {
+    evaluated = evaluate(expr);
+  } catch (error) {
     evaluated = error;
   }
   if (expr instanceof Error) {
@@ -607,13 +635,10 @@ console.log("parseSExpr", String(sExpr), sExpr);
   lispREPL(() => input.shift());
 }
 
-let nodejs = false;
-if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
-  console.log("node.js");
-  nodejs = true;
-}
+console.log("Test lispEval", lispEval(parseSExpr(`(car '(1 2))`)));
 
-if (nodejs) {
+if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
+  console.log("Running in node.js");
   let fs = require('fs');
   let inputFd, closeFd;
   try {
@@ -640,7 +665,7 @@ if (nodejs) {
             line = line.substr(0, line.length-1);
           return line;
         }
-        ok = lispREPL(getLine);
+        ok = lispREPL(getLine, { evaluate: lispEval });
       } while (ok);
     }
   } finally {
