@@ -112,10 +112,20 @@ class LazyCdrCons {
 // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
 // In Jisp, NIL, null, undefined, and false are false and everything else is true.
 //
-function lispToBool(obj) {
-  if (obj === NIL || obj === undefined || obj === null || obj === false)
+function lispToBool(val) {
+  if (val === NIL || val === undefined || val === null || val === false)
     return false;
   return true;
+}
+
+//
+// Coerce Lisp values to JS values
+//
+function lispToJS(val) {
+  if (val === NIL) val = null;
+  else if (val === Atom.TRUE) val = true;
+  else if (val === Atom.FALSE) val = false;
+  return val;
 }
 
 const cons = (car, cdr) => new Cons(car, cdr);
@@ -187,7 +197,7 @@ defineGlobalSymbol((a, ...rest) => {
 
 defineGlobalSymbol((...args) => {
   let a = 1;
-  for (let b of rest)
+  for (let b of args)
     a *= b;
   return a;
 }, false, Number.MAX_VALUE, "mul", "*");
@@ -454,7 +464,7 @@ const STRING_ESCAPES = (() => {
   return res;
 })();
 
-// XXX line wrapping
+// XXX Line wrapping
 function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   if (maxDepth <= 0) return "...";
   let objType = typeof obj;
@@ -487,6 +497,16 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
         sep = ", ";
       }
       return str + "]";
+    }
+    {
+      let str = "{", sep = "";
+      // Plain object
+      for (let name of Object.getOwnPropertyNames(obj)) {
+        let item = obj[name];
+        str += sep + name + ": " + lispToString(item, maxDepth-1, opts);
+        sep = ", ";
+      }
+      return str + "}";
     }
   }
   if (objType === 'symbol') {
@@ -590,7 +610,7 @@ function* lispTokenGenerator(characterGenerator) {
       continue;
     }
 
-    if ("()[]{},'".includes(ch)) {
+    if ("()[]{},':".includes(ch)) {
       yield { type: ch };
       nextc();
       continue;
@@ -756,26 +776,52 @@ function parseSExpr(tokenGenerator, opts = {}) {
       return parseListBody();
     }
 
-    if (token().type === '[') {  // Javascript array, oddly enough!
+    if (token().type === '[') {  // JavaScript Array, oddly enough!
       let res = [];
       let newPrompt = promptStr + promptMore;
       replHints.prompt = newPrompt;
       consumeToken();
       for (;;) {
-        let item = parseExpr(newPrompt), haveComma = false;
-        if (item !== undefined) {
-          if (item === Atom.TRUE) item = true;
-          else if (item === Atom.FALSE) item
-          res.push(item);
-          if (token().type === ',')
-            consumeToken()
-          if (token().type === ']') {
-            consumeToken();
-            return res;
-          }
+        let item = parseExpr(newPrompt);
+        item = lispToJS(item);
+        res.push(item);
+        if (token().type === ',')  // XXX: Comma might as well be optional for now
+          consumeToken()
+        if (token().type === ']') {
+          consumeToken();
+          return res;
         }
       }
-      return parseListBody();
+    }
+
+    if (token().type === '{') {  // JavaScript Object literal too!
+      let res = {};
+      let newPrompt = promptStr + promptMore;
+      replHints.prompt = newPrompt;
+      consumeToken();
+      for (;;) {
+        if (token().type === '}') {
+          consumeToken();
+          break;
+        }
+        let gotIt = false;
+        if (token().type === 'symbol' || token().type === 'string') {
+          let sym = token().value;
+          consumeToken();
+          if (token().type === ':') {
+            consumeToken();
+            let val = parseExpr(newPrompt);
+            val = lispToJS(val);
+            res[sym] = val;
+            gotIt = true;
+            if (token().type === ',')  // might as well be optional for now
+              consumeToken();
+          }
+        }
+        if (!gotIt)
+          throw new ParseError(`Bad JavaScript object literal`); // XXX details
+      }
+      return res;
     }
 
     if (token().type === "'") {
@@ -875,10 +921,16 @@ console.log("parseSExpr", String(sExpr), sExpr);
   lispREPL(() => input.shift());
 }
 
-console.log("Test lispEval1", lispEval(parseSExpr(`(car '(1 2))`)));
-console.log("Test lispEva12", lispEval(parseSExpr(`(+ 1 2 3 4)`)));
-console.log("Test lispEva13", lispEval(parseSExpr(`(? (< 1 2) "a" "b")`)));
-// console.log("Test lispEva14", lispEval(parseSExpr(`duck`))); // XXX need beter tesing
+console.log("Test lispEval", lispEval(parseSExpr(`(car '(1 2))`)));
+console.log("Test lispEva1", lispEval(parseSExpr(`(+ 1 2 3 4)`)));
+console.log("Test lispEva1", lispEval(parseSExpr(`(? (< 1 2) "a" "b")`)));
+console.log("Test lispEva1", lispEval(parseSExpr(`(* 2 3)`)));
+let xx1 = parseSExpr(`{ a: 1, b: "foo" }`);
+let xx2 = lispEval(xx1);
+console.log("Test lispEval", lispToString(xx2));
+// console.log("Test lispEval", lispEval(parseSExpr(`foo`)));
+
+//console.log("Test lispEva1", lispEval(parseSExpr(`duck`))); // XXX need beter tesing
 
 if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
   console.log("Running in node.js");
@@ -916,5 +968,6 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       fs.closeSync(closeFd);
   }
 }
+
 
 console.log("done");  // breakpoint spot
