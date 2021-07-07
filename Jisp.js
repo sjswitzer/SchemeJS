@@ -44,7 +44,7 @@ class Cons {
   toString() {
     return lispToString(this);
   }
-  [Symbol.iterator] = function() { return { next: nextCons, _current: this } };
+  *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
 
 // Nil must be a Cons because it is a list: the empty one. It should be JS-iterable.
@@ -58,6 +58,8 @@ function nextCons() {
   }
   return { done, value };
 }
+// XXX There should be a way to do this in the class decl, but how?
+Cons.prototype.isCons = true;
 
 class LazyCons {
   _carFn; _cdrFn;
@@ -66,15 +68,14 @@ class LazyCons {
     this._cdrFn = cdrFn;
     Object.freeze(this);
   }
-
   get car() { return this._carFn(); }
   get cdr() { return this._carFn(); }
-  [Symbol.iterator] = function() { return { next: nextCons, _current: this } };
-
   toString() {
     return lispToString(this);
   }
+  *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
+LazyCons.prototype.isCons = true;
 
 class LazyCarCons {
   _carFn; cdr;
@@ -83,14 +84,13 @@ class LazyCarCons {
     this.cdr = cdr;
     Object.freeze(this);
   }
-
   get car() { return this._carFn(); }
-  [Symbol.iterator] = function() { return { next: nextCons, _current: this } };
-
   toString() {
     return lispToString(this);
   }
+  *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
+LazyCarCons.prototype.isCons = true;
 
 class LazyCdrCons {
   car; _cdrFn;
@@ -99,14 +99,13 @@ class LazyCdrCons {
     this._cdrFn = cdrFn;
     Object.freeze(this);
   }
-
   get cdr() { return this._carFn(); }
-  [Symbol.iterator] = function() { return { next: nextCons, _current: this } };
-
   toString() {
     return lispToString(this);
   }
+  *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
+LazyCdrCons.prototype.isCons = true;
 
 //
 // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
