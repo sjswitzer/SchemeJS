@@ -44,6 +44,7 @@ class Cons {
   toString() {
     return lispToString(this);
   }
+  [Symbol.iterator] = function() { return { next: nextCons, _current: this } };
 }
 
 // Nil must be a Cons because it is a list: the empty one. It should be JS-iterable.
@@ -57,8 +58,6 @@ function nextCons() {
   }
   return { done, value };
 }
-
-Cons.prototype[Symbol.iterator] = function() { return { next: nextCons, _current: this } };
 
 class LazyCons {
   _carFn; _cdrFn;
