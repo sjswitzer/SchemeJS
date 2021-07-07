@@ -112,7 +112,7 @@ class LazyCdrCons {
 // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
 // In Jisp, NIL, null, undefined, and false are false and everything else is true.
 //
-function jispToBool(obj) {
+function lispToBool(obj) {
   if (obj === NIL || obj === undefined || obj === null || obj === false)
     return false;
   return true;
@@ -297,7 +297,7 @@ defineGlobalSymbol(function(...args) {
   let a = true;
   for (a of args) {
     a = lispEval(b, this);
-    if (!jispToBool(a)) return a;
+    if (!lispToBool(a)) return a;
   }
   return a;
 }, true, Number.MAX_VALUE, "and", "&&");
@@ -306,7 +306,7 @@ defineGlobalSymbol(function(...args) {
   let a = false;
   for (a of args) {
     a = lispEval(b, this);
-    if (jispToBool(a)) return a;
+    if (lispToBool(a)) return a;
   }
   return a;
 }, true, Number.MAX_VALUE, "or", "||");
@@ -314,7 +314,7 @@ defineGlobalSymbol(function(...args) {
 defineGlobalSymbol(function(predicate, trueBlock, falseBlock) {
   predicate = lispEval(predicate, this);
   let res;
-  if (jispToBool(predicate))
+  if (lispToBool(predicate))
     res = lispEval(trueBlock, this);
   else
     res = lispEval(falseBlock, this);
@@ -368,14 +368,20 @@ defineGlobalSymbol(function(e, handler, body) {  // XXX order of args?
 //
 
 function lispEval(expr, scope = GlobalScope) {
-  if (expr === NIL || typeof expr !== 'object') return expr;
+  if (expr === NIL) return expr;
+  if (typeof expr === 'symbol') {
+    let val = resolveSymbol(expr, scope);
+    if (val === undefined) throw new ResolveError(`Can't resolve ${expr.description}`);
+    return val;
+  }
+  if (typeof expr !== 'object') return expr;
   if (!(expr instanceof Cons)) return expr;  // Worry about evaluating lazy lists later. Or not!
   let op = expr.car, args = expr.cdr;
   if (op === Atom.QUOTE) {  // this is just an optimization; the quote function will do this too
     if (!(args instanceof Cons)) throw new EvalError(`Bad argument list ${args}`);
     return args.car;
   }
-  if (typeof op === 'symbol') {
+  if (typeof op === 'symbol') { // XXX a deeper eval needed? A different order?
     op = resolveSymbol(op, scope);
     if (!op) throw new ResolveError(`Can't resolve ${op}`);
   }
@@ -419,7 +425,7 @@ function lispEval(expr, scope = GlobalScope) {
       return lispEval(body, newScope);
     }
   }
-  throw new EvalError(`Cannot eval ${op}`);
+  throw new EvalError(`Cannot eval ${expr}`);
 }
 
 function resolveSymbol(sym, scope) {
@@ -637,7 +643,7 @@ function* lispTokenGenerator(characterGenerator) {
 
     if (IDENT1.includes(ch)) {
       let str = "";
-      while (IDENT2.includes(ch))
+      while (ch && IDENT2.includes(ch))
         str += ch, nextc();
       yield { type: 'symbol', value: str };
       continue;
@@ -841,6 +847,7 @@ console.log("parseSExpr", String(sExpr), sExpr);
 console.log("Test lispEval1", lispEval(parseSExpr(`(car '(1 2))`)));
 console.log("Test lispEva12", lispEval(parseSExpr(`(+ 1 2 3 4)`)));
 console.log("Test lispEva13", lispEval(parseSExpr(`(? (< 1 2) "a" "b")`)));
+// console.log("Test lispEva14", lispEval(parseSExpr(`duck`))); // XXX need beter tesing
 
 if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
   console.log("Running in node.js");
