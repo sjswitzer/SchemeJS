@@ -148,10 +148,10 @@ const specialSymbol = Symbol("*special*");
 const liftSymbol = Symbol("*lift*");
 
 function defineGlobalSymbol(val, opts = {}, ...names) {
-  let lift = opts.lift, special = opts.special;
+  let special = opts.special, lift = opts.lift;
   if (lift === '*') lift = Number.MAX_VALUE;
-  if (opts.special) val[specialSymbol] = opts.special;
-  if (opts.lift > 0) val[liftSymbol] = opts.lift;
+  if (special) val[specialSymbol] = special;
+  if (lift) val[liftSymbol] = lift;
   let atom = Atom._defineAtom(...names);
   GlobalEnv.set(atom, val);
   return atom;
@@ -413,7 +413,10 @@ function lispEval(expr, scope = GlobalScope) {
         jsArgs.push(args.car);
         args = args.cdr;
       } else {
-        jsArgs.push(NIL);  // don't let cons, etc, be seeing any undefined parmaters
+        // don't let cons, etc, be seeing any undefined parmaters
+        if (lift > Number.MAX_SAFE_INTEGER) // but not infinitely many of them!
+          break;
+        jsArgs.push(NIL);
       }
       --lift;
     }
@@ -949,6 +952,7 @@ console.log("Test lispEval", lispEval(parseSExpr(`(car '(1 2))`)));
 console.log("Test lispEva1", lispEval(parseSExpr(`(+ 1 2 3 4)`)));
 console.log("Test lispEva1", lispEval(parseSExpr(`(? (< 1 2) "a" "b")`)));
 console.log("Test lispEva1", lispEval(parseSExpr(`(* 2 3)`)));
+console.log("Test lispEva1", lispEval(parseSExpr(`+(2 3)`)));
 let xx1 = parseSExpr(`{ a: 1, b: "foo" }`);
 let xx2 = lispEval(xx1);
 console.log("Test parse JS objects", lispToString(xx2));
