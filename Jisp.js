@@ -581,7 +581,7 @@ function* lispTokenGenerator(characterGenerator) {
       continue;
     }
 
-    if ("()'".includes(ch)) {
+    if ("()[]{},'".includes(ch)) {
       yield { type: ch };
       nextc();
       continue;
@@ -743,6 +743,28 @@ function parseSExpr(tokenGenerator, opts = {}) {
         let first = parseExpr(newPrompt);
         let rest = parseListBody();
         return cons(first, rest);
+      }
+      return parseListBody();
+    }
+
+    if (token().type === '[') {  // Javascript array, oddly enough!
+      let res = [];
+      let newPrompt = promptStr + promptMore;
+      replHints.prompt = newPrompt;
+      consumeToken();
+      for (;;) {
+        let item = parseExpr(newPrompt), haveComma = false;
+        if (item !== undefined) {
+          if (item === Atom.TRUE) item = true;
+          else if (item === Atom.FALSE) item
+          res.push(item);
+          if (token().type === ']') {
+            consumeToken();
+            return res;
+          }
+          if (token().type === ',')
+            consumeToken()
+        }
       }
       return parseListBody();
     }
