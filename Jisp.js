@@ -142,14 +142,18 @@ const Env = Map;
 const Scope = Cons;
 const GlobalEnv = new Env;
 const GlobalScope = new Scope(GlobalEnv, NIL);
-const specialSymbol = Symbol("*special*");
+const evalArgsSymbol = Symbol("*eval-args*");
 const liftSymbol = Symbol("*lift*");
+const BIGGEST_INT32 = 2**32-1;
 
 function defineGlobalSymbol(val, opts = {}, ...names) {
-  let special = opts.special, lift = opts.lift;
-  if (lift === '*') lift = Number.MAX_VALUE;
-  if (special) val[specialSymbol] = special;
-  if (lift) val[liftSymbol] = lift;
+  let evalArgs = opts.evalArgs ?? BIGGEST_INT32, lift = opts.lift ?? 0;
+  if (!evalArgs) evalArgs = BIGGEST_INT32;
+  if (lift === '*') lift = BIGGEST_INT32;
+  if (val instanceof Function) {
+    val[evalArgsSymbol] = evalArgs;
+    val[liftSymbol] = lift;
+  }
   let atom = Atom._defineAtom(...names);
   GlobalEnv.set(atom, val);
   return atom;
@@ -159,7 +163,7 @@ Atom.TRUE = defineGlobalSymbol(true, {}, "true");
 Atom.FALSE = defineGlobalSymbol(false, {}, "false");
 Atom.NULL = defineGlobalSymbol(null, {}, "null");
 Atom.UNDEFINED = defineGlobalSymbol(false, {}, "undefined");
-Atom.QUOTE = defineGlobalSymbol((x) => x, { special: true }, "quote", "'");
+Atom.QUOTE = defineGlobalSymbol((x) => x, { evalArgs: 0 }, "quote", "'");
 defineGlobalSymbol(cons, { lift: 2 }, "cons");
 defineGlobalSymbol(car, { lift: 1 }, "car");
 defineGlobalSymbol(cdr, { lift: 1 }, "cdr");
@@ -240,67 +244,61 @@ defineGlobalSymbol((...args) => {
 
 defineGlobalSymbol(function(a, ...rest) {
   if (rest.length === 0) return false; // not less than itself
-  a = lispEval(a, this);
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a < b)) return false;
     a = b;
   }
   return true;
-}, { special: true, lift: '*' }, "lt", "<");
+}, { evalArgs: 1, lift: '*' }, "lt", "<");
 
 defineGlobalSymbol(function(a, ...rest) {
   if (rest.length === 0) return true; // equal to itself
-  a = lispEval(a, this);
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a <= b)) return false;
     a = b;
   }
   return true;
-}, { special: true, lift: '*' }, "le", "<=");
+}, { evalArgs: 1, lift: '*' }, "le", "<=");
 
 defineGlobalSymbol(function(a, ...rest) {
   if (rest.length === 0) return false;
-  a = lispEval(a, this);
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a > b)) return false;
     a = b;
   }
   return true;
-}, { special: true, lift: '*' }, "gt", ">");
+}, { evalArgs: 1, lift: '*' }, "gt", ">");
 
 defineGlobalSymbol(function(a, ...rest) {
   if (rest.length === 0) return true;
-  a = lispEval(a, this);
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a >= b)) return false;
     a = b;
   }
   return true;
-}, { special: true, lift: '*' }, "ge", ">=");
+}, { evalArgs: 1, lift: '*' }, "ge", ">=");
 
 defineGlobalSymbol(function(a, ...rest) {
   if (rest.length === 0) return true;
-  a = lispEval(a, this);
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a == b)) return false;
   }
   return true;
-}, { special: true, lift: '*' }, "eq", "==");
+}, { evalArgs: 1, lift: '*' }, "eq", "==");
 
 defineGlobalSymbol(function(a, ...rest) {
   if (rest.length === 0) return true;
-  a = lispEval(a, this);
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a === b)) return false;
   }
   return true;
-}, { special: true, lift: '*' }, "eeq", "===");
+}, { evalArgs: 1, lift: '*' }, "eeq", "===");
 
 // logical &conditional
 
@@ -311,7 +309,7 @@ defineGlobalSymbol(function(...args) {
     if (!lispToBool(a)) return a;
   }
   return a;
-}, { special: true, lift: '*' }, "and", "&&");
+}, { evalArgs: 0, lift: '*' }, "and", "&&");
 
 defineGlobalSymbol(function(...args) {
   let a = false;
@@ -320,17 +318,16 @@ defineGlobalSymbol(function(...args) {
     if (lispToBool(a)) return a;
   }
   return a;
-}, { special: true, lift: '*' }, "or", "||");
+}, { evalArgs: 0, lift: '*' }, "or", "||");
 
 defineGlobalSymbol(function(predicate, trueBlock, falseBlock) {
-  predicate = lispEval(predicate, this);
   let res;
   if (lispToBool(predicate))
     res = lispEval(trueBlock, this);
   else
     res = lispEval(falseBlock, this);
   return res;
-}, { special: true, lift: 3 }, "if", "?");
+}, { evalArgs: 1, lift: 3 }, "if", "?");
 
 // JavaScripty things:
 //   XXX TODO: delete, setting
@@ -349,7 +346,7 @@ defineGlobalSymbol(function (handler, body) {  // XXX order of args?
   try { val = lispEval(body, this); }
   finally { lispEval(handler, this); }
   return val;
-}, { special: true, lift: 2 }, "finally");
+}, { evalArgs: 0, lift: 2 }, "finally");
 
 defineGlobalSymbol(function(e, handler, body) {  // XXX order of args?
   // Tempting to save some of this work for the handler, but better to report errors early
@@ -377,7 +374,7 @@ defineGlobalSymbol(function(e, handler, body) {  // XXX order of args?
     val = lispEval(handler, new Scope(env, this));
   }
   return val;
-}, { special: true, lift: 3 }, "catch");
+}, { evalArgs: 0, lift: 3 }, "catch");
 
 //
 // This is where the magic happens
@@ -403,16 +400,16 @@ function lispEval(expr, scope = GlobalScope) {
     op = resolved;
   }
   if (op instanceof Function) {
-    if (!op[specialSymbol])
-      args = evalArgs(args, scope);
-    let lift = op[liftSymbol] ?? 0, jsArgs = [];
+    let evalCount = op[evalArgsSymbol] ?? BIGGEST_INT32;
+    args = evalArgs(args, scope, evalCount);
+    let lift = op[liftSymbol] ?? 0, jsArgs = [], noPad = lift === BIGGEST_INT32;
     while (lift > 0) {
       if (args !== NIL && (args instanceof Cons)) {
         jsArgs.push(args.car);
         args = args.cdr;
       } else {
         // don't let cons, etc, be seeing any undefined parmaters
-        if (lift > Number.MAX_SAFE_INTEGER) // but not infinitely many of them!
+        if (noPad) // but not infinitely many of them!
           break;
         jsArgs.push(NIL);
       }
@@ -461,13 +458,13 @@ function resolveSymbol(sym, scope) {
   }
 }
 
-function evalArgs(args, scope) {
-  if (args === NIL)
+function evalArgs(args, scope, evalCount) {
+  if (args === NIL || evalCount <= 0)
     return args;
   if (!(args instanceof Cons))
     return args;
   let val = lispEval(args.car, scope);
-  return cons(val, evalArgs(args.cdr));
+  return cons(val, evalArgs(args.cdr, scope, evalCount-1));
 }
 
 const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\' }
