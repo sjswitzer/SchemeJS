@@ -34,19 +34,20 @@ Atom.SLAMBDA = Atom._defineAtom("special-lambda", "\\\\");
 // will only ever see one shape in a list. The downside is that
 // NIL is not JavaScript falsey.
 //
+
 class Cons {
   constructor(car, cdr) {
     this.car = car;
     this.cdr = cdr;
     Object.freeze(this);
   }
-
   toString() {
     return lispToString(this);
   }
 }
 
-const NIL = new Cons(null, null);
+// Nil must be a Cons because it is a list: the empty one. It should be JS-iterable.
+const NIL = new (class Nil extends Cons {});  // Makes things look nicer in debugger
 
 function nextCons() {
   let current = this._current, done = current === NIL, value = undefined;
@@ -407,9 +408,13 @@ function lispEval(expr, scope = GlobalScope) {
     if (!op[specialSymbol])
       args = evalArgs(args, scope);
     let lift = op[liftSymbol] ?? 0, jsArgs = [];
-    while (lift > 0 && (args instanceof Cons) && args !== NIL) {
-      jsArgs.push(args.car);
-      args = args.cdr;
+    while (lift > 0) {
+      if (args !== NIL && (args instanceof Cons)) {
+        jsArgs.push(args.car);
+        args = args.cdr;
+      } else {
+        jsArgs.push(NIL);  // don't let cons, etc, be seeing any undefined parmaters
+      }
       --lift;
     }
     if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
@@ -682,7 +687,7 @@ function* lispTokenGenerator(characterGenerator) {
       let str = "";
       while (ch && IDENT2.includes(ch))
         str += ch, nextc();
-      yield { type: 'symbol', value: str };
+      yield { type: 'atom', value: str };
       continue;
     }
 
@@ -753,10 +758,10 @@ function parseSExpr(tokenGenerator, opts = {}) {
     // This will not peek across a linebreak because the newline token will foil it
     let dotNext = peekToken().type === '.';
 
-    if (!dotNext && (token().type === 'symbol' || token().type === 'string' ||
+    if (!dotNext && (token().type === 'atom' || token().type === 'string' ||
         token().type === 'number')) {
       let thisToken = consumeToken();
-      if (thisToken.type === 'symbol')
+      if (thisToken.type === 'atom')
         return Atom(thisToken.value);
       return thisToken.value;
     }
@@ -813,7 +818,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
           break;
         }
         let gotIt = false;
-        if (token().type === 'symbol' || token().type === 'string' || token().type === 'number') {
+        if (token().type === 'atom' || token().type === 'string' || token().type === 'number') {
           let sym = token().value;
           consumeToken();
           if (token().type === ':') {
@@ -841,11 +846,31 @@ function parseSExpr(tokenGenerator, opts = {}) {
      return cons(Atom.QUOTE, cons(quoted, NIL));
     }
 
+    if (peekToken().type === 'end')
+      return null;
     throw new ParseError(`Unexpected token ${token().type} ${token().value}`);
   }
-  if (peekToken().type === 'end')
-    return null;
-  let expr = parseExpr(prompt);
+
+  // I'm old enough to be fond of the EvalQuote REPL.
+  // So, as a special case, transform "symbol(a b c)" into "(symbol (quote a) (quote b) (quote c))"
+  let expr;
+  if (peekToken(0).type === 'atom' && peekToken(1).type === '(') {
+    function quoteArgs(args) {
+      if (args === NIL || !(args instanceof Cons)) return NIL;
+      let quoted = args.car;
+      quoted = cons(Atom.QUOTE, cons(quoted, NIL))
+      return cons(quoted, quoteArgs(args.cdr));
+    }
+    let tok = consumeToken();
+    let sym = Atom(tok.value);
+    let quoted = parseExpr(prompt);
+    if (quoted)
+        expr = cons(sym, quoteArgs(quoted));
+  } else {
+    // Modern form
+    expr = parseExpr(prompt);
+  }
+  console.log("PARSED:", expr); // XXX
   let peek = peekToken();
   let viable = peek.type === 'end' || peek.type === 'newline';
   if (viable)
@@ -908,7 +933,9 @@ let tokens = lispTokenGenerator(str);
 let tokenList = [ ...tokens ];
 console.log("Test lispTokenGenerator", tokenList);
 
-let sExpr = parseSExpr(`(+ b (- 1 2))`);
+let sExpr = parseSExpr(`cons(a b)`);
+console.log("Test parseSExpr", String(sExpr), sExpr);
+sExpr = parseSExpr(`(+ b (- 1 2))`);
 console.log("Test parseSExpr", String(sExpr), sExpr);
 
 sExpr = parseSExpr(`(a b 'c '(abc def))`);
@@ -925,7 +952,7 @@ console.log("Test lispEva1", lispEval(parseSExpr(`(? (< 1 2) "a" "b")`)));
 console.log("Test lispEva1", lispEval(parseSExpr(`(* 2 3)`)));
 let xx1 = parseSExpr(`{ a: 1, b: "foo" }`);
 let xx2 = lispEval(xx1);
-console.log("Test lispEval", lispToString(xx2));
+console.log("Test parse JS objects", lispToString(xx2));
 // console.log("Test lispEval", lispEval(parseSExpr(`foo`)));
 
 //console.log("Test lispEva1", lispEval(parseSExpr(`duck`))); // XXX need beter tesing
@@ -937,9 +964,9 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
     try {
       if (process.platform === 'win32') {
         inputFd = process.stdin.fd;
-        if (inputFd.setRawMode) {
+        if (process.stdin.setRawMode) {
           oldRawMode = process.stdin.isRaw;
-          inputFd.setRawMode(true);
+          process.stdin.setRawMode(true);
         }
       } else {
         inputFd = closeFd = fs.openSync('/dev/tty', 'rs')
@@ -964,9 +991,8 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
     if (closeFd !== undefined)
       fs.closeSync(closeFd);
     if (oldRawMode !== undefined)
-      inputFd.setRawMode(oldRawMode);
+      process.stdin.setRawMode(oldRawMode);
   }
 }
-
 
 console.log("done");  // breakpoint spot
