@@ -1,6 +1,16 @@
 // Lisp in JavaScript
 "use strict";
 
+class LispError extends Error {
+  constructor(...args) {
+    super(...args);
+  }
+  toString() { return this.message; }   // no type prefix on the error string
+};
+class EvalError extends LispError {};
+class ResolveError extends LispError {};
+class ParseError extends LispError {};
+
 // Atoms are Symbols
 function Atom(name) {
   let val = Atom.ATOMS.get(name);
@@ -98,9 +108,22 @@ class LazyCdrCons {
   }
 }
 
+//
+// Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
+// In Jisp, NIL, null, undefined, and false are false and everything else is true.
+//
+function jispToBool(obj) {
+  if (obj === NIL || obj === undefined || obj === null || obj === false)
+    return false;
+  return true;
+}
+
 const cons = (car, cdr) => new Cons(car, cdr);
 const car = (cons) => cons.car, first = car;
 const cdr = (cons) => cons.cdr, rest = cdr;
+const cadr = (cons) => cons.cdr.car;  // Beware the order here; in JS it's reversed
+const cdar = (cons) => cons.car.cdr;
+const cddr = (cons) => cons.cdr.cdr;
 
 //
 // An environment is simply a Map.
@@ -121,28 +144,228 @@ function defineGlobalSymbol(val, special, lift, ...names) {
   return atom;
 }
 Atom.NIL = defineGlobalSymbol(NIL, false, 0, "nil");
+Atom.TRUE = defineGlobalSymbol(true, false, 0, "true");
+Atom.FALSE = defineGlobalSymbol(false, false, 0, "false");
+Atom.NULL = defineGlobalSymbol(null, false, 0, "null");
+Atom.UNDEFINED = defineGlobalSymbol(false, false, 0, "undefined");
 Atom.QUOTE = defineGlobalSymbol((x) => x, true, false, "quote", "'");
+defineGlobalSymbol(cons, false, 2, "cons");
 defineGlobalSymbol(car, false, 1, "car");
 defineGlobalSymbol(cdr, false, 1, "cdr");
-defineGlobalSymbol(cons, false, 2, "cons");
-defineGlobalSymbol((a,b) => a + b, false, 2, "add", "+"); // XXX should do arbirary many
-defineGlobalSymbol((a,b) => a - b, false, 2, "sub", "-");
-defineGlobalSymbol((a,b) => a * b, false, 2, "mul", "*");
-defineGlobalSymbol((a,b) => a / b, false, 2, "div", "/");
-defineGlobalSymbol((a,b) => a % b, false, 2, "mod", "%");
-defineGlobalSymbol((a,b) => a | b, false, 2, "bit-or", "|");
-defineGlobalSymbol((a,b) => a & b, false, 2, "bit-and", "&");
-defineGlobalSymbol((a,b) => a && b, false, 2, "and", "&&");  // XXX this sb special form
-defineGlobalSymbol((a,b) => a || b, false, 2, "or", "||");
+defineGlobalSymbol(cadr, false, 1, "cadr");
+defineGlobalSymbol(cdar, false, 1, "cdar");
+defineGlobalSymbol(cddr, false, 1, "cddr");
 
-class LispError extends Error {
-  constructor(...args) {
-    super(...args);
+// Pokemon gotta catch 'em' all!
+defineGlobalSymbol((a) => a === NIL || !a, false, 1, "not", "!");
+defineGlobalSymbol((a) => ~a, false, 1, "bit-not", "~");
+defineGlobalSymbol((a,b) => a ** b, false, 2, "exp", "**");
+defineGlobalSymbol((a,b) => a % b, false, 2, "rem", "%");
+defineGlobalSymbol((a,b) => a << b, false, 2, "bit-shl", "<<");
+defineGlobalSymbol((a,b) => a >> b, false, 2, "bit-shr", ">>");
+defineGlobalSymbol((a,b) => a >>> b, false, 2, "bit-ushr", ">>");
+defineGlobalSymbol((a,b) => a in b, false, 2, "in");
+defineGlobalSymbol((cls, ...args) => new cls(...args), false, Number.MAX_VALUE, "new");
+defineGlobalSymbol((a,b) => a instanceof b, false, 2, "instanceof");
+defineGlobalSymbol((a,b) => a != b, false, 2, "ne", "!=");
+defineGlobalSymbol((a,b) => a !== b, false, 2, "neeq", "!==");
+
+// variable args
+defineGlobalSymbol((...args) => {
+  let a = 0;
+  for (let b of args)
+    a += b;
+  return a;
+}, false, Number.MAX_VALUE, "add", "+");
+
+defineGlobalSymbol((a, ...rest) => {
+  if (rest.length === 0) return -a;  // XXX ???
+  for (let b of rest)
+    a -= b;
+  return a;
+}, false, Number.MAX_VALUE, "sub", "-");
+
+defineGlobalSymbol((...args) => {
+  let a = 1;
+  for (let b of rest)
+    a *= b;
+  return a;
+}, false, Number.MAX_VALUE, "mul", "*");
+
+defineGlobalSymbol((a, ...rest) => {
+  if (rest.length === 0) return 1/a;  // XXX ???
+  for (let b of rest)
+    a /= b;
+  return a;
+}, false, Number.MAX_VALUE, "div", "/");
+
+defineGlobalSymbol((...args) => {
+  let a = ~0;
+  for (let b of args)
+    a &= b;
+  return a;
+}, false, Number.MAX_VALUE, "bit-and", "&");
+
+defineGlobalSymbol((...args) => {
+  let a = 0;
+  for (let b of args)
+    a |= b;
+  return a;
+}, false, Number.MAX_VALUE, "bit-or", "|");
+
+defineGlobalSymbol((...args) => {
+  let a = 0;
+  for (let b of args)
+    a ^= b;
+  return a;
+}, false, Number.MAX_VALUE, "bit-xor", "");
+
+defineGlobalSymbol((...args) => {
+  let a = ~0;
+  for (let b of args)
+    a &= b;
+  return a;
+}, false, Number.MAX_VALUE, "bit-and", "&");
+
+defineGlobalSymbol(function(a, ...rest) {
+  if (rest.length === 0) return false; // not less than itself
+  a = lispEval(a, this);
+  for (let b of rest) {
+    b = lispEval(b, this);
+    if (!(a < b)) return false;
+    a = b;
   }
-  toString() { return this.message; }   // no type prefix on the error string
-};
-class EvalError extends LispError {};
-class ResolveError extends LispError {};
+  return true;
+}, true, Number.MAX_VALUE, "lt", "<");
+
+defineGlobalSymbol(function(a, ...rest) {
+  if (rest.length === 0) return true; // equal to itself
+  a = lispEval(a, this);
+  for (let b of rest) {
+    b = lispEval(b, this);
+    if (!(a <= b)) return false;
+    a = b;
+  }
+  return true;
+}, true, Number.MAX_VALUE, "le", "<=");
+
+defineGlobalSymbol(function(a, ...rest) {
+  if (rest.length === 0) return false;
+  a = lispEval(a, this);
+  for (let b of rest) {
+    b = lispEval(b, this);
+    if (!(a > b)) return false;
+    a = b;
+  }
+  return true;
+}, true, Number.MAX_VALUE, "gt", ">");
+
+defineGlobalSymbol(function(a, ...rest) {
+  if (rest.length === 0) return true;
+  a = lispEval(a, this);
+  for (let b of rest) {
+    b = lispEval(b, this);
+    if (!(a >= b)) return false;
+    a = b;
+  }
+  return true;
+}, true, Number.MAX_VALUE, "ge", ">=");
+
+defineGlobalSymbol(function(a, ...rest) {
+  if (rest.length === 0) return true;
+  a = lispEval(a, this);
+  for (let b of rest) {
+    b = lispEval(b, this);
+    if (!(a == b)) return false;
+  }
+  return true;
+}, true, Number.MAX_VALUE, "eq", "==");
+
+defineGlobalSymbol(function(a, ...rest) {
+  if (rest.length === 0) return true;
+  a = lispEval(a, this);
+  for (let b of rest) {
+    b = lispEval(b, this);
+    if (!(a === b)) return false;
+  }
+  return true;
+}, true, Number.MAX_VALUE, "eeq", "===");
+
+// logical &conditional
+
+defineGlobalSymbol(function(...args) {
+  let a = true;
+  for (a of args) {
+    a = lispEval(b, this);
+    if (!jispToBool(a)) return a;
+  }
+  return a;
+}, true, Number.MAX_VALUE, "and", "&&");
+
+defineGlobalSymbol(function(...args) {
+  let a = false;
+  for (a of args) {
+    a = lispEval(b, this);
+    if (jispToBool(a)) return a;
+  }
+  return a;
+}, true, Number.MAX_VALUE, "or", "||");
+
+defineGlobalSymbol(function(predicate, trueBlock, falseBlock) {
+  predicate = lispEval(predicate, this);
+  let res;
+  if (jispToBool(predicate))
+    res = lispEval(trueBlock, this);
+  else
+    res = lispEval(falseBlock, this);
+  return res;
+}, true, 3, "if", "?");
+
+// JavaScripty things:
+//   XXX TODO: delete, setting
+
+defineGlobalSymbol((a, b) => a[b], false, 2, "@");  // indexing and member access
+defineGlobalSymbol((a, b) => a?.[b], false, 2, "?@");  // conditional indexing and member access
+defineGlobalSymbol(e => { throw e }, false, 1, "throw");
+
+defineGlobalSymbol(function (handler, body) {  // XXX order of args?
+  let val = NIL;
+  try { val = lispEval(body, this); }
+  finally { lispEval(handler, this); }
+  return val;
+}, true, 2, "finally");
+
+defineGlobalSymbol(function(e, handler, body) {  // XXX order of args?
+  // Tempting to save some of this work for the handler, but better to report errors early
+  let cls, sym;
+  if (typeof e === 'symbol') {
+    sym = e;
+  } else if (e instanceof Cons) {
+    cls = e.car;
+    if (typeof cls !== 'function')
+      cls = lispEval(cls, this);
+    if (typeof cls !== 'function')
+      throw new EvalError(`Not a class ${cls}`);
+    if (e.cdr instanceof Cons)
+      sym = e.cdr.car;
+  }
+  if (typeof sym !== 'symbol')
+    throw new EvalError(`Bad catch binding syntax ${e}`);
+  // Whew!
+  let val = NIL;
+  try { val = lispEval(body, this) }
+  catch (e) {
+    if (cls && !(e instanceof cls)) throw e;
+    let env = new Env;
+    env.set(sym, e);
+    val = lispEval(handler, new Scope(env, this));
+  }
+  return val;
+}, true, 3, "catch");
+
+//
+// This is where the magic happens
+//
 
 function lispEval(expr, scope = GlobalScope) {
   if (expr === NIL || typeof expr !== 'object') return expr;
@@ -160,13 +383,9 @@ function lispEval(expr, scope = GlobalScope) {
     if (!op[specialSymbol])
       args = evalArgs(args, scope);
     let lift = op[liftSymbol] ?? 0, jsArgs = [];
-    while (lift > 0) {
-      if (args !== NIL && args instanceof Cons) {
-        jsArgs.push(args.car);
-        args = args.cdr;
-      } else {
-        jsArgs.push(NIL);
-      }
+    while (lift > 0 && (args instanceof Cons) && args !== NIL) {
+      jsArgs.push(args.car);
+      args = args.cdr;
       --lift;
     }
     if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
@@ -221,6 +440,14 @@ function evalArgs(args, scope) {
   return cons(val, evalArgs(args.cdr));
 }
 
+const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\' }
+const STRING_ESCAPES = (() => {
+  let res = {};
+  for (let [key, value] of Object.entries(ESCAPE_STRINGS))
+    res[value] = key;
+  return res;
+})();
+
 function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   if (maxDepth <= 0) return "...";
   let objType = typeof obj;
@@ -252,25 +479,12 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   }
   if (objType === 'string') {
     let str = '"';
-    // XXX use map
     for (let ch of obj) {
-      switch (ch) {
-        case '"':
-          str += "\\" + ch;
-          break;
-        case "\r":
-          str += "\\r";
-          break;
-        case "\n":
-          str += "\\n";
-          break;
-        case "\t":
-          srt += "\\t";
-          break;
-        default:
-          str += ch;
-          break;
-      }
+      let replace = STRING_ESCAPES[ch];
+      if (replace)
+        str += "\\" + replace;
+      else
+        str += ch;
     }
     str += '"';
     return str;
@@ -313,7 +527,7 @@ const DIGITS = "0123456789";
 const ALPHA =
   "abcdefghijklmnopqrstuvwxyz" +
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const IDENT1 = ALPHA + "_$+-*/%\\!&|=<>";
+const IDENT1 = ALPHA + "~!@#$%^&|*_-+-=|\\<>?/";
 const IDENT2 = IDENT1 + DIGITS;
 const OPERATORS = "+-*/%\\!&|=<>";
 
@@ -402,22 +616,11 @@ function* lispTokenGenerator(characterGenerator) {
       while (ch && !'"\r\n'.includes(ch)) {
         if (ch === '\\' ) {
           nextc();
-          switch (ch) {
-            case "t":
-              str += "\t";
-              break;
-            case "n":
-              str += "\n";
-              break;
-            case "r":
-              str += "\r";
-              break;
-            case "\n": case "\r":
-              // eat newline
-              break;
-            default:
-              str += "\\" + ch;
-          }
+          let replace = ESCAPE_STRINGS[ch];
+          if (replace)
+            str += replace;
+          else
+            str += "\\" + ch;
           nextc();
           continue;
         }
@@ -547,7 +750,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
      return cons(Atom.QUOTE, cons(quoted, NIL));
     }
 
-    throw new Error(`Unexpected token ${token().type} ${token().value}`);
+    throw new ParseError(`Unexpected token ${token().type} ${token().value}`);
   }
   if (peekToken().type === 'end')
     return null;
@@ -556,15 +759,15 @@ function parseSExpr(tokenGenerator, opts = {}) {
   let viable = peek.type === 'end' || peek.type === 'newline';
   if (viable)
     return expr;
-  return new Error(`Unparsed: ${peek.type} ${peek.value}`); // XXX better message?
+  return new ParseError(`Unparsed: ${peek.type} ${peek.value}`); // XXX better message?
 }
 
-function lispREPL(readline, opts = {}) {
+function lispREPL(readline, opts = {}) {  // XXX should readline be a generator?
   // readline(prompt) => str || nullish
   let name = opts.name ?? "Jisp";
   let prompt = opts.prompt ?? name + " > ";
   let evaluate = opts.evaluate ?? (x => x);
-  let print = opts.print ?? (x => console.log(name + ":", String(x)));
+  let print = opts.print ?? (x => console.log(name + ":", lispToString(x)));
   let reportError = opts.reportError ??  (x => console.log(name + " ERROR:", String(x), x));;
   let replHints = { prompt };
   function* charStreamPromptInput() {
@@ -635,7 +838,9 @@ console.log("parseSExpr", String(sExpr), sExpr);
   lispREPL(() => input.shift());
 }
 
-console.log("Test lispEval", lispEval(parseSExpr(`(car '(1 2))`)));
+console.log("Test lispEval1", lispEval(parseSExpr(`(car '(1 2))`)));
+console.log("Test lispEva12", lispEval(parseSExpr(`(+ 1 2 3 4)`)));
+console.log("Test lispEva13", lispEval(parseSExpr(`(? (< 1 2) "a" "b")`)));
 
 if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
   console.log("Running in node.js");
