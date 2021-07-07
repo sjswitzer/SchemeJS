@@ -843,7 +843,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
       replHints.prompt = newPrompt;
       let quoted = parseExpr(newPrompt);
       replHints.prompt = promptStr;
-     return cons(Atom.QUOTE, cons(quoted, NIL));
+      return cons(Atom.QUOTE, cons(quoted, NIL));
     }
 
     if (peekToken().type === 'end')
@@ -865,12 +865,11 @@ function parseSExpr(tokenGenerator, opts = {}) {
     let sym = Atom(tok.value);
     let quoted = parseExpr(prompt);
     if (quoted)
-        expr = cons(sym, quoteArgs(quoted));
+      expr = cons(sym, quoteArgs(quoted));
   } else {
     // Modern form
     expr = parseExpr(prompt);
   }
-  console.log("PARSED:", expr); // XXX
   let peek = peekToken();
   let viable = peek.type === 'end' || peek.type === 'newline';
   if (viable)
