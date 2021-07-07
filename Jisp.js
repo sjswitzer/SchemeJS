@@ -454,6 +454,7 @@ const STRING_ESCAPES = (() => {
   return res;
 })();
 
+// XXX line wrapping
 function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   if (maxDepth <= 0) return "...";
   let objType = typeof obj;
@@ -478,6 +479,14 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
             after;
       return before + lispToString(obj.car, maxDepth-1, opts) + " . " + 
           lispToString(obj.cdr, maxDepth-1, opts) + after;
+    }
+    if (obj instanceof Array) {
+      let str = "[", sep = "";
+      for (let item of obj) {
+        str += sep + lispToString(item, maxDepth-1, opts);
+        sep = ", ";
+      }
+      return str + "]";
     }
   }
   if (objType === 'symbol') {
@@ -758,12 +767,12 @@ function parseSExpr(tokenGenerator, opts = {}) {
           if (item === Atom.TRUE) item = true;
           else if (item === Atom.FALSE) item
           res.push(item);
+          if (token().type === ',')
+            consumeToken()
           if (token().type === ']') {
             consumeToken();
             return res;
           }
-          if (token().type === ',')
-            consumeToken()
         }
       }
       return parseListBody();
