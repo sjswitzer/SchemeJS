@@ -785,7 +785,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
         let item = parseExpr(newPrompt);
         item = lispToJS(item);
         res.push(item);
-        if (token().type === ',')  // XXX: Comma might as well be optional for now
+        if (token().type === ',')  // Comma might as well be optional for now
           consumeToken()
         if (token().type === ']') {
           consumeToken();
@@ -805,7 +805,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
           break;
         }
         let gotIt = false;
-        if (token().type === 'symbol' || token().type === 'string') {
+        if (token().type === 'symbol' || token().type === 'string' || token().type === 'number') {
           let sym = token().value;
           consumeToken();
           if (token().type === ':') {
