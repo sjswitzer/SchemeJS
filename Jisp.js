@@ -839,7 +839,10 @@ function parseSExpr(tokenGenerator, opts = {}) {
     for (;;) {
       let { done, value: tok } = tokenGenerator.next();
       if (done) return str;
-      str += sep + tok.value !== undefined ? lispToString(tok.value) : tok.type;
+      if (tok.type === 'newline' || tok.type === 'end')
+        return str;
+      str += sep + (tok.value !== undefined ? lispToString(tok.value) : tok.type);
+      sep = " ";
     }
   }
 
@@ -963,7 +966,6 @@ function parseSExpr(tokenGenerator, opts = {}) {
   let unparsed = unParesedInput();
   if (!unparsed)
     return expr;
-  let tok = token();
   throw new ParseError(`Unparsed: ${unparsed}`);
 }
 
