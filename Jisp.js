@@ -721,7 +721,7 @@ function* lispTokenGenerator(characterGenerator) {
   function nextc() {
     if (_peek.length > 0)
       return ch = _peek.shift();
-    if (_done) return "";
+    if (_done) return ch = "";
     let next = characterGenerator.next();
     if (next.done) {
       _done = true;
@@ -749,6 +749,13 @@ function* lispTokenGenerator(characterGenerator) {
     if (NL[ch]) {
       yield { type: 'newline' };
       nextc();
+      continue;
+    }
+
+    if (ch === ';' && peekc() === ';') {  // ;; begins a comment
+      yield { type: 'newline' };
+      while (ch && !NL[ch])
+        nextc();
       continue;
     }
 
@@ -783,7 +790,8 @@ function* lispTokenGenerator(characterGenerator) {
       continue;
     }
 
-    // JS numbers are weird. The strategy here is to try them all and let JS sort it out.
+    // JS numbers are weird. The strategy here is to match anything that looks vaguely like a number
+    // then let JS sort it all out.
     if (NUM1[ch]) {
       // Keep + and - from having to jump through unnecessary hoops
       let pc = peekc(), falsePlusMinus = (ch === '+' || ch === '-') && !(pc !== '.' || DIGITS[pc]);
@@ -805,7 +813,7 @@ function* lispTokenGenerator(characterGenerator) {
         } else {
           let numVal = Number(str);
           if (!isNaN(numVal))
-            value =numVal
+            value = numVal;
         }
         if (value !== undefined) {
           // Consume all the characters that we peeked and succeed
@@ -831,6 +839,7 @@ function* lispTokenGenerator(characterGenerator) {
     yield { type: 'garbage', value: ch };
     nextc()
   }
+  yield { type: 'end' };
 }
 
 function parseSExpr(tokenGenerator, opts = {}) {
@@ -926,6 +935,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
           consumeToken();
           return NIL;
         }
+        if (token().type === 'end') throw new ParseError(`Parse error; reached end of input`);
         let first = parseExpr(newPrompt);
         let rest = parseListBody();
         return cons(first, rest);
@@ -948,6 +958,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
           consumeToken();
           return res;
         }
+        if (token().type === 'end') throw new ParseError(`Parse error; reached end of input`);
       }
     }
 
@@ -976,6 +987,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
             if (token().type === ',')  // might as well be optional for now
               consumeToken();
           }
+          if (token().type === 'end') throw new ParseError(`Parse error; reached end of input`);
         }
         if (!gotIt)
           throw new ParseError(`Bad JavaScript object literal`); // XXX details
