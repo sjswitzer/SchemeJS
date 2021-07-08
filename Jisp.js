@@ -51,6 +51,7 @@ class Cons {
 
 // Nil must be a Cons because it is a list: the empty one. It should be JS-iterable.
 const NIL = new (class Nil extends Cons {});  // Makes things look nicer in debugger
+NIL.__proto__.isCons = false;  // XXX is there a better way?
 
 function nextCons() {
   let current = this._current, done = current === NIL, value = undefined;
@@ -737,14 +738,30 @@ function parseSExpr(tokenGenerator, opts = {}) {
   }
 
   let _token = null, _peek = [], _done = false;
-  function token() {
-    // Prevent fetching a new line prematurely and detect viable end points
-    if (_token) return _token;
-    do {
-      _token = _nextToken();
-      // will never return a newline token, but a newline could be in the peek queue
-    } while (_token.type === 'newline')
-    return _token;
+  function token(n = 0) {
+    if (n === 0) {
+      // Fetch current token, lazily, to prevent fetching a new line prematurely
+      if (_token) return _token;
+      do {
+        _token = _nextToken();
+        // Will never return a newline token, but a newline could be in the peek queue.
+        // This prevents, for instance, "dotNext" from looking across a line.
+        // So, basically, newlines sit in the peek queue to help deal with heuristic
+        // "shall we continue to the next line" issues in the parser. It only really
+        // matters for the REPL.
+      } while (_token.type === 'newline')
+      return _token;
+    }
+    // Otherwise peek ahead
+    for (let get = n - _peek.length; get > 0; --get) {
+      let next = tokenGenerator.next();
+      if (next.done) {
+        _done = true;
+        return { type: 'end'};
+      }
+      _peek.push(next.value);
+    }
+    return _peek[n-1];
   }
 
   function consumeToken() {
@@ -766,21 +783,9 @@ function parseSExpr(tokenGenerator, opts = {}) {
     return next.value;
   }
 
-  function peekToken(n = 0) {
-    for (let get = n - _peek.length + 1; get > 0; --get) {
-      let next = tokenGenerator.next();
-      if (next.done) {
-        _done = true;
-        return { type: 'end'};
-      }
-      _peek.push(next.value);
-    }
-    return _peek[n];
-  }
-
   function parseExpr(promptStr) {
     // This will not peek across a linebreak because the newline token will foil it
-    let dotNext = peekToken().type === '.';
+    let dotNext = token(1).type === '.';
 
     if (!dotNext && (token().type === 'atom' || token().type === 'string' ||
         token().type === 'number')) {
@@ -870,7 +875,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
       return cons(Atom.QUOTE, cons(quoted, NIL));
     }
 
-    if (peekToken().type === 'end')
+    if (token(1).type === 'end')
       return null;
     throw new ParseError(`Unexpected token ${token().type} ${token().value}`);
   }
@@ -878,7 +883,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
   // I'm old enough to be fond of the EvalQuote REPL.
   // So, as a special case, transform "symbol(a b c)" into "(symbol (quote a) (quote b) (quote c))"
   let expr;
-  if (peekToken(0).type === 'atom' && peekToken(1).type === '(') {
+  if (token().type === 'atom' && token(1).type === '(') {
     function quoteArgs(args) {
       if (args === NIL || !(args instanceof Cons)) return NIL;
       let quoted = args.car;
@@ -894,7 +899,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
     // Modern form
     expr = parseExpr(prompt);
   }
-  let peek = peekToken();
+  let peek = token(1);
   let viable = peek.type === 'end' || peek.type === 'newline';
   if (viable)
     return expr;
