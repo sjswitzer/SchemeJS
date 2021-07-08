@@ -2,6 +2,7 @@
 "use strict";
 
 // XXX make this a JS module
+// XXX Make "Lisp" a function/constructor that returns a Lisp
 
 class LispError extends Error {
   constructor(...args) {
@@ -132,11 +133,11 @@ function lispToJS(val) {   // XXX Is this really needed?
 }
 
 const cons = (car, cdr) => new Cons(car, cdr);
-const car = (cons) => cons.car, first = car;
-const cdr = (cons) => cons.cdr, rest = cdr;
-const cadr = (cons) => cons.cdr.car;  // Beware the order here; in JS it's reversed
-const cdar = (cons) => cons.car.cdr;
-const cddr = (cons) => cons.cdr.cdr;
+const car = cons => cons.car, first = car;
+const cdr = cons => cons.cdr, rest = cdr;
+const cadr = cons => cons.cdr.car;  // Beware the order here; in JS it's reversed
+const cdar = cons => cons.car.cdr;
+const cddr = cons => cons.cdr.cdr;
 
 //
 // An environment is simply a Map.
@@ -157,7 +158,7 @@ function defineGlobalSymbol(name, val, ...aliases) {
   let evalArgs = opts.evalArgs ?? BIGGEST_INT32, lift = opts.lift ?? 0;
   if (!evalArgs) evalArgs = BIGGEST_INT32;
   if (lift === '*') lift = BIGGEST_INT32;
-  if (val instanceof Function) {
+  if (typeof val === 'function') {
     val[evalArgsSymbol] = evalArgs;
     val[liftSymbol] = lift;
   }
@@ -182,7 +183,17 @@ defineGlobalSymbol("cadr", cadr, { lift: 1 });
 defineGlobalSymbol("cdar", cdar, { lift: 1 });
 defineGlobalSymbol("cddr", cddr, { lift: 1 });
 defineGlobalSymbol("consp", a => a.isCons === true, { lift: 1 }, "isCons");
-defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 });
+defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 }, "isNumber");
+defineGlobalSymbol("typeof", a => typeof, { lift: 1 });
+defineGlobalSymbol("isUndefined", a => typeof a === 'undefined', { lift: 1 });
+defineGlobalSymbol("isNull", a => typeof a === 'null', { lift: 1 });
+defineGlobalSymbol("isBoolean", a => typeof a === 'boolean', { lift: 1 });
+defineGlobalSymbol("isNumber", a => typeof a === 'number', { lift: 1 });
+defineGlobalSymbol("isBigInt", a => typeof a === 'bigint', { lift: 1 });
+defineGlobalSymbol("isString", a => typeof a === 'string', { lift: 1 });
+defineGlobalSymbol("isSymbol", a => typeof a === 'symbol', { lift: 1 });
+defineGlobalSymbol("isFunction", a => typeof a === 'function', { lift: 1 });
+defineGlobalSymbol("isObject", a => typeof a === 'object', { lift: 1 });
 defineGlobalSymbol("abs", a => a < 0 ? -a : a, { lift: 1 });
 defineGlobalSymbol("sqrt", a => Math.sqrt(a), { lift: 1 });
 defineGlobalSymbol("cbrt", a => Math.cbrt(a), { lift: 1 });
@@ -441,7 +452,7 @@ function lispEval(expr, scope = GlobalScope) {
     if (!resolved) throw new ResolveError(`Can't resolve symbol "${op.description}"`);
     op = resolved;
   }
-  if (op instanceof Function) {
+  if (typeof op === 'function') {
     let evalCount = op[evalArgsSymbol] ?? BIGGEST_INT32;
     args = evalArgs(args, scope, evalCount);
     let lift = op[liftSymbol] ?? 0, jsArgs = [], noPad = lift === BIGGEST_INT32;
@@ -589,25 +600,24 @@ const toLispSymbol = Symbol("toLisp");
 // Turn iterables objects like arrays into lists
 function toLisp(obj, depth = BIGGEST_INT32, opts) { 
   if (depth <= 0)return obj;
+  let iterator;
+  if (typeof obj === 'function') // assume it's an iterator
+    iterator = obj;
   if (typeof obj === 'object') {
     if (obj.isCons) return obj;  // Careful; cons is iterable itself
     if (obj[toLispSymbol])
       return obj[toLispSymbol](opts);
     let iterator;
-    if (obj[Symbol.iterator]) {
+    if (obj[Symbol.iterator])
       iterator = obj[Symbol.iterator]();
-    } else {
-      if (obj instanceof Function)  // assume it's an iterator
-        iterator = obj;
+  }
+  if (iterator) {
+    function go() {
+      let { done, value } = iterator.next();
+      if (done) return NIL;
+      return cons(toLisp(obj, depth-1, opts), go());
     }
-    if (iterator) {
-      function go() {
-        let { done, value } = iterator.next();
-        if (done) return NIL;
-        return cons(toLisp(obj, depth-1, opts), go());
-      }
-      return go();
-    }
+    return go();
   }
   return obj;
 }
