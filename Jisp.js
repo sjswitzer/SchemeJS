@@ -403,34 +403,13 @@ defineGlobalSymbol("@", (a, b) => a[b], { lift: 2 });  // indexing and member ac
 defineGlobalSymbol("?@", (a, b) => a?.[b], { lift: 2 });  // conditional indexing and member access
 defineGlobalSymbol("toLisp", toLisp, { lift: 1 });
 defineGlobalSymbol("toArray", toArray, { lift: 1 });
-defineGlobalSymbol("Object", Object);
-defineGlobalSymbol("Array", Array);
-defineGlobalSymbol("Map", Map);
-defineGlobalSymbol("WeakMap", WeakMap);
-defineGlobalSymbol("Set", Set);
-defineGlobalSymbol("WeakSet", WeakSet);
-defineGlobalSymbol("Math", Math);
-defineGlobalSymbol("Date", Date);
-defineGlobalSymbol("String", String);
-defineGlobalSymbol("RegExp", RegExp);
-defineGlobalSymbol("JSON", JSON);
 defineGlobalSymbol("NaN", NaN);
 defineGlobalSymbol("Infinity", Infinity);
-defineGlobalSymbol("isNaN", isNaN);
-defineGlobalSymbol("isFinite", isFinite);
-defineGlobalSymbol("parseFloat", parseFloat);
-defineGlobalSymbol("parseInt", parseInt);
-defineGlobalSymbol("encodeURI", encodeURI);
-defineGlobalSymbol("encodeURIComponent", encodeURIComponent);
-defineGlobalSymbol("decodeURI", decodeURI);
-defineGlobalSymbol("decodeURIComponent", decodeURIComponent);
-defineGlobalSymbol("Error", Error);
-defineGlobalSymbol("EvalError", EvalError);
-defineGlobalSymbol("RangeError", RangeError);
-defineGlobalSymbol("ReferenceError", ReferenceError);
-defineGlobalSymbol("SyntaxError", SyntaxError);
-defineGlobalSymbol("TypeError", TypeError);
-defineGlobalSymbol("URIError", URIError);
+defineGlobalSymbol("isFinite", isFinite, { lift: '1' });
+defineGlobalSymbol("isNaN", isNaN, { lift: '1' });
+defineGlobalSymbol("isFinite", isFinite), { lift: '*' };
+defineGlobalSymbol("parseFloat", parseFloat, { lift: '*' });
+defineGlobalSymbol("parseInt", parseInt, { lift: '*' });
 
 //
 // try/catch/filnally. Just a sketch for now.
