@@ -1,6 +1,8 @@
 // Lisp in JavaScript
 "use strict";
 
+// XXX make this a JS module
+
 class LispError extends Error {
   constructor(...args) {
     super(...args);
@@ -669,32 +671,31 @@ function* lispTokenGenerator(characterGenerator) {
     }
 
     // JS numbers are weird. The strategy here is to try them all and let JS sort it out.
-    // XXX Things like "+ " go through unnecessary hoops here.
     if (NUM1[ch]) {
       // Keep + and - from having to jump through unnecessary hoops
       let pc = peekc(), falsePlusMinus = (ch === '+' || ch === '-') && !(pc !== '.' || DIGITS[pc]);
       if (!falsePlusMinus) {
-        let pos = 0, str = ch;
+        let pos = 0, str = ch, value;
         for (;;) {
           let ch = peekc(pos++);
           if (!NUM2[ch])
             break;
           str += ch;
         }
-        let value = Number(str);
-        if (isNaN(value)) {
-          value = undefined;
-          if (str.endsWith('n')) {
-            str = str.substr(0, str.length-1);
-            try {  // maybe it's a BigInt?
-              value = BigInt(str);
-            } catch (e) {
-              // eat it
-            }
+        if (str.endsWith('n')) {
+          str = str.substr(0, str.length-1);
+          try {  // maybe it's a BigInt?
+            value = BigInt(str);
+          } catch (e) {
+            // eat it
           }
+        } else {
+          let numVal = Number(str);
+          if (!isNaN(numVal))
+            value =numVal
         }
         if (value !== undefined) {
-          // consume all the characters we peeked and succeed
+          // Consume all the characters that we peeked and succeed
           while (pos-- > 0) nextc();
           yield { type: 'number', value};
           continue;
@@ -822,7 +823,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
         item = lispToJS(item);
         res.push(item);
         if (token().type === ',')  // Comma might as well be optional for now
-          consumeToken()
+          consumeToken();
         if (token().type === ']') {
           consumeToken();
           return res;
