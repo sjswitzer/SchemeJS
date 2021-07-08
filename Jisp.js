@@ -159,7 +159,7 @@ function defineGlobalSymbol(val, opts = {}, ...names) {
   return atom;
 }
 Atom.NIL = defineGlobalSymbol(NIL, {}, "nil");
-Atom.TRUE = defineGlobalSymbol(true, {}, "true");
+Atom.TRUE = defineGlobalSymbol(true, {}, "true", "t");
 Atom.FALSE = defineGlobalSymbol(false, {}, "false");
 Atom.NULL = defineGlobalSymbol(null, {}, "null");
 Atom.UNDEFINED = defineGlobalSymbol(false, {}, "undefined");
@@ -170,9 +170,14 @@ defineGlobalSymbol(cdr, { lift: 1 }, "cdr");
 defineGlobalSymbol(cadr, { lift: 1 }, "cadr");
 defineGlobalSymbol(cdar, { lift: 1 }, "cdar");
 defineGlobalSymbol(cddr, { lift: 1 }, "cddr");
+defineGlobalSymbol(a => !!a.isCons, { lift: 1 }, "consp");
+defineGlobalSymbol(a => typeof a == 'number', { lift: 1 }, "numberp");
+defineGlobalSymbol(a => a < 0 ? -a : a, { lift: 1 }, "abs");
+defineGlobalSymbol(a => Math.sqrt(a), { lift: 1 }, "sqrt");
+defineGlobalSymbol(a => Math.cbrt(a), { lift: 1 }, "cbrt");
 
 // Pokemon gotta catch 'em' all!
-defineGlobalSymbol((a) => a === NIL || !a, { lift: 1 }, "not", "!");
+defineGlobalSymbol((a) => !lispToBool(a), { lift: 1 }, "not", "!");
 defineGlobalSymbol((a) => ~a, { lift: 1 }, "bit-not", "~");
 defineGlobalSymbol((a,b) => a ** b, { lift: 2 }, "exp", "**");
 defineGlobalSymbol((a,b) => a % b, { lift: 2 }, "rem", "%");
@@ -566,16 +571,24 @@ function toList(obj, opts) {
 }
 
 //
-// s-epression parser
+// S-epression parser
 //
 
-const DIGITS = "0123456789";
-const ALPHA =
-  "abcdefghijklmnopqrstuvwxyz" +
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const IDENT1 = ALPHA + "~!@#$%^&|*_-+-=|\\<>?/";
-const IDENT2 = IDENT1 + DIGITS;
-const OPERATORS = "+-*/%\\!&|=<>";
+const TOKS = {}, DIGITS = {}, ALPHA = {}, IDENT1 = {}, IDENT2 = {},
+    NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {};
+for (let ch of `()[]{},':`) TOKS[ch] = true;
+for (let ch of ` \t`) WS[ch] = true;
+for (let ch of `\n\r`) NL[ch] = true;
+for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`)
+  ALPHA[ch] = IDENT1[ch] = IDENT2[ch] = true;
+for (let ch of `0123456789`)
+  DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = true;
+for (let ch of `+-.`)
+  NUM1[ch] = NUM2[ch] = true;
+for (let ch of `eEoOxXbBn`)
+  NUM2[ch] = true;
+for (let ch of `~!@#$%^&|*_-+-=|\\<>?/`)
+  OPERATORS[ch] = IDENT1[ch] = IDENT2[ch] = true;
 
 function* lispTokenGenerator(characterGenerator) {
   if (!(typeof characterGenerator.next === 'function')) {
@@ -612,27 +625,59 @@ function* lispTokenGenerator(characterGenerator) {
   nextc();
 
   while (ch) {
-    while (ch === ' ' || ch === '\t')
+    while (WS[ch])
       nextc();
 
-    if (ch === '\n' || ch === '\r') {
+    if (NL[ch]) {
       yield { type: 'newline' };
       nextc();
       continue;
     }
 
-    if ("()[]{},':".includes(ch)) {
+    if (TOKS[ch]) {
       yield { type: ch };
       nextc();
       continue;
     }
 
-    if (ch === "." && !DIGITS.includes(peekc())) {
+    if (ch === "." && !DIGITS[peekc()]) {
       yield { type: ch };
       nextc();
       continue;
     }
 
+    // JS numbers are weird. The strategy here is to try them all and let JS sort it out.
+    // XXX Things like "+ " go through unnecessary hoops here.
+    if (NUM1[ch]) {
+      let pos = 0, str = ch;
+      for (;;) {
+        let ch = peekc(pos++);
+        if (!NUM2[ch])
+          break;
+        str += ch;
+      }
+      let value = Number(str);
+      if (isNaN(value)) {
+        value = undefined;
+        if (str.endsWith('n')) {
+          str = str.substr(0, str.length-1);
+          try {  // maybe it's a BigInt?
+            value = BigInt(str);
+          } catch (e) {
+            // eat it
+          }
+        }
+      }
+      if (value !== undefined) {
+        // consume all the characters we peeked and succeed
+        while (pos-- > 0) nextc();
+        yield { type: 'number', value};
+        continue;
+      }
+    }
+
+    /*
+    // XXX deal with +/-
     if (ch === '.' || DIGITS.includes(ch)) {
       let dot = ch === '.';
       let str = ch;
@@ -654,21 +699,16 @@ function* lispTokenGenerator(characterGenerator) {
       }
       yield { type: 'number', value: Number(str) };
       continue;
-    }
+    } */
 
+    // XXX move later; it's less common
     if (ch === '"') {
       let str = "";
       nextc();
-      while (ch && !'"\r\n'.includes(ch)) {
-        if (ch === '\\' ) {
+      while (ch && ch != '"' && !NL[ch]) {
+        if (ch === '\\') {
           nextc();
-          let replace = ESCAPE_STRINGS[ch];
-          if (replace)
-            str += replace;
-          else
-            str += "\\" + ch;
-          nextc();
-          continue;
+          ch = ESCAPE_STRINGS[ch] ?? `\\$ch}`;
         }
         str += ch;
         nextc();
@@ -681,10 +721,14 @@ function* lispTokenGenerator(characterGenerator) {
       continue;
     }
 
-    if (IDENT1.includes(ch)) {
-      let str = "";
-      while (ch && IDENT2.includes(ch))
+    if (IDENT1[ch]) {
+      let str = "", operatorPrefix = OPERATORS[ch];
+      while (ch && IDENT2[ch]) {
+        if (operatorPrefix && DIGITS[ch])  // a prefix of operators breaks at a digit
+          break;
+        if (!OPERATORS[ch]) operatorPrefix = false;
         str += ch, nextc();
+      }
       yield { type: 'atom', value: str };
       continue;
     }
