@@ -540,6 +540,9 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
     str += '"';
     return str;
   }
+  if (objType === 'bigint') {
+    return `${String(obj)}n`;
+  }
   // XXX there must be more to do here
   return String(obj);
 }
@@ -634,74 +637,6 @@ function* lispTokenGenerator(characterGenerator) {
       continue;
     }
 
-    if (TOKS[ch]) {
-      yield { type: ch };
-      nextc();
-      continue;
-    }
-
-    if (ch === "." && !DIGITS[peekc()]) {
-      yield { type: ch };
-      nextc();
-      continue;
-    }
-
-    // JS numbers are weird. The strategy here is to try them all and let JS sort it out.
-    // XXX Things like "+ " go through unnecessary hoops here.
-    if (NUM1[ch]) {
-      let pos = 0, str = ch;
-      for (;;) {
-        let ch = peekc(pos++);
-        if (!NUM2[ch])
-          break;
-        str += ch;
-      }
-      let value = Number(str);
-      if (isNaN(value)) {
-        value = undefined;
-        if (str.endsWith('n')) {
-          str = str.substr(0, str.length-1);
-          try {  // maybe it's a BigInt?
-            value = BigInt(str);
-          } catch (e) {
-            // eat it
-          }
-        }
-      }
-      if (value !== undefined) {
-        // consume all the characters we peeked and succeed
-        while (pos-- > 0) nextc();
-        yield { type: 'number', value};
-        continue;
-      }
-    }
-
-    /*
-    // XXX deal with +/-
-    if (ch === '.' || DIGITS.includes(ch)) {
-      let dot = ch === '.';
-      let str = ch;
-      nextc();
-      while(DIGITS.includes(ch) || (!dot && ch === ".")) {
-        str += ch;
-        if (ch === ".") dot = true;
-        nextc();
-      }
-      if (ch === 'e') {
-        let pc = peekc();
-        if (DIGITS.includes(pc) || ((pc === "+" || pc === "-") && DIGITS.includes(peekc(1)))) {
-          str += ch, nextc();
-          if (ch === "+" || ch === "-")
-            str += ch, nextc();
-          while (DIGITS.includes(ch))
-            str += ch, nextc();
-        }
-      }
-      yield { type: 'number', value: Number(str) };
-      continue;
-    } */
-
-    // XXX move later; it's less common
     if (ch === '"') {
       let str = "";
       nextc();
@@ -719,6 +654,52 @@ function* lispTokenGenerator(characterGenerator) {
         yield { type: 'garbage', value: '"'+str };
       nextc();
       continue;
+    }
+
+    if (TOKS[ch]) {
+      yield { type: ch };
+      nextc();
+      continue;
+    }
+
+    if (ch === "." && !DIGITS[peekc()]) {
+      yield { type: ch };
+      nextc();
+      continue;
+    }
+
+    // JS numbers are weird. The strategy here is to try them all and let JS sort it out.
+    // XXX Things like "+ " go through unnecessary hoops here.
+    if (NUM1[ch]) {
+      // Keep + and - from having to jump through unnecessary hoops
+      let pc = peekc(), falsePlusMinus = (ch === '+' || ch === '-') && !(pc !== '.' || DIGITS[pc]);
+      if (!falsePlusMinus) {
+        let pos = 0, str = ch;
+        for (;;) {
+          let ch = peekc(pos++);
+          if (!NUM2[ch])
+            break;
+          str += ch;
+        }
+        let value = Number(str);
+        if (isNaN(value)) {
+          value = undefined;
+          if (str.endsWith('n')) {
+            str = str.substr(0, str.length-1);
+            try {  // maybe it's a BigInt?
+              value = BigInt(str);
+            } catch (e) {
+              // eat it
+            }
+          }
+        }
+        if (value !== undefined) {
+          // consume all the characters we peeked and succeed
+          while (pos-- > 0) nextc();
+          yield { type: 'number', value};
+          continue;
+        }
+      }
     }
 
     if (IDENT1[ch]) {
@@ -969,7 +950,7 @@ console.log("Test NIL iterable", [...NIL]);
 console.log("Test cons", String(cons('x', cons('y', NIL))));
 console.log("Test cons", String(cons('x', 'y')));
 console.log("Test cons", String(cons('x', cons('y', 'z'))));
-let str = `(+ b (- 1 2)) ${'\n'} 12 ( .) . 1.23 ' .23 .23.4 .23e+234 a bc b21 "asd"`;
+let str = `12b +5 -3.2e7 15b (+ b (- 1 2)) ${'\n'} 12 ( .) . 1.23 ' .23 .23.4 .23e+234 a bc b21 "asd"`;
 let tokens = lispTokenGenerator(str);
 let tokenList = [ ...tokens ];
 console.log("Test lispTokenGenerator", tokenList);
