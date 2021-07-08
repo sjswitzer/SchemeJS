@@ -832,13 +832,13 @@ function parseSExpr(tokenGenerator, opts = {}) {
     while (_toks.length > 0) {
       let tok = _toks.shift();
       if (tok.type === 'newline' || tok.type === 'end')
-        return str === '' ? none : str;
+        return str === '' ? null : str;
       str += sep + tok.value !== undefined ? lispToString(tok.value) : tok.type;
       sep = " ";
     }
     for (;;) {
-      let { next, value: tok } = tokenGenerator.next();
-      if (!next) return str;
+      let { done, value: tok } = tokenGenerator.next();
+      if (done) return str;
       str += sep + tok.value !== undefined ? lispToString(tok.value) : tok.type;
     }
   }
