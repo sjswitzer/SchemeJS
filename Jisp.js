@@ -460,7 +460,7 @@ function lispEval(expr, scope = GlobalScope) {
   if (expr === NIL) return expr;
   if (typeof expr === 'symbol') {
     let val = resolveSymbol(expr, scope);
-    if (val === undefined) throw new ResolveError(`Can't resolve ${expr.description}`);
+    if (val === undefined) throw new ResolveError(`Undefined symbol ${expr.description}`);
     return val;
   }
   if (typeof expr !== 'object') return expr;
@@ -470,9 +470,9 @@ function lispEval(expr, scope = GlobalScope) {
     if (!(args instanceof Cons)) throw new EvalError(`Bad argument list ${args}`);
     return args.car;
   }
-  if (typeof op === 'symbol') { // XXX a deeper eval needed? A different order?
+  if (typeof op === 'symbol') {
     let resolved = resolveSymbol(op, scope);
-    if (!resolved) throw new ResolveError(`Can't resolve symbol "${op.description}"`);
+    if (!resolved) throw new ResolveError(`Undefined symbol "${op.description}"`);
     op = resolved;
   }
   if (typeof op === 'function') {
