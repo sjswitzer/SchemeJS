@@ -186,7 +186,7 @@ defineGlobalSymbol("consp", a => a.isCons === true, { lift: 1 }, "isCons");
 defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 }, "isNumber");
 defineGlobalSymbol("typeof", a => typeof a, { lift: 1 });
 defineGlobalSymbol("isUndefined", a => typeof a === 'undefined', { lift: 1 });
-defineGlobalSymbol("isNull", a => typeof a === 'null', { lift: 1 });
+defineGlobalSymbol("isNull", a => a === null, { lift: 1 });
 defineGlobalSymbol("isBoolean", a => typeof a === 'boolean', { lift: 1 });
 defineGlobalSymbol("isNumber", a => typeof a === 'number', { lift: 1 });
 defineGlobalSymbol("isBigInt", a => typeof a === 'bigint', { lift: 1 });
@@ -194,6 +194,7 @@ defineGlobalSymbol("isString", a => typeof a === 'string', { lift: 1 });
 defineGlobalSymbol("isSymbol", a => typeof a === 'symbol', { lift: 1 });
 defineGlobalSymbol("isFunction", a => typeof a === 'function', { lift: 1 });
 defineGlobalSymbol("isObject", a => typeof a === 'object', { lift: 1 });
+defineGlobalSymbol("isObject", a => (typeof a === 'object') && (a instanceof Array), { lift: 1 });
 defineGlobalSymbol("abs", a => a < 0 ? -a : a, { lift: 1 });
 defineGlobalSymbol("sqrt", a => Math.sqrt(a), { lift: 1 });
 defineGlobalSymbol("cbrt", a => Math.cbrt(a), { lift: 1 });
@@ -202,6 +203,9 @@ defineGlobalSymbol("Atom", a => Atom(a), { lift: 1 });
 defineGlobalSymbol("Symbol", a => Symbol(a), { lift: 1 });
 defineGlobalSymbol("toArray", a => toArray(a), { lift: 1 });
 defineGlobalSymbol("toLisp", a => toLisp(a), { lift: 1 });
+defineGlobalSymbol("toString", a => String(a), { lift: 1 });
+defineGlobalSymbol("toNumber", a => Number(a), { lift: 1 });
+defineGlobalSymbol("toBigInt", a => BigInt(a), { lift: 1 });
 defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ], { lift: 2 });
 defineGlobalSymbol("parseSExpr", (a, b) => parseSExpr(a, b), { lift: 2 });
 
@@ -533,6 +537,8 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   if (maxDepth <= 0) return "...";
   let objType = typeof obj;
   if (obj === NIL) return "()";
+  if (obj === undefined) return "undefined";
+  if (obj === null) return "null";   // remember: typeof null === 'object'!
   if (objType === 'object') {
     if (obj instanceof Cons) {
       let before = "(", after = ")";
@@ -794,6 +800,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
         throw new LogicError(`Not an iterator or iterable ${origParam}`);
     }
   }
+  replHints.currentPrompt = prompt;
 
   let _toks = [], _done = false;
   function token(n = 0) {
@@ -826,8 +833,6 @@ function parseSExpr(tokenGenerator, opts = {}) {
   }
 
   function unParesedInput() {
-    // Here we pay the penalty for abstraction. We have no principled access to
-    // the rest of the input stream. So we have to make do.
     let str = "", sep = "";
     while (_toks.length > 0) {
       let tok = _toks.shift();
@@ -865,11 +870,11 @@ function parseSExpr(tokenGenerator, opts = {}) {
 
     if (token().type === '(') {
       let newPrompt = promptStr + promptMore;
-      replHints.prompt = newPrompt;
+      replHints.currentPrompt = newPrompt;
       consumeToken();
       function parseListBody() {
         if (token().type === ')') {
-          replHints.prompt = promptStr;
+          replHints.currentPrompt = promptStr;
           consumeToken();
           return NIL;
         }
@@ -883,7 +888,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
     if (token().type === '[') {  // JavaScript Array, oddly enough!
       let res = [];
       let newPrompt = promptStr + promptMore;
-      replHints.prompt = newPrompt;
+      replHints.currentPrompt = newPrompt;
       consumeToken();
       for (;;) {
         let item = parseExpr(newPrompt);
@@ -901,7 +906,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
     if (token().type === '{') {  // JavaScript Object literal too!
       let res = {};
       let newPrompt = promptStr + promptMore;
-      replHints.prompt = newPrompt;
+      replHints.currentPrompt = newPrompt;
       consumeToken();
       for (;;) {
         if (token().type === '}') {
@@ -933,9 +938,9 @@ function parseSExpr(tokenGenerator, opts = {}) {
     if (token().type === "'") {
       let newPrompt = promptStr + quotePromptMore;
       consumeToken();
-      replHints.prompt = newPrompt;
+      replHints.currentPrompt = newPrompt;
       let quoted = parseExpr(newPrompt);
-      replHints.prompt = promptStr;
+      replHints.currentPrompt = promptStr;
       return cons(Atom.QUOTE, cons(quoted, NIL));
     }
 
@@ -982,7 +987,7 @@ function lispREPL(readline, opts = {}) {
   let done = false;
   function* charStreamPromptInput() {
     for(;;) {
-      let line = readline(replHints.prompt);
+      let line = readline(replHints.currentPrompt);
       if (line === null || line === undefined || endTest(line)) {
         done = true;
         return;
