@@ -770,7 +770,7 @@ function* lispTokenGenerator(characterGenerator) {
         if (!OPERATORS[ch]) operatorPrefix = false;
         str += ch, nextc();
       }
-      yield { type: 'atom', value: str };
+      yield { type: 'atom', value: Atom(str) };
       continue;
     }
 
@@ -833,7 +833,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
       let tok = _toks.shift();
       if (tok.type === 'newline' || tok.type === 'end')
         return str === '' ? null : str;
-      str += sep + tok.value !== undefined ? lispToString(tok.value) : tok.type;
+      str += sep + (tok.value !== undefined ? lispToString(tok.value) : tok.type);
       sep = " ";
     }
     for (;;) {
@@ -841,6 +841,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
       if (done) return str;
       if (tok.type === 'newline' || tok.type === 'end')
         return str;
+      let val = tok.value;
       str += sep + (tok.value !== undefined ? lispToString(tok.value) : tok.type);
       sep = " ";
     }
@@ -853,8 +854,6 @@ function parseSExpr(tokenGenerator, opts = {}) {
     if (!dotNext && (token().type === 'atom' || token().type === 'string' ||
         token().type === 'number')) {
       let thisToken = consumeToken();
-      if (thisToken.type === 'atom')
-        return Atom(thisToken.value);
       return thisToken.value;
     }
 
@@ -912,6 +911,8 @@ function parseSExpr(tokenGenerator, opts = {}) {
         let gotIt = false;
         if (token().type === 'atom' || token().type === 'string' || token().type === 'number') {
           let sym = token().value;
+          if (typeof sym === 'symbol')
+            sym = sym.description;
           consumeToken();
           if (token().type === ':') {
             consumeToken();
@@ -954,7 +955,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
       return cons(quoted, quoteArgs(args.cdr));
     }
     let tok = consumeToken();
-    let sym = Atom(tok.value);
+    let sym = tok.value;
     let quoted = parseExpr(prompt);
     if (quoted)
       expr = cons(sym, quoteArgs(quoted));
