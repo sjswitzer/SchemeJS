@@ -184,7 +184,7 @@ defineGlobalSymbol("cdar", cdar, { lift: 1 });
 defineGlobalSymbol("cddr", cddr, { lift: 1 });
 defineGlobalSymbol("consp", a => a.isCons === true, { lift: 1 }, "isCons");
 defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 }, "isNumber");
-defineGlobalSymbol("typeof", a => typeof, { lift: 1 });
+defineGlobalSymbol("typeof", a => typeof a, { lift: 1 });
 defineGlobalSymbol("isUndefined", a => typeof a === 'undefined', { lift: 1 });
 defineGlobalSymbol("isNull", a => typeof a === 'null', { lift: 1 });
 defineGlobalSymbol("isBoolean", a => typeof a === 'boolean', { lift: 1 });
