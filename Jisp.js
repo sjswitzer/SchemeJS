@@ -12,6 +12,7 @@ class LispError extends Error {
 class EvalError extends LispError {};
 class ResolveError extends LispError {};
 class ParseError extends LispError {};
+const LogicError = Error;
 
 // Atoms are Symbols
 function Atom(name) {
@@ -48,10 +49,12 @@ class Cons {
   }
   *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
+// XXX There should be a way to do this in the class decl, but how?
+// TODO: make isCons a symbol
+Cons.prototype.isCons = true;
 
 // Nil must be a Cons because it is a list: the empty one. It should be JS-iterable.
 const NIL = new (class Nil extends Cons {});  // Makes things look nicer in debugger
-NIL.__proto__.isCons = false;  // XXX is there a better way?
 
 function nextCons() {
   let current = this._current, done = current === NIL, value = undefined;
@@ -61,8 +64,6 @@ function nextCons() {
   }
   return { done, value };
 }
-// XXX There should be a way to do this in the class decl, but how?
-Cons.prototype.isCons = true;
 
 class LazyCons {
   _carFn; _cdrFn;
@@ -123,7 +124,7 @@ function lispToBool(val) {
 //
 // Coerce Lisp values to JS values
 //
-function lispToJS(val) {
+function lispToJS(val) {   // XXX Is this really needed?
   if (val === NIL) val = null;
   else if (val === Atom.TRUE) val = true;
   else if (val === Atom.FALSE) val = false;
@@ -149,7 +150,10 @@ const evalArgsSymbol = Symbol("*eval-args*");
 const liftSymbol = Symbol("*lift*");
 const BIGGEST_INT32 = 2**32-1;
 
-function defineGlobalSymbol(val, opts = {}, ...names) {
+function defineGlobalSymbol(name, val, ...aliases) {
+  let opts = {};
+  if (typeof aliases[0] === 'object')
+    opts = aliases.shift();
   let evalArgs = opts.evalArgs ?? BIGGEST_INT32, lift = opts.lift ?? 0;
   if (!evalArgs) evalArgs = BIGGEST_INT32;
   if (lift === '*') lift = BIGGEST_INT32;
@@ -157,120 +161,130 @@ function defineGlobalSymbol(val, opts = {}, ...names) {
     val[evalArgsSymbol] = evalArgs;
     val[liftSymbol] = lift;
   }
-  let atom = Atom._defineAtom(...names);
+  let atom = Atom(name);
   GlobalEnv.set(atom, val);
+  for (let alias of aliases)
+    GlobalEnv.set(Atom(name), val);
   return atom;
 }
-Atom.NIL = defineGlobalSymbol(NIL, {}, "nil");
-Atom.TRUE = defineGlobalSymbol(true, {}, "true", "t");
-Atom.FALSE = defineGlobalSymbol(false, {}, "false");
-Atom.NULL = defineGlobalSymbol(null, {}, "null");
-Atom.UNDEFINED = defineGlobalSymbol(false, {}, "undefined");
-Atom.QUOTE = defineGlobalSymbol((x) => x, { evalArgs: 0 }, "quote", "'");
-defineGlobalSymbol(cons, { lift: 2 }, "cons");
-defineGlobalSymbol(car, { lift: 1 }, "car");
-defineGlobalSymbol(cdr, { lift: 1 }, "cdr");
-defineGlobalSymbol(cadr, { lift: 1 }, "cadr");
-defineGlobalSymbol(cdar, { lift: 1 }, "cdar");
-defineGlobalSymbol(cddr, { lift: 1 }, "cddr");
-defineGlobalSymbol(a => !!a.isCons, { lift: 1 }, "consp");
-defineGlobalSymbol(a => typeof a == 'number', { lift: 1 }, "numberp");
-defineGlobalSymbol(a => a < 0 ? -a : a, { lift: 1 }, "abs");
-defineGlobalSymbol(a => Math.sqrt(a), { lift: 1 }, "sqrt");
-defineGlobalSymbol(a => Math.cbrt(a), { lift: 1 }, "cbrt");
+
+defineGlobalSymbol("defineGlobalSymbol", defineGlobalSymbol, { lift: '*' });
+Atom.NIL = defineGlobalSymbol("nil", NIL);
+Atom.TRUE = defineGlobalSymbol("t", true);
+Atom.FALSE = defineGlobalSymbol("false", false);
+Atom.NULL = defineGlobalSymbol("null", null);
+Atom.UNDEFINED = defineGlobalSymbol("undefined", undefined);
+Atom.QUOTE = defineGlobalSymbol("quote", x => x, { evalArgs: 0 }, "'");
+defineGlobalSymbol("cons", cons, { lift: 2 });
+defineGlobalSymbol("car", car, { lift: 1 });
+defineGlobalSymbol("cdr", cdr, { lift: 1 });
+defineGlobalSymbol("cadr", cadr, { lift: 1 });
+defineGlobalSymbol("cdar", cdar, { lift: 1 });
+defineGlobalSymbol("cddr", cddr, { lift: 1 });
+defineGlobalSymbol("consp", a => a.isCons === true, { lift: 1 }, "isCons");
+defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 });
+defineGlobalSymbol("abs", a => a < 0 ? -a : a, { lift: 1 });
+defineGlobalSymbol("sqrt", a => Math.sqrt(a), { lift: 1 });
+defineGlobalSymbol("cbrt", a => Math.cbrt(a), { lift: 1 });
+
+defineGlobalSymbol("Atom", a => Atom(a), { lift: 1 });
+defineGlobalSymbol("Symbol", a => Symbol(a), { lift: 1 });
+defineGlobalSymbol("toArray", a => toArray(a), { lift: 1 });
+defineGlobalSymbol("toLisp", a => toLisp(a), { lift: 1 });
+defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ], { lift: 2 });
+defineGlobalSymbol("parseSExpr", (a, b) => parseSExpr(a, b), { lift: 2 });
 
 // Pokemon gotta catch 'em' all!
-defineGlobalSymbol((a) => !lispToBool(a), { lift: 1 }, "not", "!");
-defineGlobalSymbol((a) => ~a, { lift: 1 }, "bit-not", "~");
-defineGlobalSymbol((a,b) => a ** b, { lift: 2 }, "exp", "**");
-defineGlobalSymbol((a,b) => a % b, { lift: 2 }, "rem", "%");
-defineGlobalSymbol((a,b) => a << b, { lift: 2 }, "bit-shl", "<<");
-defineGlobalSymbol((a,b) => a >> b, { lift: 2 }, "bit-shr", ">>");
-defineGlobalSymbol((a,b) => a >>> b, { lift: 2 }, "bit-ushr", ">>");
-defineGlobalSymbol((a,b) => a in b, { lift: 2 }, "in");
-defineGlobalSymbol((cls, ...args) => new cls(...args), { lift: '*' }, "new");
-defineGlobalSymbol((a,b) => a instanceof b, { lift: 2 }, "instanceof");
-defineGlobalSymbol((a,b) => a != b, { lift: 2 }, "ne", "!=");
-defineGlobalSymbol((a,b) => a !== b, { lift: 2 }, "neeq", "!==");
+defineGlobalSymbol("!", (a) => !lispToBool(a), { lift: 1 }, "not");
+defineGlobalSymbol("~", (a) => ~a, { lift: 1 }, "bit-not");
+defineGlobalSymbol("**", (a,b) => a ** b, { lift: 2 }, "exp");
+defineGlobalSymbol("%", (a,b) => a % b, { lift: 2 }, "rem");
+defineGlobalSymbol("<<", (a,b) => a << b, { lift: 2 }, "bit-shl");
+defineGlobalSymbol(">>", (a,b) => a >> b, { lift: 2 }, "bit-shr");
+defineGlobalSymbol(">>>", (a,b) => a >>> b, { lift: 2 }, "bit-ushr");
+defineGlobalSymbol("in", (a,b) => a in b, { lift: 2 });
+defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { lift: '*' });
+defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { lift: 2 });
 
 // variable args
-defineGlobalSymbol((...args) => {
+defineGlobalSymbol("+", (...args) => {
   let a = 0;
   for (let b of args)
     a += b;
   return a;
-}, { lift: '*' }, "add", "+");
+}, { lift: '*' }, "add");
 
-defineGlobalSymbol((a, ...rest) => {
+defineGlobalSymbol("-", (a, ...rest) => {
   if (rest.length === 0) return -a;  // XXX ???
   for (let b of rest)
     a -= b;
   return a;
-}, { lift: '*' }, "sub", "-");
+}, { lift: '*' }, "sub");
 
-defineGlobalSymbol((...args) => {
+defineGlobalSymbol("*", (...args) => {
   let a = 1;
   for (let b of args)
     a *= b;
   return a;
-}, { lift: '*' }, "mul", "*");
+}, { lift: '*' }, "mul");
 
-defineGlobalSymbol((a, ...rest) => {
+defineGlobalSymbol('/', (a, ...rest) => {
   if (rest.length === 0) return 1/a;  // XXX ???
   for (let b of rest)
     a /= b;
   return a;
-}, { lift: '*' }, "div", "/");
+}, { lift: '*' }, "/");
 
-defineGlobalSymbol((...args) => {
+defineGlobalSymbol("&", (...args) => {
   let a = ~0;
   for (let b of args)
     a &= b;
   return a;
-}, { lift: '*' }, "bit-and", "&");
+}, { lift: '*' }, "bit-and");
 
-defineGlobalSymbol((...args) => {
+defineGlobalSymbol("|", (...args) => {
   let a = 0;
   for (let b of args)
     a |= b;
   return a;
-}, { lift: '*' }, "bit-or", "|");
+}, { lift: '*' }, "bit-or");
 
-defineGlobalSymbol((...args) => {
+defineGlobalSymbol("^", (...args) => {
   let a = 0;
   for (let b of args)
     a ^= b;
   return a;
-}, { lift: '*' }, "bit-xor", "");
+}, { lift: '*' }, "bit-xor");
 
-defineGlobalSymbol((...args) => {
+defineGlobalSymbol("&", (...args) => {
   let a = ~0;
   for (let b of args)
     a &= b;
   return a;
-}, { lift: '*' }, "bit-and", "&");
+}, { lift: '*' }, "bit-and");
 
-defineGlobalSymbol(function(a, ...rest) {
-  if (rest.length === 0) return false; // not less than itself
+// XXX todo: do all of these without lifting to array
+defineGlobalSymbol("<", function(a, ...rest) {
+  if (rest.length === 0) return false; // not less than itself?
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a < b)) return false;
     a = b;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "lt", "<");
+}, { evalArgs: 1, lift: '*' }, "lt");
 
-defineGlobalSymbol(function(a, ...rest) {
-  if (rest.length === 0) return true; // equal to itself
+defineGlobalSymbol("<=", function(a, ...rest) {
+  if (rest.length === 0) return true; // equal to itself?
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a <= b)) return false;
     a = b;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "le", "<=");
+}, { evalArgs: 1, lift: '*' }, "le");
 
-defineGlobalSymbol(function(a, ...rest) {
+defineGlobalSymbol(">", function(a, ...rest) {
   if (rest.length === 0) return false;
   for (let b of rest) {
     b = lispEval(b, this);
@@ -278,9 +292,9 @@ defineGlobalSymbol(function(a, ...rest) {
     a = b;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "gt", ">");
+}, { evalArgs: 1, lift: '*' }, "gt");
 
-defineGlobalSymbol(function(a, ...rest) {
+defineGlobalSymbol(">=", function(a, ...rest) {
   if (rest.length === 0) return true;
   for (let b of rest) {
     b = lispEval(b, this);
@@ -288,75 +302,95 @@ defineGlobalSymbol(function(a, ...rest) {
     a = b;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "ge", ">=");
+}, { evalArgs: 1, lift: '*' }, "ge");
 
-defineGlobalSymbol(function(a, ...rest) {
+defineGlobalSymbol("==", function(a, ...rest) {
   if (rest.length === 0) return true;
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a == b)) return false;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "eq", "==");
+}, { evalArgs: 1, lift: '*' }, "eq");
 
-defineGlobalSymbol(function(a, ...rest) {
+defineGlobalSymbol("===", function(a, ...rest) {
   if (rest.length === 0) return true;
   for (let b of rest) {
     b = lispEval(b, this);
     if (!(a === b)) return false;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "eeq", "===");
+}, { evalArgs: 1, lift: '*' }, "eeq");
 
-// logical &conditional
+defineGlobalSymbol("!=", function(a, ...rest) {  // all not equal to first
+  if (rest.length === 0) return false;
+  for (let b of rest) {
+    b = lispEval(b, this);
+    if (!(a != b)) return false;
+  }
+  return true;
+}, { evalArgs: 1, lift: '*' }, "ne");
 
-defineGlobalSymbol(function(...args) {
+defineGlobalSymbol("!==", function(a, ...rest) {  // all not equal to first
+  if (rest.length === 0) return false;
+  for (let b of rest) {
+    b = lispEval(b, this);
+    if (!(a !== b)) return false;
+  }
+  return true;
+}, { evalArgs: 1, lift: '*' }, "nee");
+
+// logical & conditional
+
+defineGlobalSymbol("&&", function(...args) {
   let a = true;
   for (a of args) {
     a = lispEval(b, this);
     if (!lispToBool(a)) return a;
   }
   return a;
-}, { evalArgs: 0, lift: '*' }, "and", "&&");
+}, { evalArgs: 0, lift: '*' }, "and");
 
-defineGlobalSymbol(function(...args) {
+defineGlobalSymbol("||", function(...args) {
   let a = false;
   for (a of args) {
     a = lispEval(b, this);
     if (lispToBool(a)) return a;
   }
   return a;
-}, { evalArgs: 0, lift: '*' }, "or", "||");
+}, { evalArgs: 0, lift: '*' }, "or");
 
-defineGlobalSymbol(function(predicate, trueBlock, falseBlock) {
+defineGlobalSymbol("?", function(predicate, trueBlock, falseBlock) {
   let res;
   if (lispToBool(predicate))
     res = lispEval(trueBlock, this);
   else
     res = lispEval(falseBlock, this);
   return res;
-}, { evalArgs: 1, lift: 3 }, "if", "?");
+}, { evalArgs: 1, lift: 3 }, "if");
 
 // JavaScripty things:
 //   XXX TODO: delete, setting
 
-defineGlobalSymbol((a, b) => a[b], { lift: 2 }, "@");  // indexing and member access
-defineGlobalSymbol((a, b) => a?.[b], { lift: 2 }, "?@");  // conditional indexing and member access
+defineGlobalSymbol("@", (a, b) => a[b], { lift: 2 });  // indexing and member access
+defineGlobalSymbol("?@", (a, b) => a?.[b], { lift: 2 });  // conditional indexing and member access
+defineGlobalSymbol("toLisp", toLisp, { lift: 1 });
+defineGlobalSymbol("toArray", toArray, { lift: 1 });
 
 //
 // try/catch/filnally. Just a sketch for now.
 //
 
-defineGlobalSymbol(e => { throw e }, { lift: 1 }, "throw");
+defineGlobalSymbol("throw", e => { throw e }, { lift: 1 });
 
-defineGlobalSymbol(function (handler, body) {  // XXX order of args?
+defineGlobalSymbol("finally", function (handler, body) {  // XXX order of args?
   let val = NIL;
   try { val = lispEval(body, this); }
   finally { lispEval(handler, this); }
   return val;
-}, { evalArgs: 0, lift: 2 }, "finally");
+}, { evalArgs: 0, lift: 2 });
 
-defineGlobalSymbol(function(e, handler, body) {  // XXX order of args?
+defineGlobalSymbol("catch", function(e, handler, body) {  // XXX order of args?
   // Tempting to save some of this work for the handler, but better to report errors early
   let cls, sym;
   if (typeof e === 'symbol') {
@@ -382,7 +416,7 @@ defineGlobalSymbol(function(e, handler, body) {  // XXX order of args?
     val = lispEval(handler, new Scope(env, this));
   }
   return val;
-}, { evalArgs: 0, lift: 3 }, "catch");
+}, { evalArgs: 0, lift: 3 });
 
 //
 // This is where the magic happens
@@ -483,7 +517,7 @@ const STRING_ESCAPES = (() => {
   return res;
 })();
 
-// XXX Line wrapping
+// XXX TODO: Line wrapping
 function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   if (maxDepth <= 0) return "...";
   let objType = typeof obj;
@@ -552,28 +586,42 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
 
 const toLispSymbol = Symbol("toLisp");
 
-//
-// Turn iterables objects into lists
-//
-function toList(obj, opts) { 
+// Turn iterables objects like arrays into lists
+function toLisp(obj, depth = BIGGEST_INT32, opts) { 
+  if (depth <= 0)return obj;
   if (typeof obj === 'object') {
-    let iterator = obj;
-    if (typeof obj[toLispSymbol] === 'function')
+    if (obj.isCons) return obj;  // Careful; cons is iterable itself
+    if (obj[toLispSymbol])
       return obj[toLispSymbol](opts);
-    if (typeof obj[Symbol.iterator] === 'function')
+    let iterator;
+    if (obj[Symbol.iterator]) {
       iterator = obj[Symbol.iterator]();
-    if (typeof iterator.next == 'function') {
-      let next = iterator.next();
-      if (typeof (next?.done) === 'boolean') {
-        if (next.done)
-          return NIL;
-        let value = toList(next.value, opts);
-        return cons(value, toList(iterator));
-      }
+    } else {
+      if (obj instanceof Function)  // assume it's an iterator
+        iterator = obj;
     }
-    // guess it wasn't an iterator after all. Oh well!
+    if (iterator) {
+      function go() {
+        let { done, value } = iterator.next();
+        if (done) return NIL;
+        return cons(toLisp(obj, depth-1, opts), go());
+      }
+      return go();
+    }
   }
   return obj;
+}
+
+function toArray(obj, depth = BIGGEST_INT32) {
+  if (depth <= 0) return obj;
+  if (obj === NIL) return [];
+  if (!obj.isCons) return obj;
+  let arr = [];
+  while (obj !== NIL && obj.isCons) {
+    arr.push(toArray(obj.car), depth-1);
+    obj = obj.cdr;
+  }
+  return arr;
 }
 
 //
@@ -602,7 +650,7 @@ function* lispTokenGenerator(characterGenerator) {
       let origParam = characterGenerator;
       characterGenerator = characterGenerator[Symbol.iterator]();
       if (!(typeof characterGenerator.next === 'function'))
-        throw new Error(`Not an iterator or iterable ${origParam}`);
+        throw new LogicError(`Not an iterator or iterable ${origParam}`);
     }
   }
   let ch = "", _peek = [], _done = false;
@@ -733,54 +781,56 @@ function parseSExpr(tokenGenerator, opts = {}) {
       let origParam = tokenGenerator;
       tokenGenerator = tokenGenerator[Symbol.iterator]();
       if (!(typeof tokenGenerator.next === 'function'))
-        throw new Error(`Not an iterator or iterable ${origParam}`);
+        throw new LogicError(`Not an iterator or iterable ${origParam}`);
     }
   }
 
-  let _token = null, _peek = [], _done = false;
+  let _toks = [], _done = false;
   function token(n = 0) {
-    if (n === 0) {
-      // Fetch current token, lazily, to prevent fetching a new line prematurely
-      if (_token) return _token;
-      do {
-        _token = _nextToken();
-        // Will never return a newline token, but a newline could be in the peek queue.
-        // This prevents, for instance, "dotNext" from looking across a line.
-        // So, basically, newlines sit in the peek queue to help deal with heuristic
-        // "shall we continue to the next line" issues in the parser. It only really
-        // matters for the REPL.
-      } while (_token.type === 'newline')
-      return _token;
-    }
-    // Otherwise peek ahead
-    for (let get = n - _peek.length; get > 0; --get) {
-      let next = tokenGenerator.next();
-      if (next.done) {
-        _done = true;
-        return { type: 'end'};
+    // Two main ideas here, mostly in support of the REPL:
+    // (1) Don't read anything until absolutely necessary.
+    // (2) Foil attempts to peek for tokens across a line boundary by leaving
+    //     'newline' tokens in the peek buffer. But to simplify the parser,
+    //      token(0) skips past any newline tokens.
+    for (;;) {
+      for (let get = n - _toks.length; get >= 0 && !_done; --get) {
+        let next = tokenGenerator.next();
+        if (next.done)
+          _done = true;
+        else
+          _toks.push(next.value);
       }
-      _peek.push(next.value);
+      if (n >= _toks.length)
+        return { type: 'end'};
+      let res = _toks[n];
+      if (n > 0 || res.type !== 'newline')
+        return res;
+      // token(0) never returns a newline token
+      while (_toks.length > 0 && _toks[0].type === 'newline')
+        _toks.shift();
     }
-    return _peek[n-1];
   }
 
   function consumeToken() {
-    let currToken = token();
-    _token = null;
-    return currToken;
+    return _toks.shift();
   }
 
-  function _nextToken() {
-    if (_peek.length > 0)
-        return _peek.shift();
-    else if (_done)
-      return { type: 'end'};
-    let next = tokenGenerator.next();
-    if (next.done) {
-      _done = true;
-      return { type: 'end'};
+  function unParesedInput() {
+    // Here we pay the penalty for abstraction. We have no principled access to
+    // the rest of the input stream. So we have to make do.
+    let str = "", sep = "";
+    while (_toks.length > 0) {
+      let tok = _toks.shift();
+      if (tok.type === 'newline' || tok.type === 'end')
+        return str === '' ? none : str;
+      str += sep + tok.value !== undefined ? lispToString(tok.value) : tok.type;
+      sep = " ";
     }
-    return next.value;
+    for (;;) {
+      let { next, value: tok } = tokenGenerator.next();
+      if (!next) return str;
+      str += sep + tok.value !== undefined ? lispToString(tok.value) : tok.type;
+    }
   }
 
   function parseExpr(promptStr) {
@@ -899,11 +949,12 @@ function parseSExpr(tokenGenerator, opts = {}) {
     // Modern form
     expr = parseExpr(prompt);
   }
-  let peek = token(1);
-  let viable = peek.type === 'end' || peek.type === 'newline';
-  if (viable)
+
+  let unparsed = unParesedInput();
+  if (!unparsed)
     return expr;
-  throw new ParseError(`Unparsed: ${peek.type} ${peek.value}`);
+  let tok = token();
+  throw new ParseError(`Unparsed: ${unparsed}`);
 }
 
 function lispREPL(readline, opts = {}) {
@@ -947,7 +998,7 @@ function lispREPL(readline, opts = {}) {
   }
 }
 
-let x = toList(['a', 'b', [ 1, 2, 3 ], 'c']);
+let x = toLisp(['a', 'b', [ 1, 2, 3 ], 'c']);
 console.log("Test toList", x);
 console.log("Test toString", String(x));
 console.log("Test NIL toString", String(NIL));
