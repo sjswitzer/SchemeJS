@@ -139,6 +139,13 @@ const cadr = cons => cons.cdr.car;  // Beware the order here; in JS it's reverse
 const cdar = cons => cons.car.cdr;
 const cddr = cons => cons.cdr.cdr;
 
+function list(...elements) {  // easy list builder
+  let val = NIL;
+  for (let i = elements.length; i > 0; --i)
+    val = cons(elements[i-1], val);
+  return val;
+}
+
 //
 // An environment is simply a Map.
 // A Scope is a list of environments.
@@ -156,13 +163,12 @@ function defineGlobalSymbol(name, val, ...aliases) {
   if (typeof aliases[0] === 'object')
     opts = aliases.shift();
   let evalArgs = opts.evalArgs ?? BIGGEST_INT32, lift = opts.lift ?? 0;
-  if (!evalArgs) evalArgs = BIGGEST_INT32;
   if (lift === '*') lift = BIGGEST_INT32;
   if (typeof val === 'function') {
     val[evalArgsSymbol] = evalArgs;
     val[liftSymbol] = lift;
   }
-  let atom = Atom(name);
+  let atom = typeof name === 'string' ? Atom(name) : name;
   GlobalEnv.set(atom, val);
   for (let alias of aliases)
     GlobalEnv.set(Atom(name), val);
@@ -203,11 +209,17 @@ defineGlobalSymbol("Atom", a => Atom(a), { lift: 1 });
 defineGlobalSymbol("Symbol", a => Symbol(a), { lift: 1 });
 defineGlobalSymbol("toArray", a => toArray(a), { lift: 1 });
 defineGlobalSymbol("toLisp", a => toLisp(a), { lift: 1 });
-defineGlobalSymbol("toString", a => String(a), { lift: 1 });
+defineGlobalSymbol("toString", a => lispToString(a), { lift: 1 });
 defineGlobalSymbol("toNumber", a => Number(a), { lift: 1 });
 defineGlobalSymbol("toBigInt", a => BigInt(a), { lift: 1 });
 defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ], { lift: 2 });
 defineGlobalSymbol("parseSExpr", (a, b) => parseSExpr(a, b), { lift: 2 });
+defineGlobalSymbol("eval", (expr, opts) => {
+  if (opts === NIL) opts = {};
+  if (typeof expr === 'string')
+  expr = parseSExpr(expr, opts);
+  return lispEval(expr);
+}, { lift: 2 });
 
 // Pokemon gotta catch 'em' all!
 defineGlobalSymbol("!", (a) => !lispToBool(a), { lift: 1 }, "not");
@@ -433,6 +445,13 @@ defineGlobalSymbol("catch", function(e, handler, body) {  // XXX order of args?
   return val;
 }, { evalArgs: 0, lift: 3 });
 
+defineGlobalSymbol("define", (nameAndArgs, body) => {
+  let name = nameAndArgs.car;
+  let args = nameAndArgs.cdr;
+  defineGlobalSymbol(name, list(Atom.LAMBDA, args, body));
+  return name;
+}, { evalArgs: 0, lift: 2 });
+
 //
 // This is where the magic happens
 //
@@ -479,24 +498,25 @@ function lispEval(expr, scope = GlobalScope) {
   // (\ args body)
   if (op instanceof Cons)  {
     if (op.car === Atom.LAMBDA || op.car === Atom.SLAMBDA) {
+      let formalParams = op.cdr.car;
+      let body = op.cdr.cdr.car;
       if (op.car !== Atom.SLAMBDA)
         args = evalArgs(args, scope);
-      let formalParams = op.cdr;
-      if (!formalParams) throw new EvalError(`Lambda has no parameters`);
-      let body = formalParams.cdr;
-      if (typeof formalParams === 'symbol') // allow lambda x . body notation. Why not?
-        formalParams = cons(formalParams, NIL);
+       // allow lambda x . body notation? Conflicts with rest param gimmick?
+      // if (typeof formalParams === 'symbol')
+      ///  formalParams = cons(formalParams, NIL);
       let newEnv = new Env;
       let newScope = new Scope(newEnv, scope);
-      while (formalParams instanceof Cons) {
+      while (formalParams !== NIL && formalParams instanceof Cons) {
         let param = formalParams.car;
         if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
         if (args !== NIL) {
-          newEnv[param] = args.car;
-          args = arg.cdr
+          newEnv.set(param, args.car);
+          args = args.cdr
         } else {
           newEnv[param] = NIL;
         }
+        formalParams = formalParams.cdr;
       }
       if (typeof formalParams === 'symbol')  // Neat trick for 'rest' params!
         newEnv[formalParams] = args;
