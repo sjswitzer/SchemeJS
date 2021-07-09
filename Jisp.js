@@ -54,7 +54,7 @@ class Cons {
   }
   *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
-// XXX There should be a way to do this in the class decl, but how?
+// There should be a way to do this in the class decl, but not in ES6
 Cons.prototype[IS_CONS] = true;
 
 // I hide the Nil class because there's never any reason to
@@ -234,7 +234,7 @@ defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ]);
 defineGlobalSymbol("read-from-string", a => parseSExpr(a));
 defineGlobalSymbol("eval", (expr, rest) => {
   env = GlobalEnv;
-  if (rest && rest[IS_CONS])
+  if (typeof rest === 'object' && rest[IS_CONS])
     env = rest.car;
   if (typeof expr === 'string')
     expr = parseSExpr(expr);
@@ -625,13 +625,13 @@ defineGlobalSymbol("*catch", function(e, handler, body) {  // XXX order of args?
   let cls, sym;
   if (typeof e === 'symbol') {
     sym = e;
-  } else if (e[IS_CONS]) {
+  } else if (typeof e === 'object' && e[IS_CONS]) {
     cls = e.car;
     if (typeof cls !== 'function')
       cls = lispEval(cls, this);
     if (typeof cls !== 'function')
       throw new EvalError(`Not a class ${cls}`);
-    if (e.cdr[IS_CONS])
+    if (typeof e.cdr === 'object' && e.cdr[IS_CONS])
       sym = e.cdr.car;
   }
   if (typeof sym !== 'symbol')
@@ -709,7 +709,7 @@ function lispApply(fn, args, scope) {
       let env = new Env;
       scope = new Scope(env, scope);
       let origFormalParams = formalParams;
-      while (formalParams !== NIL && formalParams[IS_CONS]) {
+      while (typeof formalParams === 'object' && formalParams[IS_CONS]) {
         let param = formalParams.car;
         if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
         if (args !== NIL) {
@@ -742,7 +742,7 @@ function resolveSymbol(sym, scope) {
 function evalArgs(args, scope, evalCount) {
   if (args === NIL || evalCount <= 0)
     return args;
-  if (!(args[IS_CONS]))
+  if (!(typeof args === 'object' && args[IS_CONS]))
     return args;
   let val = lispEval(args.car, scope);
   return cons(val, evalArgs(args.cdr, scope, evalCount-1));
@@ -776,7 +776,7 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
       }
       if (obj.cdr === NIL)
         return before + lispToString(obj.car, maxDepth-1, opts) + after;
-      if (obj.cdr[IS_CONS])
+      if (typeof obj === 'object' && obj.cdr[IS_CONS])
         return before +
             lispToString(obj.car, maxDepth-1, opts) +
             lispToString(obj.cdr, maxDepth-1, opts, true) +
@@ -855,9 +855,9 @@ function toLisp(obj, depth = BIGGEST_INT32, opts) {
 function toArray(obj, depth = BIGGEST_INT32) {
   if (depth <= 0) return obj;
   if (obj === NIL) return [];
-  if (!obj[IS_CONS]) return obj;
+  if (!(typeof obj === 'object' && obj[IS_CONS])) return obj;
   let arr = [];
-  while (obj !== NIL && obj[IS_CONS]) {
+  while (obj !== NIL && typeof obj === 'object' && obj[IS_CONS]) {
     arr.push(toArray(obj.car), depth-1);
     obj = obj.cdr;
   }
@@ -1188,7 +1188,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
   let expr;
   if (token().type === 'atom' && token(1).type === '(') {
     function quoteArgs(args) {
-      if (args === NIL || !(args[IS_CONS])) return NIL;
+      if (!(typeof args === 'object' && args[IS_CONS])) return NIL;
       let quoted = args.car;
       quoted = cons(QUOTE_ATOM, cons(quoted, NIL))
       return cons(quoted, quoteArgs(args.cdr));
