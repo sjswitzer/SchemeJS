@@ -54,8 +54,13 @@ class Cons {
 // TODO: make isCons a symbol
 Cons.prototype.isCons = true;
 
-// Nil must be a Cons because it is a list: the empty one. It should be JS-iterable.
-const NIL = new (class Nil extends Cons {});  // Makes things look nicer in debugger
+class NilClass {
+  constructor() {
+    Object.freeze(this);
+  }
+  *[Symbol.iterator]() { return { next: () => ({ done: true, value: null }) } }
+}
+const NIL = new NilClass;
 
 function nextCons() {
   let current = this._current, done = current === NIL, value = undefined;
@@ -207,7 +212,7 @@ defineGlobalSymbol("cdar", cdar, { lift: 1 });
 defineGlobalSymbol("cddar", cddar, { lift: 1 });
 defineGlobalSymbol("cdddr", cdddr, { lift: 1 });
 defineGlobalSymbol("cddr", cddr, { lift: 1 });
-defineGlobalSymbol("consp", a => a.isCons === true, { lift: 1 }, "isCons");
+defineGlobalSymbol("pair?", a => a.isCons === true, { lift: 1 }, "isCons");
 defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 }, "isNumber");
 defineGlobalSymbol("typeof", a => typeof a, { lift: 1 });
 defineGlobalSymbol("isUndefined", a => typeof a === 'undefined', { lift: 1 });
