@@ -596,32 +596,14 @@ defineGlobalSymbol("parseInt", parseInt, { lift: '*' });
 //     (* x (factoral (- x (? (isBigInt x) 1n 1))))
 //   ))l
 
-/*
-// (%%closure scope args bodies)
-defineGlobalSymbol("%%closure", (scope, formalParams, bodies) => {
-  let env = new Env;
-  let scope = new Scope(env, scope);
-  while (formalParams[IS_CONS]) {
-    let param = formalParams.car;
-    if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
-    if (args !== NIL) {
-      env.set(param, args.car);
-      args = args.cdr
-    } else {
-      env[param] = NIL;
-    }
-    formalParams = formalParams.cdr;
-  }
-  if (typeof formalParams === 'symbol')  // Neat trick for 'rest' params!
-    env[formalParams] = args;
-  return lispEval(body, newScope);
-
-}, { evalArgs: 0, lift: 2 });
-*/
+// (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args bodies)
+defineGlobalSymbol(LAMBDA_ATOM, function(formalParams, bodies) {
+  return list(CLOSURE_ATOM, this, formalParams, bodies);
+}, { evalArgs: 0, lift: 1 });
 
 // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args bodies)
-defineGlobalSymbol("lambda", function(formalParams, bodies) {
-  return list(CLOSURE_ATOM, this, formalParams, bodies);
+defineGlobalSymbol(SLAMBDA_ATOM, function(formalParams, bodies) {
+  return list(SCLOSURE_ATOM, this, formalParams, bodies);
 }, { evalArgs: 0, lift: 1 });
 
 //
@@ -687,10 +669,10 @@ function lispEval(expr, scope = GlobalScope) {
   if (!(expr[IS_CONS])) return expr;  // Worry about evaluating lazy lists later. Or not!
   let op = expr.car, args = expr.cdr;
   if (op === QUOTE_ATOM) {  // this is just an optimization; the quote function will do this too
-    if (!(args[IS_CONS])) throw new EvalError(`Bad argument list ${args}`);
+    if (!(args[IS_CONS])) throw new EvalError(`Bad argument list ${args}`); // XXX do we need these tests?
     return args.car;
   }
-  if (typeof op === 'symbol') {
+  if (typeof op === 'symbol') {  // XXX does this need a deeper eval?
     let resolved = resolveSymbol(op, scope);
     if (!resolved) throw new ResolveError(`Undefined symbol "${op.description}"`);
     op = resolved;
@@ -716,11 +698,12 @@ function lispEval(expr, scope = GlobalScope) {
     return op.apply(scope, jsArgs);  // "this" is the scope!
   }
   if (op[IS_CONS]) {
+    /*
     // (\ args body)
-    if (op.car === LAMBDA_ATOM || op.car === Atom.SLAMBDA) {
+    if (op.car === LAMBDA_ATOM || op.car === SLAMBDA_ATOM) {
       let formalParams = op.cdr.car;
       let body = op.cdr.cdr.car;
-      if (op.car !== Atom.SLAMBDA)
+      if (op.car !== SLAMBDA_ATOM)
         args = evalArgs(args, scope);
        // allow lambda x . body notation? Conflicts with rest param gimmick?
       // if (typeof formalParams === 'symbol')
@@ -742,8 +725,35 @@ function lispEval(expr, scope = GlobalScope) {
         newEnv[formalParams] = args;
       return lispEval(body, newScope);
     }
+    */
+    if (op.car === CLOSURE_ATOM || op.car === SCLOSURE_ATOM) {
+      let scope = op.cdr.car;
+      let formalParams = op.cdr.cdr.car;
+      let body = op.cdr.cdr.cdr.car;  // XXX bodies = op.cdr.cdr.cdr
+      if (op.car !== SCLOSURE_ATOM)
+        args = evalArgs(args, scope);
+      let env = new Env;
+      scope = new Scope(env, scope);
+      let origFormalParams = formalParams;
+      while (formalParams !== NIL && formalParams[IS_CONS]) {
+        let param = formalParams.car;
+        if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
+        if (args !== NIL) {
+          env.set(param, args.car);
+          args = args.cdr
+        } else {
+          env[param] = NIL;
+        }
+        formalParams = formalParams.cdr;
+      }
+      if (typeof formalParams === 'symbol')  // Neat trick for 'rest' params!
+        env[formalParams] = args;
+      else if (formalParams !== NIL)
+        throw new EvalError(`Bad parameter list ${lispToString(origFormalParams)}`);
+      return lispEval(body, scope);
+    }
   }
-  throw new EvalError(`Cannot eval ${expr}`);
+  throw new EvalError(`Cannot eval ${lispToString(expr)}`);
 }
 
 function resolveSymbol(sym, scope) {
