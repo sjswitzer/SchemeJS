@@ -263,18 +263,14 @@ defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { lift: 2 });
 
 // variable args
 defineGlobalSymbol("+", (...args) => {
-  let a, first = true;
+  let a = 0, first = true;
   for (let b of args) {
-    if (first) {  // TODO: find a better way to identify a "zero"
+    if (first) {
       first = false;
-      if (typeof b === 'number') // umber is the common case so it's first, but it's also the default
-        a = 0;
-      else if (typeof b === 'bigint')
+      if (typeof b === 'bigint')
         a = 0n;
       else if (typeof b === 'string')
         a = "";
-      else
-        a = 0;
     }
     a += b;
   }
