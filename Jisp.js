@@ -11,15 +11,15 @@
 // XXX make this a JS module
 // XXX Make "Lisp" a function/constructor that returns a "Lisp"
 
-class LispError extends Error {
-  constructor(...args) {
-    super(...args);
-  }
-  toString() { return this.message; }   // no type prefix on the error string
-};
+class LispError extends Error {};
+LispError.prototype.name = "LispError";
+
 class EvalError extends LispError {};
-class ResolveError extends LispError {};
+EvalError.prototype.name = "EvalError";
+
 class ParseError extends LispError {};
+ParseError.prototype.name = "ParseError";
+
 const LogicError = Error;
 
 // Atoms are Symbols
@@ -324,7 +324,7 @@ defineGlobalSymbol("&", (...args) => {
   return a;
 }, "bit-and");
 
-// XXX todo: do all of these without lifting to array
+// XXX todo: do all of these without lifting to JS
 defineGlobalSymbol("<", function(a, ...rest) {
   if (rest.length === 0) return false; // not less than itself?
   for (let b of rest) {
@@ -431,8 +431,7 @@ defineGlobalSymbol("?", function(predicate, trueBlock, falseBlock) {
 }, { evalArgs: 1, lift: 3 }, "if");
 
 // JavaScripty things:
-//   XXX TODO: delete, setting
-
+//   XXX TODO: delete, setting props and array elements
 defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access
 defineGlobalSymbol("?@", (a, b) => a?.[b]);  // conditional indexing and member access
 defineGlobalSymbol("toLisp", toLisp);
@@ -664,7 +663,7 @@ function lispEval(expr, scope = GlobalScope) {
   if (expr === NIL) return expr;
   if (typeof expr === 'symbol') {
     let val = resolveSymbol(expr, scope);
-    if (val === undefined) throw new ResolveError(`Undefined symbol ${expr.description}`);
+    if (val === undefined) throw new EvalError(`Undefined symbol ${expr.description}`);
     return val;
   }
   if (typeof expr === 'object' && expr[IS_CONS]) {
@@ -1098,7 +1097,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
 
     if (dotNext) {
       let firstToken = consumeToken();
-      if (consumeToken().type !== '.') throw new Error("Logic error; should be a dot");
+      if (consumeToken().type !== '.') throw new LogicError("Should be a dot");
       return cons(firstToken.value, parseExpr());
     }
 
@@ -1112,7 +1111,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
           consumeToken();
           return NIL;
         }
-        if (token().type === 'end') throw new ParseError(`Parse error; reached end of input`);
+        if (token().type === 'end') throw new ParseError(`Reached end of input`);
         let first = parseExpr(newPrompt);
         let rest = parseListBody();
         return cons(first, rest);
@@ -1134,7 +1133,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
           consumeToken();
           return res;
         }
-        if (token().type === 'end') throw new ParseError(`Parse error; reached end of input`);
+        if (token().type === 'end') throw new ParseError(`Reached end of input`);
       }
     }
 
@@ -1162,10 +1161,10 @@ function parseSExpr(tokenGenerator, opts = {}) {
             if (token().type === ',')  // might as well be optional for now
               consumeToken();
           }
-          if (token().type === 'end') throw new ParseError(`Parse error; reached end of input`);
+          if (token().type === 'end') throw new ParseError(`Reached end of input`);
         }
         if (!gotIt)
-          throw new ParseError(`Bad JavaScript object literal`); // XXX details
+          throw new ParseError(unParesedInput());
       }
       return res;
     }
@@ -1181,7 +1180,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
 
     if (token(1).type === 'end')
       return null;
-    throw new ParseError(`Unexpected token ${token().type} ${token().value}`);
+    throw new ParseError(unParesedInput());
   }
 
   // I'm old enough to be fond of the EvalQuote REPL.
@@ -1207,7 +1206,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
   let unparsed = unParesedInput();
   if (!unparsed)
     return expr;
-  throw new ParseError(`Unparsed: ${unparsed}`);
+  throw new ParseError(unparsed);
 }
 
 function lispREPL(readline, opts = {}) {
@@ -1215,8 +1214,8 @@ function lispREPL(readline, opts = {}) {
   let name = opts.name ?? "Jisp";
   let prompt = opts.prompt ?? name + " > ";
   let print = opts.print ?? (x => console.log(name + ":", lispToString(x)));
-  let reportLispError = opts.reportLispError ??  (x => console.log(name + " ERROR:", String(x)));;
-  let reportError = opts.reportError ??  (x => console.log(name + " SYSTEM ERROR:", String(x), x));;
+  let reportLispError = opts.reportLispError ?? (x => console.log(String(x)));;
+  let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
   let replHints = { prompt };
   let endTest = opts.endTest ?? (line => line === ".");  // end on a "."
   let done = false;
@@ -1246,7 +1245,7 @@ function lispREPL(readline, opts = {}) {
       if (error instanceof LispError)
         reportLispError(error);
       else
-        reportError(error);
+        reportSystemError(error);
     }
   }
 }
