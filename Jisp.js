@@ -1,4 +1,11 @@
-// Lisp in JavaScript
+//
+// JavaScript Lisp
+//
+// Copyright 2021 Stan Switzer
+//   This work is licensed under a Creative Commons Attribution-ShareAlike
+//   4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
+//
+
 "use strict";
 
 // XXX make this a JS module
