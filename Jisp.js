@@ -54,13 +54,16 @@ class Cons {
 // TODO: make isCons a symbol
 Cons.prototype.isCons = true;
 
-class NilClass {
+// I hide the Nil class because there's never any reason to
+// reference it or instantiate it it more than once. Having it visible
+// just invites errors. But it's good to have a distinct class for NIL
+// for various reasons including that it looks better in a JS debugger.
+const NIL = new (class Nil {
   constructor() {
     Object.freeze(this);
   }
   *[Symbol.iterator]() { return { next: () => ({ done: true, value: null }) } }
-}
-const NIL = new NilClass;
+});
 
 function nextCons() {
   let current = this._current, done = current === NIL, value = undefined;
