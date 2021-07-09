@@ -174,17 +174,19 @@ function defineGlobalSymbol(name, val, ...aliases) {
     if (opts.evalArgs !== undefined) val[EVAL_ARGS] = opts.evalArgs;
     if (opts.lift !== undefined) val[LIFT_ARGS] = opts.lift;
   }
-  let atom = typeof name === 'string' ? Atom(name) : name;
+  let atom = typeof name === 'symbol' ? name : Atom(String(name));
   GlobalEnv.set(atom, val);
   for (let alias of aliases)
-    GlobalEnv.set(Atom(name), val);
+    GlobalEnv.set(Atom(alias), val);
   return atom;
 }
 
 defineGlobalSymbol("defineGlobalSymbol", defineGlobalSymbol);
 defineGlobalSymbol("nil", NIL);
-const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted.car, { evalArgs: 0 }, "'");
-defineGlobalSymbol("null", null); defineGlobalSymbol("undefined", undefined);
+const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0 }, "'");
+defineGlobalSymbol("null", null);
+defineGlobalSymbol("true", true);
+defineGlobalSymbol("false", false);
 defineGlobalSymbol("cons", cons, { lift: 2 });  // lift guarantees two arguments that aren't "undefined"
 defineGlobalSymbol("car", car, { lift: 1 }, "first"); // lift guarantees one argument that isn't "undefined"
 defineGlobalSymbol("cdr", cdr, { lift: 1 }, "rest");
@@ -443,10 +445,9 @@ defineGlobalSymbol("isFinite", isFinite);
 defineGlobalSymbol("parseFloat", parseFloat);
 defineGlobalSymbol("parseInt", parseInt);
 
-defineGlobalSymbol("require", function lispRequire(path) {
-  let sym = `*${path}-loaded*`;
-  let test = resolveSymbol(sym, GlobalScope);
-  if (!lispToBool(test)) {
+defineGlobalSymbol("require", function lispRequire(path, force) {
+  let sym = Atom(`*${path}-loaded*`);
+  if (lispToBool(force) || !lispToBool(resolveSymbol(sym, GlobalScope))) {
     try {
       // For now, nodejs-specific
       const fs = require('fs');
@@ -467,6 +468,30 @@ defineGlobalSymbol("require", function lispRequire(path) {
   }
   return sym;
 });
+
+// (append l1 l2 l3 l4 ...)
+defineGlobalSymbol("append", (...args) => {
+  let res = NIL;
+  function zip(list) {
+    if (list === NIL) return;
+    if (typeof list === 'object' && list[IS_CONS]) {
+      zip(list.cdr);
+      res = cons(list.car, res);
+    }
+    else  // What to do with a node that's not a list?
+      res = cons(list, res);  // Add it to the list, I guess.
+  }
+  for (let i = args.length; i > 0; --i)
+    zip(args[i-1]);
+   return res;
+});
+
+// (last list)
+// (length)
+// (list item1 item2 ...) - Conses up its arguments into a list.
+// (reverse x) -- Returns a new list which has elements in the reverse order of the list x.
+// (butlast x)
+//    Returns a new list which has all the elements of the argument x except for the last element.
 
 // SIOD compatibility checklist:
 //
@@ -762,13 +787,13 @@ function lispApply(fn, args, scope) {
 }
 
 function resolveSymbol(sym, scope) {
-  while (scope !== NIL) {
+  while (typeof scope === 'object' && scope[IS_CONS]) {
     let val = scope.car.get(sym);
     if (val !== undefined)
       return val;
     scope = scope.cdr;
   }
-  return NIL;
+  return undefined;
 }
 
 function evalArgs(args, scope, evalCount) {
@@ -808,7 +833,7 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
       }
       if (obj.cdr === NIL)
         return before + lispToString(obj.car, maxDepth-1, opts) + after;
-      if (typeof obj === 'object' && obj.cdr[IS_CONS])
+      if (typeof obj.cdr === 'object' && obj.cdr[IS_CONS])
         return before +
             lispToString(obj.car, maxDepth-1, opts) +
             lispToString(obj.cdr, maxDepth-1, opts, true) +
@@ -889,7 +914,7 @@ function toArray(obj, depth = BIGGEST_INT32) {
   if (obj === NIL) return [];
   if (!(typeof obj === 'object' && obj[IS_CONS])) return obj;
   let arr = [];
-  while (obj !== NIL && typeof obj === 'object' && obj[IS_CONS]) {
+  while (typeof obj === 'object' && obj[IS_CONS]) {
     arr.push(toArray(obj.car), depth-1);
     obj = obj.cdr;
   }
