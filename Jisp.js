@@ -188,7 +188,7 @@ function defineGlobalSymbol(name, val, ...aliases) {
 
 defineGlobalSymbol("defineGlobalSymbol", defineGlobalSymbol, { lift: '*' });
 defineGlobalSymbol("nil", NIL);
-const QUOTE_ATOM = defineGlobalSymbol("quote", x => x, { evalArgs: 0 }, "'");
+const QUOTE_ATOM = defineGlobalSymbol("quote", x => x.car, { evalArgs: 0 }, "'");
 defineGlobalSymbol("null", null); defineGlobalSymbol("undefined", undefined);
 defineGlobalSymbol("cons", cons, { lift: 2 });
 defineGlobalSymbol("car", car, { lift: 1 }, "first");
@@ -668,27 +668,14 @@ function lispEval(expr, scope = GlobalScope) {
   if (typeof expr === 'function') return expr;
   if (typeof expr !== 'object') return expr;
   if (!(expr[IS_CONS])) return expr;
-  let op = expr.car, args = expr.cdr;
-  if (op === QUOTE_ATOM) {  // this is just an optimization; the quote function will do this too
-    if (!(args[IS_CONS])) throw new EvalError(`Bad argument list ${args}`); // XXX do we need these tests?
-    return args.car;
-  }
-  if (typeof op === 'symbol') {
-    let resolved = resolveSymbol(op, scope);
-    if (!resolved) throw new ResolveError(`Undefined symbol "${op.description}"`);
-    op = resolved;
-  }
-  if (typeof op !== 'function' && op[IS_CONS]) {
-    let opSym = op.car;
-    if (opSym !== LAMBDA_ATOM && opSym !== SLAMBDA_ATOM &&
-      opSym !== SCLOSURE_ATOM && opSym !== SCLOSURE_ATOM) {
-      op = lispEval(op, scope);
-    }
-  }
-  if (typeof op === 'function') {
-    let evalCount = op[EVAL_ARGS] ?? BIGGEST_INT32;
+  let fn = expr.car, args = expr.cdr;
+  if (typeof fn !== 'function')
+    fn = lispEval(fn, scope);
+  if (typeof fn === 'function') {
+    let evalCount = fn[EVAL_ARGS] ?? BIGGEST_INT32;
     args = evalArgs(args, scope, evalCount);
-    let lift = op[LIFT] ?? 0, jsArgs = [], noPad = lift === BIGGEST_INT32;
+    let lift = fn[LIFT] ?? BIGGEST_INT32;
+    let jsArgs = [], noPad = lift === BIGGEST_INT32;
     while (lift > 0) {
       if (args !== NIL && (args[IS_CONS])) {
         jsArgs.push(args.car);
@@ -703,19 +690,13 @@ function lispEval(expr, scope = GlobalScope) {
     }
     if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
       jsArgs.push(args);
-    return op.apply(scope, jsArgs);  // "this" is the scope!
+    return fn.apply(scope, jsArgs);  // "this" is the scope!
   }
-  if (op[IS_CONS]) {
-    let opSym = op.car;
-    if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM ||
-        opSym === SCLOSURE_ATOM || opSym === SCLOSURE_ATOM) {
-      let rest = op.cdr;
-      if (opSym === CLOSURE_ATOM || opSym === SCLOSURE_ATOM) {
-        scope = rest.car;
-        rest = rest.cdr;
-      }
-      let formalParams = rest.car;
-      let body = rest.cdr.car;  // XXX bodies = rest.cdr
+  if (fn[IS_CONS]) {
+    let opSym = fn.car;
+    if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
+      let formalParams = fn.cdr.car;
+      let body = fn.cdr.cdr.car;  // XXX bodies = fn.cdr.cdr
       if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
         args = evalArgs(args, scope);
       let env = new Env;
