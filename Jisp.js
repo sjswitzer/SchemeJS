@@ -41,6 +41,11 @@ const SLAMBDA_ATOM = Atom._defineAtom("special-lambda", "\\\\", "\u03BB");
 const IS_CONS = Symbol("*lisp-isCons*");
 
 class Cons {
+  // I want creating a Cons to be as cheap as possible, so no subclassing
+  // or calls to super.
+  // For now, cons cells are immutable. That might or might not help the JIT
+  // but in any case if that decision changes, Object.freeze(this) should
+  // become Object.seal().
   constructor(car, cdr) {
     this.car = car;
     this.cdr = cdr;
@@ -54,7 +59,18 @@ class Cons {
 // There should be a way to do this in the class decl, but not in ES6
 Cons.prototype[IS_CONS] = true;
 
-// I hide the Nil class because there's never any reason to
+// A word about testing for Cons cells. The idiom is
+//    typeof obj === 'object' && obj[IS_CONS]
+// The typeof check is basically free since the JIT always knows the type
+// of an object. And fetching properties is something the optimizer makes
+// as fast as possible. That should probebly be a function, but oddly enough
+// I don't want to trust the compiler to inline it.
+//
+// Beware when traversing lists. Things purported to be lists might not be
+// and although lists are conventionally NIL-terminated, the final "cdr"
+// could be anything at all.
+
+// Hide the Nil class because there's never any reason to
 // reference it or instantiate it it more than once. Having it visible
 // just invites errors. But it's good to have a distinct class for NIL
 // for various reasons including that it looks better in a JS debugger.
@@ -487,11 +503,59 @@ defineGlobalSymbol("append", (...args) => {
 });
 
 // (last list)
+defineGlobalSymbol("last", (list) => {
+  while (typeof list === 'object' && list[IS_CONS]) {
+    let next = list.cdr;
+    if (next === NIL)
+      return list.car;
+    list = next;
+  }
+  return list;  // list was empty or not terminated with NIL
+});
+
 // (length)
+defineGlobalSymbol("length", (list) => {
+  let n = 0;
+  while (typeof list === 'object' && list[IS_CONS]) {
+    n += 1;
+    list = list.cdr;
+  }
+  return n;
+});
+
 // (list item1 item2 ...) - Conses up its arguments into a list.
+defineGlobalSymbol("list", (...args) => {
+  let res = NIL;
+  for (let i = args.length; i > 0; --i)
+    res = cons(args[i-1], res);
+   return res;
+});
+
 // (reverse x) -- Returns a new list which has elements in the reverse order of the list x.
+defineGlobalSymbol("reverse", (list) => {
+  let res = NIL;
+  while (typeof list === 'object' && list[IS_CONS]) {
+    res = cons(list.car, res)
+    list = list.cdr;
+  }
+  return res;
+});
+
 // (butlast x)
 //    Returns a new list which has all the elements of the argument x except for the last element.
+defineGlobalSymbol("butlast", (list) => {
+  let res = NIL;
+  if (!(typeof list === 'object' && list[IS_CONS])) return NIL;
+  function zip(list) {
+    let next = list.cdr;
+    if (typeof next === 'object' && next[IS_CONS]) {
+      zip(list.cdr);
+      res = cons(list.car, res);
+    }
+  }
+  zip(list);
+  return res;
+});
 
 // SIOD compatibility checklist:
 //
