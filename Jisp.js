@@ -173,8 +173,10 @@ function defineGlobalSymbol(name, val, ...aliases) {
   let opts = {};
   if (typeof aliases[0] === 'object')
     opts = aliases.shift();
-  if (opts.evalArgs !== undefined) val[EVAL_ARGS] = opts.evalArgs;
-  if (opts.lift !== undefined) val[LIFT_ARGS] = opts.lift;
+  if (typeof val === 'function') {
+    if (opts.evalArgs !== undefined) val[EVAL_ARGS] = opts.evalArgs;
+    if (opts.lift !== undefined) val[LIFT_ARGS] = opts.lift;
+  }
   let atom = typeof name === 'string' ? Atom(name) : name;
   GlobalEnv.set(atom, val);
   for (let alias of aliases)
@@ -444,12 +446,35 @@ defineGlobalSymbol("isFinite", isFinite);
 defineGlobalSymbol("parseFloat", parseFloat);
 defineGlobalSymbol("parseInt", parseInt);
 
+defineGlobalSymbol("require", function lispRequire(path) {
+  let sym = `*${path}-loaded*`;
+  let test = resolveSymbol(sym, GlobalScope);
+  if (!lispToBool(test)) {
+    try {
+      // For now, nodejs-specific
+      const fs = require('fs');
+      let fileContent = fs.readFileSync(path);
+      fileContent = fileContent.toString();
+      // The REPL can handle this!
+      // XXX Pass in scope, but which one?
+      lispREPL(function readline() {
+        let line = fileContent;
+        fileContent = null;
+        return line;
+      });
+      GlobalEnv.set(sym, true);
+    } catch (error) {
+      console.log("require failed", String(error));
+      return false;
+    }
+  }
+  return sym;
+});
+
 // SIOD compatibility checklist:
 //
 // (*catch tag body ...)
 // (*throw tag value)
-// *pi*
-// (acos x), etc from Math
 // (append l1 l2 l3 l4 ...)
 // (last list)
 // (length)
@@ -470,7 +495,6 @@ defineGlobalSymbol("parseInt", parseInt);
 // (realtime)
 //      Returns a double precision floating point value representation of the current realtime number of seconds. Usually precise to about a thousandth of a second.
 // (begin form1 form2 ...)
-// (define variable value)
 // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
 // define needs to do procedures too -- by rewriting to begin clause
 // errobj, (error message object)
@@ -508,9 +532,6 @@ defineGlobalSymbol("parseInt", parseInt);
 // (quote x)
 // (rand modulus) -- Computes a random number from 0 to modulus-1. Uses C library rand. (srand seed)
 // (random modulus) -- Computes a random number from 0 to modulus-1. Uses C library random. (srandom seed)
-// (require path)
-//   Computes a variable name by concatenating "*" + path + "-loaded*" and then calling (load path nil t)
-//   if and only if the variable is not bound to true. After the file is loaded the variable is set to true. This is the correct way of making sure a file is only loaded once.
 // (runtime)
 //     Returns a list of containing the current cpu usage in seconds and the subset amount of cpu time
 //     that was spent performing garbage collection during the currently extant read-eval-print loop cycle.
@@ -648,10 +669,18 @@ defineGlobalSymbol("*catch", function(e, handler, body) {  // XXX order of args?
   return val;
 }, { evalArgs: 0, lift: 3 });
 
-defineGlobalSymbol("define", (nameAndArgs, body) => {
-  let name = nameAndArgs.car;
-  let args = nameAndArgs.cdr;
-  defineGlobalSymbol(name, list(LAMBDA_ATOM, args, body));
+// (define variable value)
+defineGlobalSymbol("define", function (variable, value) {
+  let scope = this, name = variable;
+  if (typeof variable === 'object' && variable[IS_CONS]) {
+    name = variable.car;
+    let args = variable.cdr;
+    value = list(LAMBDA_ATOM, args, value);
+  }
+  if (typeof name === 'string') name = Atom(name);
+  if (typeof name !== 'symbol')
+    throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
+  scope.car.set(name, value);
   return name;
 }, { evalArgs: 0, lift: 2 });
 
@@ -737,6 +766,7 @@ function resolveSymbol(sym, scope) {
       return val;
     scope = scope.cdr;
   }
+  return NIL;
 }
 
 function evalArgs(args, scope, evalCount) {
