@@ -135,8 +135,18 @@ function lispToJS(val) {   // XXX Is this really needed?
 const cons = (car, cdr) => new Cons(car, cdr);
 const car = cons => cons.car, first = car;
 const cdr = cons => cons.cdr, rest = cdr;
-const cadr = cons => cons.cdr.car;  // Beware the order here; in JS it's reversed
+// Beware the order here; in JS it's in reversed
+const caaar = cons => cons.car.car.car;
+const caadr = cons => cons.cdr.car.car;
+const caar = cons => cons.car.car;
+const cadar = cons => cons.car.cdr.car;
+const caddr = cons => cons.cdr.cdr.car;
+const cadr = cons => cons.cdr.car;
+const cdaar = cons => cons.car.car.cdr;
+const cdadr = cons => cons.cdr.car.cdr
 const cdar = cons => cons.car.cdr;
+const cddar = cons => cons.car.cdr.cdr;
+const cdddr = cons => cons.cdr.cdr.cdr;
 const cddr = cons => cons.cdr.cdr;
 
 function list(...elements) {  // easy list builder
@@ -183,10 +193,19 @@ Atom.NULL = defineGlobalSymbol("null", null);
 Atom.UNDEFINED = defineGlobalSymbol("undefined", undefined);
 Atom.QUOTE = defineGlobalSymbol("quote", x => x, { evalArgs: 0 }, "'");
 defineGlobalSymbol("cons", cons, { lift: 2 });
-defineGlobalSymbol("car", car, { lift: 1 });
-defineGlobalSymbol("cdr", cdr, { lift: 1 });
+defineGlobalSymbol("car", car, { lift: 1 }, "first");
+defineGlobalSymbol("cdr", cdr, { lift: 1 }, "rest");
+defineGlobalSymbol("caaar", caadr, { lift: 1 });
+defineGlobalSymbol("caar", caar, { lift: 1 });
+defineGlobalSymbol("caadr", caadr, { lift: 1 });
+defineGlobalSymbol("cadar", cadar, { lift: 1 });
+defineGlobalSymbol("caddr", caddr, { lift: 1 });
 defineGlobalSymbol("cadr", cadr, { lift: 1 });
+defineGlobalSymbol("cdaar", cdaar, { lift: 1 });
+defineGlobalSymbol("cdadr", cdadr, { lift: 1 });
 defineGlobalSymbol("cdar", cdar, { lift: 1 });
+defineGlobalSymbol("cddar", cddar, { lift: 1 });
+defineGlobalSymbol("cdddr", cdddr, { lift: 1 });
 defineGlobalSymbol("cddr", cddr, { lift: 1 });
 defineGlobalSymbol("consp", a => a.isCons === true, { lift: 1 }, "isCons");
 defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 }, "isNumber");
@@ -205,7 +224,7 @@ defineGlobalSymbol("abs", a => a < 0 ? -a : a, { lift: 1 });
 defineGlobalSymbol("sqrt", a => Math.sqrt(a), { lift: 1 });
 defineGlobalSymbol("cbrt", a => Math.cbrt(a), { lift: 1 });
 
-defineGlobalSymbol("Atom", a => Atom(a), { lift: 1 });
+defineGlobalSymbol("intern", a => Atom(a), { lift: 1 });
 defineGlobalSymbol("Symbol", a => Symbol(a), { lift: 1 });
 defineGlobalSymbol("toArray", a => toArray(a), { lift: 1 });
 defineGlobalSymbol("toLisp", a => toLisp(a), { lift: 1 });
@@ -213,13 +232,14 @@ defineGlobalSymbol("toString", a => lispToString(a), { lift: 1 });
 defineGlobalSymbol("toNumber", a => Number(a), { lift: 1 });
 defineGlobalSymbol("toBigInt", a => BigInt(a), { lift: 1 });
 defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ], { lift: 2 });
-defineGlobalSymbol("parseSExpr", (a, b) => parseSExpr(a, b), { lift: 2 });
-defineGlobalSymbol("eval", (expr, opts) => {
-  if (opts === NIL) opts = {};
+defineGlobalSymbol("read-from-string", a => parseSExpr(a), { lift: 1 });
+defineGlobalSymbol("eval", (expr, env) => {
+  if (env === undefined)   // xxx lifting thing
+    env = GlobalEnv;
   if (typeof expr === 'string')
-  expr = parseSExpr(expr, opts);
+    expr = parseSExpr(expr);
   return lispEval(expr);
-}, { lift: 2 });
+}, { lift: 1 });
 
 // Pokemon gotta catch 'em' all!
 defineGlobalSymbol("!", (a) => !lispToBool(a), { lift: 1 }, "not");
@@ -227,7 +247,7 @@ defineGlobalSymbol("~", (a) => ~a, { lift: 1 }, "bit-not");
 defineGlobalSymbol("**", (a,b) => a ** b, { lift: 2 }, "exp");
 defineGlobalSymbol("%", (a,b) => a % b, { lift: 2 }, "rem");
 defineGlobalSymbol("<<", (a,b) => a << b, { lift: 2 }, "bit-shl");
-defineGlobalSymbol(">>", (a,b) => a >> b, { lift: 2 }, "bit-shr");
+defineGlobalSymbol(">>", (a,b) => a >> b, { lift: 2 }, "ash");
 defineGlobalSymbol(">>>", (a,b) => a >>> b, { lift: 2 }, "bit-ushr");
 defineGlobalSymbol("in", (a,b) => a in b, { lift: 2 });
 defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { lift: '*' });
@@ -338,7 +358,7 @@ defineGlobalSymbol("==", function(a, ...rest) {
     if (!(a == b)) return false;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "eq");
+}, { evalArgs: 1, lift: '*' }, "equal?");
 
 defineGlobalSymbol("===", function(a, ...rest) {
   if (rest.length === 0) return true;
@@ -347,7 +367,7 @@ defineGlobalSymbol("===", function(a, ...rest) {
     if (!(a === b)) return false;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "eeq");
+}, { evalArgs: 1, lift: '*' }, "eq?");
 
 defineGlobalSymbol("!=", function(a, ...rest) {  // all not equal to first
   if (rest.length === 0) return false;
@@ -399,7 +419,7 @@ defineGlobalSymbol("?", function(predicate, trueBlock, falseBlock) {
 // JavaScripty things:
 //   XXX TODO: delete, setting
 
-defineGlobalSymbol("@", (a, b) => a[b], { lift: 2 });  // indexing and member access
+defineGlobalSymbol("@", (a, b) => a[b], { lift: 2 }, "aref");  // indexing and member access
 defineGlobalSymbol("?@", (a, b) => a?.[b], { lift: 2 });  // conditional indexing and member access
 defineGlobalSymbol("toLisp", toLisp, { lift: 1 });
 defineGlobalSymbol("toArray", toArray, { lift: 1 });
@@ -411,20 +431,173 @@ defineGlobalSymbol("isFinite", isFinite), { lift: '*' };
 defineGlobalSymbol("parseFloat", parseFloat, { lift: '*' });
 defineGlobalSymbol("parseInt", parseInt, { lift: '*' });
 
+// SIOD compatibility checklist:
+//
+// (*catch tag body ...)
+// (*throw tag value)
+// *pi*
+// (acos x), etc from Math
+// (append l1 l2 l3 l4 ...)
+// (last list)
+// (length)
+// (list item1 item2 ...) - Conses up its arguments into a list.
+// (reverse x) -- Returns a new list which has elements in the reverse order of the list x.
+// (butlast x)
+//    Returns a new list which has all the elements of the argument x except for the last element.
+// (apply function arglist)
+// (apropos substring) -- returns a list of all symbols containing the given substring.
+// (ass key alist function)
+//    Returns the first element of the alist such that the function applied to car of the element and the key returns a non-null value. For example:/
+// (assoc key alist) -- Same as (ass key alist equal?).
+// (assq key alist) -- Same as (ass key alist eq?).
+// (assv key alist) --Same as (ass key alist eql?).
+// (begin form1 form2 ...)
+//   A special form which evaluates each of its subforms one after another, returning the value of the last subform.
+// TODO benchmark fns -- http://people.delphiforums.com/gjc//siod.html#builtin
+// (realtime)
+//      Returns a double precision floating point value representation of the current realtime number of seconds. Usually precise to about a thousandth of a second.
+// (begin form1 form2 ...)
+// (define variable value)
+// (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
+// define needs to do procedures too -- by rewriting to begin clause
+// errobj, (error message object)
+// (exp x) -- Computes the exponential function of x.
+// (log x)
+// (lambda (args) (body1) (body2) ...) -- returns %%closure
+// (%%closure env code)
+// (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
+//     (let ((x 10)
+//      (y 20))
+//      (+ x y))
+// (letrec...) -- ?
+// (load fname noeval-flag search-flag)
+//   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
+//   no use for the search-flag
+// (mapcar fcn list1 list2 ...)
+//     Returns a list which is the result of applying the fcn to the elements of each of the lists specified.
+// (max x1 x2 ...) -- also min
+// (member key list)
+//     Returns the portion of the list where the car is equal to the key, or () if none found.
+// (memq key list)
+//     Returns the portion of the list where the car is eq to the key, or () if none found.
+// (nth index list)
+//     Reference the list using index, with the first element being index 0.
+// (null? x)  -- Returns true of x is the empty list.
+// (number->string x base width precision)
+//     Formats the number according to the base, which may be 8, 10, 16 or the symbol e or f.
+//     The width and precision are both optional.
+// (number? x) -- Returns true of x is a number.
+// (pair? x) -- Returns true if x is a pair (created by cons).
+// (parse-number str)
+// (pow x y) -- Computes the result of x raised to the y power.
+// (print object stream) -- Same as prin1 followed by output of a newline.
+// (prog1 form1 form2 form3 ...)
+//     A special form which evaluates all its subforms but returns the value of the first one.
+// (qsort list predicate-fcn access-fcn)
+// (quote x)
+// (rand modulus) -- Computes a random number from 0 to modulus-1. Uses C library rand. (srand seed)
+// (random modulus) -- Computes a random number from 0 to modulus-1. Uses C library random. (srandom seed)
+// (require path)
+//   Computes a variable name by concatenating "*" + path + "-loaded*" and then calling (load path nil t)
+//   if and only if the variable is not bound to true. After the file is loaded the variable is set to true. This is the correct way of making sure a file is only loaded once.
+// (runtime)
+//     Returns a list of containing the current cpu usage in seconds and the subset amount of cpu time
+//     that was spent performing garbage collection during the currently extant read-eval-print loop cycle.
+// (save-forms filename forms how)
+//    Prints the forms to the file, where how can be "w" (default) or "a" to append to the file.
+// (sdatref spec data) -- Used as the %%closure-code by mkdatref.
+// (set! variable value)
+//    A special form that evaluates the value subform to get a value, and then assigns the variable
+//    to the value.  ??? where ???
+// (set-symbol-value! symbol value env)
+//    Finds the location of the value cell for the specified symbol in the environment env and sets the value.
+// (strbreakup string sep)
+//    Return a list of the portions of string indicated by the separator.
+// (unbreakupstr list sep) -- The reverse of strbreakup.
+// (string-append str1 str2 str3 ...) -- same as +
+// (string->number str radix)
+// (string-downcase str) -- also string-downcase
+//    Return a new string converting all the characters of str to lowercase.
+// (string-length str)
+//    Returns the active string length of str.
+// (string-lessp str1 str2)
+//    Return true if str1 is alphabetically less than str2.
+// (string-search key str)
+//    Locate the index of the key in the specified string. Returns () if not found.
+// (string-trim str)
+//    Return a new string made by trimming whitespace from the left and right of the specified string.
+// (string-trim-left str)
+//    Like string-trim but only the left hand side.
+// (string-trim-right str)
+//    Like string-trim but only the right hand side.
+// (string-upcase str)
+//    Returns a new string with all the lowercase characters converted to uppercase.
+// (string? x)
+//    Returns true if x is a string.
+// (strspn str indicators)
+//    Returns the location of the first character in str which is not found in the indicators set, returns the length of the str if none found. For example:
+//    (define (string-trim-left x)
+//       (substring x (strspn x " \t")))
+// (subset pred-fcn list) -- aka filter?
+//    Return the subset of the list such that the elements satisify the pred-fcn. For example:
+//    (subset number? '(1 b 2 c)) => (1 2)
+// (substring str start end)
+//    Returns a new string made up of the part of str begining at start and terminating at end. In other words, the new string has a length of end - start.
+// (substring-equal? str str2 start end)
+//    An efficient way to determine if the substring of str2 specified by start and end is equal to str1.
+// (symbol-bound? symbol env)
+//    Returns true of the symbol is bound in the environment.
+// (symbol-value symbol env)
+//    Returns the value of the symbol in the environment.
+// (symbol? x)
+//    Returns true if x is a symbol.
+// (symbolconc arg1 arg2 ...)
+//    Slightly more efficient than calling intern on the result of using string-append on the arguments. This procedure actually predates the availability of the string data type in SIOD.
+// t -- Please do not change the global value of this variable, bound to a true value.
+// (tan x)
+// (the-environment) -- A special form which returns the interpreter environment structure for the current lexical scope.
+// (trunc x) -- Returns the integer portion of x.
+// (typeof x) -- Returns a symbol describing the type of the object x, or the integer type code. Hmmm
+// (unix-ctime x) -- Converts the integer time x into a string. U
+// (unix-time) -- Returns the current number of seconds since 1-JAN-1970 GMT. U
+// (unix-time->strtime x) Returns a string of the form "YYYYMMDDHHmmSSdd" which is useful in some contexts. This predates the availability of the strftime procedure.
+// (url-decode str)
+//    Performs the url decode operation on the str. See chtml.html for example usage.
+// (url-encode str)
+//    Locates characters in the str which should not appear in a url, and returns a new string where they have been converted to the %NN hex representation. Spaces are converted to "+" signs.
+// (verbose arg)
+//    Sets the verbosity level of SIOD to the specified level or returns the current level if not specified.
+//    Verbose Level	Effect on System
+//      0 No messages.
+//      1 Error messages only.
+//      2 Startup messages, prompts, and evaluation timing.
+//      3 File loading and saving messages.
+//      4 (default)	Garbage collection messages.
+//      5 display of data loaded from files and fetched from databases.
+// (while pred-form form1 form2 ...)
+//    If pred-form evaluates true it will evaluate all the other forms and then loop.
+
+
+
+// maybe some relation between of generators and Lazy eval?
+// Promises
+
+    
+
 //
 // try/catch/filnally. Just a sketch for now.
 //
 
-defineGlobalSymbol("throw", e => { throw e }, { lift: 1 });
+defineGlobalSymbol("*throw", e => { throw e }, { lift: 1 });
 
-defineGlobalSymbol("finally", function (handler, body) {  // XXX order of args?
+defineGlobalSymbol("*finally", function (handler, body) {  // XXX order of args?
   let val = NIL;
   try { val = lispEval(body, this); }
   finally { lispEval(handler, this); }
   return val;
 }, { evalArgs: 0, lift: 2 });
 
-defineGlobalSymbol("catch", function(e, handler, body) {  // XXX order of args?
+defineGlobalSymbol("*catch", function(e, handler, body) {  // XXX order of args?
   // Tempting to save some of this work for the handler, but better to report errors early
   let cls, sym;
   if (typeof e === 'symbol') {
