@@ -665,17 +665,25 @@ function lispEval(expr, scope = GlobalScope) {
     if (val === undefined) throw new ResolveError(`Undefined symbol ${expr.description}`);
     return val;
   }
+  if (typeof expr === 'function') return expr;
   if (typeof expr !== 'object') return expr;
-  if (!(expr[IS_CONS])) return expr;  // Worry about evaluating lazy lists later. Or not!
+  if (!(expr[IS_CONS])) return expr;
   let op = expr.car, args = expr.cdr;
   if (op === QUOTE_ATOM) {  // this is just an optimization; the quote function will do this too
     if (!(args[IS_CONS])) throw new EvalError(`Bad argument list ${args}`); // XXX do we need these tests?
     return args.car;
   }
-  if (typeof op === 'symbol') {  // XXX does this need a deeper eval?
+  if (typeof op === 'symbol') {
     let resolved = resolveSymbol(op, scope);
     if (!resolved) throw new ResolveError(`Undefined symbol "${op.description}"`);
     op = resolved;
+  }
+  if (typeof op !== 'function' && op[IS_CONS]) {
+    let opSym = op.car;
+    if (opSym !== LAMBDA_ATOM && opSym !== SLAMBDA_ATOM &&
+      opSym !== SCLOSURE_ATOM && opSym !== SCLOSURE_ATOM) {
+      op = lispEval(op, scope);
+    }
   }
   if (typeof op === 'function') {
     let evalCount = op[EVAL_ARGS] ?? BIGGEST_INT32;
@@ -698,39 +706,17 @@ function lispEval(expr, scope = GlobalScope) {
     return op.apply(scope, jsArgs);  // "this" is the scope!
   }
   if (op[IS_CONS]) {
-    /*
-    // (\ args body)
-    if (op.car === LAMBDA_ATOM || op.car === SLAMBDA_ATOM) {
-      let formalParams = op.cdr.car;
-      let body = op.cdr.cdr.car;
-      if (op.car !== SLAMBDA_ATOM)
-        args = evalArgs(args, scope);
-       // allow lambda x . body notation? Conflicts with rest param gimmick?
-      // if (typeof formalParams === 'symbol')
-      ///  formalParams = cons(formalParams, NIL);
-      let newEnv = new Env;
-      let newScope = new Scope(newEnv, scope);
-      while (formalParams !== NIL && formalParams[IS_CONS]) {
-        let param = formalParams.car;
-        if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
-        if (args !== NIL) {
-          newEnv.set(param, args.car);
-          args = args.cdr
-        } else {
-          newEnv[param] = NIL;
-        }
-        formalParams = formalParams.cdr;
+    let opSym = op.car;
+    if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM ||
+        opSym === SCLOSURE_ATOM || opSym === SCLOSURE_ATOM) {
+      let rest = op.cdr;
+      if (opSym === CLOSURE_ATOM || opSym === SCLOSURE_ATOM) {
+        scope = rest.car;
+        rest = rest.cdr;
       }
-      if (typeof formalParams === 'symbol')  // Neat trick for 'rest' params!
-        newEnv[formalParams] = args;
-      return lispEval(body, newScope);
-    }
-    */
-    if (op.car === CLOSURE_ATOM || op.car === SCLOSURE_ATOM) {
-      let scope = op.cdr.car;
-      let formalParams = op.cdr.cdr.car;
-      let body = op.cdr.cdr.cdr.car;  // XXX bodies = op.cdr.cdr.cdr
-      if (op.car !== SCLOSURE_ATOM)
+      let formalParams = rest.car;
+      let body = rest.cdr.car;  // XXX bodies = rest.cdr
+      if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
         args = evalArgs(args, scope);
       let env = new Env;
       scope = new Scope(env, scope);
