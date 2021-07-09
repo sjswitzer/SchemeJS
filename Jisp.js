@@ -285,9 +285,15 @@ defineGlobalSymbol("-", (a, ...rest) => {
 }, { lift: '*' }, "sub");
 
 defineGlobalSymbol("*", (...args) => {
-  let a = 1;
-  for (let b of args)
+  let a = 1, first = true;
+  for (let b of args) {
+    if (first) {
+      first = false;
+      if (typeof b === 'bigint')
+        a = 1n;
+    }
     a *= b;
+  }
   return a;
 }, { lift: '*' }, "mul");
 
@@ -593,12 +599,14 @@ defineGlobalSymbol("parseInt", parseInt, { lift: '*' });
 // (while pred-form form1 form2 ...)
 //    If pred-form evaluates true it will evaluate all the other forms and then loop.
 
-
-
 // maybe some relation between of generators and Lazy eval?
 // Promises
 
-    
+// Maybe think about bigint some more. Here's factoral now:
+//   (define (factoral x) (? (<= x 1) 
+//     (? (isBigInt x) 1n 1)
+//     (* x (factoral (- x (? (isBigInt x) 1n 1))))
+//   ))
 
 //
 // try/catch/filnally. Just a sketch for now.
