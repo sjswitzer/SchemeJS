@@ -23,21 +23,23 @@ class ParseError extends LispError {};
 const LogicError = Error;
 
 // Atoms are Symbols
+const ATOMS = new Map;
 function Atom(name) {
-  let val = Atom.ATOMS.get(name);
+  let val = ATOMS.get(name);
   if (val !== undefined) return val;
   return Atom._defineAtom(name);
 }
-Atom.ATOMS = new Map();
 Atom._defineAtom = function(...names) {
   let atom = Symbol(names[0]);
   for (let name of names)
-    Atom.ATOMS.set(name, atom);
+  ATOMS.set(name, atom);
   return atom;
 }
 
-Atom.LAMBDA = Atom._defineAtom("lambda", "\\", "\u03BB");
-Atom.SLAMBDA = Atom._defineAtom("special-lambda", "\\\\");
+const LAMBDA_ATOM = Atom._defineAtom("lambda", "\\", "\u03BB");
+const SLAMBDA_ATOM = Atom._defineAtom("special-lambda", "\\\\", "\u03BB");
+const CLOSURE_ATOM = Atom._defineAtom("%%closure");
+const SCLOSURE_ATOM = Atom._defineAtom("%%special-closure");
 
 const IS_CONS = Symbol("*isCons");
 
@@ -131,16 +133,6 @@ function lispToBool(val) {
   return true;
 }
 
-//
-// Coerce Lisp values to JS values
-//
-function lispToJS(val) {   // XXX Is this really needed?
-  if (val === NIL) val = null;
-  else if (val === Atom.TRUE) val = true;
-  else if (val === Atom.FALSE) val = false;
-  return val;
-}
-
 const cons = (car, cdr) => new Cons(car, cdr);
 const car = cons => cons.car, first = car;
 const cdr = cons => cons.cdr, rest = cdr;
@@ -195,12 +187,9 @@ function defineGlobalSymbol(name, val, ...aliases) {
 }
 
 defineGlobalSymbol("defineGlobalSymbol", defineGlobalSymbol, { lift: '*' });
-Atom.NIL = defineGlobalSymbol("nil", NIL);
-Atom.TRUE = defineGlobalSymbol("t", true);
-Atom.FALSE = defineGlobalSymbol("false", false);
-Atom.NULL = defineGlobalSymbol("null", null);
-Atom.UNDEFINED = defineGlobalSymbol("undefined", undefined);
-Atom.QUOTE = defineGlobalSymbol("quote", x => x, { evalArgs: 0 }, "'");
+defineGlobalSymbol("nil", NIL);
+const QUOTE_ATOM = defineGlobalSymbol("quote", x => x, { evalArgs: 0 }, "'");
+defineGlobalSymbol("null", null); defineGlobalSymbol("undefined", undefined);
 defineGlobalSymbol("cons", cons, { lift: 2 });
 defineGlobalSymbol("car", car, { lift: 1 }, "first");
 defineGlobalSymbol("cdr", cdr, { lift: 1 }, "rest");
@@ -605,30 +594,34 @@ defineGlobalSymbol("parseInt", parseInt, { lift: '*' });
 //   (define (factoral x) (? (<= x 1) 
 //     (? (isBigInt x) 1n 1)
 //     (* x (factoral (- x (? (isBigInt x) 1n 1))))
-//   ))
+//   ))l
 
-// (%%closure env (body1) (body2) ...)
-Atom.CLOSURE = defineGlobalSymbol("%%closure", e => {
-}, { evalArgs: 0, lift: 1 });
-
-// (lambda (args) (body1) (body2) ...) -- returns %%closure
-defineGlobalSymbol("lambda", (formalParams, bodies) => {
-  while (formalParams !== NIL && formalParams[IS_CONS]) {
+/*
+// (%%closure scope args bodies)
+defineGlobalSymbol("%%closure", (scope, formalParams, bodies) => {
+  let env = new Env;
+  let scope = new Scope(env, scope);
+  while (formalParams[IS_CONS]) {
     let param = formalParams.car;
     if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
     if (args !== NIL) {
-      newEnv.set(param, args.car);
+      env.set(param, args.car);
       args = args.cdr
     } else {
-      newEnv[param] = NIL;
+      env[param] = NIL;
     }
     formalParams = formalParams.cdr;
   }
   if (typeof formalParams === 'symbol')  // Neat trick for 'rest' params!
-    newEnv[formalParams] = args;
+    env[formalParams] = args;
   return lispEval(body, newScope);
 
+}, { evalArgs: 0, lift: 2 });
+*/
 
+// (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args bodies)
+defineGlobalSymbol("lambda", function(formalParams, bodies) {
+  return list(CLOSURE_ATOM, this, formalParams, bodies);
 }, { evalArgs: 0, lift: 1 });
 
 //
@@ -675,7 +668,7 @@ defineGlobalSymbol("*catch", function(e, handler, body) {  // XXX order of args?
 defineGlobalSymbol("define", (nameAndArgs, body) => {
   let name = nameAndArgs.car;
   let args = nameAndArgs.cdr;
-  defineGlobalSymbol(name, list(Atom.LAMBDA, args, body));
+  defineGlobalSymbol(name, list(LAMBDA_ATOM, args, body));
   return name;
 }, { evalArgs: 0, lift: 2 });
 
@@ -693,7 +686,7 @@ function lispEval(expr, scope = GlobalScope) {
   if (typeof expr !== 'object') return expr;
   if (!(expr[IS_CONS])) return expr;  // Worry about evaluating lazy lists later. Or not!
   let op = expr.car, args = expr.cdr;
-  if (op === Atom.QUOTE) {  // this is just an optimization; the quote function will do this too
+  if (op === QUOTE_ATOM) {  // this is just an optimization; the quote function will do this too
     if (!(args[IS_CONS])) throw new EvalError(`Bad argument list ${args}`);
     return args.car;
   }
@@ -724,7 +717,7 @@ function lispEval(expr, scope = GlobalScope) {
   }
   if (op[IS_CONS]) {
     // (\ args body)
-    if (op.car === Atom.LAMBDA || op.car === Atom.SLAMBDA) {
+    if (op.car === LAMBDA_ATOM || op.car === Atom.SLAMBDA) {
       let formalParams = op.cdr.car;
       let body = op.cdr.cdr.car;
       if (op.car !== Atom.SLAMBDA)
@@ -793,7 +786,7 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
         before = after = "";
       else if (moreList)
         before = " ", after = "";
-      if (opts?.quoteNotation && obj.car === Atom.QUOTE) {
+      if (opts?.quoteNotation && obj.car === QUOTE_ATOM) {
         before = moreList ? " " : "";
         return before + "'" + lispToString(obj.cdr, maxDepth-1, opts, true, true);
       }
@@ -1149,7 +1142,6 @@ function parseSExpr(tokenGenerator, opts = {}) {
       consumeToken();
       for (;;) {
         let item = parseExpr(newPrompt);
-        item = lispToJS(item);
         res.push(item);
         if (token().type === ',')  // Comma might as well be optional for now
           consumeToken();
@@ -1180,7 +1172,6 @@ function parseSExpr(tokenGenerator, opts = {}) {
           if (token().type === ':') {
             consumeToken();
             let val = parseExpr(newPrompt);
-            val = lispToJS(val);
             res[sym] = val;
             gotIt = true;
             if (token().type === ',')  // might as well be optional for now
@@ -1200,7 +1191,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
       replHints.currentPrompt = newPrompt;
       let quoted = parseExpr(newPrompt);
       replHints.currentPrompt = promptStr;
-      return cons(Atom.QUOTE, cons(quoted, NIL));
+      return cons(QUOTE_ATOM, cons(quoted, NIL));
     }
 
     if (token(1).type === 'end')
@@ -1215,7 +1206,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
     function quoteArgs(args) {
       if (args === NIL || !(args[IS_CONS])) return NIL;
       let quoted = args.car;
-      quoted = cons(Atom.QUOTE, cons(quoted, NIL))
+      quoted = cons(QUOTE_ATOM, cons(quoted, NIL))
       return cons(quoted, quoteArgs(args.cdr));
     }
     let tok = consumeToken();
