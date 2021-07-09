@@ -41,7 +41,7 @@ const SLAMBDA_ATOM = Atom._defineAtom("special-lambda", "\\\\", "\u03BB");
 const CLOSURE_ATOM = Atom._defineAtom("%%closure");
 const SCLOSURE_ATOM = Atom._defineAtom("%%special-closure");
 
-const IS_CONS = Symbol("*isCons");
+const IS_CONS = Symbol("*lisp-isCons*");
 
 class Cons {
   constructor(car, cdr) {
@@ -165,20 +165,16 @@ const Env = Map;
 const Scope = Cons;
 const GlobalEnv = new Env;
 const GlobalScope = new Scope(GlobalEnv, NIL);
-const EVAL_ARGS = Symbol("*eval-args*");
-const LIFT = Symbol("*lift*");
+const EVAL_ARGS = Symbol("*lisp-eval-args*");
+const LIFT_ARGS = Symbol("*lisp-lift-args*");
 const BIGGEST_INT32 = 2**32-1;
 
 function defineGlobalSymbol(name, val, ...aliases) {
   let opts = {};
   if (typeof aliases[0] === 'object')
     opts = aliases.shift();
-  let evalArgs = opts.evalArgs ?? BIGGEST_INT32, lift = opts.lift ?? 0;
-  if (lift === '*') lift = BIGGEST_INT32;
-  if (typeof val === 'function') {
-    val[EVAL_ARGS] = evalArgs;
-    val[LIFT] = lift;
-  }
+  if (opts.evalArgs !== undefined) val[EVAL_ARGS] = opts.evalArgs;
+  if (opts.lift !== undefined) val[LIFT_ARGS] = opts.lift;
   let atom = typeof name === 'string' ? Atom(name) : name;
   GlobalEnv.set(atom, val);
   for (let alias of aliases)
@@ -186,12 +182,12 @@ function defineGlobalSymbol(name, val, ...aliases) {
   return atom;
 }
 
-defineGlobalSymbol("defineGlobalSymbol", defineGlobalSymbol, { lift: '*' });
+defineGlobalSymbol("defineGlobalSymbol", defineGlobalSymbol);
 defineGlobalSymbol("nil", NIL);
-const QUOTE_ATOM = defineGlobalSymbol("quote", x => x.car, { evalArgs: 0 }, "'");
+const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted.car, { evalArgs: 0 }, "'");
 defineGlobalSymbol("null", null); defineGlobalSymbol("undefined", undefined);
-defineGlobalSymbol("cons", cons, { lift: 2 });
-defineGlobalSymbol("car", car, { lift: 1 }, "first");
+defineGlobalSymbol("cons", cons, { lift: 2 });  // lift guarantees two arguments that aren't "undefined"
+defineGlobalSymbol("car", car, { lift: 1 }, "first"); // lift guarantees one argument that isn't "undefined"
 defineGlobalSymbol("cdr", cdr, { lift: 1 }, "rest");
 defineGlobalSymbol("caaar", caadr, { lift: 1 });
 defineGlobalSymbol("caar", caar, { lift: 1 });
@@ -205,51 +201,57 @@ defineGlobalSymbol("cdar", cdar, { lift: 1 });
 defineGlobalSymbol("cddar", cddar, { lift: 1 });
 defineGlobalSymbol("cdddr", cdddr, { lift: 1 });
 defineGlobalSymbol("cddr", cddr, { lift: 1 });
-defineGlobalSymbol("pair?", a => a[IS_CONS] === true, { lift: 1 }, "isCons");
-defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 }, "isNumber");
-defineGlobalSymbol("typeof", a => typeof a, { lift: 1 });
-defineGlobalSymbol("isUndefined", a => typeof a === 'undefined', { lift: 1 });
-defineGlobalSymbol("isNull", a => a === null, { lift: 1 });
-defineGlobalSymbol("isBoolean", a => typeof a === 'boolean', { lift: 1 });
-defineGlobalSymbol("isNumber", a => typeof a === 'number', { lift: 1 });
-defineGlobalSymbol("isBigInt", a => typeof a === 'bigint', { lift: 1 });
-defineGlobalSymbol("isString", a => typeof a === 'string', { lift: 1 });
-defineGlobalSymbol("isSymbol", a => typeof a === 'symbol', { lift: 1 });
-defineGlobalSymbol("isFunction", a => typeof a === 'function', { lift: 1 });
-defineGlobalSymbol("isObject", a => typeof a === 'object', { lift: 1 });
-defineGlobalSymbol("isObject", a => (typeof a === 'object') && (a instanceof Array), { lift: 1 });
-defineGlobalSymbol("abs", a => a < 0 ? -a : a, { lift: 1 });
-defineGlobalSymbol("sqrt", a => Math.sqrt(a), { lift: 1 });
-defineGlobalSymbol("cbrt", a => Math.cbrt(a), { lift: 1 });
-
-defineGlobalSymbol("intern", a => Atom(a), { lift: 1 });
-defineGlobalSymbol("Symbol", a => Symbol(a), { lift: 1 });
-defineGlobalSymbol("toArray", a => toArray(a), { lift: 1 });
-defineGlobalSymbol("toLisp", a => toLisp(a), { lift: 1 });
-defineGlobalSymbol("toString", a => lispToString(a), { lift: 1 });
-defineGlobalSymbol("toNumber", a => Number(a), { lift: 1 });
-defineGlobalSymbol("toBigInt", a => BigInt(a), { lift: 1 });
-defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ], { lift: 2 });
-defineGlobalSymbol("read-from-string", a => parseSExpr(a), { lift: 1 });
-defineGlobalSymbol("eval", (expr, env) => {
-  if (env === undefined)   // xxx lifting thing
-    env = GlobalEnv;
+defineGlobalSymbol("pair?", a => typeof a === object && a[IS_CONS] === true);
+defineGlobalSymbol("typeof", a => typeof a);
+defineGlobalSymbol("undefined?", a => typeof a === 'undefined');
+defineGlobalSymbol("null?", a => a === null);
+defineGlobalSymbol("boolean?", a => typeof a === 'boolean');
+defineGlobalSymbol("number?", a => typeof a === 'number');
+defineGlobalSymbol("bigint?", a => typeof a === 'bigint');
+defineGlobalSymbol("numeric?", a => typeof a === 'number' || typeof a === 'bigint');
+defineGlobalSymbol("string?", a => typeof a === 'string');
+defineGlobalSymbol("symbol?", a => typeof a === 'symbol');
+defineGlobalSymbol("function?", a => typeof a === 'function');
+defineGlobalSymbol("object?", a => typeof a === 'object');
+defineGlobalSymbol("array?", a => (typeof a === 'object') && (a instanceof Array));
+for (let [name, {value}] of Object.entries(Object.getOwnPropertyDescriptors(Math))) {
+  // SIOD defines *pi* so I'll just define them all like that
+  if (typeof value === 'number')
+    name = `*${name.toLowerCase()}*`;
+  // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
+  if (typeof value === 'number' || typeof value === 'function')
+    defineGlobalSymbol(name, value);
+}
+defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // unlike Math.abs, this deals with bigint too
+defineGlobalSymbol("intern", a => Atom(a));
+defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
+defineGlobalSymbol("toArray", a => toArray(a));
+defineGlobalSymbol("toLisp", a => toLisp(a));
+defineGlobalSymbol("toString", a => lispToString(a));
+defineGlobalSymbol("toNumber", a => Number(a));
+defineGlobalSymbol("toBigInt", a => BigInt(a));
+defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ]);
+defineGlobalSymbol("read-from-string", a => parseSExpr(a));
+defineGlobalSymbol("eval", (expr, rest) => {
+  env = GlobalEnv;
+  if (rest && rest[IS_CONS])
+    env = rest.car;
   if (typeof expr === 'string')
     expr = parseSExpr(expr);
   return lispEval(expr);
 }, { lift: 1 });
 
 // Pokemon gotta catch 'em' all!
-defineGlobalSymbol("!", (a) => !lispToBool(a), { lift: 1 }, "not");
-defineGlobalSymbol("~", (a) => ~a, { lift: 1 }, "bit-not");
-defineGlobalSymbol("**", (a,b) => a ** b, { lift: 2 }, "exp");
-defineGlobalSymbol("%", (a,b) => a % b, { lift: 2 }, "rem");
-defineGlobalSymbol("<<", (a,b) => a << b, { lift: 2 }, "bit-shl");
-defineGlobalSymbol(">>", (a,b) => a >> b, { lift: 2 }, "ash");
-defineGlobalSymbol(">>>", (a,b) => a >>> b, { lift: 2 }, "bit-ushr");
-defineGlobalSymbol("in", (a,b) => a in b, { lift: 2 });
-defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { lift: '*' });
-defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { lift: 2 });
+defineGlobalSymbol("!", a => !lispToBool(a), "not");
+defineGlobalSymbol("~", a => ~a, "bit-not");
+defineGlobalSymbol("**", (a,b) => a ** b, "exp");
+defineGlobalSymbol("%", (a,b) => a % b, "rem");
+defineGlobalSymbol("<<", (a,b) => a << b, "bit-shl");
+defineGlobalSymbol(">>", (a,b) => a >> b, "ash");
+defineGlobalSymbol(">>>", (a,b) => a >>> b, "bit-ushr");
+defineGlobalSymbol("in", (a,b) => a in b);
+defineGlobalSymbol("new", (cls, ...args) => new cls(...args));
+defineGlobalSymbol("instanceof", (a,b) => a instanceof b);
 
 // variable args
 defineGlobalSymbol("+", (...args) => {
@@ -265,14 +267,14 @@ defineGlobalSymbol("+", (...args) => {
     a += b;
   }
   return a;
-}, { lift: '*' }, "add");
+}, "add");
 
 defineGlobalSymbol("-", (a, ...rest) => {
   if (rest.length === 0) return -a;  // XXX ???
   for (let b of rest)
     a -= b;
   return a;
-}, { lift: '*' }, "sub");
+}, "sub");
 
 defineGlobalSymbol("*", (...args) => {
   let a = 1, first = true;
@@ -285,42 +287,42 @@ defineGlobalSymbol("*", (...args) => {
     a *= b;
   }
   return a;
-}, { lift: '*' }, "mul");
+}, "mul");
 
 defineGlobalSymbol('/', (a, ...rest) => {
   if (rest.length === 0) return 1/a;  // XXX ???
   for (let b of rest)
     a /= b;
   return a;
-}, { lift: '*' }, "/");
+}, "/");
 
 defineGlobalSymbol("&", (...args) => {
   let a = ~0;
   for (let b of args)
     a &= b;
   return a;
-}, { lift: '*' }, "bit-and");
+}, "bit-and");
 
 defineGlobalSymbol("|", (...args) => {
   let a = 0;
   for (let b of args)
     a |= b;
   return a;
-}, { lift: '*' }, "bit-or");
+}, "bit-or");
 
 defineGlobalSymbol("^", (...args) => {
   let a = 0;
   for (let b of args)
     a ^= b;
   return a;
-}, { lift: '*' }, "bit-xor");
+}, "bit-xor");
 
 defineGlobalSymbol("&", (...args) => {
   let a = ~0;
   for (let b of args)
     a &= b;
   return a;
-}, { lift: '*' }, "bit-and");
+}, "bit-and");
 
 // XXX todo: do all of these without lifting to array
 defineGlobalSymbol("<", function(a, ...rest) {
@@ -331,7 +333,7 @@ defineGlobalSymbol("<", function(a, ...rest) {
     a = b;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "lt");
+}, { evalArgs: 1 }, "lt");
 
 defineGlobalSymbol("<=", function(a, ...rest) {
   if (rest.length === 0) return true; // equal to itself?
@@ -341,7 +343,7 @@ defineGlobalSymbol("<=", function(a, ...rest) {
     a = b;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "le");
+}, { evalArgs: 1 }, "le");
 
 defineGlobalSymbol(">", function(a, ...rest) {
   if (rest.length === 0) return false;
@@ -351,7 +353,7 @@ defineGlobalSymbol(">", function(a, ...rest) {
     a = b;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "gt");
+}, { evalArgs: 1 }, "gt");
 
 defineGlobalSymbol(">=", function(a, ...rest) {
   if (rest.length === 0) return true;
@@ -361,7 +363,7 @@ defineGlobalSymbol(">=", function(a, ...rest) {
     a = b;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "ge");
+}, { evalArgs: 1 }, "ge");
 
 defineGlobalSymbol("==", function(a, ...rest) {
   if (rest.length === 0) return true;
@@ -370,7 +372,7 @@ defineGlobalSymbol("==", function(a, ...rest) {
     if (!(a == b)) return false;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "equal?");
+}, { evalArgs: 1 }, "equal?");
 
 defineGlobalSymbol("===", function(a, ...rest) {
   if (rest.length === 0) return true;
@@ -379,7 +381,7 @@ defineGlobalSymbol("===", function(a, ...rest) {
     if (!(a === b)) return false;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "eq?");
+}, { evalArgs: 1 }, "eq?");
 
 defineGlobalSymbol("!=", function(a, ...rest) {  // all not equal to first
   if (rest.length === 0) return false;
@@ -388,7 +390,7 @@ defineGlobalSymbol("!=", function(a, ...rest) {  // all not equal to first
     if (!(a != b)) return false;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "ne");
+}, { evalArgs: 1 }, "ne");
 
 defineGlobalSymbol("!==", function(a, ...rest) {  // all not equal to first
   if (rest.length === 0) return false;
@@ -397,7 +399,7 @@ defineGlobalSymbol("!==", function(a, ...rest) {  // all not equal to first
     if (!(a !== b)) return false;
   }
   return true;
-}, { evalArgs: 1, lift: '*' }, "nee");
+}, { evalArgs: 1 }, "nee");
 
 // logical & conditional
 
@@ -408,7 +410,7 @@ defineGlobalSymbol("&&", function(...args) {
     if (!lispToBool(a)) return a;
   }
   return a;
-}, { evalArgs: 0, lift: '*' }, "and");
+}, { evalArgs: 0 }, "and");
 
 defineGlobalSymbol("||", function(...args) {
   let a = false;
@@ -417,7 +419,7 @@ defineGlobalSymbol("||", function(...args) {
     if (lispToBool(a)) return a;
   }
   return a;
-}, { evalArgs: 0, lift: '*' }, "or");
+}, { evalArgs: 0 }, "or");
 
 defineGlobalSymbol("?", function(predicate, trueBlock, falseBlock) {
   let res;
@@ -431,17 +433,17 @@ defineGlobalSymbol("?", function(predicate, trueBlock, falseBlock) {
 // JavaScripty things:
 //   XXX TODO: delete, setting
 
-defineGlobalSymbol("@", (a, b) => a[b], { lift: 2 }, "aref");  // indexing and member access
-defineGlobalSymbol("?@", (a, b) => a?.[b], { lift: 2 });  // conditional indexing and member access
-defineGlobalSymbol("toLisp", toLisp, { lift: 1 });
-defineGlobalSymbol("toArray", toArray, { lift: 1 });
+defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access
+defineGlobalSymbol("?@", (a, b) => a?.[b]);  // conditional indexing and member access
+defineGlobalSymbol("toLisp", toLisp);
+defineGlobalSymbol("toArray", toArray);
 defineGlobalSymbol("NaN", NaN);
 defineGlobalSymbol("Infinity", Infinity);
-defineGlobalSymbol("isFinite", isFinite, { lift: '1' });
-defineGlobalSymbol("isNaN", isNaN, { lift: '1' });
-defineGlobalSymbol("isFinite", isFinite), { lift: '*' };
-defineGlobalSymbol("parseFloat", parseFloat, { lift: '*' });
-defineGlobalSymbol("parseInt", parseInt, { lift: '*' });
+defineGlobalSymbol("isFinite", isFinite);
+defineGlobalSymbol("isNaN", isNaN);
+defineGlobalSymbol("isFinite", isFinite);
+defineGlobalSymbol("parseFloat", parseFloat);
+defineGlobalSymbol("parseInt", parseInt);
 
 // SIOD compatibility checklist:
 //
@@ -610,7 +612,7 @@ defineGlobalSymbol(SLAMBDA_ATOM, function(formalParams, bodies) {
 // try/catch/filnally. Just a sketch for now.
 //
 
-defineGlobalSymbol("*throw", e => { throw e }, { lift: 1 });
+defineGlobalSymbol("*throw", e => { throw e });
 
 defineGlobalSymbol("*finally", function (handler, body) {  // XXX order of args?
   let val = NIL;
@@ -665,19 +667,25 @@ function lispEval(expr, scope = GlobalScope) {
     if (val === undefined) throw new ResolveError(`Undefined symbol ${expr.description}`);
     return val;
   }
-  if (typeof expr === 'function') return expr;
-  if (typeof expr !== 'object') return expr;
-  if (!(expr[IS_CONS])) return expr;
-  let fn = expr.car, args = expr.cdr;
-  if (typeof fn !== 'function')
-    fn = lispEval(fn, scope);
+  if (typeof expr === 'object' && expr[IS_CONS]) {
+    let fn = expr.car, args = expr.cdr;
+    if (typeof fn !== 'function')
+      fn = lispEval(fn, scope);
+    return lispApply(fn, args, scope);
+  }
+  return expr;
+}
+
+function lispApply(fn, args, scope) {
   if (typeof fn === 'function') {
     let evalCount = fn[EVAL_ARGS] ?? BIGGEST_INT32;
-    args = evalArgs(args, scope, evalCount);
-    let lift = fn[LIFT] ?? BIGGEST_INT32;
+    if (evalCount > 0)
+      args = evalArgs(args, scope, evalCount);
+    let lift = fn[LIFT_ARGS] ?? BIGGEST_INT32;
     let jsArgs = [], noPad = lift === BIGGEST_INT32;
     while (lift > 0) {
-      if (args !== NIL && (args[IS_CONS])) {
+      // Promote "lift" arguments to JS arguments, filling with NIL
+      if (typeof args === 'object' && args[IS_CONS]) {
         jsArgs.push(args.car);
         args = args.cdr;
       } else {
@@ -692,7 +700,7 @@ function lispEval(expr, scope = GlobalScope) {
       jsArgs.push(args);
     return fn.apply(scope, jsArgs);  // "this" is the scope!
   }
-  if (fn[IS_CONS]) {
+  if (typeof fn === 'object' && fn[IS_CONS]) {
     let opSym = fn.car;
     if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
       let formalParams = fn.cdr.car;
@@ -720,7 +728,7 @@ function lispEval(expr, scope = GlobalScope) {
       return lispEval(body, scope);
     }
   }
-  throw new EvalError(`Cannot eval ${lispToString(expr)}`);
+  throw new EvalError(`Can't apply ${fn}`);
 }
 
 function resolveSymbol(sym, scope) {
@@ -818,7 +826,7 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   return String(obj);
 }
 
-const toLispSymbol = Symbol("toLisp");
+const TO_LISP = Symbol("*lisp-to-lisp*");
 
 // Turn iterables objects like arrays into lists
 function toLisp(obj, depth = BIGGEST_INT32, opts) { 
@@ -828,8 +836,8 @@ function toLisp(obj, depth = BIGGEST_INT32, opts) {
     iterator = obj;
   if (typeof obj === 'object') {
     if (obj[IS_CONS]) return obj;  // Careful; cons is iterable itself
-    if (obj[toLispSymbol])
-      return obj[toLispSymbol](opts);
+    if (obj[TO_LISP])
+      return obj[TO_LISP](opts);
     let iterator;
     if (obj[Symbol.iterator])
       iterator = obj[Symbol.iterator]();
