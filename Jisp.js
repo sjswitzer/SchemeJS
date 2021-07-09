@@ -38,9 +38,6 @@ Atom._defineAtom = function(...names) {
 
 const LAMBDA_ATOM = Atom._defineAtom("lambda", "\\", "\u03BB");
 const SLAMBDA_ATOM = Atom._defineAtom("special-lambda", "\\\\", "\u03BB");
-const CLOSURE_ATOM = Atom._defineAtom("%%closure");
-const SCLOSURE_ATOM = Atom._defineAtom("%%special-closure");
-
 const IS_CONS = Symbol("*lisp-isCons*");
 
 class Cons {
@@ -732,7 +729,7 @@ function lispApply(fn, args, scope) {
     let opSym = fn.car;
     if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
       let formalParams = fn.cdr.car;
-      let body = fn.cdr.cdr.car;  // XXX bodies = fn.cdr.cdr
+      let bodies = fn.cdr.cdr;
       if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
         args = evalArgs(args, scope);
       let env = new Env;
@@ -753,7 +750,12 @@ function lispApply(fn, args, scope) {
         env[formalParams] = args;
       else if (formalParams !== NIL)
         throw new EvalError(`Bad parameter list ${lispToString(origFormalParams)}`);
-      return lispEval(body, scope);
+      let res = NIL;
+      while (typeof bodies === 'object' && bodies[IS_CONS]) {
+        res = lispEval(bodies.car, scope);
+        bodies = bodies.cdr;
+      }
+      return res;
     }
   }
   throw new EvalError(`Can't apply ${fn}`);
