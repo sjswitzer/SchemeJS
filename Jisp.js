@@ -42,7 +42,8 @@ const IS_CONS = Symbol("*lisp-isCons*");
 
 class Cons {
   // I want creating a Cons to be as cheap as possible, so no subclassing
-  // or calls to super.
+  // or calls to super. This means that identifying the "class" of Cons
+  // cells can't use "instanceof AbstractCons".
   // For now, cons cells are immutable. That might or might not help the JIT
   // but in any case if that decision changes, Object.freeze(this) should
   // become Object.seal().
@@ -63,7 +64,8 @@ Cons.prototype[IS_CONS] = true;
 //    typeof obj === 'object' && obj[IS_CONS]
 // The typeof check is basically free since the JIT always knows the type
 // of an object. And fetching properties is something the optimizer makes
-// as fast as possible. That should probebly be a function, but oddly enough
+// as fast as possible. It's probably even as fast as or faster than "instanceof".
+// This should probebly be a function, but oddly enough
 // I don't want to trust the compiler to inline it.
 //
 // Beware when traversing lists. Things purported to be lists might not be
@@ -249,14 +251,32 @@ defineGlobalSymbol("toNumber", a => Number(a));
 defineGlobalSymbol("toBigInt", a => BigInt(a));
 defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ]);
 defineGlobalSymbol("read-from-string", a => parseSExpr(a));
-defineGlobalSymbol("eval", (expr, rest) => {
-  env = GlobalEnv;
+
+defineGlobalSymbol("eval", function (expr, rest) {
+  let scope = NIL;
+  if (rest === undefined || rest === NIL)
+    scope = this;  // use the current scope if unspecified
+  // The "rest" parameter is unlifted, so it's a list of arguments.
+  // Which means the first argument is rest.car
+  // Note the user can set a deliberately enmpty scope for whatever reason.
   if (typeof rest === 'object' && rest[IS_CONS])
-    env = rest.car;
+    scope = rest.car;
   if (typeof expr === 'string')
     expr = parseSExpr(expr);
-  return lispEval(expr);
+  return lispEval(expr, scope);
 }, { lift: 1 });
+
+defineGlobalSymbol("apply", function (fn, args, rest) {
+  let scope = NIL;
+  if (rest === undefined || rest === NIL)
+    scope = this;  // use the current scope if unspecified
+  // The "rest" parameter is unlifted, so it's a list of arguments.
+  // Which means the first argument is rest.car
+  // Note the user can set a deliberately enmpty scope for whatever reason.
+  if (typeof rest === 'object' && rest[IS_CONS])
+    scope = rest.car;
+  return lispApply(fn, args, scope);
+}, { lift: 2 });
 
 // Pokemon gotta catch 'em' all!
 defineGlobalSymbol("!", a => !lispToBool(a), "not");
@@ -287,7 +307,7 @@ defineGlobalSymbol("+", (...args) => {
 }, "add");
 
 defineGlobalSymbol("-", (a, ...rest) => {
-  if (rest.length === 0) return -a;  // XXX ???
+  if (rest.length === 0) return -a;
   for (let b of rest)
     a -= b;
   return a;
@@ -561,13 +581,6 @@ defineGlobalSymbol("butlast", (list) => {
 //
 // (*catch tag body ...)
 // (*throw tag value)
-// (append l1 l2 l3 l4 ...)
-// (last list)
-// (length)
-// (list item1 item2 ...) - Conses up its arguments into a list.
-// (reverse x) -- Returns a new list which has elements in the reverse order of the list x.
-// (butlast x)
-//    Returns a new list which has all the elements of the argument x except for the last element.
 // (apply function arglist)
 // (apropos substring) -- returns a list of all symbols containing the given substring.
 // (ass key alist function)
