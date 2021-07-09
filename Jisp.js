@@ -577,11 +577,23 @@ defineGlobalSymbol("butlast", (list) => {
   return res;
 });
 
+// (apropos substring) -- returns a list of all symbols containing the given substring.
+defineGlobalSymbol("apropos", (substring) => {
+  substring = substring.toLowerCase();
+  let matches = [];
+  for (let [name, _value] of GlobalEnv) {
+    name = lispToString(name);
+    if (name.toLowerCase().includes(substring))
+      matches.push(name);
+  }
+  matches.sort();
+  return toLisp(matches);
+});
+
 // SIOD compatibility checklist:
 //
 // (*catch tag body ...)
 // (*throw tag value)
-// (apply function arglist)
 // (apropos substring) -- returns a list of all symbols containing the given substring.
 // (ass key alist function)
 //    Returns the first element of the alist such that the function applied to car of the element and the key returns a non-null value. For example:/
@@ -779,7 +791,7 @@ defineGlobalSymbol("define", function (variable, value) {
   if (typeof name === 'string') name = Atom(name);
   if (typeof name !== 'symbol')
     throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
-  scope.car.set(name, value);
+  scope.car.set(name, value);  // XXX or should it be GlobalScope?
   return name;
 }, { evalArgs: 0, lift: 2 });
 
