@@ -1250,45 +1250,6 @@ function lispREPL(readline, opts = {}) {
   }
 }
 
-let x = toLisp(['a', 'b', [ 1, 2, 3 ], 'c']);
-console.log("Test toList", x);
-console.log("Test toString", String(x));
-console.log("Test NIL toString", String(NIL));
-console.log("Test iterable", [...x]);
-console.log("Test NIL iterable", [...NIL]);
-console.log("Test cons", String(cons('x', cons('y', NIL))));
-console.log("Test cons", String(cons('x', 'y')));
-console.log("Test cons", String(cons('x', cons('y', 'z'))));
-let str = `12b +5 -3.2e7 15b (+ b (- 1 2)) ${'\n'} 12 ( .) . 1.23 ' .23 .23.4 .23e+234 a bc b21 "asd"`;
-let tokens = lispTokenGenerator(str);
-let tokenList = [ ...tokens ];
-console.log("Test lispTokenGenerator", tokenList);
-
-let sExpr = parseSExpr(`cons(a b)`);
-console.log("Test parseSExpr", String(sExpr), sExpr);
-sExpr = parseSExpr(`(+ b (- 1 2))`);
-console.log("Test parseSExpr", String(sExpr), sExpr);
-
-sExpr = parseSExpr(`(a b 'c '(abc def))`);
-console.log("parseSExpr", String(sExpr), sExpr);
-
-{ // Run the REPL on some "input"
-  let input = [ `(a b`, ` 'c '(abc`, ` def))` ];
-  lispREPL(() => input.shift());
-}
-
-console.log("Test lispEval", lispEval(parseSExpr(`(car '(1 2))`)));
-console.log("Test lispEva1", lispEval(parseSExpr(`(+ 1 2 3 4)`)));
-console.log("Test lispEva1", lispEval(parseSExpr(`(? (< 1 2) "a" "b")`)));
-console.log("Test lispEva1", lispEval(parseSExpr(`(* 2 3)`)));
-console.log("Test lispEva1", lispEval(parseSExpr(`+(2 3)`)));
-let xx1 = parseSExpr(`{ a: 1, b: "foo" }`);
-let xx2 = lispEval(xx1);
-console.log("Test parse JS objects", lispToString(xx2));
-// console.log("Test lispEval", lispEval(parseSExpr(`foo`)));
-
-//console.log("Test lispEva1", lispEval(parseSExpr(`duck`))); // XXX need beter tesing
-
 if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
   let fs = require('fs');
   let inputFd, closeFd, oldRawMode;
@@ -1307,7 +1268,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       console.info("Can't open termnal", e);
     }
     if (inputFd !== undefined) {
-      console.log(`Jisp REPL. Type "." to exit.`);
+      console.log(`Jisp 1.1 REPL. Type "." to exit.`);
       let buffer = Buffer.alloc(2000);
       function getLine(prompt) {
         process.stdout.write(prompt);
