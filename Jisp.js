@@ -39,7 +39,7 @@ Atom._defineAtom = function(...names) {
 Atom.LAMBDA = Atom._defineAtom("lambda", "\\", "\u03BB");
 Atom.SLAMBDA = Atom._defineAtom("special-lambda", "\\\\");
 
-const IS_CONS_SYMBOL = Symbol("*isCons");
+const IS_CONS = Symbol("*isCons");
 
 class Cons {
   constructor(car, cdr) {
@@ -53,7 +53,7 @@ class Cons {
   *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
 // XXX There should be a way to do this in the class decl, but how?
-Cons.prototype[IS_CONS_SYMBOL] = true;
+Cons.prototype[IS_CONS] = true;
 
 // I hide the Nil class because there's never any reason to
 // reference it or instantiate it it more than once. Having it visible
@@ -89,7 +89,7 @@ class LazyCons {
   }
   *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
-LazyCons.prototype[IS_CONS_SYMBOL] = true;
+LazyCons.prototype[IS_CONS] = true;
 
 class LazyCarCons {
   _carFn; cdr;
@@ -104,7 +104,7 @@ class LazyCarCons {
   }
   *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
-LazyCarCons.prototype[IS_CONS_SYMBOL] = true;
+LazyCarCons.prototype[IS_CONS] = true;
 
 class LazyCdrCons {
   car; _cdrFn;
@@ -119,7 +119,7 @@ class LazyCdrCons {
   }
   *[Symbol.iterator]() { return { next: nextCons, _current: this } }
 }
-LazyCdrCons.prototype[IS_CONS_SYMBOL] = true;
+LazyCdrCons.prototype[IS_CONS] = true;
 
 //
 // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
@@ -173,8 +173,8 @@ const Env = Map;
 const Scope = Cons;
 const GlobalEnv = new Env;
 const GlobalScope = new Scope(GlobalEnv, NIL);
-const EVAL_ARGS_SYMBOL = Symbol("*eval-args*");
-const LIFT_SYMBOL = Symbol("*lift*");
+const EVAL_ARGS = Symbol("*eval-args*");
+const LIFT = Symbol("*lift*");
 const BIGGEST_INT32 = 2**32-1;
 
 function defineGlobalSymbol(name, val, ...aliases) {
@@ -184,8 +184,8 @@ function defineGlobalSymbol(name, val, ...aliases) {
   let evalArgs = opts.evalArgs ?? BIGGEST_INT32, lift = opts.lift ?? 0;
   if (lift === '*') lift = BIGGEST_INT32;
   if (typeof val === 'function') {
-    val[EVAL_ARGS_SYMBOL] = evalArgs;
-    val[LIFT_SYMBOL] = lift;
+    val[EVAL_ARGS] = evalArgs;
+    val[LIFT] = lift;
   }
   let atom = typeof name === 'string' ? Atom(name) : name;
   GlobalEnv.set(atom, val);
@@ -216,7 +216,7 @@ defineGlobalSymbol("cdar", cdar, { lift: 1 });
 defineGlobalSymbol("cddar", cddar, { lift: 1 });
 defineGlobalSymbol("cdddr", cdddr, { lift: 1 });
 defineGlobalSymbol("cddr", cddr, { lift: 1 });
-defineGlobalSymbol("pair?", a => a[IS_CONS_SYMBOL] === true, { lift: 1 }, "isCons");
+defineGlobalSymbol("pair?", a => a[IS_CONS] === true, { lift: 1 }, "isCons");
 defineGlobalSymbol("numberp", a => typeof a === 'number' || typeof a === 'bigint', { lift: 1 }, "isNumber");
 defineGlobalSymbol("typeof", a => typeof a, { lift: 1 });
 defineGlobalSymbol("isUndefined", a => typeof a === 'undefined', { lift: 1 });
@@ -486,8 +486,6 @@ defineGlobalSymbol("parseInt", parseInt, { lift: '*' });
 // errobj, (error message object)
 // (exp x) -- Computes the exponential function of x.
 // (log x)
-// (lambda (args) (body1) (body2) ...) -- returns %%closure
-// (%%closure env code)
 // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
 //     (let ((x 10)
 //      (y 20))
@@ -609,6 +607,30 @@ defineGlobalSymbol("parseInt", parseInt, { lift: '*' });
 //     (* x (factoral (- x (? (isBigInt x) 1n 1))))
 //   ))
 
+// (%%closure env (body1) (body2) ...)
+Atom.CLOSURE = defineGlobalSymbol("%%closure", e => {
+}, { evalArgs: 0, lift: 1 });
+
+// (lambda (args) (body1) (body2) ...) -- returns %%closure
+defineGlobalSymbol("lambda", (formalParams, bodies) => {
+  while (formalParams !== NIL && formalParams[IS_CONS]) {
+    let param = formalParams.car;
+    if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
+    if (args !== NIL) {
+      newEnv.set(param, args.car);
+      args = args.cdr
+    } else {
+      newEnv[param] = NIL;
+    }
+    formalParams = formalParams.cdr;
+  }
+  if (typeof formalParams === 'symbol')  // Neat trick for 'rest' params!
+    newEnv[formalParams] = args;
+  return lispEval(body, newScope);
+
+
+}, { evalArgs: 0, lift: 1 });
+
 //
 // try/catch/filnally. Just a sketch for now.
 //
@@ -627,13 +649,13 @@ defineGlobalSymbol("*catch", function(e, handler, body) {  // XXX order of args?
   let cls, sym;
   if (typeof e === 'symbol') {
     sym = e;
-  } else if (e[IS_CONS_SYMBOL]) {
+  } else if (e[IS_CONS]) {
     cls = e.car;
     if (typeof cls !== 'function')
       cls = lispEval(cls, this);
     if (typeof cls !== 'function')
       throw new EvalError(`Not a class ${cls}`);
-    if (e.cdr[IS_CONS_SYMBOL])
+    if (e.cdr[IS_CONS])
       sym = e.cdr.car;
   }
   if (typeof sym !== 'symbol')
@@ -669,10 +691,10 @@ function lispEval(expr, scope = GlobalScope) {
     return val;
   }
   if (typeof expr !== 'object') return expr;
-  if (!(expr[IS_CONS_SYMBOL])) return expr;  // Worry about evaluating lazy lists later. Or not!
+  if (!(expr[IS_CONS])) return expr;  // Worry about evaluating lazy lists later. Or not!
   let op = expr.car, args = expr.cdr;
   if (op === Atom.QUOTE) {  // this is just an optimization; the quote function will do this too
-    if (!(args[IS_CONS_SYMBOL])) throw new EvalError(`Bad argument list ${args}`);
+    if (!(args[IS_CONS])) throw new EvalError(`Bad argument list ${args}`);
     return args.car;
   }
   if (typeof op === 'symbol') {
@@ -681,11 +703,11 @@ function lispEval(expr, scope = GlobalScope) {
     op = resolved;
   }
   if (typeof op === 'function') {
-    let evalCount = op[EVAL_ARGS_SYMBOL] ?? BIGGEST_INT32;
+    let evalCount = op[EVAL_ARGS] ?? BIGGEST_INT32;
     args = evalArgs(args, scope, evalCount);
-    let lift = op[LIFT_SYMBOL] ?? 0, jsArgs = [], noPad = lift === BIGGEST_INT32;
+    let lift = op[LIFT] ?? 0, jsArgs = [], noPad = lift === BIGGEST_INT32;
     while (lift > 0) {
-      if (args !== NIL && (args[IS_CONS_SYMBOL])) {
+      if (args !== NIL && (args[IS_CONS])) {
         jsArgs.push(args.car);
         args = args.cdr;
       } else {
@@ -700,8 +722,8 @@ function lispEval(expr, scope = GlobalScope) {
       jsArgs.push(args);
     return op.apply(scope, jsArgs);  // "this" is the scope!
   }
-  // (\ args body)
-  if (op[IS_CONS_SYMBOL])  {
+  if (op[IS_CONS]) {
+    // (\ args body)
     if (op.car === Atom.LAMBDA || op.car === Atom.SLAMBDA) {
       let formalParams = op.cdr.car;
       let body = op.cdr.cdr.car;
@@ -712,7 +734,7 @@ function lispEval(expr, scope = GlobalScope) {
       ///  formalParams = cons(formalParams, NIL);
       let newEnv = new Env;
       let newScope = new Scope(newEnv, scope);
-      while (formalParams !== NIL && formalParams[IS_CONS_SYMBOL]) {
+      while (formalParams !== NIL && formalParams[IS_CONS]) {
         let param = formalParams.car;
         if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
         if (args !== NIL) {
@@ -743,7 +765,7 @@ function resolveSymbol(sym, scope) {
 function evalArgs(args, scope, evalCount) {
   if (args === NIL || evalCount <= 0)
     return args;
-  if (!(args[IS_CONS_SYMBOL]))
+  if (!(args[IS_CONS]))
     return args;
   let val = lispEval(args.car, scope);
   return cons(val, evalArgs(args.cdr, scope, evalCount-1));
@@ -765,7 +787,7 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
   if (obj === undefined) return "undefined";
   if (obj === null) return "null";   // remember: typeof null === 'object'!
   if (objType === 'object') {
-    if (obj[IS_CONS_SYMBOL]) {
+    if (obj[IS_CONS]) {
       let before = "(", after = ")";
       if (quoted)
         before = after = "";
@@ -777,7 +799,7 @@ function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
       }
       if (obj.cdr === NIL)
         return before + lispToString(obj.car, maxDepth-1, opts) + after;
-      if (obj.cdr[IS_CONS_SYMBOL])
+      if (obj.cdr[IS_CONS])
         return before +
             lispToString(obj.car, maxDepth-1, opts) +
             lispToString(obj.cdr, maxDepth-1, opts, true) +
@@ -835,7 +857,7 @@ function toLisp(obj, depth = BIGGEST_INT32, opts) {
   if (typeof obj === 'function') // assume it's an iterator
     iterator = obj;
   if (typeof obj === 'object') {
-    if (obj[IS_CONS_SYMBOL]) return obj;  // Careful; cons is iterable itself
+    if (obj[IS_CONS]) return obj;  // Careful; cons is iterable itself
     if (obj[toLispSymbol])
       return obj[toLispSymbol](opts);
     let iterator;
@@ -856,9 +878,9 @@ function toLisp(obj, depth = BIGGEST_INT32, opts) {
 function toArray(obj, depth = BIGGEST_INT32) {
   if (depth <= 0) return obj;
   if (obj === NIL) return [];
-  if (!obj[IS_CONS_SYMBOL]) return obj;
+  if (!obj[IS_CONS]) return obj;
   let arr = [];
-  while (obj !== NIL && obj[IS_CONS_SYMBOL]) {
+  while (obj !== NIL && obj[IS_CONS]) {
     arr.push(toArray(obj.car), depth-1);
     obj = obj.cdr;
   }
@@ -1191,7 +1213,7 @@ function parseSExpr(tokenGenerator, opts = {}) {
   let expr;
   if (token().type === 'atom' && token(1).type === '(') {
     function quoteArgs(args) {
-      if (args === NIL || !(args[IS_CONS_SYMBOL])) return NIL;
+      if (args === NIL || !(args[IS_CONS])) return NIL;
       let quoted = args.car;
       quoted = cons(Atom.QUOTE, cons(quoted, NIL))
       return cons(quoted, quoteArgs(args.cdr));
