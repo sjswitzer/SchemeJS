@@ -1062,13 +1062,22 @@ function Jisp(lispOpts = {}) {
     return undefined;
   }
 
-  function evalArgs(args, scope, evalCount) {
-    if (args === NIL || evalCount <= 0)
-      return args;
-    if (!(typeof args === 'object' && args[IS_CONS]))
-      return args;
-    let val = lispEval(args.car, scope);
-    return cons(val, evalArgs(args.cdr, scope, evalCount-1));
+  function evalArgs(args, scope, evalCount = MAX_SMALL_INTEGER) {
+    if (evalCount <= 0 || args === NIL) return args;
+    // Instead of evaluating recursively, evaluate iteratively,
+    // generating a list of values we then reverse. This is faster
+    // and keeps the call stack under control.
+    let reverse = NIL;
+    while (evalCount > 0 && typeof args === 'object' && args[IS_CONS]) {
+      reverse = cons(lispEval(args.car, scope), reverse);
+      args = args.cdr;
+      evalCount -= 1;
+    }
+    while (reverse !== NIL) {  // we know for sure these are Cons cells because we just made them
+      args = cons(reverse.car, args);
+      reverse = reverse.cdr;
+    }
+    return args;
   }
 
   const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\' }

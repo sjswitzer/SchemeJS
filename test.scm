@@ -1,10 +1,5 @@
 ;; Jisp tests
 
-(catch (e "string" (+ "thrown: " e))
-  (+ 1 2)
-  (+ 3 (throw "ha ha!"))
-)
-
 (define (factoral x)
   (? (<= x 1) 
      (? (bigint? x) 1n 1)
@@ -48,4 +43,11 @@
   (- a b)
   (* a b))  ;; results last value
 
+;; SIOD style
 (*catch "foo" (+ 2 (* 5 (*throw "foo" "ha!"))))
+
+;; JavaScript style
+(catch (e "string" (+ "thrown: " e))
+  (+ 1 2)
+  (+ 3 (throw "ha ha!"))
+)
