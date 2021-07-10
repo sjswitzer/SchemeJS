@@ -277,7 +277,8 @@ function Jisp(lispOpts = {}) {
   defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ]);
   defineGlobalSymbol("read-from-string", a => parseSExpr(a));
 
-  defineGlobalSymbol("eval", function(expr, rest) {
+  defineGlobalSymbol("eval", _eval , { lift: 1 });
+  function _eval(expr, rest) {
     let scope = NIL;
     if (rest === undefined || rest === NIL)
       scope = this;  // use the current scope if unspecified
@@ -289,9 +290,10 @@ function Jisp(lispOpts = {}) {
     if (typeof expr === 'string')
       expr = parseSExpr(expr);
     return lispEval(expr, scope);
-  }, { lift: 1 });
+  }
 
-  defineGlobalSymbol("apply", function(fn, args, rest) {
+  defineGlobalSymbol("apply", _apply, { lift: 2 });
+  function _apply(fn, args, rest) {
     let scope = NIL;
     if (rest === undefined || rest === NIL)
       scope = this;  // use the current scope if unspecified
@@ -301,8 +303,7 @@ function Jisp(lispOpts = {}) {
     if (typeof rest === 'object' && rest[IS_CONS])
       scope = rest.car;
     return lispApply(fn, args, scope);
-  }, { lift: 2 });
-
+  }
   // Pokemon gotta catch 'em' all!
   defineGlobalSymbol("!", a => !lispToBool(a), "not");
   defineGlobalSymbol("~", a => ~a, "bit-not");
@@ -388,7 +389,8 @@ function Jisp(lispOpts = {}) {
   }, "bit-and");
 
   // XXX todo: do all of these without lifting to JS
-  defineGlobalSymbol("<", function(a, ...rest) {
+  defineGlobalSymbol("<", lt, { evalArgs: 1 }, "lt");
+  function lt(a, ...rest) {
     if (rest.length === 0) return false; // not less than itself?
     for (let b of rest) {
       b = lispEval(b, this);
@@ -396,9 +398,10 @@ function Jisp(lispOpts = {}) {
       a = b;
     }
     return true;
-  }, { evalArgs: 1 }, "lt");
+  }
 
-  defineGlobalSymbol("<=", function(a, ...rest) {
+  defineGlobalSymbol("<=", le, { evalArgs: 1 }, "le");
+  function le(a, ...rest) {
     if (rest.length === 0) return true; // equal to itself?
     for (let b of rest) {
       b = lispEval(b, this);
@@ -406,9 +409,10 @@ function Jisp(lispOpts = {}) {
       a = b;
     }
     return true;
-  }, { evalArgs: 1 }, "le");
+  }
 
-  defineGlobalSymbol(">", function(a, ...rest) {
+  defineGlobalSymbol(">", gt, { evalArgs: 1 }, "gt");
+  function gt(a, ...rest) {
     if (rest.length === 0) return false;
     for (let b of rest) {
       b = lispEval(b, this);
@@ -416,9 +420,10 @@ function Jisp(lispOpts = {}) {
       a = b;
     }
     return true;
-  }, { evalArgs: 1 }, "gt");
+  }
 
-  defineGlobalSymbol(">=", function(a, ...rest) {
+  defineGlobalSymbol(">=", ge, { evalArgs: 1 }, "ge");
+  function ge(a, ...rest) {
     if (rest.length === 0) return true;
     for (let b of rest) {
       b = lispEval(b, this);
@@ -426,43 +431,47 @@ function Jisp(lispOpts = {}) {
       a = b;
     }
     return true;
-  }, { evalArgs: 1 }, "ge");
+  }
 
-  defineGlobalSymbol("==", function(a, ...rest) {
+  defineGlobalSymbol("==", equal, { evalArgs: 1 }, "equal?");
+  function equal(a, ...rest) {
     if (rest.length === 0) return true;
     for (let b of rest) {
       b = lispEval(b, this);
       if (!(a == b)) return false;
     }
     return true;
-  }, { evalArgs: 1 }, "equal?");
+  }
 
-  defineGlobalSymbol("===", function(a, ...rest) {
+  defineGlobalSymbol("===", eq, { evalArgs: 1 }, "eq?");
+  function eq(a, ...rest) {
     if (rest.length === 0) return true;
     for (let b of rest) {
       b = lispEval(b, this);
       if (!(a === b)) return false;
     }
     return true;
-  }, { evalArgs: 1 }, "eq?");
+  }
 
-  defineGlobalSymbol("!=", function(a, ...rest) {  // all not equal to first
+  defineGlobalSymbol("!=", ne, { evalArgs: 1 }, "ne");
+  function ne(a, ...rest) {  // all not equal to first
     if (rest.length === 0) return false;
     for (let b of rest) {
       b = lispEval(b, this);
       if (!(a != b)) return false;
     }
     return true;
-  }, { evalArgs: 1 }, "ne");
+  }
 
-  defineGlobalSymbol("!==", function(a, ...rest) {  // all not equal to first
+  defineGlobalSymbol("!==", neq, { evalArgs: 1 }, "neq");
+  function neq(a, ...rest) {  // all not equal to first
     if (rest.length === 0) return false;
     for (let b of rest) {
       b = lispEval(b, this);
       if (!(a !== b)) return false;
     }
     return true;
-  }, { evalArgs: 1 }, "nee");
+  }
 
   defineGlobalSymbol("max", (val, ...rest) => {
     for (let b of args)
@@ -480,43 +489,47 @@ function Jisp(lispOpts = {}) {
 
  // logical & conditional
 
-  defineGlobalSymbol("&&", function(...args) {
+  defineGlobalSymbol("&&", and, { evalArgs: 0 }, "and");
+  function and(...args) {
     let a = true;
     for (a of args) {
       a = lispEval(b, this);
       if (!lispToBool(a)) return a;
     }
     return a;
-  }, { evalArgs: 0 }, "and");
+  }
 
-  defineGlobalSymbol("||", function(...args) {
+  defineGlobalSymbol("||", or, { evalArgs: 0 }, "or");
+  function or(...args) {
     let a = false;
     for (a of args) {
       a = lispEval(b, this);
       if (lispToBool(a)) return a;
     }
     return a;
-  }, { evalArgs: 0 }, "or");
+  }
 
-  defineGlobalSymbol("?", function(predicate, trueBlock, falseBlock) {
+  defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3 }, "if");
+  function ifelse(predicate, trueBlock, falseBlock) {
     let res;
     if (lispToBool(predicate))
       res = lispEval(trueBlock, this);
     else
       res = lispEval(falseBlock, this);
     return res;
-  }, { evalArgs: 1, lift: 3 }, "if");
+  }
 
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", function begin(...forms) {
+  defineGlobalSymbol("begin", begin, { evalArgs: 0 });function begin(...forms) {
     let res = NIL;
     for (let form of forms)
       res = lispEval(form, this);
     return res;
-  }, { evalArgs: 0 });
+  }
 
   // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", function(...forms) {
+  defineGlobalSymbol("prog1", prog1, { evalArgs: 0 });
+  function prog1(...forms) {
     let res = NIL, first = true;
     for (let form of forms) {
       let val = lispEval(form, this);
@@ -525,10 +538,11 @@ function Jisp(lispOpts = {}) {
       first = false;
     }
     return res;
-  }, { evalArgs: 0 });
+  }
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  defineGlobalSymbol("cond", function(...clauses) {
+  defineGlobalSymbol("cond", cond, { evalArgs: 0 });
+  function cond(...clauses) {
     for (let clause of clauses) {
       if (!(typeof clause === 'object' && clause[IS_CONS]))
         throw new EvalError(`Bad clause in "cond" ${lispToString(clause)}`);
@@ -544,7 +558,7 @@ function Jisp(lispOpts = {}) {
       }
     }
     return NIL;
-  }, { evalArgs: 0 });
+  }
 
   // JavaScripty things:
   //   XXX TODO: "delete", setting props and array elements
@@ -560,7 +574,8 @@ function Jisp(lispOpts = {}) {
   defineGlobalSymbol("parseFloat", parseFloat);
   defineGlobalSymbol("parseInt", parseInt);
 
-  defineGlobalSymbol("require", function lispRequire(path, force) {
+  defineGlobalSymbol("require", _require);
+  function _require(path, force) {
     let sym = Atom(`*${path}-loaded*`);
     if (lispToBool(force) || !lispToBool(resolveSymbol(sym, GlobalScope))) {
       try {
@@ -582,7 +597,7 @@ function Jisp(lispOpts = {}) {
       }
     }
     return sym;
-  });
+  }
 
   defineGlobalSymbol("append", (...args) => {
     let res = NIL;
@@ -702,7 +717,8 @@ function Jisp(lispOpts = {}) {
   });
 
   // (mapcar fn list1 list2 ...)
-  defineGlobalSymbol("mapcar", function mapcar(fn, lists) {
+  defineGlobalSymbol("mapcar", mapcar);
+  function mapcar(fn, lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     // It's possible to write this recursively to create the list in order, but that
     // uses unbounded stack and is slower than just constructing the list backwards then
@@ -712,17 +728,18 @@ function Jisp(lispOpts = {}) {
       for (let item of list)
         rev = cons(fn.call(this, item), rev);
     return reverseList(rev);
-  });
+  }
 
   // Same as mapcar but results in an Array
-  defineGlobalSymbol("map->arrqay", function mapcar(fn, lists) {
+  defineGlobalSymbol("map->arrqay", map_to_array);
+  function map_to_array(fn, lists) {
     let res = [];
     let rev = NIL;
     for (let list of lists)
       for (let item of list)
         res.push(fn.call(this, item));
     return res;
-  });
+  }
 
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
@@ -736,7 +753,8 @@ function Jisp(lispOpts = {}) {
   // functions that take an "env" param should transform it back into
   // a Scope. That will maintain Scheme API compatibility while
   // still benefiting from Scopes internally.
-  defineGlobalSymbol("letrec", function letrec(bindings, forms) {
+  defineGlobalSymbol("letrec", letrec, { evalArgs:0, lift: 1 }, "let", "let*");
+  function letrec(bindings, forms) {
     let env = new Env, scope = new Scope(env, this);
     while (typeof bindings === 'object' && bindings[IS_CONS]) {
       let binding = bindings.car;
@@ -759,7 +777,7 @@ function Jisp(lispOpts = {}) {
       forms = forms.cdr;
     }
     return res;
-  }, { evalArgs:0, lift: 1 }, "let", "let*");
+  }
 
   // SIOD compatibility checklist:
   //
@@ -860,17 +878,19 @@ function Jisp(lispOpts = {}) {
   // Promises
 
   // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
-  defineGlobalSymbol(LAMBDA_ATOM, function lambda(lambdaForm) {
+  defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
+  function lambda(lambdaForm) {
     let scope = this;
     let closure = function closure(args) {
       return lispEval(cons(cons(LAMBDA_ATOM, lambdaForm), args), scope);
     };
     closure[LIFT_ARGS] = 0;
     return closure;
-  }, { evalArgs: 0, lift: 0 });
+  }
 
   // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
-  defineGlobalSymbol(SLAMBDA_ATOM, function special_lambda(lambdaForm) {
+  defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0, lift: 0 });
+  function special_lambda(lambdaForm) {
     let scope = this;
     let closure = function closure(args) {
       return lispEval(cons(cons(SLAMBDA_ATOM, lambdaForm), args), scope);
@@ -878,7 +898,7 @@ function Jisp(lispOpts = {}) {
     closure[LIFT_ARGS] = 0;
     closure[EVAL_ARGS] = 0;
     return closure;
-  }, { evalArgs: 0, lift: 0 });
+  }
 
   //
   // try/catch/filnally. Just a sketch for now.
@@ -900,7 +920,8 @@ function Jisp(lispOpts = {}) {
   defineGlobalSymbol("*throw", (tag, value) => { throw new LispThrow(tag, value)});
 
   // (*catch tag form ...) -- SIOD style
-  defineGlobalSymbol("*catch", function lispCatch(tag, forms) {  // XXX order of args?
+  defineGlobalSymbol("*catch", lispCatch, { evalArgs: 1, lift: 1 });
+  function lispCatch(tag, forms) {  // XXX order of args?
     let val = NIL;
     try {
       while (typeof forms === 'object' && forms[IS_CONS]) {
@@ -913,13 +934,14 @@ function Jisp(lispOpts = {}) {
       val = e.value;
     }
     return val;
-  }, { evalArgs: 1, lift: 1 });
+  }
 
   // (throw value) -- JavaScript style
   defineGlobalSymbol("throw", value => { throw value});
 
   // (catch (var [type] forms) forms)
-  defineGlobalSymbol("catch", function lispJSCatch(catchClause, forms) {
+  defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0, lift: 1 });
+  function lispJSCatch(catchClause, forms) {
     if (!(typeof catchClause === 'object' && catchClause[IS_CONS]))
       throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
     let catchVar = catchClause.car, catchForms = catchClause.cdr;
@@ -953,10 +975,11 @@ function Jisp(lispOpts = {}) {
       }
     }
     return val;
-  }, { evalArgs: 0, lift: 1 });
+  }
 
   // (define variable value)
-  defineGlobalSymbol("define", function define(variable, value) {
+  defineGlobalSymbol("define", define, { evalArgs: 0, lift: 2 });
+  function define(variable, value) {
     let scope = this, name = variable;
     if (typeof variable === 'object' && variable[IS_CONS]) {
       name = variable.car;
@@ -970,7 +993,7 @@ function Jisp(lispOpts = {}) {
       throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
     GlobalScope.car.set(name, value);  // Or should it be our scope? That would be weird.
     return name;
-  }, { evalArgs: 0, lift: 2 });
+  }
 
   //
   // This is where the magic happens
