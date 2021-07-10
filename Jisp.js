@@ -143,7 +143,9 @@ LazyCdrCons.prototype[IS_CONS] = true;
 // In Jisp, NIL, null, undefined, and false are false and everything else is true.
 //
 function lispToBool(val) {
-  if (val === NIL || val === undefined || val === null || val === false)
+  // Give priority here to actual true and false values
+  if (val === true) return true;
+  if (val === false || val === NIL || val === undefined || val === null)
     return false;
   return true;
 }
@@ -252,7 +254,7 @@ defineGlobalSymbol("toBigInt", a => BigInt(a));
 defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ]);
 defineGlobalSymbol("read-from-string", a => parseSExpr(a));
 
-defineGlobalSymbol("eval", function (expr, rest) {
+defineGlobalSymbol("eval", function(expr, rest) {
   let scope = NIL;
   if (rest === undefined || rest === NIL)
     scope = this;  // use the current scope if unspecified
@@ -266,7 +268,7 @@ defineGlobalSymbol("eval", function (expr, rest) {
   return lispEval(expr, scope);
 }, { lift: 1 });
 
-defineGlobalSymbol("apply", function (fn, args, rest) {
+defineGlobalSymbol("apply", function(fn, args, rest) {
   let scope = NIL;
   if (rest === undefined || rest === NIL)
     scope = this;  // use the current scope if unspecified
@@ -467,6 +469,45 @@ defineGlobalSymbol("?", function(predicate, trueBlock, falseBlock) {
   return res;
 }, { evalArgs: 1, lift: 3 }, "if");
 
+// (begin form1 form2 ...)
+defineGlobalSymbol("begin", function begin(...forms) {
+  let res = NIL;
+  for (let form of forms)
+    res = lispEval(form, this);
+  return res;
+}, { evalArgs: 0 });
+
+// (prog1 form1 form2 form3 ...)
+defineGlobalSymbol("prog1", function(...forms) {
+  let res = NIL, first = true;
+  for (let form of forms) {
+    let val = lispEval(form, this);
+    if (first)
+      res = val;
+    first = false;
+  }
+  return res;
+}, { evalArgs: 0 });
+
+// (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
+defineGlobalSymbol("cond", function(...clauses) {
+  for (let clause of clauses) {
+    if (!(typeof clause === 'object' && clause[IS_CONS]))
+      throw new EvalError(`Bad clause in "cond" ${lispToString(clause)}`);
+    let pe = clause.car, forms = clause.cdr;
+    let evaled = lispEval(pe, this);
+    if (lispToBool(evaled)) {
+      let res = NIL;
+      while (typeof forms === 'object' && forms[IS_CONS]) {
+        res = lispEval(forms.car, this);
+        forms = forms.cdr;
+      }
+      return res;
+    }
+  }
+  return NIL;
+}, { evalArgs: 0 });
+
 // JavaScripty things:
 //   XXX TODO: delete, setting props and array elements
 defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access
@@ -594,7 +635,6 @@ defineGlobalSymbol("apropos", (substring) => {
 //
 // (*catch tag body ...)
 // (*throw tag value)
-// (apropos substring) -- returns a list of all symbols containing the given substring.
 // (ass key alist function)
 //    Returns the first element of the alist such that the function applied to car of the element and the key returns a non-null value. For example:/
 // (assoc key alist) -- Same as (ass key alist equal?).
@@ -605,9 +645,6 @@ defineGlobalSymbol("apropos", (substring) => {
 // TODO benchmark fns -- http://people.delphiforums.com/gjc//siod.html#builtin
 // (realtime)
 //      Returns a double precision floating point value representation of the current realtime number of seconds. Usually precise to about a thousandth of a second.
-// (begin form1 form2 ...)
-// (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-// define needs to do procedures too -- by rewriting to begin clause
 // errobj, (error message object)
 // (exp x) -- Computes the exponential function of x.
 // (log x)
@@ -637,10 +674,8 @@ defineGlobalSymbol("apropos", (substring) => {
 // (parse-number str)
 // (pow x y) -- Computes the result of x raised to the y power.
 // (print object stream) -- Same as prin1 followed by output of a newline.
-// (prog1 form1 form2 form3 ...)
 //     A special form which evaluates all its subforms but returns the value of the first one.
 // (qsort list predicate-fcn access-fcn)
-// (quote x)
 // (rand modulus) -- Computes a random number from 0 to modulus-1. Uses C library rand. (srand seed)
 // (random modulus) -- Computes a random number from 0 to modulus-1. Uses C library random. (srandom seed)
 // (runtime)
@@ -729,14 +764,14 @@ defineGlobalSymbol("apropos", (substring) => {
 //     (* x (factoral (- x (? (isBigInt x) 1n 1))))
 //   ))l
 
-// (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args bodies)
-defineGlobalSymbol(LAMBDA_ATOM, function(formalParams, bodies) {
-  return list(CLOSURE_ATOM, this, formalParams, bodies);
+// (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
+defineGlobalSymbol(LAMBDA_ATOM, function(formalParams, forms) {
+  return list(CLOSURE_ATOM, this, formalParams, forms);
 }, { evalArgs: 0, lift: 1 });
 
-// (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args bodies)
-defineGlobalSymbol(SLAMBDA_ATOM, function(formalParams, bodies) {
-  return list(SCLOSURE_ATOM, this, formalParams, bodies);
+// (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
+defineGlobalSymbol(SLAMBDA_ATOM, function(formalParams, forms) {
+  return list(SCLOSURE_ATOM, this, formalParams, forms);
 }, { evalArgs: 0, lift: 1 });
 
 //
@@ -745,7 +780,7 @@ defineGlobalSymbol(SLAMBDA_ATOM, function(formalParams, bodies) {
 
 defineGlobalSymbol("*throw", e => { throw e });
 
-defineGlobalSymbol("*finally", function (handler, body) {  // XXX order of args?
+defineGlobalSymbol("*finally", function(handler, body) {  // XXX order of args?
   let val = NIL;
   try { val = lispEval(body, this); }
   finally { lispEval(handler, this); }
@@ -781,7 +816,7 @@ defineGlobalSymbol("*catch", function(e, handler, body) {  // XXX order of args?
 }, { evalArgs: 0, lift: 3 });
 
 // (define variable value)
-defineGlobalSymbol("define", function (variable, value) {
+defineGlobalSymbol("define", function(variable, value) {
   let scope = this, name = variable;
   if (typeof variable === 'object' && variable[IS_CONS]) {
     name = variable.car;
@@ -843,7 +878,7 @@ function lispApply(fn, args, scope) {
     let opSym = fn.car;
     if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
       let formalParams = fn.cdr.car;
-      let bodies = fn.cdr.cdr;
+      let forms = fn.cdr.cdr;
       if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
         args = evalArgs(args, scope);
       let env = new Env;
@@ -865,9 +900,9 @@ function lispApply(fn, args, scope) {
       else if (formalParams !== NIL)
         throw new EvalError(`Bad parameter list ${lispToString(origFormalParams)}`);
       let res = NIL;
-      while (typeof bodies === 'object' && bodies[IS_CONS]) {
-        res = lispEval(bodies.car, scope);
-        bodies = bodies.cdr;
+      while (typeof forms === 'object' && forms[IS_CONS]) {
+        res = lispEval(forms.car, scope);
+        forms = forms.cdr;
       }
       return res;
     }
