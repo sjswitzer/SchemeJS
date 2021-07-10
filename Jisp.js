@@ -630,7 +630,23 @@ function Jisp(lispOpts = {}) {
     return iterableToList(matches);
   });
 
-  // (mapcar fcn list1 list2 ...)
+  // (mapcar fn list1 list2 ...)
+  /*
+  defineGlobalSymbol("mapcar", function mapcar(fn, lists) {
+    function mapLists(lists) {
+      if (typeof lists === 'object' && lists[IS_CONS])
+        return cons(lispApply(fn, lists.car, this), mapLists(lists.cdr));
+      return NIL;
+    }
+    function mapList(list) {
+      if (typeof list === 'object' && list[IS_CONS])
+        return cons(lispApply(fn, list.car, this), mapLists(list.cdr));
+      return NIL;
+    }
+
+  }, { lift: 1 });
+  */
+
   //     Returns a list which is the result of applying the fcn to the elements of each of the lists specified.
   // (max x1 x2 ...) -- also min
 
@@ -752,29 +768,25 @@ function Jisp(lispOpts = {}) {
   // Promises
 
   // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
-  defineGlobalSymbol(LAMBDA_ATOM, function lambda(formalParams, forms) {
+  defineGlobalSymbol(LAMBDA_ATOM, function lambda(lambdaForm) {
     let scope = this;
     let closure = function closure(args) {
-      return lispEval(cons(
-        cons(LAMBDA_ATOM, cons(formalParams, forms)),
-        args), scope);
+      return lispEval(cons(cons(LAMBDA_ATOM, lambdaForm), args), scope);
     };
     closure[LIFT_ARGS] = 0;
     return closure;
-  }, { evalArgs: 0, lift: 1 });
+  }, { evalArgs: 0, lift: 0 });
 
   // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
-  defineGlobalSymbol(SLAMBDA_ATOM, function special_lambda(formalParams, forms) {
+  defineGlobalSymbol(SLAMBDA_ATOM, function special_lambda(lambdaForm) {
     let scope = this;
     let closure = function closure(args) {
-      return lispEval(cons(
-        cons(SLAMBDA_ATOM, cons(formalParams, forms)),
-        args), scope);
+      return lispEval(cons(cons(SLAMBDA_ATOM, lambdaForm), args), scope);
     };
     closure[LIFT_ARGS] = 0;
     closure[EVAL_ARGS] = 0;
     return closure;
-  }, { evalArgs: 0, lift: 1 });
+  }, { evalArgs: 0, lift: 0 });
 
   //
   // try/catch/filnally. Just a sketch for now.
