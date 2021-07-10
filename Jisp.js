@@ -856,6 +856,27 @@ function Jisp(lispOpts = {}) {
         fn = lispEval(fn, scope);
       return lispApply(fn, args, scope);
     }
+    // Experimental special eval for JS arrays and objects:
+    //   Values that are evaluable are expanded and placed in
+    //   a new Object or Array in correspoding position.
+    // XXX Investigate Symbol.species
+    if (typeof expr === 'object') {
+      if (expr instanceof Array) {
+        let res = [];
+        for (let item of expr) {
+          let val = lispEval(item, scope);
+          res.push(val);
+        }
+        return res;
+      } else {
+        let res = {};
+        for (let [key, value] of Object.entries(expr)) {
+          let val = lispEval(value, scope);
+          res[key] = val;
+        }
+        return res;
+      }
+    }
     return expr;
   }
 
@@ -975,6 +996,7 @@ function Jisp(lispOpts = {}) {
       if (obj === null) return put( "null");   // remember: typeof null === 'object'!
       let objType = typeof obj;
       let saveIndent = indent;
+      // XXX special printing for native functions
       if (objType === 'object') {
         if (obj[IS_CONS]) {
           put("(");
