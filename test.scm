@@ -17,7 +17,6 @@
   ((< 3 4) '"e" '"f")
   ((< 2 4) '"g" '"h"))
 
-(define (increment-by n) (\ (x) (+ x n)))
+(define (increment-by n) (\(x) (+ x n)))
 (define increment-by-3 (increment-by 3))
 (increment-by-3 4)
-
