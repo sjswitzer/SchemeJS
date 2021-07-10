@@ -758,20 +758,29 @@ defineGlobalSymbol("apropos", (substring) => {
 // maybe some relation between of generators and Lazy eval?
 // Promises
 
-// Maybe think about bigint some more. Here's factoral now:
-//   (define (factoral x) (? (<= x 1) 
-//     (? (isBigInt x) 1n 1)
-//     (* x (factoral (- x (? (isBigInt x) 1n 1))))
-//   ))l
-
 // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
-defineGlobalSymbol(LAMBDA_ATOM, function(formalParams, forms) {
-  return list(CLOSURE_ATOM, this, formalParams, forms);
+defineGlobalSymbol(LAMBDA_ATOM, function lambda(formalParams, forms) {
+  let scope = this;
+  let closure = function closure(args) {
+    return lispEval(cons(
+      cons(LAMBDA_ATOM, cons(formalParams, forms)),
+      args), scope);
+  };
+  closure[LIFT_ARGS] = 0;
+  return closure;
 }, { evalArgs: 0, lift: 1 });
 
 // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
-defineGlobalSymbol(SLAMBDA_ATOM, function(formalParams, forms) {
-  return list(SCLOSURE_ATOM, this, formalParams, forms);
+defineGlobalSymbol(SLAMBDA_ATOM, function special_lambda(formalParams, forms) {
+  let scope = this;
+  let closure = function closure(args) {
+    return lispEval(cons(
+      cons(SLAMBDA_ATOM, cons(formalParams, forms)),
+      args), scope);
+  };
+  closure[LIFT_ARGS] = 0;
+  closure[EVAL_ARGS] = 0;
+  return closure;
 }, { evalArgs: 0, lift: 1 });
 
 //
@@ -822,11 +831,13 @@ defineGlobalSymbol("define", function(variable, value) {
     name = variable.car;
     let args = variable.cdr;
     value = list(LAMBDA_ATOM, args, value);
+  } else {
+    value = lispEval(value, this); // XXX is this right?
   }
   if (typeof name === 'string') name = Atom(name);
   if (typeof name !== 'symbol')
     throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
-  scope.car.set(name, value);  // XXX or should it be GlobalScope?
+  GlobalScope.car.set(name, value);  // Or should it be our scope? That would be weird.
   return name;
 }, { evalArgs: 0, lift: 2 });
 
@@ -843,7 +854,8 @@ function lispEval(expr, scope = GlobalScope) {
   }
   if (typeof expr === 'object' && expr[IS_CONS]) {
     let fn = expr.car, args = expr.cdr;
-    if (typeof fn !== 'function')
+    if (typeof fn !== 'function' &&
+        !(typeof fn === 'object' && fn[IS_CONS] && (fn.car === LAMBDA_ATOM || fn.car === SLAMBDA_ATOM)))
       fn = lispEval(fn, scope);
     return lispApply(fn, args, scope);
   }
