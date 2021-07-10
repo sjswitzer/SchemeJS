@@ -12,6 +12,11 @@
 function Jisp(opts = {}) {
   if (new.target === undefined) return new Jisp(opts);
 
+  //
+  // Encapsulating everything in a function scope because JITs
+  // can resolve scoped references most easily.
+  //
+
   class LispError extends Error {};
   LispError.prototype.name = "LispError";
 
@@ -152,8 +157,8 @@ function Jisp(opts = {}) {
   }
 
   const cons = (car, cdr) => new Cons(car, cdr);
-  const car = cons => cons.car, first = car;
-  const cdr = cons => cons.cdr, rest = cdr;
+  const car = cons => cons.car;
+  const cdr = cons => cons.cdr;
   // Beware the order here; in JS it's in reversed
   const caaar = cons => cons.car.car.car;
   const caadr = cons => cons.cdr.car.car;
@@ -247,8 +252,8 @@ function Jisp(opts = {}) {
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // unlike Math.abs, this deals with bigint too
   defineGlobalSymbol("intern", a => Atom(a));
   defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
-  defineGlobalSymbol("toArray", a => toArray(a));
-  defineGlobalSymbol("toLisp", a => toLisp(a));
+  defineGlobalSymbol("toArray", a => listToArray(a));
+  defineGlobalSymbol("toLisp", a => iterableToList(a));
   defineGlobalSymbol("toString", a => lispToString(a));
   defineGlobalSymbol("toNumber", a => Number(a));
   defineGlobalSymbol("toBigInt", a => BigInt(a));
@@ -513,8 +518,8 @@ function Jisp(opts = {}) {
   //   XXX TODO: "delete", setting props and array elements
   defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access
   defineGlobalSymbol("?@", (a, b) => a?.[b]);  // conditional indexing and member access
-  defineGlobalSymbol("toLisp", toLisp);
-  defineGlobalSymbol("toArray", toArray);
+  defineGlobalSymbol("toLisp", iterableToList);
+  defineGlobalSymbol("toArray", listToArray);
   defineGlobalSymbol("NaN", NaN);
   defineGlobalSymbol("Infinity", Infinity);
   defineGlobalSymbol("isFinite", isFinite);
@@ -629,7 +634,7 @@ function Jisp(opts = {}) {
         matches.push(name);
     }
     matches.sort();
-    return toLisp(matches);
+    return iterableToList(matches);
   });
 
   // SIOD compatibility checklist:
@@ -1022,7 +1027,7 @@ function Jisp(opts = {}) {
   const TO_LISP = Symbol("*lisp-to-lisp*");
 
   // Turn iterables objects like arrays into lists
-  function toLisp(obj, depth = BIGGEST_INT32, opts) { 
+  function iterableToList(obj, depth = BIGGEST_INT32, opts) { 
     if (depth <= 0)return obj;
     let iterator;
     if (typeof obj === 'function') // assume it's an iterator
@@ -1039,20 +1044,20 @@ function Jisp(opts = {}) {
       function go() {
         let { done, value } = iterator.next();
         if (done) return NIL;
-        return cons(toLisp(obj, depth-1, opts), go());
+        return cons(iterableToList(obj, depth-1, opts), go());
       }
       return go();
     }
     return obj;
   }
 
-  function toArray(obj, depth = BIGGEST_INT32) {
+  function listToArray(obj, depth = BIGGEST_INT32) {
     if (depth <= 0) return obj;
     if (obj === NIL) return [];
     if (!(typeof obj === 'object' && obj[IS_CONS])) return obj;
     let arr = [];
     while (typeof obj === 'object' && obj[IS_CONS]) {
-      arr.push(toArray(obj.car), depth-1);
+      arr.push(listToArray(obj.car), depth-1);
       obj = obj.cdr;
     }
     return arr;
@@ -1061,7 +1066,6 @@ function Jisp(opts = {}) {
   //
   // S-epression parser
   //
-
   const TOKS = {}, DIGITS = {}, ALPHA = {}, IDENT1 = {}, IDENT2 = {},
       NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {};
   for (let ch of `()[]{},':`) TOKS[ch] = true;
@@ -1446,6 +1450,24 @@ function Jisp(opts = {}) {
 
   // Export functions and symbols here
   this.lispREPL = lispREPL;
+  this.Atom = Atom;
+  this.NIL = NIL;
+  this.cons = cons;
+  this.isCons = obj => typeof obj === 'object' && obj[IS_CONS];
+  this.car = car;
+  this.cdr = cdr;
+  this.defineGlobalSymbol = defineGlobalSymbol;
+  this.LispError = LispError;
+  this.ParseError = ParseError;
+  this.EvalError = EvalError;
+  this.LogicError = LogicError;
+  this.GlobalEnv = GlobalEnv;
+  this.eval = lispEval;
+  this.toBool = lispToBool;
+  this.stringFor = lispToString;
+  this.listToArray = listToArray;
+  this.arrayToList = iterableToList;
+  this.iterableToList = iterableToList;
 } // End of Jisp class/function
 
 let lisp = Jisp();
