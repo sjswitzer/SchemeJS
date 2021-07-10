@@ -1111,19 +1111,15 @@ function Jisp(lispOpts = {}) {
 
   function evalArgs(args, scope, evalCount = MAX_SMALL_INTEGER) {
     if (evalCount <= 0 || args === NIL) return args;
-    // Instead of evaluating recursively, evaluate iteratively,
-    // generating a list of values we then reverse. This is faster
-    // and keeps the call stack under control.
+    let argv = [];
     let reverse = NIL;
     while (evalCount > 0 && typeof args === 'object' && args[IS_CONS]) {
-      reverse = cons(lispEval(args.car, scope), reverse);
+      argv.push(lispEval(args.car, scope));
       args = args.cdr;
       evalCount -= 1;
     }
-    while (reverse !== NIL) {  // we know for sure these are Cons cells because we just made them
-      args = cons(reverse.car, args);
-      reverse = reverse.cdr;
-    }
+    for (let i = argv.length; i > 0; --i)
+      args = cons(argv[i-1], args);
     return args;
   }
 
