@@ -315,6 +315,7 @@ function Jisp(lispOpts = {}) {
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b);
 
   // variable args
+
   defineGlobalSymbol("+", (...args) => {
     let a = 0, first = true;
     for (let b of args) {
@@ -462,7 +463,21 @@ function Jisp(lispOpts = {}) {
     return true;
   }, { evalArgs: 1 }, "nee");
 
-  // logical & conditional
+  defineGlobalSymbol("max", (val, ...rest) => {
+    for (let b of args)
+      if (b > val)
+        val = b;
+    return val;
+  }, { lift: 1 });
+
+  defineGlobalSymbol("min", (val, ...rest) => {
+    for (let b of args)
+      if (b < val)
+        val = b;
+    return val;
+  }, { lift: 1 });
+
+ // logical & conditional
 
   defineGlobalSymbol("&&", function(...args) {
     let a = true;
@@ -670,9 +685,11 @@ function Jisp(lispOpts = {}) {
     return res;
   });
 
-  //     Returns a list which is the result of applying the fcn to the elements of each of the lists specified.
-  // (max x1 x2 ...) -- also min
-
+  // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
+  //     (let ((x 10)
+  //      (y 20))
+  //      (+ x y))
+  // (letrec...) -- ?
 
   // SIOD compatibility checklist:
   //
