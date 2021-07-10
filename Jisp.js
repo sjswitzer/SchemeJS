@@ -1218,6 +1218,7 @@ function Jisp(lispOpts = {}) {
   }
 
   function parseSExpr(tokenGenerator, opts = {}) {
+    opts = { ...lispOpts, ...opts };
     let replHints = opts.replHints ?? {};
     let prompt = opts.prompt ?? "Jisp > ";
     let promptMore = opts.promptMore = "  ";
@@ -1409,6 +1410,7 @@ function Jisp(lispOpts = {}) {
   }
 
   function lispREPL(readline, opts = {}) {
+    opts = { ...lispOpts, ...opts };
     // readline(prompt) => str | nullish
     let name = opts.name ?? "Jisp";
     let prompt = opts.prompt ?? name + " > ";
