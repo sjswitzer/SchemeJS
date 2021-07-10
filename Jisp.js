@@ -516,8 +516,8 @@ function Jisp(lispOpts = {}) {
 
   // JavaScripty things:
   //   XXX TODO: "delete", setting props and array elements
-  defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access
-  defineGlobalSymbol("?@", (a, b) => a?.[b]);  // conditional indexing and member access
+  defineGlobalSymbol("@", (a, b) => b[a]);  // indexing and member access
+  defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
   defineGlobalSymbol("toLisp", iterableToList);
   defineGlobalSymbol("toArray", listToArray);
   defineGlobalSymbol("NaN", NaN);
@@ -630,16 +630,15 @@ function Jisp(lispOpts = {}) {
     return iterableToList(matches);
   });
 
+  // (mapcar fcn list1 list2 ...)
+  //     Returns a list which is the result of applying the fcn to the elements of each of the lists specified.
+  // (max x1 x2 ...) -- also min
+
+
   // SIOD compatibility checklist:
   //
   // (*catch tag body ...)
   // (*throw tag value)
-  // (ass key alist function)
-  //    Returns the first element of the alist such that the function applied to car of the element and the key returns a non-null value. For example:/
-  // (assoc key alist) -- Same as (ass key alist equal?).
-  // (assq key alist) -- Same as (ass key alist eq?).
-  // (assv key alist) --Same as (ass key alist eql?).
-  // (begin form1 form2 ...)
   //   A special form which evaluates each of its subforms one after another, returning the value of the last subform.
   // TODO benchmark fns -- http://people.delphiforums.com/gjc//siod.html#builtin
   // (realtime)
@@ -653,9 +652,6 @@ function Jisp(lispOpts = {}) {
   // (load fname noeval-flag search-flag)
   //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
   //   no use for the search-flag
-  // (mapcar fcn list1 list2 ...)
-  //     Returns a list which is the result of applying the fcn to the elements of each of the lists specified.
-  // (max x1 x2 ...) -- also min
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
   // (memq key list)
