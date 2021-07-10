@@ -190,7 +190,7 @@ function Jisp(lispOpts = {}) {
   const GlobalScope = new Scope(GlobalEnv, NIL);
   const EVAL_ARGS = Symbol("*lisp-eval-args*");
   const LIFT_ARGS = Symbol("*lisp-lift-args*");
-  const BIGGEST_INT32 = 2**32-1;
+  const MAX_SMALL_INTEGER = 2**30-1;
 
   function defineGlobalSymbol(name, val, ...aliases) {
     let opts = {};
@@ -861,11 +861,11 @@ function Jisp(lispOpts = {}) {
 
   function lispApply(fn, args, scope) {
     if (typeof fn === 'function') {
-      let evalCount = fn[EVAL_ARGS] ?? BIGGEST_INT32;
+      let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
       if (evalCount > 0)
         args = evalArgs(args, scope, evalCount);
-      let lift = fn[LIFT_ARGS] ?? BIGGEST_INT32;
-      let jsArgs = [], noPad = lift === BIGGEST_INT32;
+      let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
+      let jsArgs = [], noPad = lift === MAX_SMALL_INTEGER;
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
         if (typeof args === 'object' && args[IS_CONS]) {
@@ -946,61 +946,87 @@ function Jisp(lispOpts = {}) {
     return res;
   })();
 
-  // XXX TODO: Line wrapping
   function lispToString(obj, opts = {}) {
     opts = { ...lispOpts, ...opts };
-    let quoteNotation = opts.quoteNotation;
-    let stringWrap = opts.stringWrap ?? 80;   // TODO
-    return toString(obj, opts.maxDepth ?? 1000);
-    function toString(obj, maxDepth, moreList, quoted) {
-      if (maxDepth <= 0) return "...";
+    let stringWrap = opts.stringWrap ?? 80;
+    let wrapChar = opts.wrapChar ?? "\n";
+    let maxDepth = opts.maxDepth ?? 100;
+    let indentMore = opts.indentMorw ?? "  ";
+    let line = "", lines = [], sep = "", prefix = "", indent = "";
+    toString(obj);
+    if (lines.length === 0) return line;
+    if (line)
+      lines.push(line);
+    return lines.join(wrapChar);
+    function put(str) {
+      if (line.length + str.length > stringWrap) {
+        line += sep;
+        lines.push(line);
+        line = indent + prefix + str;
+      } else {
+        line += sep + prefix + str;
+      }
+      sep = prefix = "";
+    }
+    function toString(obj, maxdepth) {
+      if (maxDepth <= 0) return put("...");
+      if (obj === NIL) return put("()");
+      if (obj === undefined) return put("undefined");
+      if (obj === null) return put( "null");   // remember: typeof null === 'object'!
       let objType = typeof obj;
-      if (obj === NIL) return "()";
-      if (obj === undefined) return "undefined";
-      if (obj === null) return "null";   // remember: typeof null === 'object'!
+      let saveIndent = indent;
       if (objType === 'object') {
         if (obj[IS_CONS]) {
-          let before = "(", after = ")";
-          if (quoted)
-            before = after = "";
-          else if (moreList)
-            before = " ", after = "";
-          if (quoteNotation && obj.car === QUOTE_ATOM) {
-            before = moreList ? " " : "";
-            return before + "'" + toString(obj.cdr, maxDepth-1, true, true);
+          put("(");
+          indent += indentMore;
+          sep = "";
+          while (typeof obj === 'object' && obj[IS_CONS]) {
+            toString(obj.car, maxDepth-1);
+            sep = " ";
+            obj = obj.cdr;
           }
-          if (obj.cdr === NIL)
-            return before + toString(obj.car, maxDepth-1) + after;
-          if (typeof obj.cdr === 'object' && obj.cdr[IS_CONS])
-            return before +
-                toString(obj.car, maxDepth-1) +
-                toString(obj.cdr, maxDepth-1, true) +
-                after;
-          return before + toString(obj.car, maxDepth-1) + " . " + 
-              toString(obj.cdr, maxDepth-1) + after;
+          if (obj !== NIL) {
+            put(".");
+            sep = " ";
+            toString(obj, maxDepth-1)
+          }
+          sep = "";
+          put(")");
+          indent = saveIndent;
+          return;
         }
         if (obj instanceof Array) {
-          let str = "[", sep = "";
+          put("[");
+          indent += indentMore;
+          sep = "";
           for (let item of obj) {
-            str += sep + toString(item, maxDepth-1);
+            toString(item, maxDepth-1);
             sep = ", ";
           }
-          return str + "]";
+          sep = "";
+          put("]");
+          indent = saveIndent;
+          return;
         }
         {
-          let str = "{", sep = "";
           // Plain object
+          put("{");
+          indent += indentMore;
+          sep = "";
           for (let name of Object.getOwnPropertyNames(obj)) {
             let item = obj[name];
-            str += sep + name + ": " + toString(item, maxDepth-1);
+            prefix = `${name}: `;
+            toString(item, maxDepth-1);
             sep = ", ";
           }
-          return str + "}";
+          sep = "";
+          put("}");
+          indent = saveIndent;
+          return;
         }
       }
-      if (objType === 'symbol') {
-        return obj.description;
-      }
+      if (objType === 'symbol')
+        return put(obj.description);
       if (objType === 'string') {
         let str = '"';
         for (let ch of obj) {
@@ -1011,13 +1037,12 @@ function Jisp(lispOpts = {}) {
             str += ch;
         }
         str += '"';
-        return str;
+        return put(str);
       }
       if (objType === 'bigint') {
-        return `${String(obj)}n`;
+        return put(`${String(obj)}n`);
       }
-      // XXX there must be more to do here
-      return String(obj);
+      return put(String(obj));
     }
   }
 
@@ -1026,7 +1051,7 @@ function Jisp(lispOpts = {}) {
   // Turn iterables objects like arrays into lists
   function iterableToList(obj, opts = {}) { 
     opts = { ...lispOpts, ...opts };
-    return toList(obj, opts.depth ?? BIGGEST_INT32);
+    return toList(obj, opts.depth ?? MAX_SMALL_INTEGER);
     function toList(obj, depth) {
       if (depth <= 0)return obj;
       let iterator;
@@ -1052,7 +1077,7 @@ function Jisp(lispOpts = {}) {
     }
   }
 
-  function listToArray(obj, depth = BIGGEST_INT32) {
+  function listToArray(obj, depth = MAX_SMALL_INTEGER) {
     if (depth <= 0) return obj;
     if (obj === NIL) return [];
     if (!(typeof obj === 'object' && obj[IS_CONS])) return obj;
@@ -1286,37 +1311,35 @@ function Jisp(lispOpts = {}) {
     }
 
     function parseExpr(promptStr) {
-      // This will not peek across a linebreak because the newline token will foil it
-      let dotNext = token(1).type === '.';
-
-      if (!dotNext && (token().type === 'atom' || token().type === 'string' ||
-          token().type === 'number')) {
+      if (token().type === 'atom' || token().type === 'string' ||
+          token().type === 'number') {
         let thisToken = consumeToken();
         return thisToken.value;
-      }
-
-      if (dotNext) {
-        let firstToken = consumeToken();
-        if (consumeToken().type !== '.') throw new LogicError("Should be a dot");
-        return cons(firstToken.value, parseExpr());
       }
 
       if (token().type === '(') {
         let newPrompt = promptStr + promptMore;
         replHints.currentPrompt = newPrompt;
         consumeToken();
+        return parseListBody();
         function parseListBody() {
           if (token().type === ')') {
             replHints.currentPrompt = promptStr;
             consumeToken();
             return NIL;
+          } else if (token().type === '.') {
+            consumeToken();
+            let val = parseExpr(newPrompt);
+            if (token().type !== ')')
+              throw new ParseError(unParesedInput());
+            consumeToken();
+            return val;
           }
           if (token().type === 'end') throw new ParseError(`Reached end of input`);
           let first = parseExpr(newPrompt);
           let rest = parseListBody();
           return cons(first, rest);
         }
-        return parseListBody();
       }
 
       if (token().type === '[') {  // JavaScript Array, oddly enough!
