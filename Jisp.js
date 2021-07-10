@@ -9,8 +9,8 @@
 "use strict";
 // TODO: make this a JS module
 
-function Jisp(opts = {}) {
-  if (new.target === undefined) return new Jisp(opts);
+function Jisp(lispOpts = {}) {
+  if (new.target === undefined) return new Jisp(lispOpts);
 
   //
   // Encapsulating everything in a function scope because JITs
@@ -552,7 +552,6 @@ function Jisp(opts = {}) {
     return sym;
   });
 
-  // (append l1 l2 l3 l4 ...)
   defineGlobalSymbol("append", (...args) => {
     let res = NIL;
     function zip(list) {
@@ -569,7 +568,6 @@ function Jisp(opts = {}) {
     return res;
   });
 
-  // (last list)
   defineGlobalSymbol("last", (list) => {
     while (typeof list === 'object' && list[IS_CONS]) {
       let next = list.cdr;
@@ -580,7 +578,6 @@ function Jisp(opts = {}) {
     return list;  // list was empty or not terminated with NIL
   });
 
-  // (length)
   defineGlobalSymbol("length", (list) => {
     let n = 0;
     while (typeof list === 'object' && list[IS_CONS]) {
@@ -590,7 +587,6 @@ function Jisp(opts = {}) {
     return n;
   });
 
-  // (list item1 item2 ...) - Conses up its arguments into a list.
   defineGlobalSymbol("list", (...args) => {
     let res = NIL;
     for (let i = args.length; i > 0; --i)
@@ -598,7 +594,6 @@ function Jisp(opts = {}) {
     return res;
   });
 
-  // (reverse x) -- Returns a new list which has elements in the reverse order of the list x.
   defineGlobalSymbol("reverse", (list) => {
     let res = NIL;
     while (typeof list === 'object' && list[IS_CONS]) {
@@ -608,8 +603,6 @@ function Jisp(opts = {}) {
     return res;
   });
 
-  // (butlast x)
-  //    Returns a new list which has all the elements of the argument x except for the last element.
   defineGlobalSymbol("butlast", (list) => {
     let res = NIL;
     if (!(typeof list === 'object' && list[IS_CONS])) return NIL;
@@ -624,7 +617,7 @@ function Jisp(opts = {}) {
     return res;
   });
 
-  // (apropos substring) -- returns a list of all symbols containing the given substring.
+  // (apropos substring) -- Returns a list of all symbols containing the given substring
   defineGlobalSymbol("apropos", (substring) => {
     substring = substring.toLowerCase();
     let matches = [];
@@ -652,8 +645,6 @@ function Jisp(opts = {}) {
   // (realtime)
   //      Returns a double precision floating point value representation of the current realtime number of seconds. Usually precise to about a thousandth of a second.
   // errobj, (error message object)
-  // (exp x) -- Computes the exponential function of x.
-  // (log x)
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
   //      (y 20))
@@ -956,99 +947,109 @@ function Jisp(opts = {}) {
   })();
 
   // XXX TODO: Line wrapping
-  function lispToString(obj, maxDepth = 1000, opts, moreList, quoted) {
-    if (maxDepth <= 0) return "...";
-    let objType = typeof obj;
-    if (obj === NIL) return "()";
-    if (obj === undefined) return "undefined";
-    if (obj === null) return "null";   // remember: typeof null === 'object'!
-    if (objType === 'object') {
-      if (obj[IS_CONS]) {
-        let before = "(", after = ")";
-        if (quoted)
-          before = after = "";
-        else if (moreList)
-          before = " ", after = "";
-        if (opts?.quoteNotation && obj.car === QUOTE_ATOM) {
-          before = moreList ? " " : "";
-          return before + "'" + lispToString(obj.cdr, maxDepth-1, opts, true, true);
+  function lispToString(obj, opts = {}) {
+    opts = { ...lispOpts, ...opts };
+    let quoteNotation = opts.quoteNotation;
+    let stringWrap = opts.stringWrap ?? 80;   // TODO
+    return toString(obj, opts.maxDepth ?? 1000);
+    function toString(obj, maxDepth, moreList, quoted) {
+      if (maxDepth <= 0) return "...";
+      let objType = typeof obj;
+      if (obj === NIL) return "()";
+      if (obj === undefined) return "undefined";
+      if (obj === null) return "null";   // remember: typeof null === 'object'!
+      if (objType === 'object') {
+        if (obj[IS_CONS]) {
+          let before = "(", after = ")";
+          if (quoted)
+            before = after = "";
+          else if (moreList)
+            before = " ", after = "";
+          if (quoteNotation && obj.car === QUOTE_ATOM) {
+            before = moreList ? " " : "";
+            return before + "'" + toString(obj.cdr, maxDepth-1, true, true);
+          }
+          if (obj.cdr === NIL)
+            return before + toString(obj.car, maxDepth-1) + after;
+          if (typeof obj.cdr === 'object' && obj.cdr[IS_CONS])
+            return before +
+                toString(obj.car, maxDepth-1) +
+                toString(obj.cdr, maxDepth-1, true) +
+                after;
+          return before + toString(obj.car, maxDepth-1) + " . " + 
+              toString(obj.cdr, maxDepth-1) + after;
         }
-        if (obj.cdr === NIL)
-          return before + lispToString(obj.car, maxDepth-1, opts) + after;
-        if (typeof obj.cdr === 'object' && obj.cdr[IS_CONS])
-          return before +
-              lispToString(obj.car, maxDepth-1, opts) +
-              lispToString(obj.cdr, maxDepth-1, opts, true) +
-              after;
-        return before + lispToString(obj.car, maxDepth-1, opts) + " . " + 
-            lispToString(obj.cdr, maxDepth-1, opts) + after;
-      }
-      if (obj instanceof Array) {
-        let str = "[", sep = "";
-        for (let item of obj) {
-          str += sep + lispToString(item, maxDepth-1, opts);
-          sep = ", ";
+        if (obj instanceof Array) {
+          let str = "[", sep = "";
+          for (let item of obj) {
+            str += sep + toString(item, maxDepth-1);
+            sep = ", ";
+          }
+          return str + "]";
         }
-        return str + "]";
-      }
-      {
-        let str = "{", sep = "";
-        // Plain object
-        for (let name of Object.getOwnPropertyNames(obj)) {
-          let item = obj[name];
-          str += sep + name + ": " + lispToString(item, maxDepth-1, opts);
-          sep = ", ";
+        {
+          let str = "{", sep = "";
+          // Plain object
+          for (let name of Object.getOwnPropertyNames(obj)) {
+            let item = obj[name];
+            str += sep + name + ": " + toString(item, maxDepth-1);
+            sep = ", ";
+          }
+          return str + "}";
         }
-        return str + "}";
       }
-    }
-    if (objType === 'symbol') {
-      return obj.description;
-    }
-    if (objType === 'string') {
-      let str = '"';
-      for (let ch of obj) {
-        let replace = STRING_ESCAPES[ch];
-        if (replace)
-          str += "\\" + replace;
-        else
-          str += ch;
+      if (objType === 'symbol') {
+        return obj.description;
       }
-      str += '"';
-      return str;
+      if (objType === 'string') {
+        let str = '"';
+        for (let ch of obj) {
+          let replace = STRING_ESCAPES[ch];
+          if (replace)
+            str += "\\" + replace;
+          else
+            str += ch;
+        }
+        str += '"';
+        return str;
+      }
+      if (objType === 'bigint') {
+        return `${String(obj)}n`;
+      }
+      // XXX there must be more to do here
+      return String(obj);
     }
-    if (objType === 'bigint') {
-      return `${String(obj)}n`;
-    }
-    // XXX there must be more to do here
-    return String(obj);
   }
 
   const TO_LISP = Symbol("*lisp-to-lisp*");
 
   // Turn iterables objects like arrays into lists
-  function iterableToList(obj, depth = BIGGEST_INT32, opts) { 
-    if (depth <= 0)return obj;
-    let iterator;
-    if (typeof obj === 'function') // assume it's an iterator
-      iterator = obj;
-    if (typeof obj === 'object') {
-      if (obj[IS_CONS]) return obj;  // Careful; cons is iterable itself
-      if (obj[TO_LISP])
-        return obj[TO_LISP](opts);
+  function iterableToList(obj, opts = {}) { 
+    opts = { ...lispOpts, ...opts };
+    return toList(obj, opts.depth ?? BIGGEST_INT32);
+    function toList(obj, depth) {
+      if (depth <= 0)return obj;
       let iterator;
-      if (obj[Symbol.iterator])
-        iterator = obj[Symbol.iterator]();
-    }
-    if (iterator) {
-      function go() {
-        let { done, value } = iterator.next();
-        if (done) return NIL;
-        return cons(iterableToList(obj, depth-1, opts), go());
+      if (typeof obj === 'function') // assume it's an iterator
+        iterator = obj;
+      if (typeof obj === 'object') {
+        if (obj[IS_CONS]) return obj;  // Careful; cons is iterable itself
+        if (obj[TO_LISP])
+          return obj[TO_LISP](opts);
+        let iterator;
+        if (obj[Symbol.iterator])
+          iterator = obj[Symbol.iterator]();
       }
-      return go();
+      if (iterator) {
+        function go() {
+          let { done, value } = iterator.next();
+          if (done) return NIL;
+          return cons(toList(obj, depth-1), go());
+        }
+        return go();
+      }
+      return obj;
     }
-    return obj;
   }
 
   function listToArray(obj, depth = BIGGEST_INT32) {
@@ -1468,6 +1469,7 @@ function Jisp(opts = {}) {
   this.listToArray = listToArray;
   this.arrayToList = iterableToList;
   this.iterableToList = iterableToList;
+  this.TO_LISP_SYMBOL = TO_LISP;
 } // End of Jisp class/function
 
 let lisp = Jisp();
