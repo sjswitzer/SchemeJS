@@ -247,7 +247,8 @@ function Jisp(lispOpts = {}) {
   defineGlobalSymbol("pair?", a => typeof a === object && a[IS_CONS] === true);
   defineGlobalSymbol("typeof", a => typeof a);
   defineGlobalSymbol("undefined?", a => typeof a === 'undefined');
-  defineGlobalSymbol("null?", a => a === null);
+  defineGlobalSymbol("null?", a => a === NIL);  // XXX scheme clained it first. Maybe rethink the naming here.
+  defineGlobalSymbol("nullJS?", a => a === null);
   defineGlobalSymbol("boolean?", a => typeof a === 'boolean');
   defineGlobalSymbol("number?", a => typeof a === 'number');
   defineGlobalSymbol("bigint?", a => typeof a === 'bigint');
@@ -649,6 +650,44 @@ function Jisp(lispOpts = {}) {
     return res;
   });
 
+  // (member key list)
+  //     Returns the portion of the list where the car is equal to the key, or () if none found.
+  defineGlobalSymbol("member", member);
+  function member(key, list) {
+    while (typeof list === 'object' && list[IS_CONS]) {
+      if (key == list.car)
+        return list;
+      list = list.cdr;
+    }
+    return NIL;
+  }
+
+  // (memq key list)
+  //     Returns the portion of the list where the car is eq to the key, or () if none found.
+  defineGlobalSymbol("memq", memq);
+  function memq(key, list) {
+    while (typeof list === 'object' && list[IS_CONS]) {
+      if (key === list.car)
+        return list;
+      list = list.cdr;
+    }
+    return NIL;
+  }
+
+  // (nth index list)
+  //     Reference the list using index, with the first element being index 0.
+  defineGlobalSymbol("nth", nth);
+  function nth(index, list) {
+    while (index > 0 && typeof list === 'object' && list[IS_CONS]) {
+      index -= 1;
+      list = list.cdr;
+    }
+    if (typeof list === 'object' && list[IS_CONS])
+      return list.car;
+    return NIL;
+  }
+
+
   // (apropos substring) -- Returns a list of all symbols containing the given substring
   defineGlobalSymbol("apropos", (substring) => {
     substring = substring.toLowerCase();
@@ -728,28 +767,13 @@ function Jisp(lispOpts = {}) {
   // (realtime)
   //      Returns a double precision floating point value representation of the current realtime number of seconds. Usually precise to about a thousandth of a second.
   // errobj, (error message object)
-  // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
-  //     (let ((x 10)
-  //      (y 20))
-  //      (+ x y))
-  // (letrec...) -- ?
   // (load fname noeval-flag search-flag)
   //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
   //   no use for the search-flag
-  // (member key list)
-  //     Returns the portion of the list where the car is equal to the key, or () if none found.
-  // (memq key list)
-  //     Returns the portion of the list where the car is eq to the key, or () if none found.
-  // (nth index list)
-  //     Reference the list using index, with the first element being index 0.
-  // (null? x)  -- Returns true of x is the empty list.
   // (number->string x base width precision)
   //     Formats the number according to the base, which may be 8, 10, 16 or the symbol e or f.
   //     The width and precision are both optional.
-  // (number? x) -- Returns true of x is a number.
-  // (pair? x) -- Returns true if x is a pair (created by cons).
   // (parse-number str)
-  // (pow x y) -- Computes the result of x raised to the y power.
   // (print object stream) -- Same as prin1 followed by output of a newline.
   //     A special form which evaluates all its subforms but returns the value of the first one.
   // (qsort list predicate-fcn access-fcn)
