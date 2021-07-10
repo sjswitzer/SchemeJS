@@ -724,9 +724,6 @@ function Jisp(lispOpts = {}) {
 
   // SIOD compatibility checklist:
   //
-  // (*catch tag form ...)
-  // (*throw tag value)
-  //   A special form which evaluates each of its subforms one after another, returning the value of the last subform.
   // TODO benchmark fns -- http://people.delphiforums.com/gjc//siod.html#builtin
   // (realtime)
   //      Returns a double precision floating point value representation of the current realtime number of seconds. Usually precise to about a thousandth of a second.
@@ -862,43 +859,77 @@ function Jisp(lispOpts = {}) {
   //
   // try/catch/filnally. Just a sketch for now.
   //
-
-  defineGlobalSymbol("*throw", e => { throw e });
-
-  defineGlobalSymbol("*finally", function lispFinally(handler, form) {  // XXX order of args?
-    let val = NIL;
-    try { val = lispEval(form, this); }
-    finally { lispEval(handler, this); }
-    return val;
-  }, { evalArgs: 0, lift: 2 });
-
-  defineGlobalSymbol("*catch", function lispCatch(e, handler, form) {  // XXX order of args?
-    // Tempting to save some of this work for the handler, but better to report errors early
-    let cls, sym;
-    if (typeof e === 'symbol') {
-      sym = e;
-    } else if (typeof e === 'object' && e[IS_CONS]) {
-      cls = e.car;
-      if (typeof cls !== 'function')
-        cls = lispEval(cls, this);
-      if (typeof cls !== 'function')
-        throw new EvalError(`Not a class ${cls}`);
-      if (typeof e.cdr === 'object' && e.cdr[IS_CONS])
-        sym = e.cdr.car;
+  class LispThrow extends LispError {
+    constructor(tag, value, msg) {
+      value;
+      super(msg);
+      this.tag = tag;
+      this.value = value;
     }
-    if (typeof sym !== 'symbol')
-      throw new EvalError(`Bad catch binding syntax ${e}`);
-    // Whew!
+    toString() {
+      return `${super.toString()} ${this.tag} ${lispToString(this.value)}`;
+    }
+  };
+  LispThrow.prototype.name = "LispThrow";
+
+  // (*throw tag value) -- SIOD style
+  defineGlobalSymbol("*throw", (tag, value) => { throw new LispThrow(tag, value)});
+
+  // (*catch tag form ...) -- SIOD style
+  defineGlobalSymbol("*catch", function lispCatch(tag, forms) {  // XXX order of args?
     let val = NIL;
-    try { val = lispEval(form, this) }
-    catch (e) {
-      if (cls && !(e instanceof cls)) throw e;
-      let env = new Env;
-      env.set(sym, e);
-      val = lispEval(handler, new Scope(env, this));
+    try {
+      while (typeof forms === 'object' && forms[IS_CONS]) {
+        val = lispEval(forms.car, this);
+        forms = forms.cdr;
+      }
+    } catch (e) {
+      if (!(e instanceof LispThrow)) throw e;  // rethrow
+      if (e.tag !== tag) throw e;
+      val = e.value;
     }
     return val;
-  }, { evalArgs: 0, lift: 3 });
+  }, { evalArgs: 1, lift: 1 });
+
+  // (throw value) -- JavaScript style
+  defineGlobalSymbol("throw", value => { throw value});
+
+  // (catch (var [type] forms) forms)
+  defineGlobalSymbol("catch", function lispJSCatch(catchClause, forms) {
+    if (!(typeof catchClause === 'object' && catchClause[IS_CONS]))
+      throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
+    let catchVar = catchClause.car, catchForms = catchClause.cdr;
+    if (!(typeof catchForms === 'object' && catchForms[IS_CONS]))
+      throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
+    var typeMatch;
+    if (typeof catchForms.car === 'string' || typeof catchForms.car === 'function') {
+      typeMatch = catchForms.car;
+      catchForms = catchForms.cdr;
+    }
+    if (!(typeof catchForms === 'object' && catchForms[IS_CONS]))
+      throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
+    let val = NIL;
+    try {
+      while (typeof forms === 'object' && forms[IS_CONS]) {
+        val = lispEval(forms.car, this);
+        forms = forms.cdr;
+      }
+    } catch (e) {
+      if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
+          || e instanceof typeMatch) {
+        let env = new Env;
+        let scope = new Scope(env, this);
+        env.set(catchVar, e);
+        while (typeof catchForms === 'object' && catchForms[IS_CONS]) {
+          val = lispEval(catchForms.car, scope);
+          catchForms = catchForms.cdr;
+        }
+      } else {
+        throw e; // rethrow
+      }
+    }
+    return val;
+  }, { evalArgs: 0, lift: 1 });
 
   // (define variable value)
   defineGlobalSymbol("define", function define(variable, value) {
