@@ -30,10 +30,15 @@
        [ 3254 53 23 35 325 5 325 325 325 3245 35] 32452346 )
      3425 464 634 7457 )
 
+;; Special Object and Array literals
 (define a 2)
- [ 1 2 3 4 5 6 7 a 3 4]
- '[ 1 2 3 4 5 6 7 a 3 4]
- { foo: 1, bar: a }
- '{ foo: 1, bar: a }
- (@ 2 ['a 'b 'c 'd])
- 
+  [ 1 2 3 4 5 6 7 a 3 4]
+    '[ 1 2 3 4 5 6 7 a 3 4]
+  { foo: 1, bar: a }
+  '{ foo: 1, bar: a }
+  (@ 2 ['a 'b 'c 'd])
+
+(let ((a 1 2 3)  ;; assigns last value
+     (b (+ a 5)))
+  (- a b)
+  (* a b))  ;; results last value

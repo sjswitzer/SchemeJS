@@ -689,11 +689,42 @@ function Jisp(lispOpts = {}) {
   //     (let ((x 10)
   //      (y 20))
   //      (+ x y))
-  // (letrec...) -- ?
+  // Because of this implementation uses a scope chain instead
+  // of an environment, each kind of let is as piwerful as "letrec".
+  //
+  // TODO: Make a shape-shifting Scope object that mimics a Cons
+  // and transforms into an environment on demand, conversely
+  // functions that take an "env" param should transform it back into
+  // a Scope. That will maintain Scheme API compatibility while
+  // still benefiting from Scopes internally.
+  defineGlobalSymbol("letrec", function letrec(bindings, forms) {
+    let env = new Env, scope = new Scope(env, this);
+    while (typeof bindings === 'object' && bindings[IS_CONS]) {
+      let binding = bindings.car;
+      if (!(typeof binding === 'object' && binding[IS_CONS]))
+        throw new EvalError(`Bad binding ${lispToString(binding)}`);
+      let boundVar = binding.car, bindingForms = binding.cdr;
+      if (typeof boundVar !== 'symbol')
+        throw new EvalError(`Bad binding ${lispToString(binding)}`);
+      let val = NIL;
+      while (typeof bindingForms === 'object' && bindingForms[IS_CONS]) {
+        val = lispEval(bindingForms.car, scope);
+        bindingForms = bindingForms.cdr;
+      }
+      env.set(boundVar, val);
+      bindings = bindings.cdr;
+    }
+    let res = NIL;
+    while (typeof forms === 'object' && forms[IS_CONS]) {
+      res = lispEval(forms.car, scope);
+      forms = forms.cdr;
+    }
+    return res;
+  }, { evalArgs:0, lift: 1 }, "let", "let*");
 
   // SIOD compatibility checklist:
   //
-  // (*catch tag body ...)
+  // (*catch tag form ...)
   // (*throw tag value)
   //   A special form which evaluates each of its subforms one after another, returning the value of the last subform.
   // TODO benchmark fns -- http://people.delphiforums.com/gjc//siod.html#builtin
@@ -834,14 +865,14 @@ function Jisp(lispOpts = {}) {
 
   defineGlobalSymbol("*throw", e => { throw e });
 
-  defineGlobalSymbol("*finally", function lispFinally(handler, body) {  // XXX order of args?
+  defineGlobalSymbol("*finally", function lispFinally(handler, form) {  // XXX order of args?
     let val = NIL;
-    try { val = lispEval(body, this); }
+    try { val = lispEval(form, this); }
     finally { lispEval(handler, this); }
     return val;
   }, { evalArgs: 0, lift: 2 });
 
-  defineGlobalSymbol("*catch", function lispCatch(e, handler, body) {  // XXX order of args?
+  defineGlobalSymbol("*catch", function lispCatch(e, handler, form) {  // XXX order of args?
     // Tempting to save some of this work for the handler, but better to report errors early
     let cls, sym;
     if (typeof e === 'symbol') {
@@ -859,7 +890,7 @@ function Jisp(lispOpts = {}) {
       throw new EvalError(`Bad catch binding syntax ${e}`);
     // Whew!
     let val = NIL;
-    try { val = lispEval(body, this) }
+    try { val = lispEval(form, this) }
     catch (e) {
       if (cls && !(e instanceof cls)) throw e;
       let env = new Env;
@@ -956,15 +987,15 @@ function Jisp(lispOpts = {}) {
     if (typeof fn === 'object' && fn[IS_CONS]) {
       let opSym = fn.car;
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        let formalParams = fn.cdr.car;
+        let params = fn.cdr.car;
         let forms = fn.cdr.cdr;
         if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
           args = evalArgs(args, scope);
         let env = new Env;
         scope = new Scope(env, scope);
-        let origFormalParams = formalParams;
-        while (typeof formalParams === 'object' && formalParams[IS_CONS]) {
-          let param = formalParams.car;
+        let origFormalParams = params;
+        while (typeof params === 'object' && params[IS_CONS]) {
+          let param = params.car;
           if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
           if (args !== NIL) {
             env.set(param, args.car);
@@ -972,11 +1003,11 @@ function Jisp(lispOpts = {}) {
           } else {
             env[param] = NIL;
           }
-          formalParams = formalParams.cdr;
+          params = params.cdr;
         }
-        if (typeof formalParams === 'symbol')  // Neat trick for 'rest' params!
-          env[formalParams] = args;
-        else if (formalParams !== NIL)
+        if (typeof params === 'symbol')  // Neat trick for 'rest' params!
+          env[params] = args;
+        else if (params !== NIL)
           throw new EvalError(`Bad parameter list ${lispToString(origFormalParams)}`);
         let res = NIL;
         while (typeof forms === 'object' && forms[IS_CONS]) {
