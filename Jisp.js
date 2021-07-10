@@ -9,6 +9,9 @@
 "use strict";
 // TODO: make this a JS module
 
+//
+// Creates a Lisp instance, independent of any others
+//
 function Jisp(lispOpts = {}) {
   if (new.target === undefined) return new Jisp(lispOpts);
 
@@ -16,38 +19,62 @@ function Jisp(lispOpts = {}) {
   // Encapsulating everything in a function scope because JITs
   // can resolve scoped references most easily.
   //
+  const exportDefinition = (name, value) => this[name] = value;
 
   class LispError extends Error {};
   LispError.prototype.name = "LispError";
+  exportDefinition("LispError", LispError);
 
   class EvalError extends LispError {};
   EvalError.prototype.name = "EvalError";
+  exportDefinition("EvalError", EvalError);
 
   class ParseError extends LispError {};
   ParseError.prototype.name = "ParseError";
+  exportDefinition("ParseError", ParseError);
+
+  class ParseExtraTokens extends ParseError {};
+  ParseExtraTokens.prototype.name = "ParseExtraTokens";
+  exportDefinition("ParseExtraTokens", ParseExtraTokens);
+
+  class ParseIncomplete extends ParseError {};
+  ParseIncomplete.prototype.name = "ParseIncomplete";
+  exportDefinition("ParseIncomplete", ParseIncomplete);
 
   const LogicError = Error;
+  exportDefinition("LogicError", LogicError);
 
   // Atoms are Symbols
   const ATOMS = new Map;
+
   function Atom(name) {
-    let val = ATOMS.get(name);
-    if (val !== undefined) return val;
-    return Atom._defineAtom(name);
-  }
-  Atom._defineAtom = function(...names) {
-    let atom = Symbol(names[0]);
-    for (let name of names)
+    if (typeof name === 'symbol') {
+      // If they pass in an atom, just return it
+      if (ATOMS.get(name.description) !== name)
+        throw new LogicError(`Symbol "${name.description}" is not an atom`);
+        return name;
+    }
+    let atom = ATOMS.get(name);
+    if (atom !== undefined) return atom;
+    atom = Symbol(name);
     ATOMS.set(name, atom);
     return atom;
   }
+  exportDefinition("Atom", Atom);
 
-  const LAMBDA_ATOM = Atom._defineAtom("lambda", "\\", "\u03BB");
-  const SLAMBDA_ATOM = Atom._defineAtom("special-lambda", "\\\\", "\u03BB");
+  function AliasAtom(name, ...aliases) {
+    let atom = Atom(name);
+    for (let alias of aliases)
+      ATOMS.set(alias, atom);
+    return atom;
+  }
+
+  const LAMBDA_ATOM = AliasAtom("lambda", "\\", "\u03BB");
+  const SLAMBDA_ATOM = AliasAtom("special-lambda", "\\\\", "\u03BB");
   const IS_CONS = Symbol("*lisp-isCons*");
 
   class Cons {
-    // I want creating a Cons to be as cheap as possible, so no subclassing
+    // Creating a Cons should be as cheap as possible, so no subclassing
     // or calls to super. This means that identifying the "class" of Cons
     // cells can't use "instanceof AbstractCons".
     // For now, cons cells are immutable. That might or might not help the JIT
@@ -88,6 +115,7 @@ function Jisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: () => ({ done: true, value: null }) } }
   });
+  exportDefinition("NIL", NIL);
 
   function nextCons() {
     let current = this._current, done = current === NIL, value = undefined;
@@ -98,30 +126,13 @@ function Jisp(lispOpts = {}) {
     return { done, value };
   }
 
-  class LazyCons {
-    _carFn; _cdrFn;
-    constructor(carFn, cdrFn) {
-      this._carFn = carFn;
-      this._cdrFn = cdrFn;
-      Object.freeze(this);
-    }
-    get car() { return this._carFn(); }
-    get cdr() { return this._carFn(); }
-    toString() {
-      return lispToString(this);
-    }
-    *[Symbol.iterator]() { return { next: nextCons, _current: this } }
-  }
-  LazyCons.prototype[IS_CONS] = true;
-
+// Just a sketch of lazy evaluation.
   class LazyCarCons {
-    _carFn; cdr;
-    constructor(carFn, cdr) {
-      this._carFn = carFn;
+    // User inplements "get car()" in a subclass and ideally seals the object
+    cdr;
+    constructor(cdr) {
       this.cdr = cdr;
-      Object.freeze(this);
     }
-    get car() { return this._carFn(); }
     toString() {
       return lispToString(this);
     }
@@ -130,13 +141,11 @@ function Jisp(lispOpts = {}) {
   LazyCarCons.prototype[IS_CONS] = true;
 
   class LazyCdrCons {
-    car; _cdrFn;
-    constructor(car, cdrFn) {
+    // User inplements "get cdr()" in a subclass and ideally seals the object
+    car;
+    constructor(car) {
       this.car = car;
-      this._cdrFn = cdrFn;
-      Object.freeze(this);
     }
-    get cdr() { return this._carFn(); }
     toString() {
       return lispToString(this);
     }
@@ -155,6 +164,7 @@ function Jisp(lispOpts = {}) {
       return false;
     return true;
   }
+  exportDefinition("toBool", lispToBool);
 
   const cons = (car, cdr) => new Cons(car, cdr);
   const car = cons => cons.car;
@@ -172,6 +182,10 @@ function Jisp(lispOpts = {}) {
   const cddar = cons => cons.car.cdr.cdr;
   const cdddr = cons => cons.cdr.cdr.cdr;
   const cddr = cons => cons.cdr.cdr;
+  exportDefinition("cons", cons);
+  exportDefinition("isCons", obj => typeof obj === 'object' && obj[IS_CONS]);
+  exportDefinition("car", car);
+  exportDefinition("cdr", cdr);
 
   function list(...elements) {  // easy list builder
     let val = NIL;
@@ -179,6 +193,7 @@ function Jisp(lispOpts = {}) {
       val = cons(elements[i-1], val);
     return val;
   }
+  exportDefinition("list", list);
 
   //
   // An environment is simply a Map.
@@ -191,6 +206,7 @@ function Jisp(lispOpts = {}) {
   const EVAL_ARGS = Symbol("*lisp-eval-args*");
   const LIFT_ARGS = Symbol("*lisp-lift-args*");
   const MAX_SMALL_INTEGER = 2**30-1;
+  exportDefinition("GlobalEnv", GlobalEnv);
 
   function defineGlobalSymbol(name, val, ...aliases) {
     let opts = {};
@@ -206,8 +222,8 @@ function Jisp(lispOpts = {}) {
       GlobalEnv.set(Atom(alias), val);
     return atom;
   }
+  exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
 
-  defineGlobalSymbol("defineGlobalSymbol", defineGlobalSymbol);
   defineGlobalSymbol("nil", NIL);
   const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0 }, "'");
   defineGlobalSymbol("null", null);
@@ -594,14 +610,15 @@ function Jisp(lispOpts = {}) {
     return res;
   });
 
-  defineGlobalSymbol("reverse", (list) => {
+  defineGlobalSymbol("reverse", reverseList);
+  function reverseList(list) {
     let res = NIL;
     while (typeof list === 'object' && list[IS_CONS]) {
       res = cons(list.car, res)
       list = list.cdr;
     }
     return res;
-  });
+  }
 
   defineGlobalSymbol("butlast", (list) => {
     let res = NIL;
@@ -631,21 +648,27 @@ function Jisp(lispOpts = {}) {
   });
 
   // (mapcar fn list1 list2 ...)
-  /*
   defineGlobalSymbol("mapcar", function mapcar(fn, lists) {
-    function mapLists(lists) {
-      if (typeof lists === 'object' && lists[IS_CONS])
-        return cons(lispApply(fn, lists.car, this), mapLists(lists.cdr));
-      return NIL;
-    }
-    function mapList(list) {
-      if (typeof list === 'object' && list[IS_CONS])
-        return cons(lispApply(fn, list.car, this), mapLists(list.cdr));
-      return NIL;
-    }
+    // Actually, this will work for any iterables, and lists are iterable.
+    // It's possible to write this recursively to create the list in order, but that
+    // uses unbounded stack and is slower than just constructing the list backwards then
+    // reversing it.
+    let rev = NIL;
+    for (let list of lists)
+      for (let item of list)
+        rev = cons(fn.call(this, item), rev);
+    return reverseList(rev);
+  });
 
-  }, { lift: 1 });
-  */
+  // Same as mapcar but results in an Array
+  defineGlobalSymbol("map->arrqay", function mapcar(fn, lists) {
+    let res = [];
+    let rev = NIL;
+    for (let list of lists)
+      for (let item of list)
+        res.push(fn.call(this, item));
+    return res;
+  });
 
   //     Returns a list which is the result of applying the fcn to the elements of each of the lists specified.
   // (max x1 x2 ...) -- also min
@@ -794,14 +817,14 @@ function Jisp(lispOpts = {}) {
 
   defineGlobalSymbol("*throw", e => { throw e });
 
-  defineGlobalSymbol("*finally", function(handler, body) {  // XXX order of args?
+  defineGlobalSymbol("*finally", function lispFinally(handler, body) {  // XXX order of args?
     let val = NIL;
     try { val = lispEval(body, this); }
     finally { lispEval(handler, this); }
     return val;
   }, { evalArgs: 0, lift: 2 });
 
-  defineGlobalSymbol("*catch", function(e, handler, body) {  // XXX order of args?
+  defineGlobalSymbol("*catch", function lispCatch(e, handler, body) {  // XXX order of args?
     // Tempting to save some of this work for the handler, but better to report errors early
     let cls, sym;
     if (typeof e === 'symbol') {
@@ -830,7 +853,7 @@ function Jisp(lispOpts = {}) {
   }, { evalArgs: 0, lift: 3 });
 
   // (define variable value)
-  defineGlobalSymbol("define", function(variable, value) {
+  defineGlobalSymbol("define", function define(variable, value) {
     let scope = this, name = variable;
     if (typeof variable === 'object' && variable[IS_CONS]) {
       name = variable.car;
@@ -887,6 +910,7 @@ function Jisp(lispOpts = {}) {
     }
     return expr;
   }
+  exportDefinition("eval", lispEval);
 
   function lispApply(fn, args, scope) {
     if (typeof fn === 'function') {
@@ -947,6 +971,7 @@ function Jisp(lispOpts = {}) {
     }
     throw new EvalError(`Can't apply ${fn}`);
   }
+  exportDefinition("apply", lispApply);
 
   function resolveSymbol(sym, scope) {
     while (typeof scope === 'object' && scope[IS_CONS]) {
@@ -975,6 +1000,9 @@ function Jisp(lispOpts = {}) {
     return res;
   })();
 
+  // Implements "toString()" for lists.
+  // We can't just implement toString() because it needs to work for
+  // non-Object types too.
   function lispToString(obj, opts = {}) {
     opts = { ...lispOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 80;
@@ -1075,38 +1103,39 @@ function Jisp(lispOpts = {}) {
       return put(String(obj));
     }
   }
+  exportDefinition("stringFor", lispToString);
 
-  const TO_LISP = Symbol("*lisp-to-lisp*");
+  const TO_LISP_SYMBOL = Symbol("*lisp-to-lisp*");
 
-  // Turn iterables objects like arrays into lists
-  function iterableToList(obj, opts = {}) { 
-    opts = { ...lispOpts, ...opts };
-    return toList(obj, opts.depth ?? MAX_SMALL_INTEGER);
-    function toList(obj, depth) {
-      if (depth <= 0)return obj;
+  // Recursively turns iterable objects like arrays into lists
+  function iterableToList(obj, depth) {
+    if (depth <= 0)return obj;
+    let iterator;
+    if (typeof obj === 'function') // assume it's an iterator
+      iterator = obj;
+    if (typeof obj === 'object') {
+      if (obj[IS_CONS]) return obj;  // Careful; cons is iterable itself
+      if (obj[TO_LISP_SYMBOL])  // User can specialize this
+        return obj[TO_LISP_SYMBOL](opts);
       let iterator;
-      if (typeof obj === 'function') // assume it's an iterator
-        iterator = obj;
-      if (typeof obj === 'object') {
-        if (obj[IS_CONS]) return obj;  // Careful; cons is iterable itself
-        if (obj[TO_LISP])
-          return obj[TO_LISP](opts);
-        let iterator;
-        if (obj[Symbol.iterator])
-          iterator = obj[Symbol.iterator]();
-      }
-      if (iterator) {
-        function go() {
-          let { done, value } = iterator.next();
-          if (done) return NIL;
-          return cons(toList(obj, depth-1), go());
-        }
-        return go();
-      }
-      return obj;
+      if (obj[Symbol.iterator])
+        iterator = obj[Symbol.iterator]();
     }
+    if (iterator) {
+      function go() {
+        let { done, value } = iterator.next();
+        if (done) return NIL;
+        return cons(iterableToList(obj, depth-1), go());
+      }
+      return go();
+    }
+    return obj;
   }
+  exportDefinition("iterableToList", iterableToList);
+  exportDefinition("arrayToList", iterableToList);
+  exportDefinition("TO_LISP_SYMBOL", TO_LISP_SYMBOL);
 
+  // Recursively turn lists into Arrays
   function listToArray(obj, depth = MAX_SMALL_INTEGER) {
     if (depth <= 0) return obj;
     if (obj === NIL) return [];
@@ -1118,6 +1147,7 @@ function Jisp(lispOpts = {}) {
     }
     return arr;
   }
+  exportDefinition("listToArray", listToArray);
 
   //
   // S-epression parser
@@ -1361,11 +1391,11 @@ function Jisp(lispOpts = {}) {
             consumeToken();
             let val = parseExpr(newPrompt);
             if (token().type !== ')')
-              throw new ParseError(unParesedInput());
+              throw new ParseExtraTokens(unParesedInput());
             consumeToken();
             return val;
           }
-          if (token().type === 'end') throw new ParseError(`Reached end of input`);
+          if (token().type === 'end') throw new ParseIncomplete();
           let first = parseExpr(newPrompt);
           let rest = parseListBody();
           return cons(first, rest);
@@ -1386,7 +1416,7 @@ function Jisp(lispOpts = {}) {
             consumeToken();
             return res;
           }
-          if (token().type === 'end') throw new ParseError(`Reached end of input`);
+          if (token().type === 'end') throw new ParseIncomplete();
         }
       }
 
@@ -1414,10 +1444,10 @@ function Jisp(lispOpts = {}) {
               if (token().type === ',')  // might as well be optional for now
                 consumeToken();
             }
-            if (token().type === 'end') throw new ParseError(`Reached end of input`);
+            if (token().type === 'end') throw new ParseIncomplete();
           }
           if (!gotIt)
-            throw new ParseError(unParesedInput());
+            throw new ParseExtraTokens(unParesedInput());
         }
         return res;
       }
@@ -1433,7 +1463,7 @@ function Jisp(lispOpts = {}) {
 
       if (token(1).type === 'end')
         return null;
-      throw new ParseError(unParesedInput());
+      throw new ParseExtraTokens(unParesedInput());
     }
 
     // I'm old enough to be fond of the EvalQuote REPL.
@@ -1459,7 +1489,7 @@ function Jisp(lispOpts = {}) {
     let unparsed = unParesedInput();
     if (!unparsed)
       return expr;
-    throw new ParseError(unparsed);
+    throw new ParseExtraTokens(unparsed);
   }
 
   function lispREPL(readline, opts = {}) {
@@ -1503,28 +1533,7 @@ function Jisp(lispOpts = {}) {
       }
     }
   }
-
-  // Export functions and symbols here
-  this.lispREPL = lispREPL;
-  this.Atom = Atom;
-  this.NIL = NIL;
-  this.cons = cons;
-  this.isCons = obj => typeof obj === 'object' && obj[IS_CONS];
-  this.car = car;
-  this.cdr = cdr;
-  this.defineGlobalSymbol = defineGlobalSymbol;
-  this.LispError = LispError;
-  this.ParseError = ParseError;
-  this.EvalError = EvalError;
-  this.LogicError = LogicError;
-  this.GlobalEnv = GlobalEnv;
-  this.eval = lispEval;
-  this.toBool = lispToBool;
-  this.stringFor = lispToString;
-  this.listToArray = listToArray;
-  this.arrayToList = iterableToList;
-  this.iterableToList = iterableToList;
-  this.TO_LISP_SYMBOL = TO_LISP;
+  exportDefinition("REPL", lispREPL);
 } // End of Jisp class/function
 
 let lisp = Jisp();
@@ -1557,7 +1566,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
           line = line.substr(0, line.length-1);
         return line;
       }
-      lisp.lispREPL(getLine);
+      lisp.REPL(getLine);
     }
   } finally {
     if (closeFd !== undefined)
