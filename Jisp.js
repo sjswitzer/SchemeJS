@@ -7,6 +7,7 @@
 //
 
 "use strict";
+
 // TODO: make this a JS module
 
 //
@@ -14,6 +15,7 @@
 //
 function Jisp(lispOpts = {}) {
   if (new.target === undefined) return new Jisp(lispOpts);
+  let sanityTest = lispOpts.sanityTest;
 
   //
   // Encapsulating everything in a function scope because JITs
@@ -28,6 +30,10 @@ function Jisp(lispOpts = {}) {
   class EvalError extends LispError {};
   EvalError.prototype.name = "EvalError";
   exportDefinition("EvalError", EvalError);
+
+  class CompileError extends LispError {};
+  CompileError.prototype.name = "CompileError";
+  exportDefinition("CompileError", CompileError);
 
   class ParseError extends LispError {};
   ParseError.prototype.name = "ParseError";
@@ -197,10 +203,18 @@ function Jisp(lispOpts = {}) {
 
   //
   // An environment is simply a Map.
-  // A Scope is a list of environments.
+  // A Scope is a effextively list of environments
   //
   const Env = Map;
-  const Scope = Cons;
+  class Scope {
+    env; next;
+    constructor(env, next) {
+      this.env = env;
+      this.next = next;
+      Object.freeze(this);
+    }
+  }
+
   const GlobalEnv = new Env;
   const GlobalScope = new Scope(GlobalEnv, NIL);
   const EVAL_ARGS = Symbol("*lisp-eval-args*");
@@ -579,7 +593,7 @@ function Jisp(lispOpts = {}) {
     let sym = Atom(`*${path}-loaded*`);
     if (lispToBool(force) || !lispToBool(resolveSymbol(sym, GlobalScope))) {
       try {
-        // For now, nodejs-specific
+        // todo: For now, nodejs-specific
         const fs = require('fs');
         let fileContent = fs.readFileSync(path);
         fileContent = fileContent.toString();
@@ -592,7 +606,7 @@ function Jisp(lispOpts = {}) {
         });
         GlobalEnv.set(sym, true);
       } catch (error) {
-        console.log("require failed", String(error));
+        console.log("require failed", String(error));  // todo: abstract reporting
         return false;
       }
     }
@@ -991,7 +1005,7 @@ function Jisp(lispOpts = {}) {
     if (typeof name === 'string') name = Atom(name);
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
-    GlobalScope.car.set(name, value);  // Or should it be our scope? That would be weird.
+    GlobalScope.env.set(name, value);  // Or should it be our scope? That would be weird.
     return name;
   }
 
@@ -1101,10 +1115,10 @@ function Jisp(lispOpts = {}) {
 
   function resolveSymbol(sym, scope) {
     while (typeof scope === 'object' && scope[IS_CONS]) {
-      let val = scope.car.get(sym);
+      let val = scope.env.get(sym);
       if (val !== undefined)
         return val;
-      scope = scope.cdr;
+      scope = scope.next;
     }
     return undefined;
   }
@@ -1284,14 +1298,14 @@ function Jisp(lispOpts = {}) {
   // S-epression parser
   //
   const TOKS = {}, DIGITS = {}, ALPHA = {}, IDENT1 = {}, IDENT2 = {},
-      NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {};
+      NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {}, WSNL = {}, JSIDENT = {};
   for (let ch of `()[]{},':`) TOKS[ch] = true;
-  for (let ch of ` \t`) WS[ch] = true;
-  for (let ch of `\n\r`) NL[ch] = true;
-  for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`)
-    ALPHA[ch] = IDENT1[ch] = IDENT2[ch] = true;
+  for (let ch of ` \t`) WS[ch] = WSNL[ch] = true;
+  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = true;
+  for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
+    ALPHA[ch] = IDENT1[ch] = IDENT2[ch] = JSIDENT[ch] = true;
   for (let ch of `0123456789`)
-    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = true;
+    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = true;
   for (let ch of `+-.`)
     NUM1[ch] = NUM2[ch] = true;
   for (let ch of `eEoOxXbBn`)
@@ -1623,6 +1637,232 @@ function Jisp(lispOpts = {}) {
     throw new ParseExtraTokens(unparsed);
   }
 
+  function compile(expr) {
+    let scope = NIL;
+    let [args, body] = compileLambda(expr, scope);
+    let res = new Function(...[ ... args, body ]);
+    if (expr.car === SLAMBDA_ATOM)
+      res[EVAL_ARGS] = 0;
+    return res;
+  }
+
+  function analyzeJSFunction(fn) {
+    // Super Shitty passer. It only has to recoginze things that fn.toSting() can return.
+    // So it takes a LOT of shortcuts that would never be sensible for arbitrary input strings.
+    let str = fn.toString(), pos = 0, tokPos = 0, token = "";
+    function nextToken() {
+      // Super Shitty tokenizer.
+      // Most of what it returns is garbage, but it returns anything we actually care about.
+      // The assumption is that what JS returns is well-formed, so it takes a lot of liberties.
+      if (pos >= str.length) return token = "";
+      let ch = str[pos]; // ch is always str[pos]
+      while (WSNL[ch]) ch = str[++pos];
+      tokPos = pos;
+      if (JSIDENT[ch]) {
+        let tok = ch;
+        ch = str[++pos];
+        while (JSIDENT[ch]) {
+          tok += ch;
+          ch = str[++pos];
+        }
+        return token = tok;
+      }
+      if (ch === '=' && str[pos+1] === '>') {
+        pos += 2;
+        return token = "=>";
+      }
+      if (ch === '.' && str[pos+1] === '.' && str[pos+2] === '.') {
+        pos += 3;
+        return token = "...";
+      }
+      if (ch === '"' || ch === "'" || ch === '`') {
+        let qc = ch;
+        ch = str[++pos];
+        while (ch && ch != qc) {
+          if (ch === '\\') ++pos;
+          ch = str[++pos]
+        }
+        ++pos;
+        return token = 'quoted-stuff';
+      }
+      return token = str[pos++];
+    }
+    nextToken();
+    let params =[], restParam = false;
+    if (token === 'function') {
+      let returnPos, returnName;
+      nextToken();
+      let name;
+      if (token !== '(') {
+        name = token;
+        nextToken();
+      }
+      if (!token === '(') return {};
+      nextToken();
+      for (;;) {
+        if (token === "...") {
+          restParam = true
+          nextToken();
+        }
+        params.push(token);
+        nextToken();
+        if (token === ')') {
+          nextToken();
+          break;
+        }
+        if (token !== ",") return {};
+        nextToken();
+      }
+      if (token !== '{') {
+        while (WSNL[str[pos]]) ++pos;
+        let bodyPos = pos;
+        while (token && token !== 'return') nextToken();
+        let clipPos = tokPos;
+        if (token === "return") {
+          // If there's a return, it has to be followed by a variable,
+          // an optional semicolon, an "}", nothing further.
+          // We capture the name of the return variable and clip the body
+          // prior to the return.
+          nextToken();
+          returnName = token;
+          nextToken();
+          while (token === ';') nextToken();
+          if (token !== '}') return {};
+          nextToken();
+          if (token !== "") return {};
+          let body = str.substring(bodyPos, clipPos);
+          return { params, restParam, body };
+        }
+      }
+      return {};
+    }
+    if (token === '(') {
+      nextToken();
+      for (;;) {
+        if (token === "...") {
+          nextToken();
+          restParam = true;
+        }
+        params.push(token);
+        nextToken();
+        if (token === ')') {
+          nextToken();
+          break;
+        }
+        if (token !== ",") return {};
+        nextToken();
+      }
+    } else {
+      params.push(token);
+      nextToken();
+    }
+    if (!(token === '=>')) return {};
+    while (WSNL[str[pos]]) ++pos;
+    let body = str.substr(pos);
+    return { params, restParam, body };
+  }
+ 
+  if (sanityTest) {
+    console.log('TEST', analyzeJSFunction(x => x * x));
+    console.log('TEST', analyzeJSFunction((x) => x * x));
+    console.log('TEST', analyzeJSFunction((x, y) => x * y));
+    console.log('TEST', analyzeJSFunction((x, ...y) => x * y));
+    console.log('TEST', analyzeJSFunction((x, y, ...z) => x * y));
+    console.log('TEST', analyzeJSFunction((...x) => x * x));
+    console.log('TEST', analyzeJSFunction(function (a) { return a; }));
+    console.log('TEST', analyzeJSFunction(function (a, b, c) { return a; }));
+    console.log('TEST', analyzeJSFunction(function name(a) { return a; }));
+    console.log('TEST', analyzeJSFunction(function name(a, b, c) { return a; }));
+    console.log('TEST', analyzeJSFunction(function (a, ...rest) { return a; }));
+    console.log('TEST', analyzeJSFunction(function (a, b, c, ...rest) { return a; }));
+    console.log('TEST', analyzeJSFunction(function name(a, ...rest) { return a; }));
+    console.log('TEST', analyzeJSFunction(function name(a, b, c, ...rest) { return a; }));
+    console.log('TEST', analyzeJSFunction(function name(...rest) { return a; }));
+    console.log('TEST', analyzeJSFunction(function (...rest) { return a; }));
+  }
+
+  function compileLambda(expr, contaniingScope) {
+    let args, body, _tvar = 0;
+    function newTvar() { return `t$(_tvar++})` }
+    function emit(fn, args) { // => tvar
+      var tvar = newTvar();
+      var fstr = String(fn);
+      let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
+      let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
+      // var $tvar; {
+      //   let p1 = a1, p2 = a2, p3 = a3 (maybe array);
+      //   tvar = ...;
+    
+      body += `var ${tvar}; {\n`;
+      // p1 => ...
+      // (p1, p2, [...]p3) => ...
+
+      body += `}`;
+      return tvar;
+    }
+    if (typeof expr === 'object' && expr[IS_CONS]) {
+      let fn = expr.car;
+      if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM) {
+        let paramsAndForms = expr.cdr;
+        if (typeof paramsAndForms === 'object' && paramsAndForms[IS_CONS]) {
+          let params = paramsAndForms.car, forms = paramsAndForms.cdr;
+          if (params === NIL || (typeof params === 'object' && params[IS_CONS])) {
+            if (forms === NIL || (typeof forms === 'object' && forms[IS_CONS])) {
+              // We've got something to work with here
+              let env = new Env, scope = new Scope(env, contaniingScope);
+              while (typeof params === 'object' && params[IS_CONS]) {
+                let param = params.car, jsVar = toJSvariable(param);
+                env.put(param, jsVar);
+                args.push(jsVar);
+                param = param.cdr;
+              }
+              let res;
+              while (typeof forms === 'object' && forms[IS_CONS]) {
+                res = compileForm(forms.car, scope);
+                forms = forms.cdr;
+              }
+              return null; // XXX something!
+            }
+          }
+        }
+      }
+    }
+    throw new CompileError(`Not a lambda ${lispToString(expr)}`)
+  }
+  
+  const JS_IDENT_REPLACEMENTS  = {
+    '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
+    '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$minus', '=': '$eq', '<': '$lt', '>': '$gt',
+    '/': '$stroke', '\\': '$backstroke', '?': '$if'
+  };
+
+  function toJSvariable(name) {
+    let newName = "", fragment = "";
+    for (let ch of name) {
+      if (JS_IDENT_REPLACEMENTS[ch]) {
+        newName += fragment + JS_IDENT_REPLACEMENTS[ch];
+        fragment = "";
+      } else if (JSIDENT[ch]) {
+        if (!fragment) fragment = "_";
+        fragment += ch;
+      } else {
+        newName += fragment + '$x' + ch.codePointAt(0).toString(16);
+        fragment = "";5
+      }
+    }
+    newName += fragment;
+    return newName;
+  }
+
+  if (sanityTest) {
+    console.log("TEST", toJSvariable("aNormal_name0234"));
+    console.log("TEST", toJSvariable("aname%with&/specialChars?"));
+    console.log("TEST", toJSvariable("_begins_with_underscore"));
+    console.log("TEST", toJSvariable("number?"));
+    console.log("TEST", toJSvariable("&&"));
+    console.log("TEST", toJSvariable("?"));
+  }
+
   function lispREPL(readline, opts = {}) {
     opts = { ...lispOpts, ...opts };
     // readline(prompt) => str | nullish
@@ -1667,7 +1907,7 @@ function Jisp(lispOpts = {}) {
   exportDefinition("REPL", lispREPL);
 } // End of Jisp class/function
 
-let lisp = Jisp();
+let lisp = Jisp({ sanityTest: true });
 
 if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
   let fs = require('fs');
