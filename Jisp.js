@@ -82,13 +82,9 @@ function Jisp(lispOpts = {}) {
     // Creating a Cons should be as cheap as possible, so no subclassing
     // or calls to super. This means that identifying the "class" of Cons
     // cells can't use "instanceof AbstractCons".
-    // For now, cons cells are immutable. That might or might not help the JIT
-    // but in any case if that decision changes, Object.freeze(this) should
-    // become Object.seal().
     constructor(car, cdr) {
       this.car = car;
       this.cdr = cdr;
-      Object.freeze(this);
     }
     toString() {
       return lispToString(this);
@@ -162,14 +158,14 @@ function Jisp(lispOpts = {}) {
   // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
   // In Jisp, NIL, null, undefined, and false are false and everything else is true.
   //
-  function lispToBool(val) {
+  function _bool(val) {
     // Give priority here to actual true and false values
     if (val === true) return true;
     if (val === false || val === NIL || val === undefined || val === null)
       return false;
     return true;
   }
-  exportDefinition("toBool", lispToBool);
+  exportDefinition("toBool", _bool);
 
   const cons = (car, cdr) => new Cons(car, cdr);
   const car = cons => cons.car;
@@ -290,8 +286,8 @@ function Jisp(lispOpts = {}) {
   defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ]);
   defineGlobalSymbol("read-from-string", a => parseSExpr(a));
 
-  defineGlobalSymbol("eval", _eval , { lift: 1 });
-  function _eval(expr, rest) {
+  defineGlobalSymbol("eval", eval_defn , { lift: 1 });
+  function eval_defn(expr, rest) {
     let scope = NIL;
     if (rest === undefined || rest === NIL)
       scope = this;  // use the current scope if unspecified
@@ -302,11 +298,11 @@ function Jisp(lispOpts = {}) {
       scope = rest.car;
     if (typeof expr === 'string')
       expr = parseSExpr(expr);
-    return lispEval(expr, scope);
+    return _eval(expr, scope);
   }
 
-  defineGlobalSymbol("apply", _apply, { lift: 2 });
-  function _apply(fn, args, rest) {
+  defineGlobalSymbol("apply", apply_defn, { lift: 2 });
+  function apply_defn(fn, args, rest) {
     let scope = NIL;
     if (rest === undefined || rest === NIL)
       scope = this;  // use the current scope if unspecified
@@ -315,10 +311,10 @@ function Jisp(lispOpts = {}) {
     // Note the user can set a deliberately enmpty scope for whatever reason.
     if (typeof rest === 'object' && rest[IS_CONS])
       scope = rest.car;
-    return lispApply(fn, args, scope);
+    return _apply(fn, args, scope);
   }
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !lispToBool(a), "not");
+  defineGlobalSymbol("!", a => !_bool(a), "not");
   defineGlobalSymbol("~", a => ~a, "bit-not");
   defineGlobalSymbol("**", (a,b) => a ** b, "exp");
   defineGlobalSymbol("%", (a,b) => a % b, "rem");
@@ -406,7 +402,7 @@ function Jisp(lispOpts = {}) {
   function lt(a, ...rest) {
     if (rest.length === 0) return false; // not less than itself?
     for (let b of rest) {
-      b = lispEval(b, this);
+      b = _eval(b, this);
       if (!(a < b)) return false;
       a = b;
     }
@@ -417,7 +413,7 @@ function Jisp(lispOpts = {}) {
   function le(a, ...rest) {
     if (rest.length === 0) return true; // equal to itself?
     for (let b of rest) {
-      b = lispEval(b, this);
+      b = _eval(b, this);
       if (!(a <= b)) return false;
       a = b;
     }
@@ -428,7 +424,7 @@ function Jisp(lispOpts = {}) {
   function gt(a, ...rest) {
     if (rest.length === 0) return false;
     for (let b of rest) {
-      b = lispEval(b, this);
+      b = _eval(b, this);
       if (!(a > b)) return false;
       a = b;
     }
@@ -439,7 +435,7 @@ function Jisp(lispOpts = {}) {
   function ge(a, ...rest) {
     if (rest.length === 0) return true;
     for (let b of rest) {
-      b = lispEval(b, this);
+      b = _eval(b, this);
       if (!(a >= b)) return false;
       a = b;
     }
@@ -450,7 +446,7 @@ function Jisp(lispOpts = {}) {
   function equal(a, ...rest) {
     if (rest.length === 0) return true;
     for (let b of rest) {
-      b = lispEval(b, this);
+      b = _eval(b, this);
       if (!(a == b)) return false;
     }
     return true;
@@ -460,7 +456,7 @@ function Jisp(lispOpts = {}) {
   function eq(a, ...rest) {
     if (rest.length === 0) return true;
     for (let b of rest) {
-      b = lispEval(b, this);
+      b = _eval(b, this);
       if (!(a === b)) return false;
     }
     return true;
@@ -470,7 +466,7 @@ function Jisp(lispOpts = {}) {
   function ne(a, ...rest) {  // all not equal to first
     if (rest.length === 0) return false;
     for (let b of rest) {
-      b = lispEval(b, this);
+      b = _eval(b, this);
       if (!(a != b)) return false;
     }
     return true;
@@ -480,7 +476,7 @@ function Jisp(lispOpts = {}) {
   function neq(a, ...rest) {  // all not equal to first
     if (rest.length === 0) return false;
     for (let b of rest) {
-      b = lispEval(b, this);
+      b = _eval(b, this);
       if (!(a !== b)) return false;
     }
     return true;
@@ -506,8 +502,8 @@ function Jisp(lispOpts = {}) {
   function and(...args) {
     let a = true;
     for (a of args) {
-      a = lispEval(b, this);
-      if (!lispToBool(a)) return a;
+      a = _eval(b, this);
+      if (!_bool(a)) return a;
     }
     return a;
   }
@@ -516,27 +512,20 @@ function Jisp(lispOpts = {}) {
   function or(...args) {
     let a = false;
     for (a of args) {
-      a = lispEval(b, this);
-      if (lispToBool(a)) return a;
+      a = _eval(b, this);
+      if (_bool(a)) return a;
     }
     return a;
   }
 
-  defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3 }, "if");
-  function ifelse(predicate, trueBlock, falseBlock) {
-    let res;
-    if (lispToBool(predicate))
-      res = lispEval(trueBlock, this);
-    else
-      res = lispEval(falseBlock, this);
-    return res;
-  }
+  defineGlobalSymbol("?",
+    (p, t, f) => _bool(p) ? _eval(t) : _eval(f), { evalArgs: 1, lift: 3 }, "if");
 
   // (begin form1 form2 ...)
   defineGlobalSymbol("begin", begin, { evalArgs: 0 });function begin(...forms) {
     let res = NIL;
     for (let form of forms)
-      res = lispEval(form, this);
+      res = _eval(form, this);
     return res;
   }
 
@@ -545,7 +534,7 @@ function Jisp(lispOpts = {}) {
   function prog1(...forms) {
     let res = NIL, first = true;
     for (let form of forms) {
-      let val = lispEval(form, this);
+      let val = _eval(form, this);
       if (first)
         res = val;
       first = false;
@@ -560,11 +549,11 @@ function Jisp(lispOpts = {}) {
       if (!(typeof clause === 'object' && clause[IS_CONS]))
         throw new EvalError(`Bad clause in "cond" ${lispToString(clause)}`);
       let pe = clause.car, forms = clause.cdr;
-      let evaled = lispEval(pe, this);
-      if (lispToBool(evaled)) {
+      let evaled = _eval(pe, this);
+      if (_bool(evaled)) {
         let res = NIL;
         while (typeof forms === 'object' && forms[IS_CONS]) {
-          res = lispEval(forms.car, this);
+          res = _eval(forms.car, this);
           forms = forms.cdr;
         }
         return res;
@@ -590,7 +579,7 @@ function Jisp(lispOpts = {}) {
   defineGlobalSymbol("require", _require);
   function _require(path, force) {
     let sym = Atom(`*${path}-loaded*`);
-    if (lispToBool(force) || !lispToBool(resolveSymbol(sym, GlobalScope))) {
+    if (_bool(force) || !_bool(resolveSymbol(sym, GlobalScope))) {
       try {
         // todo: For now, nodejs-specific
         const fs = require('fs');
@@ -778,7 +767,7 @@ function Jisp(lispOpts = {}) {
         throw new EvalError(`Bad binding ${lispToString(binding)}`);
       let val = NIL;
       while (typeof bindingForms === 'object' && bindingForms[IS_CONS]) {
-        val = lispEval(bindingForms.car, scope);
+        val = _eval(bindingForms.car, scope);
         bindingForms = bindingForms.cdr;
       }
       env.set(boundVar, val);
@@ -786,7 +775,7 @@ function Jisp(lispOpts = {}) {
     }
     let res = NIL;
     while (typeof forms === 'object' && forms[IS_CONS]) {
-      res = lispEval(forms.car, scope);
+      res = _eval(forms.car, scope);
       forms = forms.cdr;
     }
     return res;
@@ -895,7 +884,7 @@ function Jisp(lispOpts = {}) {
   function lambda(lambdaForm) {
     let scope = this;
     let closure = function closure(args) {
-      return lispEval(cons(cons(LAMBDA_ATOM, lambdaForm), args), scope);
+      return _eval(cons(cons(LAMBDA_ATOM, lambdaForm), args), scope);
     };
     closure[LIFT_ARGS] = 0;
     return closure;
@@ -906,7 +895,7 @@ function Jisp(lispOpts = {}) {
   function special_lambda(lambdaForm) {
     let scope = this;
     let closure = function closure(args) {
-      return lispEval(cons(cons(SLAMBDA_ATOM, lambdaForm), args), scope);
+      return _eval(cons(cons(SLAMBDA_ATOM, lambdaForm), args), scope);
     };
     closure[LIFT_ARGS] = 0;
     closure[EVAL_ARGS] = 0;
@@ -938,7 +927,7 @@ function Jisp(lispOpts = {}) {
     let val = NIL;
     try {
       while (typeof forms === 'object' && forms[IS_CONS]) {
-        val = lispEval(forms.car, this);
+        val = _eval(forms.car, this);
         forms = forms.cdr;
       }
     } catch (e) {
@@ -970,7 +959,7 @@ function Jisp(lispOpts = {}) {
     let val = NIL;
     try {
       while (typeof forms === 'object' && forms[IS_CONS]) {
-        val = lispEval(forms.car, this);
+        val = _eval(forms.car, this);
         forms = forms.cdr;
       }
     } catch (e) {
@@ -980,7 +969,7 @@ function Jisp(lispOpts = {}) {
         let scope = new Scope(env, this);
         env.set(catchVar, e);
         while (typeof catchForms === 'object' && catchForms[IS_CONS]) {
-          val = lispEval(catchForms.car, scope);
+          val = _eval(catchForms.car, scope);
           catchForms = catchForms.cdr;
         }
       } else {
@@ -999,7 +988,7 @@ function Jisp(lispOpts = {}) {
       let args = variable.cdr;
       value = list(LAMBDA_ATOM, args, value);
     } else {
-      value = lispEval(value, this); // XXX is this right?
+      value = _eval(value, this); // XXX is this right?
     }
     if (typeof name === 'string') name = Atom(name);
     if (typeof name !== 'symbol')
@@ -1012,7 +1001,7 @@ function Jisp(lispOpts = {}) {
   // This is where the magic happens
   //
 
-  function lispEval(expr, scope = GlobalScope) {
+  function _eval(expr, scope = GlobalScope) {
     if (expr === NIL) return expr;
     if (typeof expr === 'symbol') {
       let val = resolveSymbol(expr, scope);
@@ -1023,8 +1012,8 @@ function Jisp(lispOpts = {}) {
       let fn = expr.car, args = expr.cdr;
       if (typeof fn !== 'function' &&
           !(typeof fn === 'object' && fn[IS_CONS] && (fn.car === LAMBDA_ATOM || fn.car === SLAMBDA_ATOM)))
-        fn = lispEval(fn, scope);
-      return lispApply(fn, args, scope);
+        fn = _eval(fn, scope);
+      return _apply(fn, args, scope);
     }
     // Experimental special eval for JS arrays and objects:
     //   Values that are evaluable are expanded and placed in
@@ -1034,14 +1023,14 @@ function Jisp(lispOpts = {}) {
       if (expr instanceof Array) {
         let res = [];
         for (let item of expr) {
-          let val = lispEval(item, scope);
+          let val = _eval(item, scope);
           res.push(val);
         }
         return res;
       } else {
         let res = {};
         for (let [key, value] of Object.entries(expr)) {
-          let val = lispEval(value, scope);
+          let val = _eval(value, scope);
           res[key] = val;
         }
         return res;
@@ -1049,9 +1038,9 @@ function Jisp(lispOpts = {}) {
     }
     return expr;
   }
-  exportDefinition("eval", lispEval);
+  exportDefinition("eval", _eval);
 
-  function lispApply(fn, args, scope) {
+  function _apply(fn, args, scope) {
     if (typeof fn === 'function') {
       let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
       if (evalCount > 0)
@@ -1102,7 +1091,7 @@ function Jisp(lispOpts = {}) {
           throw new EvalError(`Bad parameter list ${lispToString(origFormalParams)}`);
         let res = NIL;
         while (typeof forms === 'object' && forms[IS_CONS]) {
-          res = lispEval(forms.car, scope);
+          res = _eval(forms.car, scope);
           forms = forms.cdr;
         }
         return res;
@@ -1110,7 +1099,7 @@ function Jisp(lispOpts = {}) {
     }
     throw new EvalError(`Can't apply ${fn}`);
   }
-  exportDefinition("apply", lispApply);
+  exportDefinition("apply", _apply);
 
   function resolveSymbol(sym, scope) {
     while (scope !== NIL) {
@@ -1127,7 +1116,7 @@ function Jisp(lispOpts = {}) {
     let argv = [];
     let reverse = NIL;
     while (evalCount > 0 && typeof args === 'object' && args[IS_CONS]) {
-      argv.push(lispEval(args.car, scope));
+      argv.push(_eval(args.car, scope));
       args = args.cdr;
       evalCount -= 1;
     }
@@ -1893,7 +1882,7 @@ function Jisp(lispOpts = {}) {
       try {
         let expr = parseSExpr(tokenGenerator, { ...opts, replHints });
         if (!expr) continue;
-        let evaluated = lispEval(expr);
+        let evaluated = _eval(expr);
         print (evaluated);
       } catch (error) {
         if (error instanceof LispError)
