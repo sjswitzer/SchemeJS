@@ -7,7 +7,6 @@
 //
 
 "use strict";
-
 // TODO: make this a JS module
 
 //
@@ -1114,7 +1113,7 @@ function Jisp(lispOpts = {}) {
   exportDefinition("apply", lispApply);
 
   function resolveSymbol(sym, scope) {
-    while (typeof scope === 'object' && scope[IS_CONS]) {
+    while (scope !== NIL) {
       let val = scope.env.get(sym);
       if (val !== undefined)
         return val;
@@ -1297,13 +1296,13 @@ function Jisp(lispOpts = {}) {
   //
   // S-epression parser
   //
-  const TOKS = {}, DIGITS = {}, ALPHA = {}, IDENT1 = {}, IDENT2 = {},
+  const TOKS = {}, DIGITS = {}, IDENT1 = {}, IDENT2 = {},
       NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {}, WSNL = {}, JSIDENT = {};
   for (let ch of `()[]{},':`) TOKS[ch] = true;
   for (let ch of ` \t`) WS[ch] = WSNL[ch] = true;
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = true;
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
-    ALPHA[ch] = IDENT1[ch] = IDENT2[ch] = JSIDENT[ch] = true;
+    IDENT1[ch] = IDENT2[ch] = JSIDENT[ch] = true;
   for (let ch of `0123456789`)
     DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = true;
   for (let ch of `+-.`)
