@@ -198,18 +198,10 @@ function Jisp(lispOpts = {}) {
 
   //
   // An environment is simply a Map.
-  // A Scope is a effextively list of environments
+  // A Scope is a list of environments.
   //
   const Env = Map;
-  class Scope {
-    env; next;
-    constructor(env, next) {
-      this.env = env;
-      this.next = next;
-      Object.freeze(this);
-    }
-  }
-
+  const Scope = Cons;
   const GlobalEnv = new Env;
   const GlobalScope = new Scope(GlobalEnv, NIL);
   const EVAL_ARGS = Symbol("*lisp-eval-args*");
@@ -300,6 +292,9 @@ function Jisp(lispOpts = {}) {
       expr = parseSExpr(expr);
     return _eval(expr, scope);
   }
+  exportDefinition("eval", function callEval(expr, scope = GlobalScope) {
+    eval_defn.call(scope, expr);
+  });
 
   defineGlobalSymbol("apply", apply_defn, { lift: 2 });
   function apply_defn(fn, args, rest) {
@@ -518,8 +513,8 @@ function Jisp(lispOpts = {}) {
     return a;
   }
 
-  defineGlobalSymbol("?",
-    (p, t, f) => _bool(p) ? _eval(t) : _eval(f), { evalArgs: 1, lift: 3 }, "if");
+  defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3 }, "if");
+  function ifelse(p, t, f) { return _bool(p) ? _eval(t, this) : _eval(f, this); }
 
   // (begin form1 form2 ...)
   defineGlobalSymbol("begin", begin, { evalArgs: 0 });function begin(...forms) {
@@ -600,6 +595,7 @@ function Jisp(lispOpts = {}) {
     }
     return sym;
   }
+  exportDefinition("require", _require);
 
   defineGlobalSymbol("append", (...args) => {
     let res = NIL;
@@ -881,22 +877,19 @@ function Jisp(lispOpts = {}) {
 
   // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
-  function lambda(lambdaForm) {
+  function lambda(form) {
     let scope = this;
-    let closure = function closure(args) {
-      return _eval(cons(cons(LAMBDA_ATOM, lambdaForm), args), scope);
-    };
+    // This looks pretty when printed by Lisp!
+    let closure = args => _apply(cons(LAMBDA_ATOM, form), args, scope);
     closure[LIFT_ARGS] = 0;
     return closure;
   }
 
   // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0, lift: 0 });
-  function special_lambda(lambdaForm) {
+  function special_lambda(form) {
     let scope = this;
-    let closure = function closure(args) {
-      return _eval(cons(cons(SLAMBDA_ATOM, lambdaForm), args), scope);
-    };
+    let closure = args => _apply(cons(SLAMBDA_ATOM, form), args, scope);
     closure[LIFT_ARGS] = 0;
     closure[EVAL_ARGS] = 0;
     return closure;
@@ -988,12 +981,12 @@ function Jisp(lispOpts = {}) {
       let args = variable.cdr;
       value = list(LAMBDA_ATOM, args, value);
     } else {
-      value = _eval(value, this); // XXX is this right?
+      value = _eval(value, this);
     }
     if (typeof name === 'string') name = Atom(name);
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
-    GlobalScope.env.set(name, value);  // Or should it be our scope? That would be weird.
+    GlobalScope.car.set(name, value);  // Or should it be our scope? That would be weird.
     return name;
   }
 
@@ -1018,7 +1011,7 @@ function Jisp(lispOpts = {}) {
     // Experimental special eval for JS arrays and objects:
     //   Values that are evaluable are expanded and placed in
     //   a new Object or Array in correspoding position.
-    // XXX Investigate Symbol.species
+    // XXX Investigate Symbol.species (also for mapcar, etc.)
     if (typeof expr === 'object') {
       if (expr instanceof Array) {
         let res = [];
@@ -1038,7 +1031,6 @@ function Jisp(lispOpts = {}) {
     }
     return expr;
   }
-  exportDefinition("eval", _eval);
 
   function _apply(fn, args, scope) {
     if (typeof fn === 'function') {
@@ -1102,11 +1094,11 @@ function Jisp(lispOpts = {}) {
   exportDefinition("apply", _apply);
 
   function resolveSymbol(sym, scope) {
-    while (scope !== NIL) {
-      let val = scope.env.get(sym);
+    while (typeof scope === 'object' && scope[IS_CONS]) {
+      let val = scope.car.get(sym);
       if (val !== undefined)
         return val;
-      scope = scope.next;
+      scope = scope.cdr;
     }
     return undefined;
   }
@@ -1769,7 +1761,7 @@ function Jisp(lispOpts = {}) {
     console.log('TEST', analyzeJSFunction(function (...rest) { return a; }));
   }
 
-  function compileLambda(expr, contaniingScope) {
+  function compileLambda(expr, contaningScope) {
     let args, body, _tvar = 0;
     function newTvar() { return `t$(_tvar++})` }
     function emit(fn, args) { // => tvar
@@ -1797,7 +1789,7 @@ function Jisp(lispOpts = {}) {
           if (params === NIL || (typeof params === 'object' && params[IS_CONS])) {
             if (forms === NIL || (typeof forms === 'object' && forms[IS_CONS])) {
               // We've got something to work with here
-              let env = new Env, scope = new Scope(env, contaniingScope);
+              let env = new Env, scope = new Scope(env, contaningScope);
               while (typeof params === 'object' && params[IS_CONS]) {
                 let param = params.car, jsVar = toJSvariable(param);
                 env.put(param, jsVar);
@@ -1895,8 +1887,6 @@ function Jisp(lispOpts = {}) {
   exportDefinition("REPL", lispREPL);
 } // End of Jisp class/function
 
-let lisp = Jisp({ sanityTest: true });
-
 if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
   let fs = require('fs');
   let inputFd, closeFd, oldRawMode;
@@ -1913,6 +1903,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
     } catch(e) {
       console.info("Can't open termnal", e);
+      Jisp({ sanityTest: true });  // XXX silly debugging hack
     }
     if (inputFd !== undefined) {
       console.log(`Jisp 1.1 REPL. Type "." to exit.`);
@@ -1925,6 +1916,9 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
           line = line.substr(0, line.length-1);
         return line;
       }
+      let lisp = Jisp();
+      // getLine("Attach debugger and hit return! ");  // uncomment to do what it says
+      lisp.eval('(define (test) (require "test.scm" true))');
       lisp.REPL(getLine);
     }
   } finally {
