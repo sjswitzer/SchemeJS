@@ -1627,18 +1627,147 @@ function Jisp(lispOpts = {}) {
     return res;
   }
 
-  function analyzeJSFunction(fn) {
-    // Super Shitty passer. It only has to recoginze things that fn.toSting() can return.
+  function analyzeJSFunction(fn, result, args) {
+    // Super janky passer. It only has to recoginze things that fn.toSting() can return.
     // So it takes a LOT of shortcuts that would never be sensible for arbitrary input strings.
-    let str = fn.toString(), pos = 0, tokPos = 0, token = "";
+    let str = fn.toString(), pos = 0, token = "";
+    let functionName, params = [], restParam, resultVal, body;
+    if (sanityTest) console.log('TEST analyzeJSFunction', str, result, args);
+    nextToken();
+    if (token === 'function') {
+      nextToken();
+      if (token !== '(') {
+        functionName = token;
+        nextToken();
+      }
+      if (token !== '(')
+        return {};
+      nextToken();
+      for (;;) {
+        if (token === "...") {
+          nextToken();
+          restParam = token;
+          nextToken()
+        } else {
+          params.push(token);
+          nextToken();
+        }
+        if (token === ')') {
+          nextToken();
+          break;
+        }
+        if (token !== ",")
+          return {};
+        nextToken();
+      }
+      if (token === '{') {
+        while (WSNL[str[pos]]) ++pos;
+        let bodyPos = pos, returnPos = bodyPos;
+        while (token && token !== 'return') {
+          returnPos = pos;
+          nextToken();
+        }
+        if (token === "return") {
+          // If there's a return, it has to be followed by a variable,
+          // an optional semicolon, an "}", and NOTHING FURTHER.
+          // We capture the name of the return variable and clip the body
+          // prior to the return.
+          nextToken();
+          resultVal = token;
+          nextToken();
+          while (token === ';') nextToken();
+          if (token !== '}')
+            return {};
+          nextToken();
+          if (token !== "")
+            return {};
+          body = str.substring(bodyPos, returnPos);
+        }
+      }
+    } else {
+      if (token === '(') {
+        nextToken();
+        for (;;) {
+          if (token === "...") {
+            nextToken();
+            restParam = token;
+            nextToken();
+          } else {
+            params.push(token);
+            nextToken();
+          }
+          if (token === ')') {
+            nextToken();
+            break;
+          }
+          if (token !== ",")
+            return {};
+          nextToken();
+        }
+      } else {
+        params.push(token);
+        nextToken();
+      }
+      if (!(token === '=>'))
+        return {};
+      while (WSNL[str[pos]]) ++pos;
+      resultVal = str.substr(pos);
+    }
+    if (!resultVal)
+      return {};
+
+    /*
+      let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
+      if (evalCount > 0)
+        args = evalArgs(args, scope, evalCount);
+      let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
+      let jsArgs = [], noPad = lift === MAX_SMALL_INTEGER;
+      while (lift > 0) {
+        // Promote "lift" arguments to JS arguments, filling with NIL
+        if (typeof args === 'object' && args[IS_CONS]) {
+          jsArgs.push(args.car);
+          args = args.cdr;
+        } else {
+          // don't let cons, etc, be seeing any undefined parmaters
+          if (noPad) // but not infinitely many of them!
+            break;
+          jsArgs.push(NIL);
+        }
+        --lift;
+      }
+      if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
+        jsArgs.push(args);
+      return fn.apply(scope, jsArgs);  // "this" is the scope!
+    */
+    if (sanityTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
+    let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
+    let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
+
+    let decompiled = `let ${result}; {${functionName ? "// " + functionName : ""}\n`;
+    let paramsCopy = [...params], argsCopy = [...args];
+    while (lift > 0 && paramsCopy.length > 0) {
+      let param = paramsCopy.shift();
+      let arg = argsCopy.shift();
+      lift -= 1;
+      decompiled += `let ${param} = ${arg};\n`
+    }
+    if (restParam) {
+      // ???
+    }
+      
+    if (body)
+      decompiled += `${body}\n`;
+    decompiled += `${result} = ${resultVal};\n}\n`
+    if (sanityTest) console.log("TEST analyzeJSFunction (decompiled)", decompiled);
+    return { result, name: functionName, params, restParam, body, decompiled, fn };
+
     function nextToken() {
-      // Super Shitty tokenizer.
+      // Super janky tokenizer.
       // Most of what it returns is garbage, but it returns anything we actually care about.
       // The assumption is that what JS returns is well-formed, so it takes a lot of liberties.
       if (pos >= str.length) return token = "";
       let ch = str[pos]; // ch is always str[pos]
       while (WSNL[ch]) ch = str[++pos];
-      tokPos = pos;
       if (JSIDENT[ch]) {
         let tok = ch;
         ch = str[++pos];
@@ -1668,98 +1797,26 @@ function Jisp(lispOpts = {}) {
       }
       return token = str[pos++];
     }
-    nextToken();
-    let params =[], restParam = false;
-    if (token === 'function') {
-      let returnPos, returnName;
-      nextToken();
-      let name;
-      if (token !== '(') {
-        name = token;
-        nextToken();
-      }
-      if (!token === '(') return {};
-      nextToken();
-      for (;;) {
-        if (token === "...") {
-          restParam = true
-          nextToken();
-        }
-        params.push(token);
-        nextToken();
-        if (token === ')') {
-          nextToken();
-          break;
-        }
-        if (token !== ",") return {};
-        nextToken();
-      }
-      if (token !== '{') {
-        while (WSNL[str[pos]]) ++pos;
-        let bodyPos = pos;
-        while (token && token !== 'return') nextToken();
-        let clipPos = tokPos;
-        if (token === "return") {
-          // If there's a return, it has to be followed by a variable,
-          // an optional semicolon, an "}", nothing further.
-          // We capture the name of the return variable and clip the body
-          // prior to the return.
-          nextToken();
-          returnName = token;
-          nextToken();
-          while (token === ';') nextToken();
-          if (token !== '}') return {};
-          nextToken();
-          if (token !== "") return {};
-          let body = str.substring(bodyPos, clipPos);
-          return { params, restParam, body };
-        }
-      }
-      return {};
-    }
-    if (token === '(') {
-      nextToken();
-      for (;;) {
-        if (token === "...") {
-          nextToken();
-          restParam = true;
-        }
-        params.push(token);
-        nextToken();
-        if (token === ')') {
-          nextToken();
-          break;
-        }
-        if (token !== ",") return {};
-        nextToken();
-      }
-    } else {
-      params.push(token);
-      nextToken();
-    }
-    if (!(token === '=>')) return {};
-    while (WSNL[str[pos]]) ++pos;
-    let body = str.substr(pos);
-    return { params, restParam, body };
   }
  
   if (sanityTest) {
-    console.log('TEST', analyzeJSFunction(x => x * x));
-    console.log('TEST', analyzeJSFunction((x) => x * x));
-    console.log('TEST', analyzeJSFunction((x, y) => x * y));
-    console.log('TEST', analyzeJSFunction((x, ...y) => x * y));
-    console.log('TEST', analyzeJSFunction((x, y, ...z) => x * y));
-    console.log('TEST', analyzeJSFunction((...x) => x * x));
-    console.log('TEST', analyzeJSFunction(function (a) { return a; }));
-    console.log('TEST', analyzeJSFunction(function (a, b, c) { return a; }));
-    console.log('TEST', analyzeJSFunction(function name(a) { return a; }));
-    console.log('TEST', analyzeJSFunction(function name(a, b, c) { return a; }));
-    console.log('TEST', analyzeJSFunction(function (a, ...rest) { return a; }));
-    console.log('TEST', analyzeJSFunction(function (a, b, c, ...rest) { return a; }));
-    console.log('TEST', analyzeJSFunction(function name(a, ...rest) { return a; }));
-    console.log('TEST', analyzeJSFunction(function name(a, b, c, ...rest) { return a; }));
-    console.log('TEST', analyzeJSFunction(function name(...rest) { return a; }));
-    console.log('TEST', analyzeJSFunction(function (...rest) { return a; }));
+    let resultTmp = "tmp$15", args = ["tmp$1", "tmp$4", "tmp$3", "tmp$7"];
+    analyzeJSFunction(x => x * x, resultTmp, args);
+    analyzeJSFunction((x) => x * x, resultTmp, args);
+    analyzeJSFunction((x, y) => x * y, resultTmp, args);
+    analyzeJSFunction((x, ...y) => x * y, resultTmp, args);
+    analyzeJSFunction((x, y, ...z) => x * y, resultTmp, args);
+    analyzeJSFunction((...x) => x * x, resultTmp, args);
+    analyzeJSFunction(function (a) { a = 2 * a; return a; }, resultTmp, args);
+    analyzeJSFunction(function (a, b, c) { a = 2 * a; return a; }, resultTmp, args);
+    analyzeJSFunction(function someFunction(a) { a = 2 * a; return a; }, resultTmp, args);
+    analyzeJSFunction(function someFunction(a, b, c) { a = 2 * a; return a; }, resultTmp, args);
+    analyzeJSFunction(function (a, ...rest) { return a; }, resultTmp, args);
+    analyzeJSFunction(function (a, b, c, ...rest) { return a; }, resultTmp, args);
+    analyzeJSFunction(function someFunction(a, ...rest) { return a; }, resultTmp, args);
+    analyzeJSFunction(function someFunction(a, b, c, ...rest) { return a; }, resultTmp, args);
+    analyzeJSFunction(function someFunction(...rest) { return a; }, resultTmp, args);
+    analyzeJSFunction(function (...rest) { return a; }, resultTmp, args);
   }
 
   function compileLambda(expr, contaningScope) {
@@ -1818,6 +1875,7 @@ function Jisp(lispOpts = {}) {
   };
 
   function toJSvariable(name) {
+    if (sanityTest) console.log(toJSvariable)
     let newName = "", fragment = "";
     for (let ch of name) {
       if (JS_IDENT_REPLACEMENTS[ch]) {
@@ -1832,16 +1890,17 @@ function Jisp(lispOpts = {}) {
       }
     }
     newName += fragment;
+    if (sanityTest) console.log("TEST toJSvariable", name, newName);
     return newName;
   }
 
   if (sanityTest) {
-    console.log("TEST", toJSvariable("aNormal_name0234"));
-    console.log("TEST", toJSvariable("aname%with&/specialChars?"));
-    console.log("TEST", toJSvariable("_begins_with_underscore"));
-    console.log("TEST", toJSvariable("number?"));
-    console.log("TEST", toJSvariable("&&"));
-    console.log("TEST", toJSvariable("?"));
+    toJSvariable("aNormal_name0234");
+    toJSvariable("aname%with&/specialChars?");
+    toJSvariable("_begins_with_underscore");
+    toJSvariable("number?");
+    toJSvariable("&&");
+    toJSvariable("?");
   }
 
   function lispREPL(readline, opts = {}) {
