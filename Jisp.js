@@ -13,14 +13,65 @@
 // Creates a Lisp instance, independent of any others
 //
 function Jisp(lispOpts = {}) {
-  if (new.target === undefined) return new Jisp(lispOpts);
   let sanityTest = lispOpts.sanityTest;
+
+  const IS_CONS = Symbol("*lisp-isCons*");
+
+  class Cons {
+    // Creating a Cons should be as cheap as possible, so no subclassing
+    // or calls to super. This means that identifying the "class" of Cons
+    // cells can't use "instanceof AbstractCons".
+    constructor(car, cdr) {
+      this.car = car;
+      this.cdr = cdr;
+    }
+    toString() {
+      return lispToString(this);
+    }
+    *[Symbol.iterator]() { return { next: nextCons, _current: this } }
+  }
+  // There should be a way to do this in the class decl, but not in ES6
+  Cons.prototype[IS_CONS] = true;
+
+  // A word about testing for Cons cells. The idiom is
+  //    typeof obj === 'object' && obj[IS_CONS]
+  // The typeof check is basically free since the JIT always knows the type
+  // of an object. And fetching properties is something the optimizer makes
+  // as fast as possible. It's probably even as fast as or faster than "instanceof".
+  // This should probebly be a function, but oddly enough
+  // I don't want to trust the compiler to inline it.
+  //
+  // Beware when traversing lists. Things purported to be lists might not be
+  // and although lists are conventionally NIL-terminated, the final "cdr"
+  // could be anything at all.
+
+  // Hide the Nil class because there's never any reason to
+  // reference it or instantiate it it more than once. Having it visible
+  // just invites errors. But it's good to have a distinct class for NIL
+  // for various reasons including that it looks better in a JS debugger.
+  const NIL = new (class Nil {
+    constructor() {
+      Object.freeze(this);
+    }
+    *[Symbol.iterator]() { return { next: () => ({ done: true, value: null }) } }
+  });
+
+  //
+  // An environment is simply a Map.
+  // A Scope is a list of environments.
+  //
+  const Env = Map;
+  const Scope = Cons;
+  const GlobalEnv = new Env;
+  const GlobalScope = new Scope(GlobalEnv, NIL);
 
   //
   // Encapsulating everything in a function scope because JITs
   // can resolve scoped references most easily.
+  // Since most functions expect "this" to be a scope, a Lisp instance
+  // is the global scope itself!
   //
-  const exportDefinition = (name, value) => this[name] = value;
+  const exportDefinition = (name, value) => GlobalScope[name] = value;
 
   class LispError extends Error {};
   LispError.prototype.name = "LispError";
@@ -76,48 +127,7 @@ function Jisp(lispOpts = {}) {
 
   const LAMBDA_ATOM = AliasAtom("lambda", "\\", "\u03BB");
   const SLAMBDA_ATOM = AliasAtom("special-lambda", "\\\\", "\u03BB");
-  const IS_CONS = Symbol("*lisp-isCons*");
-
-  class Cons {
-    // Creating a Cons should be as cheap as possible, so no subclassing
-    // or calls to super. This means that identifying the "class" of Cons
-    // cells can't use "instanceof AbstractCons".
-    constructor(car, cdr) {
-      this.car = car;
-      this.cdr = cdr;
-    }
-    toString() {
-      return lispToString(this);
-    }
-    *[Symbol.iterator]() { return { next: nextCons, _current: this } }
-  }
-  // There should be a way to do this in the class decl, but not in ES6
-  Cons.prototype[IS_CONS] = true;
-
-  // A word about testing for Cons cells. The idiom is
-  //    typeof obj === 'object' && obj[IS_CONS]
-  // The typeof check is basically free since the JIT always knows the type
-  // of an object. And fetching properties is something the optimizer makes
-  // as fast as possible. It's probably even as fast as or faster than "instanceof".
-  // This should probebly be a function, but oddly enough
-  // I don't want to trust the compiler to inline it.
-  //
-  // Beware when traversing lists. Things purported to be lists might not be
-  // and although lists are conventionally NIL-terminated, the final "cdr"
-  // could be anything at all.
-
-  // Hide the Nil class because there's never any reason to
-  // reference it or instantiate it it more than once. Having it visible
-  // just invites errors. But it's good to have a distinct class for NIL
-  // for various reasons including that it looks better in a JS debugger.
-  const NIL = new (class Nil {
-    constructor() {
-      Object.freeze(this);
-    }
-    *[Symbol.iterator]() { return { next: () => ({ done: true, value: null }) } }
-  });
-  exportDefinition("NIL", NIL);
-
+  
   function nextCons() {
     let current = this._current, done = current === NIL, value = undefined;
     if (!done) {
@@ -127,7 +137,7 @@ function Jisp(lispOpts = {}) {
     return { done, value };
   }
 
-// Just a sketch of lazy evaluation.
+  // Just a sketch of lazy evaluation.
   class LazyCarCons {
     // User inplements "get car()" in a subclass and ideally seals the object
     cdr;
@@ -183,10 +193,11 @@ function Jisp(lispOpts = {}) {
   const cddar = cons => cons.car.cdr.cdr;
   const cdddr = cons => cons.cdr.cdr.cdr;
   const cddr = cons => cons.cdr.cdr;
-  exportDefinition("cons", cons);
-  exportDefinition("isCons", obj => typeof obj === 'object' && obj[IS_CONS]);
-  exportDefinition("car", car);
-  exportDefinition("cdr", cdr);
+  exportDefinition("Cons", cons);
+  exportDefinition("IsCons", obj => typeof obj === 'object' && obj[IS_CONS]);
+  exportDefinition("NIL", NIL);
+  exportDefinition("Car", car);  // IMPORTANT: Don't smash the scope's "car" and "cdr" members!
+  exportDefinition("Cdr", cdr);
 
   function list(...elements) {  // easy list builder
     let val = NIL;
@@ -196,14 +207,6 @@ function Jisp(lispOpts = {}) {
   }
   exportDefinition("list", list);
 
-  //
-  // An environment is simply a Map.
-  // A Scope is a list of environments.
-  //
-  const Env = Map;
-  const Scope = Cons;
-  const GlobalEnv = new Env;
-  const GlobalScope = new Scope(GlobalEnv, NIL);
   const EVAL_ARGS = Symbol("*lisp-eval-args*");
   const LIFT_ARGS = Symbol("*lisp-lift-args*");
   const MAX_SMALL_INTEGER = 2**30-1;
@@ -292,9 +295,7 @@ function Jisp(lispOpts = {}) {
       expr = parseSExpr(expr);
     return _eval(expr, scope);
   }
-  exportDefinition("eval", function callEval(expr, scope = GlobalScope) {
-    eval_defn.call(scope, expr);
-  });
+  exportDefinition("eval", eval_defn);
 
   defineGlobalSymbol("apply", apply_defn, { lift: 2 });
   function apply_defn(fn, args, rest) {
@@ -1885,7 +1886,9 @@ function Jisp(lispOpts = {}) {
     }
   }
   exportDefinition("REPL", lispREPL);
-} // End of Jisp class/function
+
+  return GlobalScope;
+} // Whew!
 
 if (typeof window === 'undefined' && typeof process !== 'undefined') { // Running under node.js
   let fs = require('fs');
