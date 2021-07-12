@@ -177,7 +177,7 @@ function newLisp(lispOpts = {}) {
   function _bool(val) {
     // Give priority here to actual true and false values
     if (val === true) return true;
-    if (val === false || val === NIL || val === undefined || val === null)
+    if (val === false || val === NIL || val == null) // The val == null is _intended_ as a nullish test
       return false;
     return true;
   }
@@ -227,6 +227,7 @@ function newLisp(lispOpts = {}) {
       // Always set these props because JITs are more likely to optimize found props than unfound ones.
       val[EVAL_ARGS] = opts.evalArgs ?? MAX_SMALL_INTEGER;;
       val[LIFT_ARGS] = opts.lift ?? MAX_SMALL_INTEGER;
+      // XXX TODO: make sure that every defn with EVAL_ARGS !== MAX_SMALL_INTEGER has a compile hook.
       if (opts.compileHook) val[COMPILE_HOOK] = opts.compileHook;
     }
     let atom = typeof name === 'symbol' ? name : Atom(String(name));
@@ -523,7 +524,8 @@ function newLisp(lispOpts = {}) {
     return a;
   }
 
-  defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3 }, "if");
+  // XXX TODO: What happens if more that 3 args?
+  defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3, compileHook: ifelseHook }, "if");
   function ifelse(p, t, f) { return _bool(p) ? _eval(t, this) : _eval(f, this); }
 
   // (begin form1 form2 ...)
@@ -1899,8 +1901,8 @@ function newLisp(lispOpts = {}) {
   
   const JS_IDENT_REPLACEMENTS  = {
     '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
-    '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$minus', '=': '$eq', '<': '$lt', '>': '$gt',
-    '/': '$stroke', '\\': '$backstroke', '?': '$if'
+    '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$minus', '=': '$eq', '<': '$lt',
+    '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$wut'
   };
 
   function toJSvariable(name) {
@@ -1914,7 +1916,7 @@ function newLisp(lispOpts = {}) {
         fragment += ch;
       } else {
         newName += fragment + '$x' + ch.codePointAt(0).toString(16);
-        fragment = "";5
+        fragment = "";
       }
     }
     newName += fragment;
@@ -1929,6 +1931,23 @@ function newLisp(lispOpts = {}) {
     toJSvariable("number?");
     toJSvariable("&&");
     toJSvariable("?");
+  }
+
+  function ifelseHook(args, scope, newTemp) {
+    if (args.length < 3) return {}; // XXX what happens when more than 3?
+    let emit = "";
+    let { val: p, emit: emitted } = compileEval(args[0], scope, newTemp);
+    if (!p) return {};
+    emit += emitted;
+    let val = newTemp();
+    emit += `let ${val};\nif (${p} === true || !(${p} === false || ${p} === NIL || ${p} == null)) {\n`;
+    let { val: tval, emit: t_emitted } = compileEval(args[1], scope, newTemp);
+    if (!tval) return {};
+    emit += t_emitted + `${val} = ${tval};\n} else {\n`;
+    let { val: fval, emit: f_emitted } = compileEval(args[2], scope, newTemp);
+    if (!fval) return {};
+    emit += f_emitted + `${val} = ${fval};\n}\n`;
+    return { val, emit };
   }
 
   function lispREPL(readline, opts = {}) {

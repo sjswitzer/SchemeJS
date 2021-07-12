@@ -8,6 +8,8 @@
 
 (factoral 100)
 (factoral 100n)
+(factoral 200)
+(factoral 200n)
 
 (begin (+ 1 2 3 4) (* 1 2 3 4))
 (prog1 (+ 1 2 3 4) (* 1 2 3 4))
