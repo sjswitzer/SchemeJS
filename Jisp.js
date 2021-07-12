@@ -16,6 +16,7 @@
 //
 function newLisp(lispOpts = {}) {
   let sanityTest = lispOpts.sanityTest;
+  let readFile = lispOpts.readFile;
 
   // Creating a Cons should be as cheap as possible, so no subclassing
   // or calls to super. But I want people to be able to define their
@@ -345,8 +346,7 @@ function newLisp(lispOpts = {}) {
   //
   // Variable args definitions
   //
-  defineGlobalSymbol("+", (...a) => add(...a), "add");  // Hide the function body from String(fn)
-  function add(...args) {
+  defineGlobalSymbol("+", (...args) => {
     let a = 0, first = true;
     for (let b of args) {
       if (first) {
@@ -359,18 +359,16 @@ function newLisp(lispOpts = {}) {
       a += b;
     }
     return a;
-  }
+  }, "add");
 
-  defineGlobalSymbol("-", (...a) => sub(...a), "sub");
-  function sub (a, ...rest) {
+  defineGlobalSymbol("-", (a, ...rest) => {
     if (rest.length === 0) return -a;
     for (let b of rest)
       a -= b;
     return a;
-  }
+  }, "sub");
 
-  defineGlobalSymbol("*", (...a) => mul(...a), "mul");
-  function mul(...args) {
+  defineGlobalSymbol("*", (...args) => {
     let a = 1, first = true;
     for (let b of args) {
       if (first) {
@@ -381,7 +379,7 @@ function newLisp(lispOpts = {}) {
       a *= b;
     }
     return a;
-  }
+  }, "mul");
 
   defineGlobalSymbol('/', (a, ...rest) => {
     if (rest.length === 0) return 1/a;  // XXX ???
@@ -537,7 +535,8 @@ function newLisp(lispOpts = {}) {
   function ifelse(p, t, f) { return _bool(p) ? _eval(t, this) : _eval(f, this); }
 
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", begin, { evalArgs: 0 });function begin(...forms) {
+  defineGlobalSymbol("begin", begin, { evalArgs: 0 });
+  function begin(...forms) {
     let res = NIL;
     for (let form of forms)
       res = _eval(form, this);
@@ -582,10 +581,8 @@ function newLisp(lispOpts = {}) {
     let sym = Atom(`*${path}-loaded*`);
     if (_bool(force) || !_bool(GlobalScope[sym])) {
       try {
-        // todo: For now, nodejs-specific
-        const fs = require('fs');
-        let fileContent = fs.readFileSync(path);
-        fileContent = fileContent.toString();
+        if (!readFile) throw new EvalError("No file reader defined");
+        let fileContent = readFile(path);
         // The REPL can handle this!
         this.REPL(function readline() {
           let line = fileContent;
@@ -2030,7 +2027,12 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
           line = line.substr(0, line.length-1);
         return line;
       }
-      let lisp = newLisp();
+      function readFile(path) {
+        let fileContent = fs.readFileSync(path);
+        fileContent = fileContent.toString();
+        return fileContent;
+      }
+      let lisp = newLisp( { readFile });
       // getLine("Attach debugger and hit return! ");  // uncomment to do what it says
       lisp.eval('(define (test) (require "test.scm" true))');
       lisp.REPL(getLine);
