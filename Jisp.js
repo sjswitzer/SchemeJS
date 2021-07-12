@@ -414,114 +414,114 @@ function newLisp(lispOpts = {}) {
     return a;
   }, "bit-xor");
 
-  defineGlobalSymbol("<", lt, { evalArgs: 0, liftArgs: 0 }, "lt");
+  defineGlobalSymbol("<", lt, { evalArgs: 0, lift: 0 }, "lt");
   function lt(forms) {
-    if (!(typeof form === 'object' && form[PAIR])) return false;
-    let a = _eval(form[CAR], this);
-    form = form[CDR];
-    while ((typeof form === 'object' && form[PAIR])) {
-      let b = _eval(form[CAR], this);
+    if (!(typeof forms === 'object' && forms[PAIR])) return false;
+    let a = _eval(forms[CAR], this);
+    forms = forms[CDR];
+    while ((typeof forms === 'object' && forms[PAIR])) {
+      let b = _eval(forms[CAR], this);
       if (!(a < b)) return false;
       a = b;
-      form = form[CDR];
+      forms = forms[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("<=", le, { evalArgs: 0, liftArgs: 0 }, "le");
+  defineGlobalSymbol("<=", le, { evalArgs: 0, lift: 0 }, "le");
   function le(forms) {
-    if (!(typeof form === 'object' && form[PAIR])) return true;
-    let a = _eval(form[CAR], this);
-    form = form[CDR];
-    while ((typeof form === 'object' && form[PAIR])) {
-      let b = _eval(form[CAR], this);
+    if (!(typeof forms === 'object' && forms[PAIR])) return true;
+    let a = _eval(forms[CAR], this);
+    forms = forms[CDR];
+    while ((typeof forms === 'object' && forms[PAIR])) {
+      let b = _eval(forms[CAR], this);
       if (!(a <= b)) return false;
       a = b;
-      form = form[CDR];
+      forms = forms[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol(">", gt, { evalArgs: 0, liftArgs: 0 }, "gt");
+  defineGlobalSymbol(">", gt, { evalArgs: 0, lift: 0 }, "gt");
   function gt(forms) {
-    if (!(typeof form === 'object' && form[PAIR])) return false;
-    let a = _eval(form[CAR], this);
-    form = form[CDR];
-    while ((typeof form === 'object' && form[PAIR])) {
-      let b = _eval(form[CAR], this);
+    if (!(typeof forms === 'object' && forms[PAIR])) return false;
+    let a = _eval(forms[CAR], this);
+    forms = forms[CDR];
+    while ((typeof forms === 'object' && forms[PAIR])) {
+      let b = _eval(forms[CAR], this);
       if (!(a > b)) return false;
       a = b;
-      form = form[CDR];
+      forms = forms[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol(">=", ge, { evalArgs: 0, liftArgs: 0 }, "ge");
+  defineGlobalSymbol(">=", ge, { evalArgs: 0, lift: 0 }, "ge");
   function ge(forms) {
-    if (!(typeof form === 'object' && form[PAIR])) return true;
-    let a = _eval(form[CAR], this);
-    form = form[CDR];
-    while ((typeof form === 'object' && form[PAIR])) {
-      let b = _eval(form[CAR], this);
+    if (!(typeof forms === 'object' && forms[PAIR])) return true;
+    let a = _eval(forms[CAR], this);
+    forms = forms[CDR];
+    while ((typeof forms === 'object' && forms[PAIR])) {
+      let b = _eval(forms[CAR], this);
       if (!(a >= b)) return false;
       a = b;
-      form = form[CDR];
+      forms = forms[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 0, liftArgs: 0 }, "eq");
+  defineGlobalSymbol("==", eq, { evalArgs: 0, lift: 0 }, "eq");
   function eq(forms) {
-    if (!(typeof form === 'object' && form[PAIR])) return true;
-    let a = _eval(form[CAR], this);
-    form = form[CDR];
-    while ((typeof form === 'object' && form[PAIR])) {
-      let b = _eval(form[CAR], this);
+    if (!(typeof forms === 'object' && forms[PAIR])) return true;
+    let a = _eval(forms[CAR], this);
+    forms = forms[CDR];
+    while ((typeof forms === 'object' && forms[PAIR])) {
+      let b = _eval(forms[CAR], this);
       if (!(a == b)) return false;
       a = b;
-      form = form[CDR];
+      forms = forms[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("===", eeq, { evalArgs: 0, liftArgs: 0 }, "eq?");
+  defineGlobalSymbol("===", eeq, { evalArgs: 0, lift: 0 }, "eq?");
   function eeq(forms) {
-    if (!(typeof form === 'object' && form[PAIR])) return true;
-    let a = _eval(form[CAR], this);
-    form = form[CDR];
-    while ((typeof form === 'object' && form[PAIR])) {
-      let b = _eval(form[CAR], this);
+    if (!(typeof forms === 'object' && forms[PAIR])) return true;
+    let a = _eval(forms[CAR], this);
+    forms = forms[CDR];
+    while ((typeof forms === 'object' && forms[PAIR])) {
+      let b = _eval(forms[CAR], this);
       if (!(a === b)) return false;
       a = b;
-      form = form[CDR];
+      forms = forms[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("!=", ne, { evalArgs: 0, liftArgs: 0 }, "ne");
+  defineGlobalSymbol("!=", ne, { evalArgs: 0, lift: 0 }, "ne");
   function ne(forms) {
-    if (!(typeof form === 'object' && form[PAIR])) return false;
-    let a = _eval(form[CAR], this);
-    form = form[CDR];
-    while ((typeof form === 'object' && form[PAIR])) {
-      let b = _eval(form[CAR], this);
+    if (!(typeof forms === 'object' && forms[PAIR])) return false;
+    let a = _eval(forms[CAR], this);
+    forms = forms[CDR];
+    while ((typeof forms === 'object' && forms[PAIR])) {
+      let b = _eval(forms[CAR], this);
       if (!(a != b)) return false;
       a = b;
-      form = form[CDR];
+      forms = forms[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("!==", neq, { evalArgs: 0, liftArgs: 0 }, "neq");
+  defineGlobalSymbol("!==", neq, { evalArgs: 0, lift: 0 }, "neq");
   function neq(forms) {
-    if (!(typeof form === 'object' && form[PAIR])) return false;
-    let a = _eval(form[CAR], this);
-    form = form[CDR];
-    while ((typeof form === 'object' && form[PAIR])) {
-      let b = _eval(form[CAR], this);
+    if (!(typeof forms === 'object' && forms[PAIR])) return false;
+    let a = _eval(forms[CAR], this);
+    forms = forms[CDR];
+    while ((typeof forms === 'object' && forms[PAIR])) {
+      let b = _eval(forms[CAR], this);
       if (!(a !== b)) return false;
       a = b;
-      form = form[CDR];
+      forms = forms[CDR];
     }
     return true;
   }
@@ -542,25 +542,27 @@ function newLisp(lispOpts = {}) {
 
  // logical & conditional
 
-  defineGlobalSymbol("&&", and, { evalArgs: 0 }, "and");
-  function and(...args) {
-    let a = true;
-    for (a of args) {
-      a = _eval(b, this);
-      if (!_bool(a)) return a;
-    }
-    return a;
-  }
+ defineGlobalSymbol("&&", and, { evalArgs: 0, lift: 0 }, "and");
+ function and(forms) {
+   let val = true;
+   while (typeof forms === 'object' && forms[PAIR]) {
+     val = _eval(forms[CAR], this);
+     if (!_bool(val)) return val;
+     forms = forms[CDR];
+   }
+   return val;
+ }
 
-  defineGlobalSymbol("||", or, { evalArgs: 0 }, "or");
-  function or(...args) {
-    let a = false;
-    for (a of args) {
-      a = _eval(b, this);
-      if (_bool(a)) return a;
-    }
-    return a;
-  }
+ defineGlobalSymbol("||", or, { evalArgs: 0, lift: 0 }, "or");
+ function or(forms) {
+   let val = false;
+   while (typeof forms === 'object' && forms[PAIR]) {
+     val = _eval(forms[CAR], this);
+     if (_bool(val)) return val;
+     forms = forms[CDR];
+   }
+   return val;
+ }
 
   // XXX TODO: What happens if more that 3 args?
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3, compileHook: ifelseHook }, "if");
@@ -1074,9 +1076,9 @@ function newLisp(lispOpts = {}) {
       let lift = (fn[LIFT_ARGS] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
       let evalCount = MAX_INTEGER;
       if (lift < 0) {  // This is tedious but it's got to be faster than reading two properties
-        lift = evalCount & 0xf;
+        evalCount = lift >> 4;
+        lift = lift & 0xf;
         if (lift === 0xf) lift = MAX_INTEGER;
-        evalCount >> 4
         evalCount = ~evalCount; // bitwize not
       }
       if (evalCount > 0)
