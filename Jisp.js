@@ -763,7 +763,7 @@ function newLisp(lispOpts = {}) {
   // functions that take an "env" param should transform it back into
   // a Scope. That will maintain Scheme API compatibility while
   // still benefiting from Scopes internally.
-  defineGlobalSymbol("letrec", letrec, { evalArgs:0, lift: 1 }, "let", "let*");
+  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, lift: 1 }, "let", "let*");
   function letrec(bindings, forms) {
     let env = new Env, scope = new Scope(env, this);
     while (typeof bindings === 'object' && bindings[IS_CONS]) {
@@ -1935,11 +1935,10 @@ function newLisp(lispOpts = {}) {
 
   function ifelseHook(args, scope, newTemp) {
     if (args.length < 3) return {}; // XXX what happens when more than 3?
-    let emit = "";
+    let val = newTemp(), emit = "";
     let { val: p, emit: emitted } = compileEval(args[0], scope, newTemp);
     if (!p) return {};
     emit += emitted;
-    let val = newTemp();
     emit += `let ${val};\nif (${p} === true || !(${p} === false || ${p} === NIL || ${p} == null)) {\n`;
     let { val: tval, emit: t_emitted } = compileEval(args[1], scope, newTemp);
     if (!tval) return {};
@@ -1947,6 +1946,26 @@ function newLisp(lispOpts = {}) {
     let { val: fval, emit: f_emitted } = compileEval(args[2], scope, newTemp);
     if (!fval) return {};
     emit += f_emitted + `${val} = ${fval};\n}\n`;
+    return { val, emit };
+  }
+
+  function leHook(args, scope, newTemp) {
+    let val = newTemp(), emit = "";
+    let { val: val0, emit: emit0 } = compileEval(args[0], scope, newTemp);
+    if (!val0) return {};
+    emit += emit0;
+    if (args.length < 2)
+      return { val: "true", emit };  // eval first arg but return true regardless (unless exception)
+    let emitAfter = `let ${val} = true &&`;
+    for (let i = 1; i < args.length; ++i) {
+      let { val: val_n, emit: emit_n } = compileEval(args[1], scope, newTemp);
+      if (!val_n) return {};
+      emit += emit_n;
+      emitAfter += `&& ${val0} <= ${val_n}`;
+      val0 = val_n;
+    }
+    emitAfter += ';\n';
+    emit += emitAfter;
     return { val, emit };
   }
 
