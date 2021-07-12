@@ -126,7 +126,6 @@ function newLisp(lispOpts = {}) {
   // defines a symbol for the lisp environment AND exports it as an API.
   // Be careful which one you use!
   // 
-  const EVAL_ARGS = Symbol("*lisp-eval-args*");
   const LIFT_ARGS = Symbol("*lisp-lift-args*");
   const COMPILE_HOOK = Symbol("*lisp-compile-hook*");
   const MAX_SMALL_INTEGER = 2**30-1;  // Presumably allows JIT to do small-int optimizations
@@ -137,9 +136,15 @@ function newLisp(lispOpts = {}) {
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
     if (typeof value === 'function') {
-      // Always set these props because JITs are more likely to optimize found props than unfound ones.
-      value[EVAL_ARGS] = opts.evalArgs ?? MAX_SMALL_INTEGER;;
-      value[LIFT_ARGS] = opts.lift ?? MAX_SMALL_INTEGER;
+      let lift = opts.lift ?? MAX_SMALL_INTEGER;
+      let evalArgs = opts.evalArgs ?? MAX_SMALL_INTEGER;
+      if (evalArgs !== MAX_SMALL_INTEGER) {
+        if (lift === MAX_SMALL_INTEGER) lift = 0xf;
+        else if (lift >= 0xf) throw new LogicError("Can't specify both evalArgs and large lift")
+        lift = (~evalArgs << 4) + lift;  // Read carefully; that's a bitwise not (tilde)
+      }
+      // Always set this prop because JITs are more likely to optimize found props than unfound ones.
+      value[LIFT_ARGS] = lift;
       // XXX TODO: make sure that every defn with EVAL_ARGS !== MAX_SMALL_INTEGER has a compile hook.
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
     }
@@ -256,7 +261,7 @@ function newLisp(lispOpts = {}) {
     return val;
   }
 
-  const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0 }, "'");
+  const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0, lift: 1 }, "'");
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
@@ -897,8 +902,7 @@ function newLisp(lispOpts = {}) {
   function special_lambda(form) {
     let scope = this;
     let closure = args => _apply(cons(SLAMBDA_ATOM, form), args, scope);
-    closure[LIFT_ARGS] = 0;
-    closure[EVAL_ARGS] = 0;
+    closure[LIFT_ARGS] = (~0) << 4;
     return closure;
   }
 
@@ -1040,10 +1044,16 @@ function newLisp(lispOpts = {}) {
 
   function _apply(fn, args, scope) {
     if (typeof fn === 'function') {
-      let evalCount = fn[EVAL_ARGS];
+      let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
+      let evalCount = MAX_SMALL_INTEGER;
+      if (lift < 0) {  // This is tedious but it's got to be faster than reading two properties
+        lift = evalCount & 0xf;
+        if (lift === 0xf) lift = MAX_SMALL_INTEGER;
+        evalCount >> 4
+        evalCount = ~evalCount; // bitwize not
+      }
       if (evalCount > 0)
         args = evalArgs(args, scope, evalCount);
-      let lift = fn[LIFT_ARGS];
       let jsArgs = [], noPad = lift === MAX_SMALL_INTEGER;
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
