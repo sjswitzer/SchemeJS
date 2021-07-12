@@ -53,3 +53,5 @@
   (+ 1 2)
   (+ 3 (throw "ha ha!"))
 )
+
+(factoral 100n)

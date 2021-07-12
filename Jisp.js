@@ -1068,14 +1068,14 @@ function newLisp(lispOpts = {}) {
         return res;
       }
     }
-    return expr;
+    return expr; // XXX is this too permissive?
   }
 
   function _apply(fn, args, scope) {
     if (typeof fn === 'function') {
       let lift = (fn[LIFT_ARGS] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
       let evalCount = MAX_INTEGER;
-      if (lift < 0) {  // This is tedious but it's got to be faster than reading two properties
+      if (lift < 0) {  // This is tedious but it's got to be faster than reading a second property
         evalCount = lift >> 4;
         lift = lift & 0xf;
         if (lift === 0xf) lift = MAX_INTEGER;
@@ -1870,53 +1870,180 @@ function newLisp(lispOpts = {}) {
     analyzeJSFunction(function (...rest) { return a; }, resultTmp, args);
   }
 
-  function compileLambda(expr, contaningScope) {
-    let args, body, _tvar = 0;
-    function newTvar() { return `t$(_tvar++})` }
-    function emit(fn, args) { // => tvar
-      var tvar = newTvar();
-      var fstr = String(fn);
-      let evalCount = fn[EVAL_ARGS] ?? MAX_INTEGER;
-      let lift = fn[LIFT_ARGS] ?? MAX_INTEGER;
-      // var $tvar; {
-      //   let p1 = a1, p2 = a2, p3 = a3 (maybe array);
-      //   tvar = ...;
-    
-      body += `var ${tvar}; {\n`;
-      // p1 => ...
-      // (p1, p2, [...]p3) => ...
-
-      body += `}`;
-      return tvar;
-    }
+  function compileDefinition(expr) {
+    let emit = "", _tvar = 0, scope = new Scope();
+    function newTemp() { return `t${_tvar++}$)`; }
     if (typeof expr === 'object' && expr[PAIR]) {
-      let fn = expr[CAR];
-      if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM) {
-        let paramsAndForms = expr[CDR];
-        if (typeof paramsAndForms === 'object' && paramsAndForms[PAIR]) {
-          let params = paramsAndForms[CAR], forms = paramsAndForms[CDR];
-          if (params === NIL || (typeof params === 'object' && params[PAIR])) {
-            if (forms === NIL || (typeof forms === 'object' && forms[PAIR])) {
-              // We've got something to work with here
-              let scope = new Object(contaningScope);
-              while (typeof params === 'object' && params[PAIR]) {
-                let param = params[CAR], jsVar = toJSvariable(param);
-                scope[param] = jsVar;
-                args.push(jsVar);
-                param = param[CDR];
-              }
-              let res;
-              while (typeof forms === 'object' && forms[PAIR]) {
-                res = compileForm(forms[CAR], scope);
-                forms = forms[CDR];
-              }
-              return null; // XXX something!
-            }
-          }
-        }
+      let nameAndParams = expr[CAR], forms = expr[CDR];
+      if (typeof nameAndParams === 'object' && nameAndParams[PAIR]) {
+        let functionName = nameAndParams[CAR], params = [];
+        let { val, emit: emitted, dcl } = compileFunction(functionName, params, forms, scope, "");
+        let emit = `(function ${dcl}) {`;
+        emit += `  let outerScope = this;\n`;
+        emit += "  function resolveSymbol(s) {\n";
+        emit += "    let val = outerScope[s];\n";
+        emit += "    if (val === undefined) throw new EvalError(`Undefined symbol ${expr.description});\n";
+        emit += "  }\n";
+        emit += emitted;
+        emit += `  return ${val};\n`;
+        emit += ")\n";
+        console.log("COMPILED", params, `\b+${emitted}`);
       }
     }
-    throw new CompileError(`Not a lambda ${_toString(expr)}`)
+  }
+
+  function compileFunction(functionName, params, forms, scope, newTemp, indent) {
+    let invokeScope = this;
+    if (!typeof functionName === 'symbol')
+      throw new CompileError(`Function name is not an atom ${_toString(functionName)}`);
+    while (typeof nameAndParams === 'object' && nameAndParams[PAIR]) {
+      let param = nameAndParams[CAR];
+      if (!typeof param === 'symbol')
+        throw new CompileError(`Function parameter is not an atom ${_toString(param)}`);
+      params.push(param);
+      nameAndParams = nameAndParams[CDR];
+    }
+    let dcl = `${functionName}(`;
+    let jsFunctionName = scope[functionName] = toJSname(functionName);
+    let sep = "";
+    for (let param in params) {
+      dcl += sep + param;
+      sep = ", ";
+      scope[param] = toJSname(param);
+    }
+    emit += indent + `function ${dcl} {\n}`;
+    let { val, emit: emitted } = compileForms(forms, scope, invokeScope, newTemp, indent + "  ");
+    emit += indent + `  return ${val};\n`;
+    emit += indent + `}\n`
+    return { val, emit, dcl };
+  }
+
+  function compileForms(forms, scope, invokeScope, newTemp, indent) {
+    let val = newTemp(), emit = indent + `let ${resultVal};\n`;
+    while (typeof forms === 'object' && forms[PAIR]) {
+      let form = forms[CAR];
+      let { val: formVal, emit: emitted } = compileExpr(form, scope, invokeScope, newTemp, indent);
+      emit += emitted;
+      emit += indent + `${val} = ${formVal};\n`;
+      forms = forms[CDR];
+    }
+    return { val, emit };
+  }
+
+  function compileExpr(expr, scope, invokeScope, newTemp, indent) {
+    let val = newTemp(), emit = "", fnVal;
+    if (typeof expr === 'symbol') {
+      let sym = expr;
+      let val = scope[sym];
+      if (val !== undefined) return { val, emit };
+      let scopeVal = invokeScope[sym];
+      if (typeof scopeVal === 'function')
+        val = scopeVal;
+      else
+        emit += indent + `${val} = resolveSymbol(${sym});\n`;
+      return { val, emit };
+    }
+    if (typeof expr === 'object' && expr[PAIR]) {
+      let fn = expr[CAR], args = expr[CDR], fnVal;
+      if (!(typeof fn === 'object' && fn[PAIR] && (fn[CAR] === LAMBDA_ATOM || fn[CAR] === SLAMBDA_ATOM))) {
+        let { val, emit: emitted } = compileExpr(fn, scope, newTemp, indent);
+        fnVal = val;
+        emit += emitted;
+      }
+      return compileApply(fn, fnVal, args, scope, invokeScope, newTemp, indent);
+    }
+    if (typeof expr === 'number' || typeof expr === 'bigint' || typeof expr === 'string'
+        || typeof expr === 'boolean' || expr == null) {
+      return { val: _toString(expr), emit };
+    }
+    // XXX TODO: deal with object and array literals.
+    throw new CompileError(`Cannot compile expression ${expr}`);
+  }
+
+  function compileApply(fn, fnVal, args, scope, invokeScope, newTemp, indent) {
+    /*
+    if (typeof fn === 'function') {
+      let lift = (fn[LIFT_ARGS] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
+      let evalCount = MAX_INTEGER;
+      if (lift < 0) {  // This is tedious but it's got to be faster than reading a second property
+        evalCount = lift >> 4;
+        lift = lift & 0xf;
+        if (lift === 0xf) lift = MAX_INTEGER;
+        evalCount = ~evalCount; // bitwize not
+      }
+      if (evalCount > 0)
+        args = evalArgs(args, scope, evalCount);
+      let jsArgs = [], noPad = lift === MAX_INTEGER;
+      while (lift > 0) {
+        // Promote "lift" arguments to JS arguments, filling with NIL
+        if (typeof args === 'object' && args[PAIR]) {
+          jsArgs.push(args[CAR]);
+          args = args[CDR];
+        } else {
+          // don't let cons, etc, be seeing any undefined parmaters
+          if (noPad) // but not infinitely many of them!
+            break;
+          jsArgs.push(NIL);
+        }
+        --lift;
+      }
+      if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
+        jsArgs.push(args);
+      return fn.apply(scope, jsArgs);  // ??? scope[fn](...jsArgs);
+    }
+    if (typeof fn === 'object' && fn[PAIR]) {
+      let opSym = fn[CAR];
+      if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
+        let params = fn[CDR][CAR];
+        let forms = fn[CDR][CDR];
+        if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
+          args = evalArgs(args, scope);
+        scope = new Object(scope);
+        let origFormalParams = params;
+        while (typeof params === 'object' && params[PAIR]) {
+          let param = params[CAR];
+          if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
+          if (args !== NIL) {
+            scope[param] = args[CAR];
+            if (typeof args === 'object' && args[PAIR]) args = args[CDR];
+          } else {
+            scope[param] = NIL;
+          }
+          params = params[CDR];
+        }
+        if (typeof params === 'symbol')  // Neat trick for 'rest' params!
+          scope[params] = args;
+        else if (params !== NIL)
+          throw new EvalError(`Bad parameter list ${_toString(origFormalParams)}`);
+        let res = NIL;
+        while (typeof forms === 'object' && forms[PAIR]) {
+          res = _eval(forms[CAR], scope);
+          forms = forms[CDR];
+        }
+        return res;
+      }
+    }
+    throw new EvalError(`Can't apply ${fn}`);
+    */
+  }
+
+  function compileEvalArgs() {
+    /*
+    function evalArgs(args, scope, evalCount = MAX_INTEGER) {
+      evalCount = evalCount|0;  // really an int
+      if (evalCount <= 0 || args === NIL) return args;
+      let argv = [];
+      let reverse = NIL;
+      while (evalCount > 0 && typeof args === 'object' && args[PAIR]) {
+        argv.push(_eval(args[CAR], scope));
+        args = args[CDR];
+        evalCount -= 1;
+      }
+      for (let i = argv.length; i > 0; --i)
+        args = cons(argv[i-1], args);
+      return args;
+    }
+  */
   }
   
   const JS_IDENT_REPLACEMENTS  = {
@@ -1925,7 +2052,7 @@ function newLisp(lispOpts = {}) {
     '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$wut'
   };
 
-  function toJSvariable(name) {
+  function toJSname(name) {
     let newName = "", fragment = "";
     for (let ch of name) {
       if (JS_IDENT_REPLACEMENTS[ch]) {
@@ -1940,17 +2067,17 @@ function newLisp(lispOpts = {}) {
       }
     }
     newName += fragment;
-    if (sanityTest) console.log("TEST toJSvariable", name, newName);
+    if (sanityTest) console.log("TEST toJSname", name, newName);
     return newName;
   }
 
   if (sanityTest) {
-    toJSvariable("aNormal_name0234");
-    toJSvariable("aname%with&/specialChars?");
-    toJSvariable("_begins_with_underscore");
-    toJSvariable("number?");
-    toJSvariable("&&");
-    toJSvariable("?");
+    toJSname("aNormal_name0234");
+    toJSname("aname%with&/specialChars?");
+    toJSname("_begins_with_underscore");
+    toJSname("number?");
+    toJSname("&&");
+    toJSname("?");
   }
 
   function ifelseHook(args, scope, newTemp) {
@@ -1970,22 +2097,21 @@ function newLisp(lispOpts = {}) {
   }
 
   function leHook(args, scope, newTemp) {
-    let val = newTemp(), emit = "";
-    let { val: val0, emit: emit0 } = compileEval(args[0], scope, newTemp);
-    if (!val0) return {};
+    let val = newTemp(), emit = `let ${val} = true;\n`;
+    if (args.length < 1) return { val, emit: emit }
+    let { val: val_n, emit: emit0 } = compileEval(forms[CAR], scope, newTemp);
+    if (!val_n) return {};
     emit += emit0;
-    if (args.length < 2)
-      return { val: "true", emit };  // eval first arg but return true regardless (unless exception)
-    let emitAfter = `let ${val} = true &&`;
+    if (args.length < 2) return { val, emit };
+    emit += `$val: {\n}`;
     for (let i = 1; i < args.length; ++i) {
-      let { val: val_n, emit: emit_n } = compileEval(args[1], scope, newTemp);
+      let { val: val_n, emit: emit_n } = compileEval(args[i], scope, newTemp);
       if (!val_n) return {};
       emit += emit_n;
-      emitAfter += `&& ${val0} <= ${val_n}`;
-      val0 = val_n;
+      emit += `if (!(${val_n} <= ${val_n})) { ${val} = false; break ${val}; }`
+      val_0 = val_n;
     }
-    emitAfter += ';\n';
-    emit += emitAfter;
+    emit += '}\n';
     return { val, emit };
   }
 
