@@ -17,12 +17,29 @@
 function newLisp(lispOpts = {}) {
   let sanityTest = lispOpts.sanityTest;
 
-  const IS_CONS = Symbol("*lisp-isCons*"), CAR = Symbol("*car*"), CDR = Symbol("*cdr*");
+  // Creating a Cons should be as cheap as possible, so no subclassing
+  // or calls to super. But I want people to be able to define their
+  // own specialized or tricky Cons cells.
+  // This means that identifying the "class" of Cons
+  // cells can't use "instanceof AbstractCons" or whatever.
+  //
+  // Instead, the idiom is:
+  //    typeof obj === 'object' && obj[IS_CONS]
+  //
+  // The typeof check is basically free since the JIT always knows the type
+  // of an object and needs to check it before member access anyway.
+  // Fetching properties is something the JI really focusses on making
+  // as fast as possible. It's probably even as fast as or faster than "instanceof".
+  // This should probably be a function, but oddly enough
+  // I don't want to trust the compiler to inline it.
+  //
+  // Beware when traversing lists. Things purported to be lists might not be
+  // and although lists are conventionally NIL-terminated, the final "cdr"
+  // could be anything at all.
+
+  const CAR = Symbol("*car*"), CDR = Symbol("*cdr*"), IS_CONS = Symbol("*lisp-isCons*");
 
   class Cons {
-    // Creating a Cons should be as cheap as possible, so no subclassing
-    // or calls to super. This means that identifying the "class" of Cons
-    // cells can't use "instanceof AbstractCons".
     constructor(car, cdr) {
       [CAR]; [CDR];
       this[CAR] = car;
@@ -36,18 +53,6 @@ function newLisp(lispOpts = {}) {
   // There should be a way to do this in the class decl, but not in ES6
   Cons.prototype[IS_CONS] = true;
 
-  // A word about testing for Cons cells. The idiom is
-  //    typeof obj === 'object' && obj[IS_CONS]
-  // The typeof check is basically free since the JIT always knows the type
-  // of an object. And fetching properties is something the optimizer makes
-  // as fast as possible. It's probably even as fast as or faster than "instanceof".
-  // This should probebly be a function, but oddly enough
-  // I don't want to trust the compiler to inline it.
-  //
-  // Beware when traversing lists. Things purported to be lists might not be
-  // and although lists are conventionally NIL-terminated, the final "cdr"
-  // could be anything at all.
-
   // Hide the Nil class because there's never any reason to
   // reference it or instantiate it it more than once. Having it visible
   // just invites errors. But it's good to have a distinct class for NIL
@@ -59,85 +64,124 @@ function newLisp(lispOpts = {}) {
     *[Symbol.iterator]() { return { next: () => ({ done: true, value: null }) } }
   });
 
-  //
   // You create a new scope with "new Object(oldScope)".
-  // Thus, a scope chain is a prototype chain and resolving
-  // a symbol is as simple as "scope[sym]".
-  //
+  // this way, a scope chain is a prototype chain and resolving
+  // a symbol is as simple as "scope[sym]"!
+  
   class Scope {
-    // Careful defining methods or properties here; they
+    // Be careful defining methods or properties here; they
     // automatically become part of the API.
   };
   const GlobalScope = new Scope();
 
-    // Atoms are Symbols
-    const ATOMS = {};
-    function Atom(name) {
-      if (typeof name === 'symbol') {
-        // If they pass in an atom, just return it
-        if (ATOMS[name.description] !== name)
-          throw new LogicError(`Symbol "${name.description}" is not an atom`);
-        return name;
-      }
-      name = String(name);
-      let atom = ATOMS[name];
-      if (atom !== undefined) return atom;
-      atom = Symbol(name);
-      ATOMS[name] = atom;
-      return atom;
-    }
-    exportDefinition("Atom", Atom);  
+  //
+  // Atoms are Symbols
+  //
+  const ATOMS = {};
 
+  exportDefinition("Atom", Atom);  
+  function Atom(name) {
+    if (typeof name === 'symbol') {
+      // If they pass in an atom, just return it
+      if (ATOMS[name.description] !== name)
+        throw new LogicError(`Symbol "${name.description}" is not an atom`);
+      return name;
+    }
+    name = String(name);
+    let atom = ATOMS[name];
+    if (atom !== undefined) return atom;
+    atom = Symbol(name);
+    ATOMS[name] = atom;
+    return atom;
+  }
+
+  const LAMBDA_ATOM = Atom("lambda");
+  ATOMS["\\"] = ATOMS["\u03BB"] = LAMBDA_ATOM;  // Some aliases for Lambda
+  const SLAMBDA_ATOM = Atom("special-lambda");
+  ATOMS["\\\\"] = SLAMBDA_ATOM;
+  
   //
   // Encapsulating everything in a function scope because JITs
   // can resolve lexically-scoped references most easily.
   // Since "this" is used as the current scope, a Lisp instance
   // is the global scope itself!
   //
- function exportDefinition(name, value, ...aliases) {
-   GlobalScope[name] = value;
-   for (let alias in aliases)
-     GlobalScope[alias] = value;
- }
+  function exportDefinition(name, value, ...aliases) {
+    GlobalScope[name] = value;
+    for (let alias in aliases)
+      GlobalScope[alias] = value;
+  }
 
-  class LispError extends Error {};
-  LispError.prototype.name = "LispError";
-  exportDefinition("LispError", LispError);
+  //
+  // Unlike exportDefinition, which exports an API to clients, defineGlobalSymbol
+  // defines a symbol for the lisp environment AND exports it as an API.
+  // Be careful which one you use!
+  // 
+  const EVAL_ARGS = Symbol("*lisp-eval-args*");
+  const LIFT_ARGS = Symbol("*lisp-lift-args*");
+  const COMPILE_HOOK = Symbol("*lisp-compile-hook*");
+  const MAX_SMALL_INTEGER = 2**30-1;  // Presumably allows JIT to do small-int optimizations
 
-  class EvalError extends LispError {};
-  EvalError.prototype.name = "EvalError";
-  exportDefinition("EvalError", EvalError);
-
-  class CompileError extends LispError {};
-  CompileError.prototype.name = "CompileError";
-  exportDefinition("CompileError", CompileError);
-
-  class ParseError extends LispError {};
-  ParseError.prototype.name = "ParseError";
-  exportDefinition("ParseError", ParseError);
-
-  class ParseExtraTokens extends ParseError {};
-  ParseExtraTokens.prototype.name = "ParseExtraTokens";
-  exportDefinition("ParseExtraTokens", ParseExtraTokens);
-
-  class ParseIncomplete extends ParseError {};
-  ParseIncomplete.prototype.name = "ParseIncomplete";
-  exportDefinition("ParseIncomplete", ParseIncomplete);
-
-  const LogicError = Error;
-  exportDefinition("LogicError", LogicError);
-
-
-  function AliasAtom(name, ...aliases) {
-    let atom = Atom(name);
-    for (let alias of aliases)
-      ATOMS[alias] = atom;
+  exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
+  function defineGlobalSymbol(name, value, ...aliases) {
+    let opts = {};
+    if (typeof aliases[0] === 'object')
+      opts = aliases.shift();
+    if (typeof value === 'function') {
+      // Always set these props because JITs are more likely to optimize found props than unfound ones.
+      value[EVAL_ARGS] = opts.evalArgs ?? MAX_SMALL_INTEGER;;
+      value[LIFT_ARGS] = opts.lift ?? MAX_SMALL_INTEGER;
+      // XXX TODO: make sure that every defn with EVAL_ARGS !== MAX_SMALL_INTEGER has a compile hook.
+      if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
+    }
+    let atom = typeof name === 'symbol' ? name : Atom(name);
+    GlobalScope[name] = value;
+    GlobalScope[atom] = value;
+    for (let alias of aliases) {
+      let aliasAtom = typeof alias === 'symbol' ? alias : Atom(alias);
+      GlobalScope[alias] = value;
+      GlobalScope[aliasAtom] = value;
+    }
     return atom;
   }
 
-  const LAMBDA_ATOM = AliasAtom("lambda", "\\", "\u03BB");
-  const SLAMBDA_ATOM = AliasAtom("special-lambda", "\\\\", "\u03BB");
-  
+  class LispError extends Error {};
+  LispError.prototype.name = "LispError";
+  defineGlobalSymbol("LispError", LispError);
+
+  class EvalError extends LispError {};
+  EvalError.prototype.name = "EvalError";
+  defineGlobalSymbol("EvalError", EvalError);
+
+  class CompileError extends LispError {};
+  CompileError.prototype.name = "CompileError";
+  defineGlobalSymbol("CompileError", CompileError);
+
+  class ParseError extends LispError {};
+  ParseError.prototype.name = "ParseError";
+  defineGlobalSymbol("ParseError", ParseError);
+
+  class ParseExtraTokens extends ParseError {};
+  ParseExtraTokens.prototype.name = "ParseExtraTokens";
+  defineGlobalSymbol("ParseExtraTokens", ParseExtraTokens);
+
+  class ParseIncomplete extends ParseError {};
+  ParseIncomplete.prototype.name = "ParseIncomplete";
+  defineGlobalSymbol("ParseIncomplete", ParseIncomplete);
+
+  const LogicError = Error;
+  defineGlobalSymbol("LogicError", LogicError);
+
+  // Define some of the JS Error classes here so users can "catch" them
+  defineGlobalSymbol("Error", Error);
+  defineGlobalSymbol("RangeError", RangeError);
+  defineGlobalSymbol("ReferenceError", ReferenceError);
+  defineGlobalSymbol("TypeError", TypeError);
+  defineGlobalSymbol("URIError", URIError);
+  defineGlobalSymbol("SyntaxError", SyntaxError);
+  defineGlobalSymbol("TypeError", TypeError);
+  defineGlobalSymbol("EvalError", EvalError);
+
   function nextCons() {
     let current = this._current, done = current === NIL, value = undefined;
     if (!done) {
@@ -216,34 +260,6 @@ function newLisp(lispOpts = {}) {
     return val;
   }
   exportDefinition("list", list);
-
-  const EVAL_ARGS = Symbol("*lisp-eval-args*");
-  const LIFT_ARGS = Symbol("*lisp-lift-args*");
-  const COMPILE_HOOK = Symbol("*lisp-compile-hook*");
-  const MAX_SMALL_INTEGER = 2**30-1;  // Presumably allows JIT to do small-int optimizations
-
-  function defineGlobalSymbol(name, val, ...aliases) {
-    let opts = {};
-    if (typeof aliases[0] === 'object')
-      opts = aliases.shift();
-    if (typeof val === 'function') {
-      // Always set these props because JITs are more likely to optimize found props than unfound ones.
-      val[EVAL_ARGS] = opts.evalArgs ?? MAX_SMALL_INTEGER;;
-      val[LIFT_ARGS] = opts.lift ?? MAX_SMALL_INTEGER;
-      // XXX TODO: make sure that every defn with EVAL_ARGS !== MAX_SMALL_INTEGER has a compile hook.
-      if (opts.compileHook) val[COMPILE_HOOK] = opts.compileHook;
-    }
-    let atom = typeof name === 'symbol' ? name : Atom(name);
-    GlobalScope[name] = val;
-    GlobalScope[atom] = val;
-    for (let alias of aliases) {
-      let aliasAtom = typeof alias === 'symbol' ? alias : Atom(alias);
-      GlobalScope[alias] = val;
-      GlobalScope[aliasAtom] = val;
-    }
-    return atom;
-  }
-  exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
 
   defineGlobalSymbol("nil", NIL);
   const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0 }, "'");
