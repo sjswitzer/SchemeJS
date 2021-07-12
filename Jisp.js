@@ -17,15 +17,16 @@
 function newLisp(lispOpts = {}) {
   let sanityTest = lispOpts.sanityTest;
 
-  const IS_CONS = Symbol("*lisp-isCons*");
+  const IS_CONS = Symbol("*lisp-isCons*"), CAR = Symbol("*car*"), CDR = Symbol("*cdr*");
 
   class Cons {
     // Creating a Cons should be as cheap as possible, so no subclassing
     // or calls to super. This means that identifying the "class" of Cons
     // cells can't use "instanceof AbstractCons".
     constructor(car, cdr) {
-      this.car = car;
-      this.cdr = cdr;
+      [CAR]; [CDR];
+      this[CAR] = car;
+      this[CDR] = cdr;
     }
     toString() {
       return lispToString(this);
@@ -137,8 +138,8 @@ function newLisp(lispOpts = {}) {
   function nextCons() {
     let current = this._current, done = current === NIL, value = undefined;
     if (!done) {
-      this._current = current.cdr;
-      value = current.car;
+      this._current = current[CDR];
+      value = current[CAR];
     }
     return { done, value };
   }
@@ -148,7 +149,7 @@ function newLisp(lispOpts = {}) {
     // User inplements "get car()" in a subclass and ideally seals the object
     cdr;
     constructor(cdr) {
-      this.cdr = cdr;
+      this[CDR] = cdr;
     }
     toString() {
       return lispToString(this);
@@ -161,7 +162,7 @@ function newLisp(lispOpts = {}) {
     // User inplements "get cdr()" in a subclass and ideally seals the object
     car;
     constructor(car) {
-      this.car = car;
+      this[CAR] = car;
     }
     toString() {
       return lispToString(this);
@@ -184,21 +185,21 @@ function newLisp(lispOpts = {}) {
   exportDefinition("toBool", _bool);
 
   const cons = (car, cdr) => new Cons(car, cdr);
-  const car = cons => cons.car;
-  const cdr = cons => cons.cdr;
+  const car = cons => cons[CAR];
+  const cdr = cons => cons[CDR];
   // Beware the order here; in JS it's in reversed
-  const caaar = cons => cons.car.car.car;
-  const caadr = cons => cons.cdr.car.car;
-  const caar = cons => cons.car.car;
-  const cadar = cons => cons.car.cdr.car;
-  const caddr = cons => cons.cdr.cdr.car;
-  const cadr = cons => cons.cdr.car;
-  const cdaar = cons => cons.car.car.cdr;
-  const cdadr = cons => cons.cdr.car.cdr
-  const cdar = cons => cons.car.cdr;
-  const cddar = cons => cons.car.cdr.cdr;
-  const cdddr = cons => cons.cdr.cdr.cdr;
-  const cddr = cons => cons.cdr.cdr;
+  const caaar = cons => cons[CAR][CAR][CAR];
+  const caadr = cons => cons[CDR][CAR][CAR];
+  const caar = cons => cons[CAR][CAR];
+  const cadar = cons => cons[CAR][CDR][CAR];
+  const caddr = cons => cons[CDR][CDR][CAR];
+  const cadr = cons => cons[CDR][CAR];
+  const cdaar = cons => cons[CAR][CAR][CDR];
+  const cdadr = cons => cons[CDR][CAR][CDR]
+  const cdar = cons => cons[CAR][CDR];
+  const cddar = cons => cons[CAR][CDR][CDR];
+  const cdddr = cons => cons[CDR][CDR][CDR];
+  const cddr = cons => cons[CDR][CDR];
   exportDefinition("NIL", NIL);
   exportDefinition("Car", car);  // IMPORTANT: Don't smash the scope's "car" and "cdr" members!
   exportDefinition("Cdr", cdr);  // IMPORTANT: Don't smash the scope's "car" and "cdr" members!
@@ -297,10 +298,10 @@ function newLisp(lispOpts = {}) {
     if (rest === undefined || rest === NIL)
       scope = this;  // use the current scope if unspecified
     // The "rest" parameter is unlifted, so it's a list of arguments.
-    // Which means the first argument is rest.car
+    // Which means the first argument is rest[CAR]
     // Note the user can set a deliberately enmpty scope for whatever reason.
     if (typeof rest === 'object' && rest[IS_CONS])
-      scope = rest.car;
+      scope = rest[CAR];
     if (typeof expr === 'string')
       expr = parseSExpr(expr);
     return _eval(expr, scope);
@@ -313,10 +314,10 @@ function newLisp(lispOpts = {}) {
     if (rest === undefined || rest === NIL)
       scope = this;  // use the current scope if unspecified
     // The "rest" parameter is unlifted, so it's a list of arguments.
-    // Which means the first argument is rest.car
+    // Which means the first argument is rest[CAR]
     // Note the user can set a deliberately enmpty scope for whatever reason.
     if (typeof rest === 'object' && rest[IS_CONS])
-      scope = rest.car;
+      scope = rest[CAR];
     return _apply(fn, args, scope);
   }
   // Pokemon gotta catch 'em' all!
@@ -555,13 +556,13 @@ function newLisp(lispOpts = {}) {
     for (let clause of clauses) {
       if (!(typeof clause === 'object' && clause[IS_CONS]))
         throw new EvalError(`Bad clause in "cond" ${lispToString(clause)}`);
-      let pe = clause.car, forms = clause.cdr;
+      let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
       if (_bool(evaled)) {
         let res = NIL;
         while (typeof forms === 'object' && forms[IS_CONS]) {
-          res = _eval(forms.car, this);
-          forms = forms.cdr;
+          res = _eval(forms[CAR], this);
+          forms = forms[CDR];
         }
         return res;
       }
@@ -614,8 +615,8 @@ function newLisp(lispOpts = {}) {
     function zip(list) {
       if (list === NIL) return;
       if (typeof list === 'object' && list[IS_CONS]) {
-        zip(list.cdr);
-        res = cons(list.car, res);
+        zip(list[CDR]);
+        res = cons(list[CAR], res);
       }
       else  // What to do with a node that's not a list?
         res = cons(list, res);  // Add it to the list, I guess.
@@ -627,9 +628,9 @@ function newLisp(lispOpts = {}) {
 
   defineGlobalSymbol("last", (list) => {
     while (typeof list === 'object' && list[IS_CONS]) {
-      let next = list.cdr;
+      let next = list[CDR];
       if (next === NIL)
-        return list.car;
+        return list[CAR];
       list = next;
     }
     return list;  // list was empty or not terminated with NIL
@@ -639,7 +640,7 @@ function newLisp(lispOpts = {}) {
     let n = 0;
     while (typeof list === 'object' && list[IS_CONS]) {
       n += 1;
-      list = list.cdr;
+      list = list[CDR];
     }
     return n;
   });
@@ -655,8 +656,8 @@ function newLisp(lispOpts = {}) {
   function reverseList(list) {
     let res = NIL;
     while (typeof list === 'object' && list[IS_CONS]) {
-      res = cons(list.car, res)
-      list = list.cdr;
+      res = cons(list[CAR], res)
+      list = list[CDR];
     }
     return res;
   }
@@ -665,10 +666,10 @@ function newLisp(lispOpts = {}) {
     let res = NIL;
     if (!(typeof list === 'object' && list[IS_CONS])) return NIL;
     function zip(list) {
-      let next = list.cdr;
+      let next = list[CDR];
       if (typeof next === 'object' && next[IS_CONS]) {
-        zip(list.cdr);
-        res = cons(list.car, res);
+        zip(list[CDR]);
+        res = cons(list[CAR], res);
       }
     }
     zip(list);
@@ -680,9 +681,9 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("member", member);
   function member(key, list) {
     while (typeof list === 'object' && list[IS_CONS]) {
-      if (key == list.car)
+      if (key == list[CAR])
         return list;
-      list = list.cdr;
+      list = list[CDR];
     }
     return NIL;
   }
@@ -692,9 +693,9 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("memq", memq);
   function memq(key, list) {
     while (typeof list === 'object' && list[IS_CONS]) {
-      if (key === list.car)
+      if (key === list[CAR])
         return list;
-      list = list.cdr;
+      list = list[CDR];
     }
     return NIL;
   }
@@ -705,10 +706,10 @@ function newLisp(lispOpts = {}) {
   function nth(index, list) {
     while (index > 0 && typeof list === 'object' && list[IS_CONS]) {
       index -= 1;
-      list = list.cdr;
+      list = list[CDR];
     }
     if (typeof list === 'object' && list[IS_CONS])
-      return list.car;
+      return list[CAR];
     return NIL;
   }
 
@@ -767,24 +768,24 @@ function newLisp(lispOpts = {}) {
   function letrec(bindings, forms) {
     let env = new Env, scope = new Scope(env, this);
     while (typeof bindings === 'object' && bindings[IS_CONS]) {
-      let binding = bindings.car;
+      let binding = bindings[CAR];
       if (!(typeof binding === 'object' && binding[IS_CONS]))
         throw new EvalError(`Bad binding ${lispToString(binding)}`);
-      let boundVar = binding.car, bindingForms = binding.cdr;
+      let boundVar = binding[CAR], bindingForms = binding[CDR];
       if (typeof boundVar !== 'symbol')
         throw new EvalError(`Bad binding ${lispToString(binding)}`);
       let val = NIL;
       while (typeof bindingForms === 'object' && bindingForms[IS_CONS]) {
-        val = _eval(bindingForms.car, scope);
-        bindingForms = bindingForms.cdr;
+        val = _eval(bindingForms[CAR], scope);
+        bindingForms = bindingForms[CDR];
       }
       env.set(boundVar, val);
-      bindings = bindings.cdr;
+      bindings = bindings[CDR];
     }
     let res = NIL;
     while (typeof forms === 'object' && forms[IS_CONS]) {
-      res = _eval(forms.car, scope);
-      forms = forms.cdr;
+      res = _eval(forms[CAR], scope);
+      forms = forms[CDR];
     }
     return res;
   }
@@ -932,8 +933,8 @@ function newLisp(lispOpts = {}) {
     let val = NIL;
     try {
       while (typeof forms === 'object' && forms[IS_CONS]) {
-        val = _eval(forms.car, this);
-        forms = forms.cdr;
+        val = _eval(forms[CAR], this);
+        forms = forms[CDR];
       }
     } catch (e) {
       if (!(e instanceof LispThrow)) throw e;  // rethrow
@@ -951,21 +952,21 @@ function newLisp(lispOpts = {}) {
   function lispJSCatch(catchClause, forms) {
     if (!(typeof catchClause === 'object' && catchClause[IS_CONS]))
       throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
-    let catchVar = catchClause.car, catchForms = catchClause.cdr;
+    let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     if (!(typeof catchForms === 'object' && catchForms[IS_CONS]))
       throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
     var typeMatch;
-    if (typeof catchForms.car === 'string' || typeof catchForms.car === 'function') {
-      typeMatch = catchForms.car;
-      catchForms = catchForms.cdr;
+    if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
+      typeMatch = catchForms[CAR];
+      catchForms = catchForms[CDR];
     }
     if (!(typeof catchForms === 'object' && catchForms[IS_CONS]))
       throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
     let val = NIL;
     try {
       while (typeof forms === 'object' && forms[IS_CONS]) {
-        val = _eval(forms.car, this);
-        forms = forms.cdr;
+        val = _eval(forms[CAR], this);
+        forms = forms[CDR];
       }
     } catch (e) {
       if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
@@ -974,8 +975,8 @@ function newLisp(lispOpts = {}) {
         let scope = new Scope(env, this);
         env.set(catchVar, e);
         while (typeof catchForms === 'object' && catchForms[IS_CONS]) {
-          val = _eval(catchForms.car, scope);
-          catchForms = catchForms.cdr;
+          val = _eval(catchForms[CAR], scope);
+          catchForms = catchForms[CDR];
         }
       } else {
         throw e; // rethrow
@@ -989,8 +990,8 @@ function newLisp(lispOpts = {}) {
   function define(variable, value) {
     let scope = this, name = variable;
     if (typeof variable === 'object' && variable[IS_CONS]) {
-      name = variable.car;
-      let args = variable.cdr;
+      name = variable[CAR];
+      let args = variable[CDR];
       value = list(LAMBDA_ATOM, args, value);
     } else {
       value = _eval(value, this);
@@ -998,7 +999,7 @@ function newLisp(lispOpts = {}) {
     if (typeof name === 'string') name = Atom(name);
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
-    GlobalScope.car.set(name, value);  // Or should it be our scope? That would be weird.
+    GlobalScope[CAR].set(name, value);  // Or should it be our scope? That would be weird.
     return name;
   }
 
@@ -1014,9 +1015,9 @@ function newLisp(lispOpts = {}) {
       return val;
     }
     if (typeof expr === 'object' && expr[IS_CONS]) {
-      let fn = expr.car, args = expr.cdr;
+      let fn = expr[CAR], args = expr[CDR];
       if (typeof fn !== 'function' &&
-          !(typeof fn === 'object' && fn[IS_CONS] && (fn.car === LAMBDA_ATOM || fn.car === SLAMBDA_ATOM)))
+          !(typeof fn === 'object' && fn[IS_CONS] && (fn[CAR] === LAMBDA_ATOM || fn[CAR] === SLAMBDA_ATOM)))
         fn = _eval(fn, scope);
       return _apply(fn, args, scope);
     }
@@ -1054,8 +1055,8 @@ function newLisp(lispOpts = {}) {
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
         if (typeof args === 'object' && args[IS_CONS]) {
-          jsArgs.push(args.car);
-          args = args.cdr;
+          jsArgs.push(args[CAR]);
+          args = args[CDR];
         } else {
           // don't let cons, etc, be seeing any undefined parmaters
           if (noPad) // but not infinitely many of them!
@@ -1069,25 +1070,25 @@ function newLisp(lispOpts = {}) {
       return fn.apply(scope, jsArgs);  // "this" is the scope!
     }
     if (typeof fn === 'object' && fn[IS_CONS]) {
-      let opSym = fn.car;
+      let opSym = fn[CAR];
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        let params = fn.cdr.car;
-        let forms = fn.cdr.cdr;
+        let params = fn[CDR][CAR];
+        let forms = fn[CDR][CDR];
         if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
           args = evalArgs(args, scope);
         let env = new Env;
         scope = new Scope(env, scope);
         let origFormalParams = params;
         while (typeof params === 'object' && params[IS_CONS]) {
-          let param = params.car;
+          let param = params[CAR];
           if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
           if (args !== NIL) {
-            env.set(param, args.car);
-            args = args.cdr
+            env.set(param, args[CAR]);
+            args = args[CDR];
           } else {
             env[param] = NIL;
           }
-          params = params.cdr;
+          params = params[CDR];
         }
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           env[params] = args;
@@ -1095,8 +1096,8 @@ function newLisp(lispOpts = {}) {
           throw new EvalError(`Bad parameter list ${lispToString(origFormalParams)}`);
         let res = NIL;
         while (typeof forms === 'object' && forms[IS_CONS]) {
-          res = _eval(forms.car, scope);
-          forms = forms.cdr;
+          res = _eval(forms[CAR], scope);
+          forms = forms[CDR];
         }
         return res;
       }
@@ -1107,10 +1108,10 @@ function newLisp(lispOpts = {}) {
 
   function resolveSymbol(sym, scope) {
     while (typeof scope === 'object' && scope[IS_CONS]) {
-      let val = scope.car.get(sym);
+      let val = scope[CAR].get(sym);
       if (val !== undefined)
         return val;
-      scope = scope.cdr;
+      scope = scope[CDR];
     }
     return undefined;
   }
@@ -1120,8 +1121,8 @@ function newLisp(lispOpts = {}) {
     let argv = [];
     let reverse = NIL;
     while (evalCount > 0 && typeof args === 'object' && args[IS_CONS]) {
-      argv.push(_eval(args.car, scope));
-      args = args.cdr;
+      argv.push(_eval(args[CAR], scope));
+      args = args[CDR];
       evalCount -= 1;
     }
     for (let i = argv.length; i > 0; --i)
@@ -1176,9 +1177,9 @@ function newLisp(lispOpts = {}) {
           indent += indentMore;
           sep = "";
           while (typeof obj === 'object' && obj[IS_CONS]) {
-            toString(obj.car, maxDepth-1);
+            toString(obj[CAR], maxDepth-1);
             sep = " ";
-            obj = obj.cdr;
+            obj = obj[CDR];
           }
           if (obj !== NIL) {
             put(".");
@@ -1279,8 +1280,8 @@ function newLisp(lispOpts = {}) {
     if (!(typeof obj === 'object' && obj[IS_CONS])) return obj;
     let arr = [];
     while (typeof obj === 'object' && obj[IS_CONS]) {
-      arr.push(listToArray(obj.car), depth-1);
-      obj = obj.cdr;
+      arr.push(listToArray(obj[CAR]), depth-1);
+      obj = obj[CDR];
     }
     return arr;
   }
@@ -1609,9 +1610,9 @@ function newLisp(lispOpts = {}) {
     if (token().type === 'atom' && token(1).type === '(') {
       function quoteArgs(args) {
         if (!(typeof args === 'object' && args[IS_CONS])) return NIL;
-        let quoted = args.car;
+        let quoted = args[CAR];
         quoted = cons(QUOTE_ATOM, cons(quoted, NIL))
-        return cons(quoted, quoteArgs(args.cdr));
+        return cons(quoted, quoteArgs(args[CDR]));
       }
       let tok = consumeToken();
       let sym = tok.value;
@@ -1633,7 +1634,7 @@ function newLisp(lispOpts = {}) {
     let scope = NIL;
     let [args, body] = compileLambda(expr, scope);
     let res = new Function(...[ ... args, body ]);
-    if (expr.car === SLAMBDA_ATOM)
+    if (expr[CAR] === SLAMBDA_ATOM)
       res[EVAL_ARGS] = 0;
     return res;
   }
@@ -1737,8 +1738,8 @@ function newLisp(lispOpts = {}) {
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
         if (typeof args === 'object' && args[IS_CONS]) {
-          jsArgs.push(args.car);
-          args = args.cdr;
+          jsArgs.push(args[CAR]);
+          args = args[CDR];
         } else {
           // Don't let cons, etc, be seeing any undefined parmaters
           if (noPad) // but not infinitely many of them!
@@ -1870,25 +1871,25 @@ function newLisp(lispOpts = {}) {
       return tvar;
     }
     if (typeof expr === 'object' && expr[IS_CONS]) {
-      let fn = expr.car;
+      let fn = expr[CAR];
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM) {
-        let paramsAndForms = expr.cdr;
+        let paramsAndForms = expr[CDR];
         if (typeof paramsAndForms === 'object' && paramsAndForms[IS_CONS]) {
-          let params = paramsAndForms.car, forms = paramsAndForms.cdr;
+          let params = paramsAndForms[CAR], forms = paramsAndForms[CDR];
           if (params === NIL || (typeof params === 'object' && params[IS_CONS])) {
             if (forms === NIL || (typeof forms === 'object' && forms[IS_CONS])) {
               // We've got something to work with here
               let env = new Env, scope = new Scope(env, contaningScope);
               while (typeof params === 'object' && params[IS_CONS]) {
-                let param = params.car, jsVar = toJSvariable(param);
+                let param = params[CAR], jsVar = toJSvariable(param);
                 env.put(param, jsVar);
                 args.push(jsVar);
-                param = param.cdr;
+                param = param[CDR];
               }
               let res;
               while (typeof forms === 'object' && forms[IS_CONS]) {
-                res = compileForm(forms.car, scope);
-                forms = forms.cdr;
+                res = compileForm(forms[CAR], scope);
+                forms = forms[CDR];
               }
               return null; // XXX something!
             }
