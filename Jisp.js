@@ -414,87 +414,114 @@ function newLisp(lispOpts = {}) {
     return a;
   }, "bit-xor");
 
-  // XXX todo: do all of these without lifting to JS
-  defineGlobalSymbol("<", lt, { evalArgs: 1 }, "lt");
-  function lt(a, ...rest) {
-    if (rest.length === 0) return false; // not less than itself?
-    for (let b of rest) {
-      b = _eval(b, this);
+  defineGlobalSymbol("<", lt, { evalArgs: 0, liftArgs: 0 }, "lt");
+  function lt(forms) {
+    if (!(typeof form === 'object' && form[PAIR])) return false;
+    let a = _eval(form[CAR], this);
+    form = form[CDR];
+    while ((typeof form === 'object' && form[PAIR])) {
+      let b = _eval(form[CAR], this);
       if (!(a < b)) return false;
       a = b;
+      form = form[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("<=", le, { evalArgs: 1, compileHook: leHook }, "le");
-  function le(a, ...rest) {
-    if (rest.length === 0) return true; // is nothing equal to itself?
-    for (let b of rest) {
-      b = _eval(b, this);
+  defineGlobalSymbol("<=", le, { evalArgs: 0, liftArgs: 0 }, "le");
+  function le(forms) {
+    if (!(typeof form === 'object' && form[PAIR])) return true;
+    let a = _eval(form[CAR], this);
+    form = form[CDR];
+    while ((typeof form === 'object' && form[PAIR])) {
+      let b = _eval(form[CAR], this);
       if (!(a <= b)) return false;
       a = b;
+      form = form[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol(">", gt, { evalArgs: 1 }, "gt");
-  function gt(a, ...rest) {
-    if (rest.length === 0) return false;
-    for (let b of rest) {
-      b = _eval(b, this);
+  defineGlobalSymbol(">", gt, { evalArgs: 0, liftArgs: 0 }, "gt");
+  function gt(forms) {
+    if (!(typeof form === 'object' && form[PAIR])) return false;
+    let a = _eval(form[CAR], this);
+    form = form[CDR];
+    while ((typeof form === 'object' && form[PAIR])) {
+      let b = _eval(form[CAR], this);
       if (!(a > b)) return false;
       a = b;
+      form = form[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol(">=", ge, { evalArgs: 1 }, "ge");
-  function ge(a, ...rest) {
-    if (rest.length === 0) return true;
-    for (let b of rest) {
-      b = _eval(b, this);
+  defineGlobalSymbol(">=", ge, { evalArgs: 0, liftArgs: 0 }, "ge");
+  function ge(forms) {
+    if (!(typeof form === 'object' && form[PAIR])) return true;
+    let a = _eval(form[CAR], this);
+    form = form[CDR];
+    while ((typeof form === 'object' && form[PAIR])) {
+      let b = _eval(form[CAR], this);
       if (!(a >= b)) return false;
       a = b;
+      form = form[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("==", equal, { evalArgs: 1 }, "equal?");
-  function equal(a, ...rest) {
-    if (rest.length === 0) return true;
-    for (let b of rest) {
-      b = _eval(b, this);
+  defineGlobalSymbol("==", eq, { evalArgs: 0, liftArgs: 0 }, "eq");
+  function eq(forms) {
+    if (!(typeof form === 'object' && form[PAIR])) return true;
+    let a = _eval(form[CAR], this);
+    form = form[CDR];
+    while ((typeof form === 'object' && form[PAIR])) {
+      let b = _eval(form[CAR], this);
       if (!(a == b)) return false;
+      a = b;
+      form = form[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("===", eq, { evalArgs: 1 }, "eq?");
-  function eq(a, ...rest) {
-    if (rest.length === 0) return true;
-    for (let b of rest) {
-      b = _eval(b, this);
+  defineGlobalSymbol("===", eeq, { evalArgs: 0, liftArgs: 0 }, "eq?");
+  function eeq(forms) {
+    if (!(typeof form === 'object' && form[PAIR])) return true;
+    let a = _eval(form[CAR], this);
+    form = form[CDR];
+    while ((typeof form === 'object' && form[PAIR])) {
+      let b = _eval(form[CAR], this);
       if (!(a === b)) return false;
+      a = b;
+      form = form[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("!=", ne, { evalArgs: 1 }, "ne");
-  function ne(a, ...rest) {  // all not equal to first
-    if (rest.length === 0) return false;
-    for (let b of rest) {
-      b = _eval(b, this);
+  defineGlobalSymbol("!=", ne, { evalArgs: 0, liftArgs: 0 }, "ne");
+  function ne(forms) {
+    if (!(typeof form === 'object' && form[PAIR])) return false;
+    let a = _eval(form[CAR], this);
+    form = form[CDR];
+    while ((typeof form === 'object' && form[PAIR])) {
+      let b = _eval(form[CAR], this);
       if (!(a != b)) return false;
+      a = b;
+      form = form[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("!==", neq, { evalArgs: 1 }, "neq");
-  function neq(a, ...rest) {  // all not equal to first
-    if (rest.length === 0) return false;
-    for (let b of rest) {
-      b = _eval(b, this);
+  defineGlobalSymbol("!==", neq, { evalArgs: 0, liftArgs: 0 }, "neq");
+  function neq(forms) {
+    if (!(typeof form === 'object' && form[PAIR])) return false;
+    let a = _eval(form[CAR], this);
+    form = form[CDR];
+    while ((typeof form === 'object' && form[PAIR])) {
+      let b = _eval(form[CAR], this);
       if (!(a !== b)) return false;
+      a = b;
+      form = form[CDR];
     }
     return true;
   }
