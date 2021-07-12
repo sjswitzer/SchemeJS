@@ -11,7 +11,7 @@
 
 //
 // Creates a Lisp instance, independent of any others.
-// They are distinct to the bones; they do not even recognize each other's
+// Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design.
 //
 function newLisp(lispOpts = {}) {
@@ -29,7 +29,7 @@ function newLisp(lispOpts = {}) {
       this[CDR] = cdr;
     }
     toString() {
-      return lispToString(this);
+      return _toString(this, { maxDepth: 4 });
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -70,6 +70,24 @@ function newLisp(lispOpts = {}) {
   };
   const GlobalScope = new Scope();
 
+    // Atoms are Symbols
+    const ATOMS = {};
+    function Atom(name) {
+      if (typeof name === 'symbol') {
+        // If they pass in an atom, just return it
+        if (ATOMS[name.description] !== name)
+          throw new LogicError(`Symbol "${name.description}" is not an atom`);
+        return name;
+      }
+      name = String(name);
+      let atom = ATOMS[name];
+      if (atom !== undefined) return atom;
+      atom = Symbol(name);
+      ATOMS[name] = atom;
+      return atom;
+    }
+    exportDefinition("Atom", Atom);  
+
   //
   // Encapsulating everything in a function scope because JITs
   // can resolve lexically-scoped references most easily.
@@ -109,23 +127,6 @@ function newLisp(lispOpts = {}) {
   const LogicError = Error;
   exportDefinition("LogicError", LogicError);
 
-  // Atoms are Symbols
-  const ATOMS = {};
-
-  function Atom(name) {
-    if (typeof name === 'symbol') {
-      // If they pass in an atom, just return it
-      if (ATOMS[name.description] !== name)
-        throw new LogicError(`Symbol "${name.description}" is not an atom`);
-      return name;
-    }
-    let atom = ATOMS[name];
-    if (atom !== undefined) return atom;
-    atom = Symbol(name);
-    ATOMS[name] = atom;
-    return atom;
-  }
-  exportDefinition("Atom", Atom);
 
   function AliasAtom(name, ...aliases) {
     let atom = Atom(name);
@@ -154,7 +155,7 @@ function newLisp(lispOpts = {}) {
       this[CDR] = cdr;
     }
     toString() {
-      return lispToString(this);
+      return _toString(this);
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -167,7 +168,7 @@ function newLisp(lispOpts = {}) {
       this[CAR] = car;
     }
     toString() {
-      return lispToString(this);
+      return _toString(this);
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -232,10 +233,14 @@ function newLisp(lispOpts = {}) {
       // XXX TODO: make sure that every defn with EVAL_ARGS !== MAX_SMALL_INTEGER has a compile hook.
       if (opts.compileHook) val[COMPILE_HOOK] = opts.compileHook;
     }
-    let atom = typeof name === 'symbol' ? name : Atom(String(name));
+    let atom = typeof name === 'symbol' ? name : Atom(name);
+    GlobalScope[name] = val;
     GlobalScope[atom] = val;
-    for (let alias of aliases)
-    GlobalScope[alias] = val;
+    for (let alias of aliases) {
+      let aliasAtom = typeof alias === 'symbol' ? alias : Atom(alias);
+      GlobalScope[alias] = val;
+      GlobalScope[aliasAtom] = val;
+    }
     return atom;
   }
   exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
@@ -282,16 +287,14 @@ function newLisp(lispOpts = {}) {
     if (typeof value === 'number' || typeof value === 'function')
       defineGlobalSymbol(name, value);
   }
-  defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // unlike Math.abs, this deals with bigint too
+  defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // unlike Math.abs, this deals with BigInt too
   defineGlobalSymbol("intern", a => Atom(a));
   defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
-  defineGlobalSymbol("toArray", a => listToArray(a));
-  defineGlobalSymbol("toLisp", a => iterableToList(a));
-  defineGlobalSymbol("toString", a => lispToString(a));
+  defineGlobalSymbol("toArray", a => _toArray(a));
   defineGlobalSymbol("toNumber", a => Number(a));
   defineGlobalSymbol("toBigInt", a => BigInt(a));
-  defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ]);
-  defineGlobalSymbol("read-from-string", a => parseSExpr(a));
+  defineGlobalSymbol("lispTokens", a => [ ... lispTokenGenerator(a) ]);
+  defineGlobalSymbol("parse", a => parseSExpr(a));
 
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, scope) { // XXX TODO: can this just be "eval"?
@@ -544,7 +547,7 @@ function newLisp(lispOpts = {}) {
   function cond(...clauses) {
     for (let clause of clauses) {
       if (!(typeof clause === 'object' && clause[IS_CONS]))
-        throw new EvalError(`Bad clause in "cond" ${lispToString(clause)}`);
+        throw new EvalError(`Bad clause in "cond" ${_toString(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
       if (_bool(evaled)) {
@@ -563,8 +566,8 @@ function newLisp(lispOpts = {}) {
   //   XXX TODO: "delete", setting props and array elements
   defineGlobalSymbol("@", (a, b) => b[a]);  // indexing and member access
   defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
-  defineGlobalSymbol("toLisp", iterableToList);
-  defineGlobalSymbol("toArray", listToArray);
+  defineGlobalSymbol("toLisp", _toList);
+  defineGlobalSymbol("toArray", _toArray);
   defineGlobalSymbol("NaN", NaN);
   defineGlobalSymbol("Infinity", Infinity);
   defineGlobalSymbol("isFinite", isFinite);
@@ -711,7 +714,7 @@ function newLisp(lispOpts = {}) {
     while (scope && scope !== Object) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
-        let name = lispToString(symbol);
+        let name = _toString(symbol);
         if (name.toLowerCase().includes(substring))
           matches.push(symbol);
       }
@@ -719,7 +722,7 @@ function newLisp(lispOpts = {}) {
       scope = Object.getPrototypeOf(scope);
     }
     matches.sort((a,b) => a.description < b.description ? -1 : a.description > b.description ? 1 : 0);
-    return iterableToList(matches);
+    return _toList(matches);
   }
 
   // (mapcar fn list1 list2 ...)
@@ -765,10 +768,10 @@ function newLisp(lispOpts = {}) {
     while (typeof bindings === 'object' && bindings[IS_CONS]) {
       let binding = bindings[CAR];
       if (!(typeof binding === 'object' && binding[IS_CONS]))
-        throw new EvalError(`Bad binding ${lispToString(binding)}`);
+        throw new EvalError(`Bad binding ${_toString(binding)}`);
       let boundVar = binding[CAR], bindingForms = binding[CDR];
       if (typeof boundVar !== 'symbol')
-        throw new EvalError(`Bad binding ${lispToString(binding)}`);
+        throw new EvalError(`Bad binding ${_toString(binding)}`);
       let val = NIL;
       while (typeof bindingForms === 'object' && bindingForms[IS_CONS]) {
         val = _eval(bindingForms[CAR], scope);
@@ -913,7 +916,7 @@ function newLisp(lispOpts = {}) {
       this.value = value;
     }
     toString() {
-      return `${super.toString()} ${this.tag} ${lispToString(this.value)}`;
+      return `${super.toString()} ${this.tag} ${_toString(this.value)}`;
     }
   };
   LispThrow.prototype.name = "LispThrow";
@@ -945,17 +948,17 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0, lift: 1 });
   function lispJSCatch(catchClause, forms) {
     if (!(typeof catchClause === 'object' && catchClause[IS_CONS]))
-      throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${_toString(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     if (!(typeof catchForms === 'object' && catchForms[IS_CONS]))
-      throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${_toString(catchClause)}`);
     var typeMatch;
     if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
       typeMatch = catchForms[CAR];
       catchForms = catchForms[CDR];
     }
     if (!(typeof catchForms === 'object' && catchForms[IS_CONS]))
-      throw new EvalError(`Bad catch clause ${lispToString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${_toString(catchClause)}`);
     let val = NIL;
     try {
       while (typeof forms === 'object' && forms[IS_CONS]) {
@@ -991,7 +994,7 @@ function newLisp(lispOpts = {}) {
     }
     if (typeof name === 'string') name = Atom(name);
     if (typeof name !== 'symbol')
-      throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
+      throw new EvalError(`must define symbol or string ${_toString(variable)}`);
     this[name] = value;  // Or maybe GlobalScope?
     return name;
   }
@@ -1085,7 +1088,7 @@ function newLisp(lispOpts = {}) {
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           scope[params] = args;
         else if (params !== NIL)
-          throw new EvalError(`Bad parameter list ${lispToString(origFormalParams)}`);
+          throw new EvalError(`Bad parameter list ${_toString(origFormalParams)}`);
         let res = NIL;
         while (typeof forms === 'object' && forms[IS_CONS]) {
           res = _eval(forms[CAR], scope);
@@ -1123,7 +1126,8 @@ function newLisp(lispOpts = {}) {
   // Implements "toString()" for lists.
   // We can't just implement toString() because it needs to work for
   // non-Object types too.
-  function lispToString(obj, opts = {}) {
+  defineGlobalSymbol("toString", a => _toString(a));
+  function _toString(obj, opts = {}) {
     opts = { ...lispOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 80;
     let wrapChar = opts.wrapChar ?? "\n";
@@ -1223,12 +1227,13 @@ function newLisp(lispOpts = {}) {
       return put(String(obj));
     }
   }
-  exportDefinition("stringFor", lispToString);
 
   const TO_LISP_SYMBOL = Symbol("*lisp-to-lisp*");
+  exportDefinition("TO_LISP_SYMBOL", TO_LISP_SYMBOL);
 
   // Recursively turns iterable objects like arrays into lists
-  function iterableToList(obj, depth) {
+  defineGlobalSymbol("toList", a => _toList(a));
+  function _toList(obj, depth) {
     if (depth <= 0)return obj;
     let iterator;
     if (typeof obj === 'function') // assume it's an iterator
@@ -1245,29 +1250,24 @@ function newLisp(lispOpts = {}) {
       function go() {
         let { done, value } = iterator.next();
         if (done) return NIL;
-        return cons(iterableToList(obj, depth-1), go());
+        return cons(_toList(obj, depth-1), go());
       }
       return go();
     }
     return obj;
   }
-  exportDefinition("iterableToList", iterableToList);
-  exportDefinition("arrayToList", iterableToList);
-  exportDefinition("TO_LISP_SYMBOL", TO_LISP_SYMBOL);
 
-  // Recursively turn lists into Arrays
-  function listToArray(obj, depth = MAX_SMALL_INTEGER) {
-    if (depth <= 0) return obj;
-    if (obj === NIL) return [];
-    if (!(typeof obj === 'object' && obj[IS_CONS])) return obj;
+  // Turn iterables into Arrays, recursively if depth > 0
+  exportDefinition("toArray", _toArray);
+  function _toArray(obj, depth = 0) {
     let arr = [];
-    while (typeof obj === 'object' && obj[IS_CONS]) {
-      arr.push(listToArray(obj[CAR]), depth-1);
-      obj = obj[CDR];
+    for (let elem of obj) {
+      if (depth > 0 && elem[Symbol.iterator])
+        elem = _toArray(elem, depth-1);
+      arr += elem;
     }
     return arr;
   }
-  exportDefinition("listToArray", listToArray);
 
   //
   // S-epression parser
@@ -1476,7 +1476,7 @@ function newLisp(lispOpts = {}) {
         let tok = _toks.shift();
         if (tok.type === 'newline' || tok.type === 'end')
           return str === '' ? null : str;
-        str += sep + (tok.value !== undefined ? lispToString(tok.value) : tok.type);
+        str += sep + (tok.value !== undefined ? _toString(tok.value) : tok.type);
         sep = " ";
       }
       for (;;) {
@@ -1485,7 +1485,7 @@ function newLisp(lispOpts = {}) {
         if (tok.type === 'newline' || tok.type === 'end')
           return str;
         let val = tok.value;
-        str += sep + (tok.value !== undefined ? lispToString(tok.value) : tok.type);
+        str += sep + (tok.value !== undefined ? _toString(tok.value) : tok.type);
         sep = " ";
       }
     }
@@ -1879,7 +1879,7 @@ function newLisp(lispOpts = {}) {
         }
       }
     }
-    throw new CompileError(`Not a lambda ${lispToString(expr)}`)
+    throw new CompileError(`Not a lambda ${_toString(expr)}`)
   }
   
   const JS_IDENT_REPLACEMENTS  = {
@@ -1958,7 +1958,7 @@ function newLisp(lispOpts = {}) {
     // readline(prompt) => str | nullish
     let name = opts.name ?? "Jisp";
     let prompt = opts.prompt ?? name + " > ";
-    let print = opts.print ?? (x => console.log(name + ":", lispToString(x)));
+    let print = opts.print ?? (x => console.log(name + ":", _toString(x)));
     let reportLispError = opts.reportLispError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
     let replHints = { prompt };
