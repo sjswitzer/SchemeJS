@@ -60,18 +60,20 @@ function newLisp(lispOpts = {}) {
   });
 
   //
-  // An environment is simply a Map.
-  // A Scope is a list of environments.
+  // You create a new scope with "new Object(oldScope)".
+  // Thus, a scope chain is a prototype chain and resolving
+  // a symbol is as simple as "scope[sym]".
   //
-  const Env = Map;
-  const Scope = Cons;
-  const GlobalEnv = new Env;
-  const GlobalScope = new Scope(GlobalEnv, NIL);
+  class Scope {
+    // Careful defining methods or properties here; they
+    // automatically become part of the API.
+  };
+  const GlobalScope = new Scope();
 
   //
   // Encapsulating everything in a function scope because JITs
-  // can resolve scoped references most easily.
-  // Since most functions expect "this" to be a scope, a Lisp instance
+  // can resolve lexically-scoped references most easily.
+  // Since "this" is used as the current scope, a Lisp instance
   // is the global scope itself!
   //
  function exportDefinition(name, value, ...aliases) {
@@ -201,8 +203,8 @@ function newLisp(lispOpts = {}) {
   const cdddr = cons => cons[CDR][CDR][CDR];
   const cddr = cons => cons[CDR][CDR];
   exportDefinition("NIL", NIL);
-  exportDefinition("Car", car);  // IMPORTANT: Don't smash the scope's "car" and "cdr" members!
-  exportDefinition("Cdr", cdr);  // IMPORTANT: Don't smash the scope's "car" and "cdr" members!
+  exportDefinition("Car", car);
+  exportDefinition("Cdr", cdr);
   exportDefinition("Cons", cons, "cons");
   exportDefinition("IsCons", obj => typeof obj === 'object' && obj[IS_CONS], "isCons");
 
@@ -218,7 +220,6 @@ function newLisp(lispOpts = {}) {
   const LIFT_ARGS = Symbol("*lisp-lift-args*");
   const COMPILE_HOOK = Symbol("*lisp-compile-hook*");
   const MAX_SMALL_INTEGER = 2**30-1;  // Presumably allows JIT to do small-int optimizations
-  exportDefinition("GlobalEnv", GlobalEnv);
 
   function defineGlobalSymbol(name, val, ...aliases) {
     let opts = {};
@@ -232,9 +233,9 @@ function newLisp(lispOpts = {}) {
       if (opts.compileHook) val[COMPILE_HOOK] = opts.compileHook;
     }
     let atom = typeof name === 'symbol' ? name : Atom(String(name));
-    GlobalEnv.set(atom, val);
+    GlobalScope[atom] = val;
     for (let alias of aliases)
-      GlobalEnv.set(Atom(alias), val);
+    GlobalScope[alias] = val;
     return atom;
   }
   exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
@@ -292,32 +293,20 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("lispTokens", (a, b) => [ ... lispTokenGenerator(a), b ]);
   defineGlobalSymbol("read-from-string", a => parseSExpr(a));
 
-  defineGlobalSymbol("eval", eval_defn , { lift: 1 });
-  function eval_defn(expr, rest) {
-    let scope = NIL;
-    if (rest === undefined || rest === NIL)
-      scope = this;  // use the current scope if unspecified
-    // The "rest" parameter is unlifted, so it's a list of arguments.
-    // Which means the first argument is rest[CAR]
-    // Note the user can set a deliberately enmpty scope for whatever reason.
-    if (typeof rest === 'object' && rest[IS_CONS])
-      scope = rest[CAR];
+  defineGlobalSymbol("eval", eval_);
+  function eval_(expr, scope) { // XXX TODO: can this just be "eval"?
+    if (scope == null) scope = this;
+    else if (rest === NIL) scope = GlobalScope;
     if (typeof expr === 'string')
       expr = parseSExpr(expr);
     return _eval(expr, scope);
   }
-  exportDefinition("eval", eval_defn);
+  exportDefinition("eval", eval_);
 
-  defineGlobalSymbol("apply", apply_defn, { lift: 2 });
-  function apply_defn(fn, args, rest) {
-    let scope = NIL;
-    if (rest === undefined || rest === NIL)
-      scope = this;  // use the current scope if unspecified
-    // The "rest" parameter is unlifted, so it's a list of arguments.
-    // Which means the first argument is rest[CAR]
-    // Note the user can set a deliberately enmpty scope for whatever reason.
-    if (typeof rest === 'object' && rest[IS_CONS])
-      scope = rest[CAR];
+  defineGlobalSymbol("apply", apply);
+  function apply(fn, args, scope) {
+    if (scope == null) scope = this;
+    else if (rest === NIL) scope = GlobalScope;
     return _apply(fn, args, scope);
   }
   // Pokemon gotta catch 'em' all!
@@ -587,20 +576,19 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("require", _require);
   function _require(path, force) {
     let sym = Atom(`*${path}-loaded*`);
-    if (_bool(force) || !_bool(resolveSymbol(sym, GlobalScope))) {
+    if (_bool(force) || !_bool(GlobalScope[sym])) {
       try {
         // todo: For now, nodejs-specific
         const fs = require('fs');
         let fileContent = fs.readFileSync(path);
         fileContent = fileContent.toString();
         // The REPL can handle this!
-        // XXX Pass in scope, but which one?
-        lispREPL(function readline() {
+        this.REPL(function readline() {
           let line = fileContent;
           fileContent = null;
           return line;
         });
-        GlobalEnv.set(sym, true);
+        GlobalScope[sym] = true;
       } catch (error) {
         console.log(`"require" failed`, String(error));  // todo: abstract reporting
         return false;
@@ -715,17 +703,24 @@ function newLisp(lispOpts = {}) {
 
 
   // (apropos substring) -- Returns a list of all symbols containing the given substring
-  defineGlobalSymbol("apropos", (substring) => {
+  defineGlobalSymbol("apropos", apropos);
+  function apropos(substring) {
+    if (!substring) substring = "";
     substring = substring.toLowerCase();
-    let matches = [];
-    for (let [name, _value] of GlobalEnv) {
-      name = lispToString(name);
-      if (name.toLowerCase().includes(substring))
-        matches.push(name);
+    let matches = [], scope = this;
+    while (scope && scope !== Object) {
+      let symbols = Object.getOwnPropertySymbols(scope);
+      for (let symbol of symbols) {
+        let name = lispToString(symbol);
+        if (name.toLowerCase().includes(substring))
+          matches.push(symbol);
+      }
+      if (scope === GlobalScope) break;
+      scope = Object.getPrototypeOf(scope);
     }
-    matches.sort();
+    matches.sort((a,b) => a.description < b.description ? -1 : a.description > b.description ? 1 : 0);
     return iterableToList(matches);
-  });
+  }
 
   // (mapcar fn list1 list2 ...)
   defineGlobalSymbol("mapcar", mapcar);
@@ -766,7 +761,7 @@ function newLisp(lispOpts = {}) {
   // still benefiting from Scopes internally.
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0, lift: 1 }, "let", "let*");
   function letrec(bindings, forms) {
-    let env = new Env, scope = new Scope(env, this);
+    let scope = new Object(this);
     while (typeof bindings === 'object' && bindings[IS_CONS]) {
       let binding = bindings[CAR];
       if (!(typeof binding === 'object' && binding[IS_CONS]))
@@ -779,7 +774,7 @@ function newLisp(lispOpts = {}) {
         val = _eval(bindingForms[CAR], scope);
         bindingForms = bindingForms[CDR];
       }
-      env.set(boundVar, val);
+      scope[boundVar] = val;
       bindings = bindings[CDR];
     }
     let res = NIL;
@@ -888,17 +883,16 @@ function newLisp(lispOpts = {}) {
   // maybe some relation between of generators and Lazy eval?
   // Promises
 
-  // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
+  // (lambda (args) (body1) (body2) ...)
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
   function lambda(form) {
     let scope = this;
-    // This looks pretty when printed by Lisp!
     let closure = args => _apply(cons(LAMBDA_ATOM, form), args, scope);
     closure[LIFT_ARGS] = 0;
     return closure;
   }
 
-  // (lambda (args) (body1) (body2) ...) -- returns (%%closure scope args forms)
+  // (lambda (args) (body1) (body2) ...)
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0, lift: 0 });
   function special_lambda(form) {
     let scope = this;
@@ -971,9 +965,8 @@ function newLisp(lispOpts = {}) {
     } catch (e) {
       if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
           || e instanceof typeMatch) {
-        let env = new Env;
-        let scope = new Scope(env, this);
-        env.set(catchVar, e);
+        let scope = new Object(this);
+        scope[catchVar] = e;
         while (typeof catchForms === 'object' && catchForms[IS_CONS]) {
           val = _eval(catchForms[CAR], scope);
           catchForms = catchForms[CDR];
@@ -999,7 +992,7 @@ function newLisp(lispOpts = {}) {
     if (typeof name === 'string') name = Atom(name);
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${lispToString(variable)}`);
-    GlobalScope[CAR].set(name, value);  // Or should it be our scope? That would be weird.
+    this[name] = value;  // Or maybe GlobalScope?
     return name;
   }
 
@@ -1007,10 +1000,10 @@ function newLisp(lispOpts = {}) {
   // This is where the magic happens
   //
 
-  function _eval(expr, scope = GlobalScope) {
+  function _eval(expr, scope) {
     if (expr === NIL) return expr;
     if (typeof expr === 'symbol') {
-      let val = resolveSymbol(expr, scope);
+      let val = scope[expr];
       if (val === undefined) throw new EvalError(`Undefined symbol ${expr.description}`);
       return val;
     }
@@ -1067,7 +1060,7 @@ function newLisp(lispOpts = {}) {
       }
       if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
         jsArgs.push(args);
-      return fn.apply(scope, jsArgs);  // "this" is the scope!
+      return fn.apply(scope, jsArgs);  // ??? scope[fn](...jsArgs);
     }
     if (typeof fn === 'object' && fn[IS_CONS]) {
       let opSym = fn[CAR];
@@ -1076,22 +1069,21 @@ function newLisp(lispOpts = {}) {
         let forms = fn[CDR][CDR];
         if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
           args = evalArgs(args, scope);
-        let env = new Env;
-        scope = new Scope(env, scope);
+        scope = new Object(scope);
         let origFormalParams = params;
         while (typeof params === 'object' && params[IS_CONS]) {
           let param = params[CAR];
           if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
           if (args !== NIL) {
-            env.set(param, args[CAR]);
-            args = args[CDR];
+            scope[param] = args[CAR];
+            if (typeof args === 'object' && args[IS_CONS]) args = args[CDR];
           } else {
-            env[param] = NIL;
+            scope[param] = NIL;
           }
           params = params[CDR];
         }
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
-          env[params] = args;
+          scope[params] = args;
         else if (params !== NIL)
           throw new EvalError(`Bad parameter list ${lispToString(origFormalParams)}`);
         let res = NIL;
@@ -1105,16 +1097,6 @@ function newLisp(lispOpts = {}) {
     throw new EvalError(`Can't apply ${fn}`);
   }
   exportDefinition("apply", _apply);
-
-  function resolveSymbol(sym, scope) {
-    while (typeof scope === 'object' && scope[IS_CONS]) {
-      let val = scope[CAR].get(sym);
-      if (val !== undefined)
-        return val;
-      scope = scope[CDR];
-    }
-    return undefined;
-  }
 
   function evalArgs(args, scope, evalCount = MAX_SMALL_INTEGER) {
     if (evalCount <= 0 || args === NIL) return args;
@@ -1631,7 +1613,7 @@ function newLisp(lispOpts = {}) {
   }
 
   function compile(expr) {
-    let scope = NIL;
+    let scope = GlobalScope;
     let [args, body] = compileLambda(expr, scope);
     let res = new Function(...[ ... args, body ]);
     if (expr[CAR] === SLAMBDA_ATOM)
@@ -1879,10 +1861,10 @@ function newLisp(lispOpts = {}) {
           if (params === NIL || (typeof params === 'object' && params[IS_CONS])) {
             if (forms === NIL || (typeof forms === 'object' && forms[IS_CONS])) {
               // We've got something to work with here
-              let env = new Env, scope = new Scope(env, contaningScope);
+              let scope = new Object(contaningScope);
               while (typeof params === 'object' && params[IS_CONS]) {
                 let param = params[CAR], jsVar = toJSvariable(param);
-                env.put(param, jsVar);
+                scope[param] = jsVar;
                 args.push(jsVar);
                 param = param[CDR];
               }
@@ -1970,7 +1952,8 @@ function newLisp(lispOpts = {}) {
     return { val, emit };
   }
 
-  function lispREPL(readline, opts = {}) {
+  function REPL(readline, opts = {}) {
+    let scope = this;
     opts = { ...lispOpts, ...opts };
     // readline(prompt) => str | nullish
     let name = opts.name ?? "Jisp";
@@ -2001,7 +1984,7 @@ function newLisp(lispOpts = {}) {
       try {
         let expr = parseSExpr(tokenGenerator, { ...opts, replHints });
         if (!expr) continue;
-        let evaluated = _eval(expr);
+        let evaluated = _eval(expr, scope);
         print (evaluated);
       } catch (error) {
         if (error instanceof LispError)
@@ -2011,7 +1994,7 @@ function newLisp(lispOpts = {}) {
       }
     }
   }
-  exportDefinition("REPL", lispREPL);
+  exportDefinition("REPL", REPL);
 
   return GlobalScope;
 } // Whew!
