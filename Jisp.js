@@ -110,19 +110,19 @@ function newLisp(lispOpts = {}) {
   exportDefinition("LogicError", LogicError);
 
   // Atoms are Symbols
-  const ATOMS = new Map;
+  const ATOMS = {};
 
   function Atom(name) {
     if (typeof name === 'symbol') {
       // If they pass in an atom, just return it
-      if (ATOMS.get(name.description) !== name)
+      if (ATOMS[name.description] !== name)
         throw new LogicError(`Symbol "${name.description}" is not an atom`);
-        return name;
+      return name;
     }
-    let atom = ATOMS.get(name);
+    let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
-    ATOMS.set(name, atom);
+    ATOMS[name] = atom;
     return atom;
   }
   exportDefinition("Atom", Atom);
@@ -130,7 +130,7 @@ function newLisp(lispOpts = {}) {
   function AliasAtom(name, ...aliases) {
     let atom = Atom(name);
     for (let alias of aliases)
-      ATOMS.set(alias, atom);
+      ATOMS[alias] = atom;
     return atom;
   }
 
