@@ -10,9 +10,11 @@
 // TODO: make this a JS module
 
 //
-// Creates a Lisp instance, independent of any others
+// Creates a Lisp instance, independent of any others.
+// They are distinct to the bones; they do not even recognize each other's
+// Cons cells or NIL values. This is by design.
 //
-function Jisp(lispOpts = {}) {
+function newLisp(lispOpts = {}) {
   let sanityTest = lispOpts.sanityTest;
 
   const IS_CONS = Symbol("*lisp-isCons*");
@@ -71,7 +73,11 @@ function Jisp(lispOpts = {}) {
   // Since most functions expect "this" to be a scope, a Lisp instance
   // is the global scope itself!
   //
-  const exportDefinition = (name, value) => GlobalScope[name] = value;
+ function exportDefinition(name, value, ...aliases) {
+   GlobalScope[name] = value;
+   for (let alias in aliases)
+     GlobalScope[alias] = value;
+ }
 
   class LispError extends Error {};
   LispError.prototype.name = "LispError";
@@ -193,11 +199,11 @@ function Jisp(lispOpts = {}) {
   const cddar = cons => cons.car.cdr.cdr;
   const cdddr = cons => cons.cdr.cdr.cdr;
   const cddr = cons => cons.cdr.cdr;
-  exportDefinition("Cons", cons);
-  exportDefinition("IsCons", obj => typeof obj === 'object' && obj[IS_CONS]);
   exportDefinition("NIL", NIL);
   exportDefinition("Car", car);  // IMPORTANT: Don't smash the scope's "car" and "cdr" members!
-  exportDefinition("Cdr", cdr);
+  exportDefinition("Cdr", cdr);  // IMPORTANT: Don't smash the scope's "car" and "cdr" members!
+  exportDefinition("Cons", cons, "cons");
+  exportDefinition("IsCons", obj => typeof obj === 'object' && obj[IS_CONS], "isCons");
 
   function list(...elements) {  // easy list builder
     let val = NIL;
@@ -209,7 +215,8 @@ function Jisp(lispOpts = {}) {
 
   const EVAL_ARGS = Symbol("*lisp-eval-args*");
   const LIFT_ARGS = Symbol("*lisp-lift-args*");
-  const MAX_SMALL_INTEGER = 2**30-1;
+  const COMPILE_HOOK = Symbol("*lisp-compile-hook*");
+  const MAX_SMALL_INTEGER = 2**30-1;  // Presumably allows JIT to do small-int optimizations
   exportDefinition("GlobalEnv", GlobalEnv);
 
   function defineGlobalSymbol(name, val, ...aliases) {
@@ -217,8 +224,10 @@ function Jisp(lispOpts = {}) {
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
     if (typeof val === 'function') {
-      if (opts.evalArgs !== undefined) val[EVAL_ARGS] = opts.evalArgs;
-      if (opts.lift !== undefined) val[LIFT_ARGS] = opts.lift;
+      // Always set these props because JITs are more likely to optimize found props than unfound ones.
+      val[EVAL_ARGS] = opts.evalArgs ?? MAX_SMALL_INTEGER;;
+      val[LIFT_ARGS] = opts.lift ?? MAX_SMALL_INTEGER;
+      if (opts.compileHook) val[COMPILE_HOOK] = opts.compileHook;
     }
     let atom = typeof name === 'symbol' ? name : Atom(String(name));
     GlobalEnv.set(atom, val);
@@ -590,7 +599,7 @@ function Jisp(lispOpts = {}) {
         });
         GlobalEnv.set(sym, true);
       } catch (error) {
-        console.log("require failed", String(error));  // todo: abstract reporting
+        console.log(`"require" failed`, String(error));  // todo: abstract reporting
         return false;
       }
     }
@@ -932,10 +941,10 @@ function Jisp(lispOpts = {}) {
     return val;
   }
 
-  // (throw value) -- JavaScript style
+  // (throw value) -- Java/JavaScript style
   defineGlobalSymbol("throw", value => { throw value});
 
-  // (catch (var [type] forms) forms)
+  // (catch (var [type] forms) forms) -- Java/JavaScript style
   defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0, lift: 1 });
   function lispJSCatch(catchClause, forms) {
     if (!(typeof catchClause === 'object' && catchClause[IS_CONS]))
@@ -1035,10 +1044,10 @@ function Jisp(lispOpts = {}) {
 
   function _apply(fn, args, scope) {
     if (typeof fn === 'function') {
-      let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
+      let evalCount = fn[EVAL_ARGS];
       if (evalCount > 0)
         args = evalArgs(args, scope, evalCount);
-      let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
+      let lift = fn[LIFT_ARGS];
       let jsArgs = [], noPad = lift === MAX_SMALL_INTEGER;
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
@@ -1629,7 +1638,8 @@ function Jisp(lispOpts = {}) {
 
   function analyzeJSFunction(fn, result, args) {
     // Super janky passer. It only has to recoginze things that fn.toSting() can return.
-    // So it takes a LOT of shortcuts that would never be sensible for arbitrary input strings.
+    // But it's conservative in that it doesn't recognize any functions that
+    // don't end in a particular sequence of tokens or that use "return" more than once.
     let str = fn.toString(), pos = 0, token = "";
     let functionName, params = [], restParam, resultVal, body;
     if (sanityTest) console.log('TEST analyzeJSFunction', str, result, args);
@@ -1728,7 +1738,7 @@ function Jisp(lispOpts = {}) {
           jsArgs.push(args.car);
           args = args.cdr;
         } else {
-          // don't let cons, etc, be seeing any undefined parmaters
+          // Don't let cons, etc, be seeing any undefined parmaters
           if (noPad) // but not infinitely many of them!
             break;
           jsArgs.push(NIL);
@@ -1740,19 +1750,37 @@ function Jisp(lispOpts = {}) {
       return fn.apply(scope, jsArgs);  // "this" is the scope!
     */
     if (sanityTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
-    let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
-    let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
-
+    let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER, noPad = lift === MAX_SMALL_INTEGER;
     let decompiled = `let ${result}; {${functionName ? "// " + functionName : ""}\n`;
     let paramsCopy = [...params], argsCopy = [...args];
-    while (lift > 0 && paramsCopy.length > 0) {
-      let param = paramsCopy.shift();
-      let arg = argsCopy.shift();
+    // See corresponding code in _apply!
+    while (lift > 0) {
+      if (paramsCopy.length > 0) {
+        let param = paramsCopy.shift();
+        let arg = argsCopy.shift();
+        decompiled += `let ${param} = ${arg};\n`
+      } else {
+        if (noPad) break;
+        decompiled += `let ${param} = NIL;\n`
+      }
       lift -= 1;
-      decompiled += `let ${param} = ${arg};\n`
     }
     if (restParam) {
-      // ???
+      // Q: Are "cons" and "NIL" in scope?
+      // A: No, not inherently, but the top-level function will hoist them from
+      // the scope ("this") object. So "no" and "yes."
+      decompiled += `let ${restParam} = `;
+      if (args.length > 0) {
+        let lng = args.length;
+        for (let i = 0; i < lng; ++i)
+          decompiled += `cons(${args[i]}, `;
+        decompiled += `NIL`;
+        for (let i = 0; i < lng; ++i)
+          decompiled += `)`;
+        decompiled += `;\n`;
+      } else {
+        decompiled += `let ${restParam} = undefined;\n`;
+      }
     }
       
     if (body)
@@ -1814,6 +1842,7 @@ function Jisp(lispOpts = {}) {
     analyzeJSFunction(function (a, ...rest) { return a; }, resultTmp, args);
     analyzeJSFunction(function (a, b, c, ...rest) { return a; }, resultTmp, args);
     analyzeJSFunction(function someFunction(a, ...rest) { return a; }, resultTmp, args);
+    analyzeJSFunction(function someFunction(a, ...rest) { return a; }, resultTmp, ["tmp$1"]);
     analyzeJSFunction(function someFunction(a, b, c, ...rest) { return a; }, resultTmp, args);
     analyzeJSFunction(function someFunction(...rest) { return a; }, resultTmp, args);
     analyzeJSFunction(function (...rest) { return a; }, resultTmp, args);
@@ -1875,7 +1904,6 @@ function Jisp(lispOpts = {}) {
   };
 
   function toJSvariable(name) {
-    if (sanityTest) console.log(toJSvariable)
     let newName = "", fragment = "";
     for (let ch of name) {
       if (JS_IDENT_REPLACEMENTS[ch]) {
@@ -1965,7 +1993,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
     } catch(e) {
       console.info("Can't open termnal", e);
-      Jisp({ sanityTest: true });  // XXX silly debugging hack
+      newLisp({ sanityTest: true });  // XXX silly debugging hack
     }
     if (inputFd !== undefined) {
       console.log(`Jisp 1.1 REPL. Type "." to exit.`);
@@ -1978,7 +2006,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
           line = line.substr(0, line.length-1);
         return line;
       }
-      let lisp = Jisp();
+      let lisp = newLisp();
       // getLine("Attach debugger and hit return! ");  // uncomment to do what it says
       lisp.eval('(define (test) (require "test.scm" true))');
       lisp.REPL(getLine);
