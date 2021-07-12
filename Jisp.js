@@ -53,6 +53,15 @@ function newLisp(lispOpts = {}) {
   // There should be a way to do this in the class decl, but not in ES6
   Cons.prototype[IS_CONS] = true;
 
+  function nextCons() {  // Cons iterator function
+    let current = this._current, done = !(typeof current === 'object' && current[IS_CONS]), value;
+    if (!done) {
+      this._current = current[CDR];
+      value = current[CAR];
+    }
+    return { done, value };
+  }
+
   // Hide the Nil class because there's never any reason to
   // reference it or instantiate it it more than once. Having it visible
   // just invites errors. But it's good to have a distinct class for NIL
@@ -64,10 +73,9 @@ function newLisp(lispOpts = {}) {
     *[Symbol.iterator]() { return { next: () => ({ done: true, value: null }) } }
   });
 
-  // You create a new scope with "new Object(oldScope)".
+  // Create a new scope with "new Object(oldScope)".
   // this way, a scope chain is a prototype chain and resolving
   // a symbol is as simple as "scope[sym]"!
-  
   class Scope {
     // Be careful defining methods or properties here; they
     // automatically become part of the API.
@@ -101,7 +109,7 @@ function newLisp(lispOpts = {}) {
   ATOMS["\\\\"] = SLAMBDA_ATOM;
   
   //
-  // Encapsulating everything in a function scope because JITs
+  // Everything is encapsulated in a function scope because JITs
   // can resolve lexically-scoped references most easily.
   // Since "this" is used as the current scope, a Lisp instance
   // is the global scope itself!
@@ -182,15 +190,6 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("TypeError", TypeError);
   defineGlobalSymbol("EvalError", EvalError);
 
-  function nextCons() {
-    let current = this._current, done = current === NIL, value = undefined;
-    if (!done) {
-      this._current = current[CDR];
-      value = current[CAR];
-    }
-    return { done, value };
-  }
-
   // Just a sketch of lazy evaluation.
   class LazyCarCons {
     // User inplements "get car()" in a subclass and ideally seals the object
@@ -222,6 +221,7 @@ function newLisp(lispOpts = {}) {
   // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
   // In Jisp, NIL, null, undefined, and false are false and everything else is true.
   //
+  exportDefinition("toBool", _bool);
   function _bool(val) {
     // Give priority here to actual true and false values
     if (val === true) return true;
@@ -229,7 +229,6 @@ function newLisp(lispOpts = {}) {
       return false;
     return true;
   }
-  exportDefinition("toBool", _bool);
 
   const cons = (car, cdr) => new Cons(car, cdr);
   const car = cons => cons[CAR];
@@ -247,25 +246,21 @@ function newLisp(lispOpts = {}) {
   const cddar = cons => cons[CAR][CDR][CDR];
   const cdddr = cons => cons[CDR][CDR][CDR];
   const cddr = cons => cons[CDR][CDR];
-  exportDefinition("NIL", NIL);
-  exportDefinition("Car", car);
-  exportDefinition("Cdr", cdr);
-  exportDefinition("Cons", cons, "cons");
-  exportDefinition("IsCons", obj => typeof obj === 'object' && obj[IS_CONS], "isCons");
 
+  exportDefinition("list", list);
   function list(...elements) {  // easy list builder
     let val = NIL;
     for (let i = elements.length; i > 0; --i)
       val = cons(elements[i-1], val);
     return val;
   }
-  exportDefinition("list", list);
 
-  defineGlobalSymbol("nil", NIL);
   const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0 }, "'");
+  defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
   defineGlobalSymbol("false", false);
+  defineGlobalSymbol("isCons", a => typeof a === 'object' && a[IS_CONS], "pair?");
   defineGlobalSymbol("cons", cons, { lift: 2 });  // lift guarantees two arguments that aren't "undefined"
   defineGlobalSymbol("car", car, { lift: 1 }, "first"); // lift guarantees one argument that isn't "undefined"
   defineGlobalSymbol("cdr", cdr, { lift: 1 }, "rest");
@@ -281,11 +276,11 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("cddar", cddar, { lift: 1 });
   defineGlobalSymbol("cdddr", cdddr, { lift: 1 });
   defineGlobalSymbol("cddr", cddr, { lift: 1 });
-  defineGlobalSymbol("pair?", a => typeof a === object && a[IS_CONS] === true);
   defineGlobalSymbol("typeof", a => typeof a);
   defineGlobalSymbol("undefined?", a => typeof a === 'undefined');
   defineGlobalSymbol("null?", a => a === NIL);  // XXX scheme clained it first. Maybe rethink the naming here.
   defineGlobalSymbol("nullJS?", a => a === null);
+  defineGlobalSymbol("nullish?", a => a == null);
   defineGlobalSymbol("boolean?", a => typeof a === 'boolean');
   defineGlobalSymbol("number?", a => typeof a === 'number');
   defineGlobalSymbol("bigint?", a => typeof a === 'bigint');
@@ -295,6 +290,11 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("function?", a => typeof a === 'function');
   defineGlobalSymbol("object?", a => typeof a === 'object');
   defineGlobalSymbol("array?", a => (typeof a === 'object') && (a instanceof Array));
+  defineGlobalSymbol("NaN", NaN);
+  defineGlobalSymbol("isNaN", isNaN, "nan?");
+  defineGlobalSymbol("Infinity", Infinity);
+  defineGlobalSymbol("isFinite", isFinite, "finite?");
+  // Stuff the whole Math class in there!
   for (let [name, {value}] of Object.entries(Object.getOwnPropertyDescriptors(Math))) {
     // SIOD defines *pi* so I'll just define them all like that
     if (typeof value === 'number')
@@ -303,24 +303,21 @@ function newLisp(lispOpts = {}) {
     if (typeof value === 'number' || typeof value === 'function')
       defineGlobalSymbol(name, value);
   }
-  defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // unlike Math.abs, this deals with BigInt too
+  defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
   defineGlobalSymbol("intern", a => Atom(a));
   defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
-  defineGlobalSymbol("toArray", a => _toArray(a));
   defineGlobalSymbol("toNumber", a => Number(a));
   defineGlobalSymbol("toBigInt", a => BigInt(a));
   defineGlobalSymbol("lispTokens", a => [ ... lispTokenGenerator(a) ]);
-  defineGlobalSymbol("parse", a => parseSExpr(a));
 
   defineGlobalSymbol("eval", eval_);
-  function eval_(expr, scope) { // XXX TODO: can this just be "eval"?
+  function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
     if (scope == null) scope = this;
     else if (rest === NIL) scope = GlobalScope;
     if (typeof expr === 'string')
       expr = parseSExpr(expr);
     return _eval(expr, scope);
   }
-  exportDefinition("eval", eval_);
 
   defineGlobalSymbol("apply", apply);
   function apply(fn, args, scope) {
@@ -334,15 +331,22 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("**", (a,b) => a ** b, "exp");
   defineGlobalSymbol("%", (a,b) => a % b, "rem");
   defineGlobalSymbol("<<", (a,b) => a << b, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, "ash");
+  defineGlobalSymbol(">>", (a,b) => a >> b, "ash");  // XXX name?
   defineGlobalSymbol(">>>", (a,b) => a >>> b, "bit-ushr");
   defineGlobalSymbol("in", (a,b) => a in b);
   defineGlobalSymbol("new", (cls, ...args) => new cls(...args));
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b);
+  //   XXX TODO: "delete", setting props and array elements
+  defineGlobalSymbol("@", (a, b) => b[a]);  // indexing and member access
+  defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
+  defineGlobalSymbol("parseFloat", parseFloat);
+  defineGlobalSymbol("parseInt", parseInt);
 
-  // variable args
-
-  defineGlobalSymbol("+", (...args) => {
+  //
+  // Variable args definitions
+  //
+  defineGlobalSymbol("+", (...a) => add(...a), "add");  // Hide the function body from String(fn)
+  function add(...args) {
     let a = 0, first = true;
     for (let b of args) {
       if (first) {
@@ -355,16 +359,18 @@ function newLisp(lispOpts = {}) {
       a += b;
     }
     return a;
-  }, "add");
+  }
 
-  defineGlobalSymbol("-", (a, ...rest) => {
+  defineGlobalSymbol("-", (...a) => sub(...a), "sub");
+  function sub (a, ...rest) {
     if (rest.length === 0) return -a;
     for (let b of rest)
       a -= b;
     return a;
-  }, "sub");
+  }
 
-  defineGlobalSymbol("*", (...args) => {
+  defineGlobalSymbol("*", (...a) => mul(...a), "mul");
+  function mul(...args) {
     let a = 1, first = true;
     for (let b of args) {
       if (first) {
@@ -375,7 +381,7 @@ function newLisp(lispOpts = {}) {
       a *= b;
     }
     return a;
-  }, "mul");
+  }
 
   defineGlobalSymbol('/', (a, ...rest) => {
     if (rest.length === 0) return 1/a;  // XXX ???
@@ -405,13 +411,6 @@ function newLisp(lispOpts = {}) {
     return a;
   }, "bit-xor");
 
-  defineGlobalSymbol("&", (...args) => {
-    let a = ~0;
-    for (let b of args)
-      a &= b;
-    return a;
-  }, "bit-and");
-
   // XXX todo: do all of these without lifting to JS
   defineGlobalSymbol("<", lt, { evalArgs: 1 }, "lt");
   function lt(a, ...rest) {
@@ -424,9 +423,9 @@ function newLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol("<=", le, { evalArgs: 1 }, "le");
+  defineGlobalSymbol("<=", le, { evalArgs: 1, compileHook: leHook }, "le");
   function le(a, ...rest) {
-    if (rest.length === 0) return true; // equal to itself?
+    if (rest.length === 0) return true; // is nothing equal to itself?
     for (let b of rest) {
       b = _eval(b, this);
       if (!(a <= b)) return false;
@@ -577,20 +576,6 @@ function newLisp(lispOpts = {}) {
     }
     return NIL;
   }
-
-  // JavaScripty things:
-  //   XXX TODO: "delete", setting props and array elements
-  defineGlobalSymbol("@", (a, b) => b[a]);  // indexing and member access
-  defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
-  defineGlobalSymbol("toLisp", _toList);
-  defineGlobalSymbol("toArray", _toArray);
-  defineGlobalSymbol("NaN", NaN);
-  defineGlobalSymbol("Infinity", Infinity);
-  defineGlobalSymbol("isFinite", isFinite);
-  defineGlobalSymbol("isNaN", isNaN);
-  defineGlobalSymbol("isFinite", isFinite);
-  defineGlobalSymbol("parseFloat", parseFloat);
-  defineGlobalSymbol("parseInt", parseInt);
 
   defineGlobalSymbol("require", _require);
   function _require(path, force) {
@@ -1274,7 +1259,7 @@ function newLisp(lispOpts = {}) {
   }
 
   // Turn iterables into Arrays, recursively if depth > 0
-  exportDefinition("toArray", _toArray);
+  defineGlobalSymbol("toArray", a => _toArray(a));
   function _toArray(obj, depth = 0) {
     let arr = [];
     for (let elem of obj) {
@@ -1438,6 +1423,7 @@ function newLisp(lispOpts = {}) {
     yield { type: 'end' };
   }
 
+  defineGlobalSymbol("parse", a => parseSExpr(a));
   function parseSExpr(tokenGenerator, opts = {}) {
     opts = { ...lispOpts, ...opts };
     let replHints = opts.replHints ?? {};
@@ -1822,7 +1808,7 @@ function newLisp(lispOpts = {}) {
           ch = str[++pos]
         }
         ++pos;
-        return token = 'quoted-stuff';
+        return token = 'quoted';
       }
       return token = str[pos++];
     }
