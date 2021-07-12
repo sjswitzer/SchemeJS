@@ -128,7 +128,7 @@ function newLisp(lispOpts = {}) {
   // 
   const LIFT_ARGS = Symbol("*lisp-lift-args*");
   const COMPILE_HOOK = Symbol("*lisp-compile-hook*");
-  const MAX_SMALL_INTEGER = 2**30-1;  // Presumably allows JIT to do small-int optimizations
+  const MAX_INTEGER = 2**31-1;  // Presumably allows JIT to do small-int optimizations
 
   exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
   function defineGlobalSymbol(name, value, ...aliases) {
@@ -136,16 +136,16 @@ function newLisp(lispOpts = {}) {
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
     if (typeof value === 'function') {
-      let lift = opts.lift ?? MAX_SMALL_INTEGER;
-      let evalArgs = opts.evalArgs ?? MAX_SMALL_INTEGER;
-      if (evalArgs !== MAX_SMALL_INTEGER) {
-        if (lift === MAX_SMALL_INTEGER) lift = 0xf;
+      let lift = opts.lift ?? MAX_INTEGER;
+      let evalArgs = opts.evalArgs ?? MAX_INTEGER;
+      if (evalArgs !== MAX_INTEGER) {
+        if (lift === MAX_INTEGER) lift = 0xf;
         else if (lift >= 0xf) throw new LogicError("Can't specify both evalArgs and large lift")
         lift = (~evalArgs << 4) + lift;  // Read carefully; that's a bitwise not (tilde)
       }
       // Always set this prop because JITs are more likely to optimize found props than unfound ones.
       value[LIFT_ARGS] = lift;
-      // XXX TODO: make sure that every defn with EVAL_ARGS !== MAX_SMALL_INTEGER has a compile hook.
+      // XXX TODO: make sure that every defn with evalArgs !== MAX_INTEGER has a compile hook.
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
     }
     let atom = typeof name === 'symbol' ? name : Atom(name);
@@ -1071,17 +1071,17 @@ function newLisp(lispOpts = {}) {
 
   function _apply(fn, args, scope) {
     if (typeof fn === 'function') {
-      let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
-      let evalCount = MAX_SMALL_INTEGER;
+      let lift = (fn[LIFT_ARGS] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
+      let evalCount = MAX_INTEGER;
       if (lift < 0) {  // This is tedious but it's got to be faster than reading two properties
         lift = evalCount & 0xf;
-        if (lift === 0xf) lift = MAX_SMALL_INTEGER;
+        if (lift === 0xf) lift = MAX_INTEGER;
         evalCount >> 4
         evalCount = ~evalCount; // bitwize not
       }
       if (evalCount > 0)
         args = evalArgs(args, scope, evalCount);
-      let jsArgs = [], noPad = lift === MAX_SMALL_INTEGER;
+      let jsArgs = [], noPad = lift === MAX_INTEGER;
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
         if (typeof args === 'object' && args[PAIR]) {
@@ -1134,7 +1134,8 @@ function newLisp(lispOpts = {}) {
     throw new EvalError(`Can't apply ${fn}`);
   }
 
-  function evalArgs(args, scope, evalCount = MAX_SMALL_INTEGER) {
+  function evalArgs(args, scope, evalCount = MAX_INTEGER) {
+    evalCount = evalCount|0;  // really an int
     if (evalCount <= 0 || args === NIL) return args;
     let argv = [];
     let reverse = NIL;
@@ -1746,11 +1747,11 @@ function newLisp(lispOpts = {}) {
       return {};
 
     /*
-      let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
+      let evalCount = fn[EVAL_ARGS] ?? MAX_INTEGER;
       if (evalCount > 0)
         args = evalArgs(args, scope, evalCount);
-      let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
-      let jsArgs = [], noPad = lift === MAX_SMALL_INTEGER;
+      let lift = fn[LIFT_ARGS] ?? MAX_INTEGER;
+      let jsArgs = [], noPad = lift === MAX_INTEGER;
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
         if (typeof args === 'object' && args[PAIR]) {
@@ -1769,7 +1770,7 @@ function newLisp(lispOpts = {}) {
       return fn.apply(scope, jsArgs);  // "this" is the scope!
     */
     if (sanityTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
-    let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER, noPad = lift === MAX_SMALL_INTEGER;
+    let lift = fn[LIFT_ARGS] ?? MAX_INTEGER, noPad = lift === MAX_INTEGER;
     let decompiled = `let ${result}; {${functionName ? "// " + functionName : ""}\n`;
     let paramsCopy = [...params], argsCopy = [...args];
     // See corresponding code in _apply!
@@ -1873,8 +1874,8 @@ function newLisp(lispOpts = {}) {
     function emit(fn, args) { // => tvar
       var tvar = newTvar();
       var fstr = String(fn);
-      let evalCount = fn[EVAL_ARGS] ?? MAX_SMALL_INTEGER;
-      let lift = fn[LIFT_ARGS] ?? MAX_SMALL_INTEGER;
+      let evalCount = fn[EVAL_ARGS] ?? MAX_INTEGER;
+      let lift = fn[LIFT_ARGS] ?? MAX_INTEGER;
       // var $tvar; {
       //   let p1 = a1, p2 = a2, p3 = a3 (maybe array);
       //   tvar = ...;
@@ -2068,7 +2069,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
         return fileContent;
       }
       let lisp = newLisp( { readFile });
-      // getLine("Attach debugger and hit return! ");  // uncomment to do what it says
+      // getLine("Attach debugger and hit return!");  // uncomment to do what it says
       lisp.eval('(define (test) (require "test.scm" true))');
       lisp.REPL(getLine);
     }
