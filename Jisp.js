@@ -18,12 +18,14 @@ const { isArray } = require('util');
 // Cons cells or NIL values. This is by design.
 //
 function newLisp(lispOpts = {}) {
-  let sanityTest = lispOpts.sanityTest;
   let readFile = lispOpts.readFile;
   let _reportError = lispOpts.reportError = error => console.log(error); // Don't call this one
   let reportLispError = lispOpts.reportLispError ?? _reportError; // Call these instead
   let reportSystemError = lispOpts.reportError ?? _reportError;
-  let reportLoadResult = lispOpts.reportLoadResult = result => console.log(_toString(result));
+  let reportLoadResult = lispOpts.reportLoadResult ?? (result => console.log(_toString(result)));
+  let unitTest = lispOpts.unitTest;
+  let reportTestFailed = lispOpts.reportTestFailure ?? testFailed;
+  let reportTestSucceeded = lispOpts.reportTestSuccess ?? testSucceeded;
 
   // Creating a Cons should be as cheap as possible, so no subclassing
   // or calls to super. But I want people to be able to define their
@@ -163,6 +165,8 @@ function newLisp(lispOpts = {}) {
     return atom;
   }
 
+  let testQueue = [];
+
   class LispError extends Error {};
   LispError.prototype.name = "LispError";
   defineGlobalSymbol("LispError", LispError);
@@ -212,7 +216,7 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  LazyCarCons.prototype[CDR] = true;
+  LazyCarCons.prototype[PAIR] = true;
 
   class LazyCdrCons {
     // User inplements "get cdr()" in a subclass and ideally seals the object
@@ -225,7 +229,7 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  LazyCdrCons.prototype[CDR] = true;
+  LazyCdrCons.prototype[PAIR] = true;
 
   //
   // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
@@ -319,6 +323,10 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("toNumber", a => Number(a));
   defineGlobalSymbol("toBigInt", a => BigInt(a));
   defineGlobalSymbol("lispTokens", a => [ ... lispTokenGenerator(a) ]);
+
+  queueTests(function() {
+    // TODO
+  });
 
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
@@ -1720,7 +1728,7 @@ function newLisp(lispOpts = {}) {
     // don't end in a particular sequence of tokens or that use "return" more than once.
     let str = fn.toString(), pos = 0, token = "";
     let functionName, params = [], restParam, resultVal, body;
-    if (sanityTest) console.log('TEST analyzeJSFunction', str, result, args);
+    if (unitTest) console.log('TEST analyzeJSFunction', str, result, args);
     nextToken();
     if (token === 'function') {
       nextToken();
@@ -1827,7 +1835,7 @@ function newLisp(lispOpts = {}) {
         jsArgs.push(args);
       return fn.apply(scope, jsArgs);  // "this" is the scope!
     */
-    if (sanityTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
+    if (unitTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
     let lift = fn[LIFT_ARGS] ?? MAX_INTEGER;
     let decompiled = `let ${result}; {${functionName ? "// " + functionName : ""}\n`;
     let paramsCopy = [...params], argsCopy = [...args];
@@ -1864,7 +1872,7 @@ function newLisp(lispOpts = {}) {
     if (body)
       decompiled += `${body}\n`;
     decompiled += `${result} = ${resultVal};\n}\n`
-    if (sanityTest) console.log("TEST analyzeJSFunction (decompiled)", decompiled);
+    if (unitTest) console.log("TEST analyzeJSFunction (decompiled)", decompiled);
     return { result, name: functionName, params, restParam, body, decompiled, fn };
 
     function nextToken() {
@@ -1905,7 +1913,7 @@ function newLisp(lispOpts = {}) {
     }
   }
  
-  if (sanityTest) {
+  if (unitTest) {
     let resultTmp = "tmp$15", args = ["tmp$1", "tmp$4", "tmp$3", "tmp$7"];
     analyzeJSFunction(x => x * x, resultTmp, args);
     analyzeJSFunction((x) => x * x, resultTmp, args);
@@ -2147,11 +2155,11 @@ function newLisp(lispOpts = {}) {
       }
     }
     newName += fragment;
-    if (sanityTest) console.log("TEST toJSname", name, newName);
+    if (unitTest) console.log("TEST toJSname", name, newName);
     return newName;
   }
 
-  if (sanityTest) {
+  if (unitTest) {
     toJSname("aNormal_name0234");
     toJSname("aname%with&/specialChars?");
     toJSname("_begins_with_underscore");
@@ -2239,6 +2247,82 @@ function newLisp(lispOpts = {}) {
     }
   }
 
+  // Tiny unit test system
+  // I need something special here because the internal functions are not accessible
+  // externally. I also just like the idea of the tests being with the code itself.
+  class TestFailureError extends LispError {
+    constructor(message, test, result, expected) {
+      super(message);
+      this.test = test;
+      this.result = result;
+      this.expected = expected;
+    }
+  }
+  TestFailureError.prototype.name = "TestFailureError";
+
+  function testFailed(message, test, result, expected) {
+    console.info("FAILED", test, result, expected);
+    throw new TestFailureError(message, test, result, expected);
+  }
+
+  function testSucceeded(test, result, expected) {
+    console.info("SUCCEEDED", test, result, expected);
+  }
+
+  function EXPECT(test, expected) {
+    try {
+      let result, ok;
+      if (typeof test === 'string') {
+        result = GlobalScope.eval(test);
+        if (typeof expected === 'string')
+          expected = GlobalScope.eval(expected);
+      } else {
+        test.call(GlobalScope);
+      }
+      if (typeof expected === 'function')
+        ok = expected(result);
+      else
+        ok = deep_eq(result, expected);
+      if (!ok) {
+        reportTestFailed("unexpected", test, result, expected);
+      } else {
+        reportTestSucceeded(test, result, expected);
+      }
+    } catch (error) {
+      reportTestFailed("exception", test, error, expected);
+    }
+  }
+
+  function EXPECT_THROW(test, expected) {
+    let result;
+    try {
+      if (typeof test === 'string') {
+        result = GlobalScope.eval(test);
+        if (typeof expected === 'string')
+          expected = GlobalScope.eval(expected);
+      } else {
+        test.call(GlobalScope);
+      }
+    } catch (error) {
+      if (error === expected
+          || (expected instanceof error && error instanceof expected)
+          || (typeof expected === 'function' && expected(error))) {
+        reportTestSucceeded(test, result, expected);
+      }
+      reportTestFailed("wrong exception", test, result, expected);
+    }
+    reportTestFailed("expected exception", test, result, expected);
+  }
+
+  function queueTests(tests) {
+    if (unitTest) testQueue.push(tests);
+  }
+
+  if (unitTest) {
+    for (tests of testQueue)
+      tests.call(GlobalScope);
+  }
+
   return GlobalScope;
 } // Whew!
 
@@ -2258,7 +2342,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
     } catch(e) {
       console.info("Can't open termnal", e);
-      newLisp({ sanityTest: true });  // XXX silly debugging hack
+      newLisp({ unitTest: true });  // XXX silly debugging hack
     }
     if (inputFd !== undefined) {
       console.log(`Jisp 1.1 REPL. Type "." to exit.`);
