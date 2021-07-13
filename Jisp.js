@@ -139,7 +139,7 @@ function newLisp(lispOpts = {}) {
       let lift = opts.lift ?? MAX_INTEGER;
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       if (lift !== MAX_INTEGER && lift >= 0xff) throw new LogicError("Too big a lift");
-      // Encoding chosen so that small values mean eval everything and lift that namy
+      // Encoding chosen so that small values mean eval everything and lift that many.
       lift = (~evalCount << 8) | lift&0xff;
       value[LIFT_ARGS] = lift;
       // XXX TODO: make sure that every defn with evalArgs !== MAX_INTEGER has a compile hook.
@@ -1073,9 +1073,11 @@ function newLisp(lispOpts = {}) {
   function _apply(fn, args, scope) {
     if (typeof fn === 'function') {
       // lift encoded as: (~evalCount << 8) | lift&0xff;
-      let lift = (fn[LIFT_ARGS] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
-      let evalCount = ~(lift >> 8);
-       // Turns a "lift" that was MAX_INTEGER back into MAX_INTEGER, without branches
+      // If there's no LIFT_ARGS, the default is to eval and lift everything.
+      // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
+      let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
+       // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
+       let evalCount = ~lift >> 7 >>> 1;
       lift = lift << 24 >> 23 >>> 1;
       args = evalArgs(args, scope, evalCount);
       let jsArgs = [];
@@ -1653,6 +1655,10 @@ function newLisp(lispOpts = {}) {
   }
 
   function analyzeJSFunction(fn, result, args) {
+    // The idea here is to use the intrinsic functions themselves as code generation
+    // templates. That works as long as the functions don't call _eval. In that case
+    // we need specialized compile hooks to generate code.
+    //
     // Super janky passer. It only has to recoginze things that fn.toSting() can return.
     // But it's conservative in that it doesn't recognize any functions that
     // don't end in a particular sequence of tokens or that use "return" more than once.
@@ -1710,7 +1716,7 @@ function newLisp(lispOpts = {}) {
           body = str.substring(bodyPos, returnPos);
         }
       }
-    } else {
+    } else { // Arrow functions
       if (token === '(') {
         nextToken();
         for (;;) {
@@ -1766,7 +1772,7 @@ function newLisp(lispOpts = {}) {
       return fn.apply(scope, jsArgs);  // "this" is the scope!
     */
     if (sanityTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
-    let lift = fn[LIFT_ARGS] ?? MAX_INTEGER, noPad = lift === MAX_INTEGER;
+    let lift = fn[LIFT_ARGS] ?? MAX_INTEGER;
     let decompiled = `let ${result}; {${functionName ? "// " + functionName : ""}\n`;
     let paramsCopy = [...params], argsCopy = [...args];
     // See corresponding code in _apply!
