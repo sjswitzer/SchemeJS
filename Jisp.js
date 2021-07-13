@@ -1174,7 +1174,7 @@ function newLisp(lispOpts = {}) {
     return args;
   }
 
-  const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\' }
+  const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\', '\n': '' };
   const STRING_ESCAPES = (() => {
     let res = {};
     for (let [key, value] of Object.entries(ESCAPE_STRINGS))
@@ -1406,16 +1406,18 @@ function newLisp(lispOpts = {}) {
         while (ch && ch != '"' && !NL[ch]) {
           if (ch === '\\') {
             nextc();
-            ch = ESCAPE_STRINGS[ch] ?? `\\$ch}`;
+            ch = ESCAPE_STRINGS[ch] ?? `\\${ch}`;
           }
           str += ch;
           nextc();
         }
-        if (ch === '"')
+        if (ch === '"') {
           yield { type: 'string', value: str };
-        else
+          nextc();
+        } else {
           yield { type: 'garbage', value: '"'+str };
-        nextc();
+          // Don't consume the newline or the REPL will prompt for another line of input
+        }
         continue;
       }
 
@@ -1578,6 +1580,7 @@ function newLisp(lispOpts = {}) {
             return val;
           }
           if (token().type === 'end') throw new ParseIncomplete();
+          if (token().type === 'garbage') throw new ParseExtraTokens(unParesedInput());
           let first = parseExpr(newPrompt);
           let rest = parseListBody();
           return cons(first, rest);
