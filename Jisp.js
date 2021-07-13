@@ -137,13 +137,10 @@ function newLisp(lispOpts = {}) {
       opts = aliases.shift();
     if (typeof value === 'function') {
       let lift = opts.lift ?? MAX_INTEGER;
-      let evalArgs = opts.evalArgs ?? MAX_INTEGER;
-      if (evalArgs !== MAX_INTEGER) {
-        if (lift === MAX_INTEGER) lift = 0xf;
-        else if (lift >= 0xf) throw new LogicError("Can't specify both evalArgs and large lift")
-        lift = (~evalArgs << 4) + lift;  // Read carefully; that's a bitwise not (tilde)
-      }
-      // Always set this prop because JITs are more likely to optimize found props than unfound ones.
+      let evalCount = opts.evalArgs ?? MAX_INTEGER;
+      if (lift !== MAX_INTEGER && lift >= 0xff) throw new LogicError("Too big a lift");
+      // Encoding chosen so that small values mean eval everything and lift that namy
+      lift = (~evalCount << 8) | lift&0xff;
       value[LIFT_ARGS] = lift;
       // XXX TODO: make sure that every defn with evalArgs !== MAX_INTEGER has a compile hook.
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
@@ -922,7 +919,8 @@ function newLisp(lispOpts = {}) {
   function lambda(form) {
     let scope = this;
     let closure = args => _apply(cons(LAMBDA_ATOM, form), args, scope);
-    closure[LIFT_ARGS] = 0;
+    let lift = 0, evalCount = MAX_INTEGER;
+    closure[LIFT_ARGS] = (~evalCount << 8) | lift&0xff;
     return closure;
   }
 
@@ -931,7 +929,8 @@ function newLisp(lispOpts = {}) {
   function special_lambda(form) {
     let scope = this;
     let closure = args => _apply(cons(SLAMBDA_ATOM, form), args, scope);
-    closure[LIFT_ARGS] = (~0) << 4;
+    let lift = 0, evalCount = 0;
+    closure[LIFT_ARGS] = (~evalCount << 8) | lift&0xff;
     return closure;
   }
 
@@ -1073,17 +1072,13 @@ function newLisp(lispOpts = {}) {
 
   function _apply(fn, args, scope) {
     if (typeof fn === 'function') {
+      // lift encoded as: (~evalCount << 8) | lift&0xff;
       let lift = (fn[LIFT_ARGS] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
-      let evalCount = MAX_INTEGER;
-      if (lift < 0) {  // This is tedious but it's got to be faster than reading a second property
-        evalCount = lift >> 4;
-        lift = lift & 0xf;
-        if (lift === 0xf) lift = MAX_INTEGER;
-        evalCount = ~evalCount; // bitwize not
-      }
-      if (evalCount > 0)
-        args = evalArgs(args, scope, evalCount);
-      let jsArgs = [], noPad = lift === MAX_INTEGER;
+      let evalCount = ~(lift >> 8);
+       // Turns a "lift" that was MAX_INTEGER back into MAX_INTEGER, without branches
+      lift = lift << 24 >> 23 >>> 1;
+      args = evalArgs(args, scope, evalCount);
+      let jsArgs = [];
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
         if (typeof args === 'object' && args[PAIR]) {
@@ -1091,7 +1086,7 @@ function newLisp(lispOpts = {}) {
           args = args[CDR];
         } else {
           // don't let cons, etc, be seeing any undefined parmaters
-          if (noPad) // but not infinitely many of them!
+          if (lift > 0xff) // but not indefinitely many of them!
             break;
           jsArgs.push(NIL);
         }
@@ -1653,8 +1648,7 @@ function newLisp(lispOpts = {}) {
     let scope = GlobalScope;
     let [args, body] = compileLambda(expr, scope);
     let res = new Function(...[ ... args, body ]);
-    if (expr[CAR] === SLAMBDA_ATOM)
-      res[EVAL_ARGS] = 0;
+    // todo.
     return res;
   }
 
