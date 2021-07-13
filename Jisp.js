@@ -1872,7 +1872,7 @@ function newLisp(lispOpts = {}) {
 
   function compileDefinition(expr) {
     let emit = "", _tvar = 0, scope = new Scope();
-    function newTemp() { return `t${_tvar++}$)`; }
+    function newTemp(prefix = "tmp") { return `${prefix}${_tvar++}$)`; }
     if (typeof expr === 'object' && expr[PAIR]) {
       let nameAndParams = expr[CAR], forms = expr[CDR];
       if (typeof nameAndParams === 'object' && nameAndParams[PAIR]) {
@@ -1961,7 +1961,6 @@ function newLisp(lispOpts = {}) {
   }
 
   function compileApply(fn, fnVal, args, scope, invokeScope, newTemp, indent) {
-    /*
     if (typeof fn === 'function') {
       let lift = (fn[LIFT_ARGS] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
       let evalCount = MAX_INTEGER;
@@ -1971,9 +1970,23 @@ function newLisp(lispOpts = {}) {
         if (lift === 0xf) lift = MAX_INTEGER;
         evalCount = ~evalCount; // bitwize not
       }
-      if (evalCount > 0)
-        args = evalArgs(args, scope, evalCount);
+      let { argv, unevaluated } = compileEvalArgs(args, scope, invokeScope, evalCount, newTemp, indent);
       let jsArgs = [], noPad = lift === MAX_INTEGER;
+      while (lift > 0) {
+        if (argv.length > 0) {
+          jsArgs.push(argv.shift());
+        } else {
+          if (nopad) break;
+          jsArgs.push("NIL");
+        }
+        --lift;
+      }
+      if (unevaluated) {
+        jsArgs.push(unevaluated);
+      }
+      // XXX TODO
+    }
+    /*
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
         if (typeof args === 'object' && args[PAIR]) {
@@ -2027,7 +2040,7 @@ function newLisp(lispOpts = {}) {
     */
   }
 
-  function compileEvalArgs() {
+  function compileEvalArgs(args, scope, invokeScope, evalCount, newTemp, indent) {
     /*
     function evalArgs(args, scope, evalCount = MAX_INTEGER) {
       evalCount = evalCount|0;  // really an int
@@ -2044,6 +2057,17 @@ function newLisp(lispOpts = {}) {
       return args;
     }
   */
+    let argv = [], unevaluated, emit = "";
+    while (evalCount > 0 && typeof args === 'object' && args[PAIR]) {
+      let { val, emit: emitted } = compileExpr(args[CAR], scope, invokeScope, newTemp, indent);
+      emit += emitted;
+      argv.push(val);
+      args = args[CDR];
+      evalCount -= 1;
+    }
+    if (evalCount > 0)
+      unevaluated = args;
+    return { argv, unevaluated };
   }
   
   const JS_IDENT_REPLACEMENTS  = {
