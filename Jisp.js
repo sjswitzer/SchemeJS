@@ -29,18 +29,18 @@ function newLisp(lispOpts = {}) {
   // cells can't use "instanceof AbstractCons" or whatever.
   //
   // Instead, the method is:
-  //    typeof obj === 'object' && obj[CDR]
+  //    typeof obj === 'object' && obj[PAIR] === true
   //
   // The typeof check is free because JITs always knows the type
-  // of an object and needs to check it before property access anyway.
-  // Fetching properties is something JIT really focusses on making
+  // of an object and need to check it before property access anyway.
+  // Fetching properties is something JITs really focusses on making
   // as fast as possible. It's probably even as fast as or faster than "instanceof".
   //
   // Beware when traversing lists. Things purported to be lists might not be
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("*car*"), CDR = Symbol("*cdr*");
+  const CAR = Symbol("*car*"), CDR = Symbol("*cdr*"), PAIR = Symbol("*pair*");
 
   class Cons {
     constructor(car, cdr) {
@@ -53,9 +53,10 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
+  Cons.prototype[PAIR] = true;
 
   // Trust the JIT to inline this
-  const isCons = a => typeof a === 'object' && a[CDR] !== undefined;
+  const isCons = a => typeof a === 'object' && a[PAIR] === true;
 
   function nextCons() {  // Cons iterator function
     let current = this._current, done = !isCons(current), value;
@@ -643,7 +644,7 @@ function newLisp(lispOpts = {}) {
         let expr = parseSExpr(tokenGenerator, { lispOpts });
         if (!expr) break;
         if (noEval) {
-          if (last) last[CDR] = cons(expr, NIL);
+          if (last) last = last[CDR] = cons(expr, NIL);
           else result = last = cons(expr, NIL);
         } else {
           let evaluated = _eval(expr, scope);
@@ -1216,7 +1217,7 @@ function newLisp(lispOpts = {}) {
       let saveIndent = indent;
       // XXX special printing for native functions
       if (objType === 'object') {
-        if (obj[CDR]) {
+        if (obj[PAIR]) {
           put("(");
           indent += indentMore;
           sep = "";
@@ -1295,7 +1296,7 @@ function newLisp(lispOpts = {}) {
     if (!_bool(depth)) depth = 1;
     if (depth <= 0) return obj;
     if (typeof obj === 'object') {
-      if (obj[CDR]) return obj;  // Careful; Cons is iterable itself
+      if (obj[PAIR]) return obj;  // Careful; Cons is iterable itself
       if (obj[TO_LISP_SYMBOL])  // User can specialize this
         return obj[TO_LISP_SYMBOL].call(this, opts);
       if (obj[Symbol.iterator]) {
