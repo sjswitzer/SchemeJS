@@ -630,18 +630,15 @@ function newLisp(lispOpts = {}) {
   exportDefinition("require", _require);
 
   defineGlobalSymbol("append", (...args) => {
-    let res = NIL;
-    function zip(list) {
-      if (list === NIL) return;
-      if (isCons(list)) {
-        zip(list[CDR]);
-        res = cons(list[CAR], res);
+    let res = NIL, last;
+    for (arg of args) {
+      while (isCons(arg)) {
+        if (last)
+          last[CDR] = cons(arg[CAR], NIL);
+        else
+          res = last = cons(arg[CAR], NIL);
       }
-      else  // What to do with a node that's not a list?
-        res = cons(list, res);  // Add it to the list, I guess.
     }
-    for (let i = args.length; i > 0; --i)
-      zip(args[i-1]);
     return res;
   });
 
@@ -671,8 +668,8 @@ function newLisp(lispOpts = {}) {
     return res;
   });
 
-  defineGlobalSymbol("reverse", reverseList);
-  function reverseList(list) {
+  defineGlobalSymbol("reverse", reverse);
+  function reverse(list) {
     let res = NIL;
     while (isCons(list)) {
       res = cons(list[CAR], res)
@@ -681,20 +678,18 @@ function newLisp(lispOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("butlast", (list) => {
-    let res = NIL;
-    if (!isCons(list)) return NIL;
-    function zip(list) {
-      let next = list[CDR];
-      if (isCons(next)) {
-        zip(list[CDR]);
-        res = cons(list[CAR], res);
-      }
+  defineGlobalSymbol("butlast", butlast);
+  function butlast(list) {
+    let res = NIL, last;
+    while (isCons(list) && isCons(list[CDR])) {
+      if (last)
+        last[CDR] = cons(list[CAR], NIL);
+      else
+        res = last = cons(list[CAR], NIL);
     }
-    zip(list);
     return res;
-  });
-
+  }
+  
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
   defineGlobalSymbol("member", member);
@@ -749,31 +744,36 @@ function newLisp(lispOpts = {}) {
       scope = Object.getPrototypeOf(scope);
     }
     matches.sort((a,b) => a.description < b.description ? -1 : a.description > b.description ? 1 : 0);
-    return _toList(matches);
+    return toList(matches);
   }
 
   // (mapcar fn list1 list2 ...)
   defineGlobalSymbol("mapcar", mapcar);
-  function mapcar(fn, lists) {
-    // Actually, this will work for any iterables, and lists are iterable.
-    // It's possible to write this recursively to create the list in order, but that
-    // uses unbounded stack and is slower than just constructing the list backwards then
-    // reversing it.
-    let rev = NIL;
-    for (let list of lists)
-      for (let item of list)
-        rev = cons(fn.call(this, item), rev);
-    return reverseList(rev);
+  function mapcar(fn, ...lists) {
+    // Actually, this will work for any iterables and lists are iterable.
+    let res = NIL, last;
+    for (let list of lists) {
+      for (let item of list) {
+        item = fn.apply(this, item);
+        if (last)
+          last[CDR] = cons(item, NIL);
+        else
+          res = last = cons(item, NIL);
+      }
+    }
+    return res;
   }
 
   // Same as mapcar but results in an Array
-  defineGlobalSymbol("map->arrqay", map_to_array);
-  function map_to_array(fn, lists) {
+  defineGlobalSymbol("map->array", map_to_array);
+  function map_to_array(fn, ...lists) {
     let res = [];
-    let rev = NIL;
-    for (let list of lists)
-      for (let item of list)
+    for (let list of lists) {
+      for (let item of list) {
+        item = fn.apply(this, item);
         res.push(fn.call(this, item));
+      }
+    }
     return res;
   }
 
@@ -1136,7 +1136,6 @@ function newLisp(lispOpts = {}) {
     evalCount = evalCount|0;  // really an int
     if (evalCount <= 0 || args === NIL) return args;
     let argv = [];
-    let reverse = NIL;
     while (evalCount > 0 && isCons(args)) {
       argv.push(_eval(args[CAR], scope));
       args = args[CDR];
@@ -1263,42 +1262,51 @@ function newLisp(lispOpts = {}) {
   const TO_LISP_SYMBOL = Symbol("*lisp-to-lisp*");
   exportDefinition("TO_LISP_SYMBOL", TO_LISP_SYMBOL);
 
-  // Recursively turns iterable objects like arrays into lists
-  defineGlobalSymbol("toList", a => _toList(a));
-  function _toList(obj, depth) {
-    if (depth <= 0)return obj;
-    let iterator;
-    if (typeof obj === 'function') // assume it's an iterator
-      iterator = obj;
+  // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
+  defineGlobalSymbol("toList", toList);
+  function toList(obj, depth) {
+    if (!_bool(depth)) depth = 1;
+    if (depth <= 0) return obj;
     if (typeof obj === 'object') {
-      if (obj[CDR]) return obj;  // Careful; cons is iterable itself
+      if (obj[CDR]) return obj;  // Careful; Cons is iterable itself
       if (obj[TO_LISP_SYMBOL])  // User can specialize this
-        return obj[TO_LISP_SYMBOL](opts);
-      let iterator;
-      if (obj[Symbol.iterator])
-        iterator = obj[Symbol.iterator]();
-    }
-    if (iterator) {
-      function go() {
-        let { done, value } = iterator.next();
-        if (done) return NIL;
-        return cons(_toList(obj, depth-1), go());
+        return obj[TO_LISP_SYMBOL].apply(this, opts);
+      if (obj[Symbol.iterator]) {
+        let list = NIL, last;
+        for (value of obj) {
+          let { done, value } = iterator.next();
+          if (depth > 1 && value[Symbol.iterator])
+            value = toList.apply(this, value, depth-1);
+          if (done) return list;
+          if (last)
+            last[CDR] = cons(value, NIL);
+          else
+            list = last = cons(value, NIL);
+        }
       }
-      return go();
     }
     return obj;
   }
 
-  // Turn iterables into Arrays, recursively if depth > 0
-  defineGlobalSymbol("toArray", a => _toArray(a));
-  function _toArray(obj, depth = 0) {
-    let arr = [];
-    for (let elem of obj) {
-      if (depth > 0 && elem[Symbol.iterator])
-        elem = _toArray(elem, depth-1);
-      arr += elem;
+  // Turns iterable objects like lists into arrays, recursively to "depth" (default 1) deep.
+  defineGlobalSymbol("toArray", toArray);
+  function toArray(obj, depth) {
+    if (!_bool(depth)) depth = 1;
+    if (depth <= 0) return obj;
+    if (obj[Symbol.iterator]) {
+      let iterator = obj[Symbol.iterator].apply(obj);
+      if (typeof iterator === 'function') {
+        let array = [];
+        for (;;) {
+          let { done, value } = iterator.next();
+          if (depth > 1 && value[Symbol.iterator])
+            value = toList.apply(this, value, depth-1);
+          if (done) return array;
+          array.push(value);
+        }
+      }
     }
-    return arr;
+    return obj;
   }
 
   //
