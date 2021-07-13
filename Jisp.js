@@ -25,7 +25,7 @@ function newLisp(lispOpts = {}) {
   // cells can't use "instanceof AbstractCons" or whatever.
   //
   // Instead, the method is:
-  //    typeof obj === 'object' && obj[PAIR]
+  //    typeof obj === 'object' && obj[CDR]
   //
   // The typeof check is free because JITs always knows the type
   // of an object and needs to check it before property access anyway.
@@ -36,7 +36,7 @@ function newLisp(lispOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("*car*"), CDR = Symbol("*cdr*"), PAIR = Symbol("*lisp-isCons*");
+  const CAR = Symbol("*car*"), CDR = Symbol("*cdr*");
 
   class Cons {
     constructor(car, cdr) {
@@ -49,10 +49,9 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  // There should be a way to do this in the class decl, but not in ES6
-  Cons.prototype[PAIR] = true;
 
-  const isCons = a => typeof a === 'object' && a[PAIR];
+  // Trust the JIT to inline this
+  const isCons = a => typeof a === 'object' && a[CDR] !== undefined;
 
   function nextCons() {  // Cons iterator function
     let current = this._current, done = !isCons(current), value;
@@ -205,7 +204,7 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  LazyCarCons.prototype[PAIR] = true;
+  LazyCarCons.prototype[CDR] = true;
 
   class LazyCdrCons {
     // User inplements "get cdr()" in a subclass and ideally seals the object
@@ -218,7 +217,7 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  LazyCdrCons.prototype[PAIR] = true;
+  LazyCdrCons.prototype[CDR] = true;
 
   //
   // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
@@ -658,7 +657,7 @@ function newLisp(lispOpts = {}) {
 
   defineGlobalSymbol("length", (list) => {
     let n = 0;
-    while (isCons(list[PAIR])) {
+    while (isCons(list)) {
       n += 1;
       list = list[CDR];
     }
@@ -712,7 +711,7 @@ function newLisp(lispOpts = {}) {
   //     Returns the portion of the list where the car is eq to the key, or () if none found.
   defineGlobalSymbol("memq", memq);
   function memq(key, list) {
-    while (isCons(list[PAIR])) {
+    while (isCons(list)) {
       if (key === list[CAR])
         return list;
       list = list[CDR];
@@ -1191,7 +1190,7 @@ function newLisp(lispOpts = {}) {
       let saveIndent = indent;
       // XXX special printing for native functions
       if (objType === 'object') {
-        if (obj[PAIR]) {
+        if (obj[CDR]) {
           put("(");
           indent += indentMore;
           sep = "";
@@ -1272,7 +1271,7 @@ function newLisp(lispOpts = {}) {
     if (typeof obj === 'function') // assume it's an iterator
       iterator = obj;
     if (typeof obj === 'object') {
-      if (obj[PAIR]) return obj;  // Careful; cons is iterable itself
+      if (obj[CDR]) return obj;  // Careful; cons is iterable itself
       if (obj[TO_LISP_SYMBOL])  // User can specialize this
         return obj[TO_LISP_SYMBOL](opts);
       let iterator;
