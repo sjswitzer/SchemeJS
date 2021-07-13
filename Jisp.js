@@ -7,6 +7,9 @@
 //
 
 "use strict";
+
+const { isArray } = require('util');
+
 // TODO: make this a JS module
 
 //
@@ -296,7 +299,7 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("symbol?", a => typeof a === 'symbol');
   defineGlobalSymbol("function?", a => typeof a === 'function');
   defineGlobalSymbol("object?", a => typeof a === 'object');
-  defineGlobalSymbol("array?", a => (typeof a === 'object') && (a instanceof Array));
+  defineGlobalSymbol("array?", a => Array.isArray(a));
   defineGlobalSymbol("NaN", NaN);
   defineGlobalSymbol("isNaN", isNaN, "nan?");
   defineGlobalSymbol("Infinity", Infinity);
@@ -664,10 +667,8 @@ function newLisp(lispOpts = {}) {
     let res = NIL, last;
     for (arg of args) {
       while (isCons(arg)) {
-        if (last)
-          last[CDR] = cons(arg[CAR], NIL);
-        else
-          res = last = cons(arg[CAR], NIL);
+        if (last) last = last[CDR] = cons(arg[CAR], NIL);
+        else res = last = cons(arg[CAR], NIL);
       }
     }
     return res;
@@ -713,10 +714,8 @@ function newLisp(lispOpts = {}) {
   function butlast(list) {
     let res = NIL, last;
     while (isCons(list) && isCons(list[CDR])) {
-      if (last)
-        last[CDR] = cons(list[CAR], NIL);
-      else
-        res = last = cons(list[CAR], NIL);
+      if (last) last = last[CDR] = cons(list[CAR], NIL);
+      else res = last = cons(list[CAR], NIL);
     }
     return res;
   }
@@ -786,10 +785,8 @@ function newLisp(lispOpts = {}) {
     for (let list of lists) {
       for (let item of list) {
         item = fn.call(this, item);
-        if (last)
-          last[CDR] = cons(item, NIL);
-        else
-          res = last = cons(item, NIL);
+        if (last) last = last[CDR] = cons(item, NIL);
+        else res = last = cons(item, NIL);
       }
     }
     return res;
@@ -844,6 +841,36 @@ function newLisp(lispOpts = {}) {
       forms = forms[CDR];
     }
     return res;
+  }
+
+  // For testing, mostly
+  defineGlobalSymbol("deep-eq", deep_eq, { evalArgs: 0, lift: 2 });
+  function deep_eq(a, b, maxDepth) {
+    if (!_bool(maxDepth)) maxDepth = 10000; // Protection for circular lists
+    if (a === b) return true;
+    if (depth <= 0) return false;
+
+    if (isCons(a)) {
+      if (!isCons(b)) return false;
+      return deep_eq(a[CAR], b[CAR]) && deep_eq(a[CDR], b[CDR]);
+    }
+    if (isCons(b)) return false;
+    
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b)) return false;
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; ++i)
+        if (!deep_eq(a[i], b[i])) return false;
+      return true;
+    }
+    if (Array.isArray(b)) return false;
+    
+    for (let prop of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a)))
+      if (!b.hasOwnProperty(prop)) return false;
+    for (let prop of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b)))
+      if (!a.hasOwnProperty(prop) || b[prop] !== a[prop]) return false;
+
+    return false;
   }
 
   // SIOD compatibility checklist:
@@ -1306,10 +1333,8 @@ function newLisp(lispOpts = {}) {
           if (depth > 1 && value[Symbol.iterator])
             value = toList.call(this, value, depth-1);
           if (done) return list;
-          if (last)
-            last[CDR] = cons(value, NIL);
-          else
-            list = last = cons(value, NIL);
+          if (last) last = last[CDR] = cons(value, NIL);
+          else list = last = cons(value, NIL);
         }
       }
     }
