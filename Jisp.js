@@ -17,6 +17,10 @@
 function newLisp(lispOpts = {}) {
   let sanityTest = lispOpts.sanityTest;
   let readFile = lispOpts.readFile;
+  let _reportError = lispOpts.reportError = error => console.log(error); // Don't call this one
+  let reportLispError = lispOpts.reportLispError ?? _reportError; // Call these instead
+  let reportSystemError = lispOpts.reportError ?? _reportError;
+  let reportLoadResult = lispOpts.reportLoadResult = result => console.log(_toString(result));
 
   // Creating a Cons should be as cheap as possible, so no subclassing
   // or calls to super. But I want people to be able to define their
@@ -606,28 +610,54 @@ function newLisp(lispOpts = {}) {
     return NIL;
   }
 
-  defineGlobalSymbol("require", _require);
-  function _require(path, force) {
+  defineGlobalSymbol("require", require_);
+  function require_(path) {
     let sym = Atom(`*${path}-loaded*`);
-    if (_bool(force) || !_bool(GlobalScope[sym])) {
+    if (!_bool(GlobalScope[sym])) {
+      load.call(this, path);
+      GlobalScope[sym] = true;
+      return sym;
+    }
+    return NIL;
+  }
+
+  // (load fname noeval-flag)
+  //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
+  defineGlobalSymbol("load", load);
+  function load(path, noEval) {
+    let scope = this, result = NIL, last;
+    noEval = _bool(noEval);
+    let fileContent;
+    try {
+      if (!readFile) throw new EvalError("No file reader defined");
+      fileContent = readFile(path);
+    } catch (error) {
+      let loadError = new EvalError(`Load failed ${_toString(path)}`);
+      loadError.cause = error;
+      loadError.path = path;
+      return false;
+    }
+    let tokenGenerator = lispTokenGenerator(fileContent);
+    for(;;) {
       try {
-        if (!readFile) throw new EvalError("No file reader defined");
-        let fileContent = readFile(path);
-        // The REPL can handle this!
-        this.REPL(function readline() {
-          let line = fileContent;
-          fileContent = null;
-          return line;
-        });
-        GlobalScope[sym] = true;
+        let expr = parseSExpr(tokenGenerator, { lispOpts });
+        if (!expr) break;
+        if (noEval) {
+          if (last) last[CDR] = cons(expr, NIL);
+          else result = last = cons(expr, NIL);
+        } else {
+          let evaluated = _eval(expr, scope);
+          reportLoadResult(evaluated);
+        }
       } catch (error) {
-        console.log(`"require" failed`, String(error));  // todo: abstract reporting
-        return false;
+        if (error instanceof LispError)
+          reportLispError(error);
+        else
+          reportSystemError(error);
       }
     }
-    return sym;
+    return result;
   }
-  exportDefinition("require", _require);
 
   defineGlobalSymbol("append", (...args) => {
     let res = NIL, last;
@@ -821,9 +851,6 @@ function newLisp(lispOpts = {}) {
   // (realtime)
   //      Returns a double precision floating point value representation of the current realtime number of seconds. Usually precise to about a thousandth of a second.
   // errobj, (error message object)
-  // (load fname noeval-flag search-flag)
-  //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
-  //   no use for the search-flag
   // (number->string x base width precision)
   //     Formats the number according to the base, which may be 8, 10, 16 or the symbol e or f.
   //     The width and precision are both optional.
@@ -2222,7 +2249,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
       let lisp = newLisp( { readFile });
       // getLine("Attach debugger and hit return!");  // uncomment to do what it says
-      lisp.eval('(define (test) (require "test.scm" true))');
+      lisp.eval('(define (test) (load "test.scm"))');
       lisp.REPL(getLine);
     }
   } finally {
