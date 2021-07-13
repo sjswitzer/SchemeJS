@@ -70,7 +70,7 @@ function newLisp(lispOpts = {}) {
     constructor() {
       Object.freeze(this);
     }
-    *[Symbol.iterator]() { return { next: () => ({ done: true, value: null }) } }
+    *[Symbol.iterator]() { return { next: () => ({ done: true, value: undefined }) } }
   });
 
   // Create a new scope with "new Object(oldScope)".
@@ -689,7 +689,7 @@ function newLisp(lispOpts = {}) {
     }
     return res;
   }
-  
+
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
   defineGlobalSymbol("member", member);
@@ -754,7 +754,7 @@ function newLisp(lispOpts = {}) {
     let res = NIL, last;
     for (let list of lists) {
       for (let item of list) {
-        item = fn.apply(this, item);
+        item = fn.call(this, item);
         if (last)
           last[CDR] = cons(item, NIL);
         else
@@ -770,7 +770,7 @@ function newLisp(lispOpts = {}) {
     let res = [];
     for (let list of lists) {
       for (let item of list) {
-        item = fn.apply(this, item);
+        item = fn.call(this, item);
         res.push(fn.call(this, item));
       }
     }
@@ -1270,13 +1270,13 @@ function newLisp(lispOpts = {}) {
     if (typeof obj === 'object') {
       if (obj[CDR]) return obj;  // Careful; Cons is iterable itself
       if (obj[TO_LISP_SYMBOL])  // User can specialize this
-        return obj[TO_LISP_SYMBOL].apply(this, opts);
+        return obj[TO_LISP_SYMBOL].call(this, opts);
       if (obj[Symbol.iterator]) {
         let list = NIL, last;
         for (value of obj) {
           let { done, value } = iterator.next();
           if (depth > 1 && value[Symbol.iterator])
-            value = toList.apply(this, value, depth-1);
+            value = toList.call(this, value, depth-1);
           if (done) return list;
           if (last)
             last[CDR] = cons(value, NIL);
@@ -1293,20 +1293,13 @@ function newLisp(lispOpts = {}) {
   function toArray(obj, depth) {
     if (!_bool(depth)) depth = 1;
     if (depth <= 0) return obj;
-    if (obj[Symbol.iterator]) {
-      let iterator = obj[Symbol.iterator].apply(obj);
-      if (typeof iterator === 'function') {
-        let array = [];
-        for (;;) {
-          let { done, value } = iterator.next();
-          if (depth > 1 && value[Symbol.iterator])
-            value = toList.apply(this, value, depth-1);
-          if (done) return array;
-          array.push(value);
-        }
-      }
+    res = [];
+    for (let item of obj) {
+      if (depth > 1 && obj[Symbol.iterator])
+        value = toArray.call(this, item, depth-1);
+      res.push(item);
     }
-    return obj;
+    return res;
   }
 
   //
@@ -1331,10 +1324,10 @@ function newLisp(lispOpts = {}) {
   function* lispTokenGenerator(characterGenerator) {
     if (!(typeof characterGenerator.next === 'function')) {
       if (typeof characterGenerator[Symbol.iterator] === 'function') {
-        let origParam = characterGenerator;
-        characterGenerator = characterGenerator[Symbol.iterator]();
-        if (!(typeof characterGenerator.next === 'function'))
-          throw new LogicError(`Not an iterator or iterable ${origParam}`);
+        let generator = characterGenerator[Symbol.iterator]();
+        if (!(typeof generator.next === 'function'))
+          throw new LogicError(`Not an iterator or iterable ${characterGenerator}`);
+        characterGenerator = generator;
       }
     }
     let ch = "", _peek = [], _done = false;
@@ -1473,10 +1466,10 @@ function newLisp(lispOpts = {}) {
       tokenGenerator = lispTokenGenerator(tokenGenerator);
     if (!(typeof tokenGenerator.next === 'function')) {
       if (typeof tokenGenerator[Symbol.iterator] === 'function') {
-        let origParam = tokenGenerator;
-        tokenGenerator = tokenGenerator[Symbol.iterator]();
-        if (!(typeof tokenGenerator.next === 'function'))
-          throw new LogicError(`Not an iterator or iterable ${origParam}`);
+        let generator = tokenGenerator[Symbol.iterator]();
+        if (!(typeof generator.next === 'function'))
+          throw new LogicError(`Not an iterator or iterable ${tokenGenerator}`);
+        tokenGenerator = generator;
       }
     }
     replHints.currentPrompt = prompt;
