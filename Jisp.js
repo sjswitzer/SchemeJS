@@ -8,8 +8,6 @@
 
 "use strict";
 
-const { isArray } = require('util');
-
 // TODO: make this a JS module
 
 //
@@ -325,7 +323,7 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("lispTokens", a => [ ... lispTokenGenerator(a) ]);
 
   queueTests(function() {
-    // TODO
+    EXPECT(`(cdr '(a b c))`, `'(b c)`);
   });
 
   defineGlobalSymbol("eval", eval_);
@@ -856,11 +854,12 @@ function newLisp(lispOpts = {}) {
   function deep_eq(a, b, maxDepth) {
     if (!_bool(maxDepth)) maxDepth = 10000; // Protection for circular lists
     if (a === b) return true;
-    if (depth <= 0) return false;
+    if (maxDepth <= 0) return false;
+    maxDepth -= 1;
 
     if (isCons(a)) {
       if (!isCons(b)) return false;
-      return deep_eq(a[CAR], b[CAR]) && deep_eq(a[CDR], b[CDR]);
+      return deep_eq(a[CAR], b[CAR]) && deep_eq(a[CDR], b[CDR], maxDepth);
     }
     if (isCons(b)) return false;
     
@@ -868,7 +867,7 @@ function newLisp(lispOpts = {}) {
       if (!Array.isArray(b)) return false;
       if (a.length !== b.length) return false;
       for (let i = 0; i < a.length; ++i)
-        if (!deep_eq(a[i], b[i])) return false;
+        if (!deep_eq(a[i], b[i]), maxDepth) return false;
       return true;
     }
     if (Array.isArray(b)) return false;
@@ -876,7 +875,7 @@ function newLisp(lispOpts = {}) {
     for (let prop of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a)))
       if (!b.hasOwnProperty(prop)) return false;
     for (let prop of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b)))
-      if (!a.hasOwnProperty(prop) || b[prop] !== a[prop]) return false;
+      if (!a.hasOwnProperty(prop) || deep_eq(b[prop], a[prop], maxDepth)) return false;
 
     return false;
   }
@@ -1718,6 +1717,8 @@ function newLisp(lispOpts = {}) {
     return res;
   }
 
+  let selfTest = lispOpts.selfTest;  // TODO: convert to unit tests
+
   function analyzeJSFunction(fn, result, args) {
     // The idea here is to use the intrinsic functions themselves as code generation
     // templates. That works as long as the functions don't call _eval. In that case
@@ -1728,7 +1729,7 @@ function newLisp(lispOpts = {}) {
     // don't end in a particular sequence of tokens or that use "return" more than once.
     let str = fn.toString(), pos = 0, token = "";
     let functionName, params = [], restParam, resultVal, body;
-    if (unitTest) console.log('TEST analyzeJSFunction', str, result, args);
+    if (selfTest) console.log('TEST analyzeJSFunction', str, result, args);
     nextToken();
     if (token === 'function') {
       nextToken();
@@ -1813,10 +1814,6 @@ function newLisp(lispOpts = {}) {
       return {};
 
     /*
-      let evalCount = fn[EVAL_ARGS] ?? MAX_INTEGER;
-      if (evalCount > 0)
-        args = evalArgs(args, scope, evalCount);
-      let lift = fn[LIFT_ARGS] ?? MAX_INTEGER;
       let jsArgs = [], noPad = lift === MAX_INTEGER;
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
@@ -1835,8 +1832,11 @@ function newLisp(lispOpts = {}) {
         jsArgs.push(args);
       return fn.apply(scope, jsArgs);  // "this" is the scope!
     */
-    if (unitTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
-    let lift = fn[LIFT_ARGS] ?? MAX_INTEGER;
+    if (selfTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
+    let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
+    // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
+    let evalCount = ~lift >> 7 >>> 1;
+    lift = lift << 24 >> 23 >>> 1;
     let decompiled = `let ${result}; {${functionName ? "// " + functionName : ""}\n`;
     let paramsCopy = [...params], argsCopy = [...args];
     // See corresponding code in _apply!
@@ -1846,7 +1846,7 @@ function newLisp(lispOpts = {}) {
         let arg = argsCopy.shift();
         decompiled += `let ${param} = ${arg};\n`
       } else {
-        if (noPad) break;
+        if (lift > 0xff) break;
         decompiled += `let ${param} = NIL;\n`
       }
       lift -= 1;
@@ -1872,7 +1872,7 @@ function newLisp(lispOpts = {}) {
     if (body)
       decompiled += `${body}\n`;
     decompiled += `${result} = ${resultVal};\n}\n`
-    if (unitTest) console.log("TEST analyzeJSFunction (decompiled)", decompiled);
+    if (selfTest) console.log("TEST analyzeJSFunction (decompiled)", decompiled);
     return { result, name: functionName, params, restParam, body, decompiled, fn };
 
     function nextToken() {
@@ -1913,7 +1913,7 @@ function newLisp(lispOpts = {}) {
     }
   }
  
-  if (unitTest) {
+  if (selfTest) {
     let resultTmp = "tmp$15", args = ["tmp$1", "tmp$4", "tmp$3", "tmp$7"];
     analyzeJSFunction(x => x * x, resultTmp, args);
     analyzeJSFunction((x) => x * x, resultTmp, args);
@@ -2155,11 +2155,11 @@ function newLisp(lispOpts = {}) {
       }
     }
     newName += fragment;
-    if (unitTest) console.log("TEST toJSname", name, newName);
+    if (selfTest) console.log("TEST toJSname", name, newName);
     return newName;
   }
 
-  if (unitTest) {
+  if (selfTest) {
     toJSname("aNormal_name0234");
     toJSname("aname%with&/specialChars?");
     toJSname("_begins_with_underscore");
@@ -2250,6 +2250,8 @@ function newLisp(lispOpts = {}) {
   // Tiny unit test system
   // I need something special here because the internal functions are not accessible
   // externally. I also just like the idea of the tests being with the code itself.
+  // I may change my mind once this is a module
+
   class TestFailureError extends LispError {
     constructor(message, test, result, expected) {
       super(message);
@@ -2270,8 +2272,8 @@ function newLisp(lispOpts = {}) {
   }
 
   function EXPECT(test, expected) {
+    let result, ok;
     try {
-      let result, ok;
       if (typeof test === 'string') {
         result = GlobalScope.eval(test);
         if (typeof expected === 'string')
@@ -2319,7 +2321,7 @@ function newLisp(lispOpts = {}) {
   }
 
   if (unitTest) {
-    for (tests of testQueue)
+    for (let tests of testQueue)
       tests.call(GlobalScope);
   }
 
