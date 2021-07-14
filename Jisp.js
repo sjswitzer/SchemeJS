@@ -383,6 +383,20 @@ function newLisp(lispOpts = {}) {
     return _eval(expr, scope);
   }
 
+  queueTests(function() {
+    EXPECT(`
+      (define (factoral x)
+        (? (<= x 1) 
+          (? (bigint? x) 1n 1)
+          (* x (factoral (- x (? (bigint? x) 1n 1))))
+      ))`,
+      ` 'factoral `);
+    EXPECT(` (factoral 10) `, 3628800);
+    EXPECT(` (factoral 10n) `, 3628800n);
+    EXPECT(` (factoral 171) `, Infinity);
+    EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
+  });
+
   defineGlobalSymbol("apply", apply);
   function apply(fn, args, scope) {
     if (scope == null) scope = this;
@@ -902,7 +916,10 @@ function newLisp(lispOpts = {}) {
   function deep_eq(a, b, maxDepth) {
     if (!_bool(maxDepth)) maxDepth = 10000; // Protection for circular lists
     if (a === b) return true;
-    if (isNaN(a) && isNaN(b)) return true;
+    // Normally NaNs are not equal to anything, including NaNs, but for
+    // the purposes of this routine they are
+    if (typeof a === 'number' && typeof b === 'number'
+        && isNaN(a) && isNaN(b)) return true;
     if (maxDepth <= 0) return false;
     maxDepth -= 1;
 
@@ -2327,24 +2344,24 @@ function newLisp(lispOpts = {}) {
     let result, ok;
     try {
       if (typeof test === 'string') {
-        result = GlobalScope.eval(test);
+      result = GlobalScope.eval(test);
         if (typeof expected === 'string')
           expected = GlobalScope.eval(expected);
       } else {
         test.call(GlobalScope);
       }
-      if (typeof expected === 'function')
-        ok = expected(result);
-      else
-        ok = deep_eq(result, expected);
-      if (!ok) {
-        reportTestFailed("unexpected", test, result, expected);
-      } else {
-        reportTestSucceeded(test, result, expected);
-      }
     } catch (error) {
       reportTestFailed("exception", test, error, expected);
+      return;
     }
+    if (typeof expected === 'function')
+      ok = expected(result);
+    else
+      ok = deep_eq(result, expected);
+    if (!ok)
+      reportTestFailed("unexpected", test, result, expected);
+    else
+      reportTestSucceeded(test, result, expected);
   }
 
   function EXPECT_ERROR(test, expected) {
@@ -2358,7 +2375,6 @@ function newLisp(lispOpts = {}) {
     } catch (error) {
       if (typeof test === 'string' && typeof expected === 'string')
         expected = GlobalScope.eval(expected);
-
       if (error === expected
           || (error instanceof expected || expected instanceof Object.getPrototypeOf(error))
           || (typeof expected === 'function' && expected(error))) {
