@@ -115,11 +115,11 @@ function newLisp(lispOpts = {}) {
   function Atom(name) {
     if (typeof name === 'symbol') {
       // If they pass in an atom, just return it
-      if (ATOMS[name.description] !== name)
-        throw new LogicError(`Symbol "${name.description}" is not an atom`);
-      return name;
+      if (ATOMS[name.description] === name)
+        return name;
     }
-    name = String(name);
+    if (typeof name !== 'string')
+      name = _toString(name);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -408,7 +408,6 @@ function newLisp(lispOpts = {}) {
 
   // Pokemon gotta catch 'em' all!
   defineGlobalSymbol("!", a => !_bool(a), "not");
-  defineGlobalSymbol("!!", a => _bool(a), "Boolean");
   defineGlobalSymbol("~", a => ~a, "bit-not");
   defineGlobalSymbol("**", (a,b) => a ** b, "exp");
   defineGlobalSymbol("%", (a,b) => a % b, "rem");
@@ -425,17 +424,18 @@ function newLisp(lispOpts = {}) {
   queueTests(function() {
     EXPECT(` (! true) `, false);
     EXPECT(` (! false) `, true);
-    EXPECT(` (!! true) `, true);
-    EXPECT(` (!! false) `, false);
-    EXPECT(` (!! nil) `, false);
-    EXPECT(` (!! 0) `, true); // different from JS
-    EXPECT(` (!! 0n) `, true); // different from JS
-    EXPECT(` (!! "") `, true); // different from JS
-    EXPECT(` (!! 1) `, true);
-    EXPECT(` (!! 1n) `, true);
-    EXPECT(` (!! null) `, false);
-    EXPECT(` (!! {}) `, true);
-    EXPECT(` (!! []) `, true);
+    EXPECT(` (! nil) `, true);
+    EXPECT(` (! 'a) `, false);
+    EXPECT(` (! '(a)) `, false);
+    EXPECT(` (! nil) `, true);
+    EXPECT(` (! 0) `, false); // different from JS
+    EXPECT(` (! 0n) `, false); // different from JS
+    EXPECT(` (! "") `, false); // different from JS
+    EXPECT(` (! 1) `, false);
+    EXPECT(` (! 1n) `, false);
+    EXPECT(` (! null) `, true);
+    EXPECT(` (! {}) `, false);
+    EXPECT(` (! []) `, false);
     EXPECT(` (~ 3) `, ~3);
     EXPECT(` (** 5 7) `, 5**7);
     EXPECT(` (% 1235 37) `, 1235%37);
@@ -454,7 +454,8 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (void) `, undefined);
     EXPECT(` (undefined? (void)) `, true);
     EXPECT(` (void 1 2 3) `, undefined);
-    EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError); // Args are evaled, but undefined is returned
+     // Args are evaled, but undefined is returned; this is one way to materialize an "undefined" value
+    EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError);
   });
 
   //
@@ -509,8 +510,17 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (+ 1 2 3) `, 6);
     EXPECT(` (+ 1n 2n) `, 3n);
     EXPECT_ERROR(` (+ 1 2n) `, TypeError);
-    // EXPECT(` (-))`)
-  });
+    EXPECT(` (-) `, NaN);  // Sure. Why not?
+    EXPECT(` (- 3) `, -3);
+    EXPECT(` (- 3n) `, -3n);
+    EXPECT(` (- 100 2 5 10) `, 83);
+    EXPECT(` (*) `, 1);
+    EXPECT(` (* 1) `, 1);
+    EXPECT(` (* 1 2) `, 2);
+    EXPECT(` (* 1 2 3) `, 6);
+    EXPECT(` (* 1 2 3 4) `, 24);
+    EXPECT(` (+ 1n 2n) `, 3n);
+ });
 
   defineGlobalSymbol("&", (...args) => {
     let a = ~0;
@@ -1088,21 +1098,23 @@ function newLisp(lispOpts = {}) {
   // maybe some relation between of generators and Lazy eval?
   // Promises
 
-  // (lambda (args) (body1) (body2) ...)
+  // (\ (params) (body1) (body2) ...)
+  // (\ param . form) -- Curry notation
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
-  function lambda(form) {
+  function lambda(body) {
     let scope = this;
-    let closure = args => _apply(cons(LAMBDA_ATOM, form), args, scope);
+    let closure = args => _apply(cons(LAMBDA_ATOM, body), args, scope);
     let lift = 0, evalCount = MAX_INTEGER;
     closure[LIFT_ARGS] = (~evalCount << 8) | lift&0xff;
     return closure;
   }
 
-  // (lambda (args) (body1) (body2) ...)
+  // (\\ (params) (body1) (body2) ...)
+  // (\\ param . form) -- Curry notation
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0, lift: 0 });
-  function special_lambda(form) {
+  function special_lambda(body) {
     let scope = this;
-    let closure = args => _apply(cons(SLAMBDA_ATOM, form), args, scope);
+    let closure = args => _apply(cons(SLAMBDA_ATOM, body), args, scope);
     let lift = 0, evalCount = 0;
     closure[LIFT_ARGS] = (~evalCount << 8) | lift&0xff;
     return closure;
@@ -1296,6 +1308,8 @@ function newLisp(lispOpts = {}) {
       let opSym = fn[CAR];
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
         let params = fn[CDR][CAR];
+        if (typeof params === 'symbol')  // Curry notation!
+          params = cons(params, NIL);
         let forms = fn[CDR][CDR];
         if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
           args = evalArgs(args, scope);
@@ -2388,11 +2402,11 @@ function newLisp(lispOpts = {}) {
   // Tiny unit test system.
   // I need something special here because the internal functions are not accessible
   // externally. I also just like the idea of the tests being with the code itself.
-  // I may change my mind once this is a module.
+  // I may change my mind once this is a JavaScript module.
 
   class TestFailureError extends LispError {
     constructor(message, test, result, expected) {
-      super(message);
+      super(`${_toString(test)}; ${message}: ${_toString(result)}, expected: ${_toString(expected)}`);
       this.test = test;
       this.result = result;
       this.expected = expected;
