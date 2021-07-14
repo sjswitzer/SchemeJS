@@ -502,6 +502,16 @@ function newLisp(lispOpts = {}) {
     return a;
   }, "/");
 
+  queueTests(function() {
+    EXPECT(` (+) `, 0);
+    EXPECT(` (+ 1) `, 1);
+    EXPECT(` (+ 1 2) `, 3);
+    EXPECT(` (+ 1 2 3) `, 6);
+    EXPECT(` (+ 1n 2n) `, 3n);
+    EXPECT_ERROR(` (+ 1 2n) `, TypeError);
+    // EXPECT(` (-))`)
+  });
+
   defineGlobalSymbol("&", (...args) => {
     let a = ~0;
     for (let b of args)
