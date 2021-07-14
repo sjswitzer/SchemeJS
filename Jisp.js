@@ -82,11 +82,11 @@ function newLisp(lispOpts = {}) {
   // There does not appear to be an ES6 syntax for this
   Object.defineProperties(Object.getPrototypeOf(NIL), {
     [CAR]: {
-      get: function(){ throw new EvalError("get car of nil"); },
+      get: function(){ throw new EvalError("car of nil"); },
       set: function(){ throw new EvalError("set car of nil"); },
     },
     [CDR]: {
-      get: function(){ throw new EvalError("get cdr of nil"); },
+      get: function(){ throw new EvalError("cdr of nil"); },
       set: function(){ throw new EvalError("set cdr of nil"); },
     },
   });
@@ -250,10 +250,10 @@ function newLisp(lispOpts = {}) {
   // In Jisp, NIL, null, undefined, and false are false and everything else is true.
   //
   exportDefinition("toBool", _bool);
-  function _bool(val) {
-    // Give priority here to actual true and false values
-    if (val === true) return true;
-    if (val === false || val === NIL || val == null) // The val == null is _intended_ as a nullish test
+  function  _bool(val) {
+    // Give priority to actual true and false values
+    if (typeof val === 'boolean') return val;
+    if (val === NIL || val == null) // The val == null is _intended_ as a nullish test
       return false;
     return true;
   }
@@ -408,6 +408,7 @@ function newLisp(lispOpts = {}) {
 
   // Pokemon gotta catch 'em' all!
   defineGlobalSymbol("!", a => !_bool(a), "not");
+  defineGlobalSymbol("!!", a => _bool(a), "Boolean");
   defineGlobalSymbol("~", a => ~a, "bit-not");
   defineGlobalSymbol("**", (a,b) => a ** b, "exp");
   defineGlobalSymbol("%", (a,b) => a % b, "rem");
@@ -424,6 +425,26 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("parseInt", parseInt);
   queueTests(function() {
     EXPECT(` (! true) `, false);
+    EXPECT(` (! false) `, true);
+    EXPECT(` (!! true) `, true);
+    EXPECT(` (!! false) `, false);
+    EXPECT(` (!! nil) `, false);
+    EXPECT(` (!! 0) `, true); // different from JS
+    EXPECT(` (!! 0n) `, true); // different from JS
+    EXPECT(` (!! "") `, true); // different from JS
+    EXPECT(` (!! 1) `, true);
+    EXPECT(` (!! 1n) `, true);
+    EXPECT(` (!! null) `, false);
+    EXPECT(` (!! {}) `, true);
+    EXPECT(` (!! []) `, true);
+    EXPECT(` (~ 3) `, ~3);
+    EXPECT(` (** 5 7) `, 5**7);
+    EXPECT(` (% 1235 37) `, 1235%37);
+    EXPECT(` (<< 234 4) `, 234 << 4);
+    EXPECT(` (>> 345 3) `, 345 >> 3);
+    EXPECT(` (>>> -1 4) `, -1 >>> 4);
+    EXPECT(` (>>> 1 4) `, 1 >>> 4);
+    EXPECT(` (in "a" {a: 1}) `, true);
   });
 
   //
@@ -1598,7 +1619,7 @@ function newLisp(lispOpts = {}) {
           if (!OPERATORS[ch]) operatorPrefix = false;
           str += ch, nextc();
         }
-        yield { type: 'atom', value: Atom(str) };
+        yield { type: 'ident', value: str };
         continue;
       }
 
@@ -1680,10 +1701,14 @@ function newLisp(lispOpts = {}) {
     }
 
     function parseExpr(promptStr) {
-      if (token().type === 'atom' || token().type === 'string' ||
-          token().type === 'number') {
+      if (token().type === 'string' || token().type === 'number') {
         let thisToken = consumeToken();
         return thisToken.value;
+      }
+
+      if (token().type === 'ident') {
+        let thisToken = consumeToken();
+        return Atom(thisToken.value);
       }
 
       if (token().type === '(') {
@@ -1718,14 +1743,14 @@ function newLisp(lispOpts = {}) {
         replHints.currentPrompt = newPrompt;
         consumeToken();
         for (;;) {
-          let item = parseExpr(newPrompt);
-          res.push(item);
-          if (token().type === ',')  // Comma might as well be optional for now
-            consumeToken();
           if (token().type === ']') {
             consumeToken();
             return res;
           }
+          let item = parseExpr(newPrompt);
+          res.push(item);
+          if (token().type === ',')  // Comma might as well be optional for now
+            consumeToken();
           if (token().type === 'end') throw new ParseIncomplete();
         }
       }
@@ -1741,7 +1766,7 @@ function newLisp(lispOpts = {}) {
             break;
           }
           let gotIt = false;
-          if (token().type === 'atom' || token().type === 'string' || token().type === 'number') {
+          if (token().type === 'ident' || token().type === 'string' || token().type === 'number') {
             let sym = token().value;
             if (typeof sym === 'symbol')
               sym = sym.description;
@@ -1779,7 +1804,7 @@ function newLisp(lispOpts = {}) {
     // I'm old enough to be fond of the EvalQuote REPL.
     // So, as a special case, transform "symbol(a b c)" into "(symbol (quote a) (quote b) (quote c))"
     let expr;
-    if (token().type === 'atom' && token(1).type === '(') {
+    if (token().type === 'ident' && token(1).type === '(') {
       function quoteArgs(args) {
         if (!isCons(args)) return NIL;
         let quoted = args[CAR];
@@ -1787,7 +1812,7 @@ function newLisp(lispOpts = {}) {
         return cons(quoted, quoteArgs(args[CDR]));
       }
       let tok = consumeToken();
-      let sym = tok.value;
+      let sym = Atom(tok.value);
       let quoted = parseExpr(prompt);
       if (quoted)
         expr = cons(sym, quoteArgs(quoted));
