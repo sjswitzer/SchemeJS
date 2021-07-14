@@ -377,7 +377,6 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
   defineGlobalSymbol("Number", a => Number(a));
   defineGlobalSymbol("BigInt", a => BigInt(a));
-
   queueTests(function() {
     EXPECT(` (intern "abc") `, ` 'abc `);
     EXPECT(` (Symbol  "a") `, x => typeof x === 'symbol' && x.description === "a");
@@ -403,6 +402,10 @@ function newLisp(lispOpts = {}) {
     else if (rest === NIL) scope = GlobalScope;
     return _apply(fn, args, scope);
   }
+  queueTests(function() {
+    EXPECT(` (apply + '(1 2)) `, 3);
+  });
+
   // Pokemon gotta catch 'em' all!
   defineGlobalSymbol("!", a => !_bool(a), "not");
   defineGlobalSymbol("~", a => ~a, "bit-not");
@@ -419,9 +422,8 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
   defineGlobalSymbol("parseFloat", parseFloat);
   defineGlobalSymbol("parseInt", parseInt);
-
   queueTests(function() {
-    EXPECT(` (apply + '(1 2)) `, 3);
+    EXPECT(` (! true) `, false);
   });
 
   //
