@@ -742,21 +742,26 @@ function newLisp(lispOpts = {}) {
   });
 
   defineGlobalSymbol("max", (val, ...rest) => {
-    for (let b of args)
+    for (let b of rest)
       if (b > val)
         val = b;
     return val;
-  }, { lift: 1 });
+  });
 
   defineGlobalSymbol("min", (val, ...rest) => {
-    for (let b of args)
+    for (let b of rest)
       if (b < val)
         val = b;
     return val;
-  }, { lift: 1 });
+  });
 
   queueTests(function() {
-    // XXX
+    EXPECT(` (max) `, undefined);
+    EXPECT(` (max 5) `, 5);
+    EXPECT(` (max 3 7 9 2 4) `, 9);
+    EXPECT(` (min) `, undefined);
+    EXPECT(` (min 5) `, 5);
+    EXPECT(` (min 3 7 9 2 4) `, 2);
   });
 
  // logical & conditional
@@ -1067,6 +1072,7 @@ function newLisp(lispOpts = {}) {
     // the purposes of this routine they are
     if (typeof a === 'number' && typeof b === 'number'
         && isNaN(a) && isNaN(b)) return true;
+    if (a == null || b == null) return false; // nullish and we already know thay aren't equal
     if (maxDepth <= 0) return false;
     maxDepth -= 1;
 
@@ -2492,7 +2498,7 @@ function newLisp(lispOpts = {}) {
   // Tiny unit test system.
   // I need something special here because the internal functions are not accessible
   // externally. I also just like the idea of the tests being with the code itself.
-  // I may change my mind once this is a JavaScript module.
+  // But I'll separate them when I finally make this a JavaScript module.
 
   class TestFailureError extends LispError {
     constructor(message, test, result, expected) {
@@ -2516,6 +2522,8 @@ function newLisp(lispOpts = {}) {
   let testScope = GlobalScope, testScopeStack = [];
   
   function SAVESCOPE() {
+    // The idea here is to let the following series of steps to share a scope
+    // Otherwise, each test gets a fresh scope.
     testScopeStack.push(testScope);
     testScope = Scope.newScope(testScope);
   }
@@ -2551,7 +2559,7 @@ function newLisp(lispOpts = {}) {
       else
         ok = deep_eq(result, expected);
       if (!ok)
-        reportTestFailed("unexpected", test, result, expected);
+        reportTestFailed("got", test, result, expected);
       else
         reportTestSucceeded(test, result, expected);
     } finally {
