@@ -596,7 +596,7 @@ function newLisp(lispOpts = {}) {
 
   defineGlobalSymbol(">", gt, { evalArgs: 0, lift: 0 }, "gt");
   function gt(forms) {
-    if (!(isCons(forms) && isCons(cdr(forms)))) return false;
+    if (!(isCons(forms) && isCons(forms[CDR]))) return false;
     let a = _eval(forms[CAR], this);
     forms = forms[CDR];
     while (isCons(forms)) {
@@ -650,12 +650,12 @@ function newLisp(lispOpts = {}) {
 
   defineGlobalSymbol("!=", ne, { evalArgs: 0, lift: 0 }, "ne");
   function ne(forms) {
-    return !this.eq(forms);
+    return !eq.call(this, forms);
   }
 
   defineGlobalSymbol("!==", neq, { evalArgs: 0, lift: 0 }, "neq");
   function neq(forms) {
-    return !this.eeq(forms);
+    return !eeq.call(this, forms);
   }
 
   queueTests(function(){
@@ -832,8 +832,8 @@ function newLisp(lispOpts = {}) {
   function begin(forms) {
     let res = NIL;
     while (isCons(forms)) {
-      res = _eval(car(forms), this);
-      forms = cdr(forms);
+      res = _eval(forms[CAR], this);
+      forms = forms[CDR];
     }
     return res;
   }
@@ -843,11 +843,11 @@ function newLisp(lispOpts = {}) {
   function prog1(forms) {
     let res = NIL, first = true;
     while (isCons(forms)) {
-      let val = _eval(car(forms), this);
+      let val = _eval(forms[CAR], this);
       if (first)
         res = val;
       first = false;
-      forms = cdr(forms);
+      forms = forms[CDR];
     }
     return res;
   }
@@ -867,6 +867,7 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("cond", cond, { evalArgs: 0, lift: 0 });
   function cond(clauses) {
     while (isCons(clauses)) {
+      let clause = clauses[CAR];
       if (!isCons(clause))
         throw new EvalError(`Bad clause in "cond" ${_toString(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
@@ -879,10 +880,22 @@ function newLisp(lispOpts = {}) {
         }
         return res;
       }
-      clauses = cdr(clauses);
+      clauses = clauses[CDR];
     }
     return NIL;
   }
+
+  queueTests(function(){
+    EXPECT(` (cond) `, NIL);
+    EXPECT_ERROR(` (cond a) `, EvalError);
+    EXPECT_ERROR(` (cond 1) `, EvalError);
+    EXPECT_ERROR(` (cond ()) `, EvalError);
+    EXPECT(` (cond (true) 1) `, NIL);
+    EXPECT(` (cond ((< 4 5) (+ 5 6))) `, 11);
+    EXPECT(` (cond ((< 4 5) (+ 5 6) (* 5 6))) `, 30);
+    EXPECT(` (cond ((> 4 5) (+ 5 6) (* 5 6))
+                   ((< 4 5) (+ 2 9) (* 5 3))) `, 15);
+  });
 
   defineGlobalSymbol("require", require_);
   function require_(path) {
@@ -933,16 +946,27 @@ function newLisp(lispOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("append", (...args) => {
+  defineGlobalSymbol("append", append, { lift: 0 });
+  function append(lists) {
     let res = NIL, last;
-    for (arg of args) {
-      while (isCons(arg)) {
-        if (last) last = last[CDR] = cons(arg[CAR], NIL);
-        else res = last = cons(arg[CAR], NIL);
+    while (isCons(lists)) {
+      let list = lists[CAR];
+      if (isCons(list)) {
+        // Could handle as iterable, but faster not to
+        while (isCons(list)) {
+          if (last) last = last[CDR] = cons(list[CAR], NIL);
+          else res = last = cons(list[CAR], NIL);
+          list = list[CDR];
+        }
+      } else {  // other iterables
+        for (let element of list)
+          if (last) last = last[CDR] = cons(element, NIL);
+          else res = last = cons(element, NIL);
       }
+      lists = lists[CDR];
     }
     return res;
-  });
+  }
 
   defineGlobalSymbol("last", (list) => {
     while (isCons(list)) {
@@ -961,6 +985,18 @@ function newLisp(lispOpts = {}) {
       list = list[CDR];
     }
     return n;
+  });
+
+  queueTests(function(){
+    EXPECT(` (append) `, NIL);
+    EXPECT(` (append '(a b c)) ` , ` '(a b c) `);
+    EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
+    EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
+    EXPECT(` (append '(a b c) '(d e f) '(g h i)) ` , ` '(a b c d e f g h i) `);
+    EXPECT(` (append '[a b c]) ` , ` '(a b c) `);
+    EXPECT(` (append '[a b c] '[d e f]) ` , ` '(a b c d e f) `);
+    EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
+    EXPECT(` (append '(a b c) '[d e f] '(g h i)) ` , ` '(a b c d e f g h i) `);
   });
 
   defineGlobalSymbol("list", (...args) => {
