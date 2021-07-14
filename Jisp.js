@@ -377,7 +377,16 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
   defineGlobalSymbol("Number", a => Number(a));
   defineGlobalSymbol("BigInt", a => BigInt(a));
-  defineGlobalSymbol("lisp-tokens", a => toList(lispTokenGenerator(a)));
+
+  queueTests(function() {
+    EXPECT(` (intern "abc") `, ` 'abc `);
+    EXPECT(` (Symbol  "a") `, x => typeof x === 'symbol');
+    EXPECT(` (Number "10") `, 10);
+    EXPECT(` (Number "foo") `, NaN);
+    EXPECT(` (BigInt "10") `, 10n);
+    EXPECT(` (BigInt 10) `, 10n);
+    EXPECT_ERROR(` (BigInt "foo") `, SyntaxError);  // This is a weird JavaScript thing
+  });
 
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
@@ -389,7 +398,7 @@ function newLisp(lispOpts = {}) {
   }
 
   queueTests(function() {
-    PUSHSCOPE()
+    SAVESCOPE();
     EXPECT(`
       (define (factoral x)
         (? (<= x 1) 
@@ -401,7 +410,7 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (factoral 10n) `, 3628800n);
     EXPECT(` (factoral 171) `, Infinity);
     EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
-    POPSCOPE();
+    RESTORESCOPE();
     // Factoral should be undefined now
     EXPECT_ERROR(` (factoral 10) `, EvalError);
   });
@@ -428,6 +437,10 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
   defineGlobalSymbol("parseFloat", parseFloat);
   defineGlobalSymbol("parseInt", parseInt);
+
+  queueTests(function() {
+    EXPECT(` (apply + '(1 2)) `, 3);
+  });
 
   //
   // Variable args definitions
@@ -2351,12 +2364,12 @@ function newLisp(lispOpts = {}) {
 
   let testScope = GlobalScope, testScopeStack = [];
   
-  function PUSHSCOPE() {
+  function SAVESCOPE() {
     testScopeStack.push(testScope);
     testScope = Scope.newScope(testScope);
   }
 
-  function POPSCOPE() {
+  function RESTORESCOPE() {
     let scope = testScopeStack.pop();
     if (!scope) throw new LogicError("Test scope push and pop not paired");
     testScope = scope;
@@ -2365,7 +2378,7 @@ function newLisp(lispOpts = {}) {
   function EXPECT(test, expected) {
     let pushed = false;
     if (testScope === GlobalScope) {
-      PUSHSCOPE();
+      SAVESCOPE();
       pushed = true;
     }
     try {
@@ -2391,14 +2404,14 @@ function newLisp(lispOpts = {}) {
       else
         reportTestSucceeded(test, result, expected);
     } finally {
-      if (pushed) POPSCOPE();
+      if (pushed) RESTORESCOPE();
     }
   }
 
   function EXPECT_ERROR(test, expected) {
     let result, pushed = false;
     if (testScope === GlobalScope) {
-      PUSHSCOPE();
+      SAVESCOPE();
       pushed = true;
     }
     try {
@@ -2410,16 +2423,14 @@ function newLisp(lispOpts = {}) {
     } catch (error) {
       if (typeof test === 'string' && typeof expected === 'string')
         expected = testScope.eval(expected);
-      if (error === expected
-          || (error instanceof expected || expected instanceof Object.getPrototypeOf(error))
-          || (typeof expected === 'function' && expected(error))) {
+      if (error === expected || (error instanceof expected)) {
         reportTestSucceeded(test, error, expected);
       } else {
         reportTestFailed("wrong exception", test, error, expected);
       }
       return;
     } finally {
-      if (pushed) POPSCOPE();
+      if (pushed) RESTORESCOPE();
     }
     reportTestFailed("expected exception", test, result, expected);
   }
