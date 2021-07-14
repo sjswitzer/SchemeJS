@@ -92,13 +92,18 @@ function newLisp(lispOpts = {}) {
   });
   
 
-  // Create a new scope with "new Object(oldScope)".
-  // this way, a scope chain is a prototype chain and resolving
+  // Create a new scope with Scope.newScope(oldScope).
+  // That creates a new scope whose prototype is the old scope.
+  // This way, a scope chain is a prototype chain and resolving
   // a symbol is as simple as "scope[sym]"!
   class Scope {
     // Be careful defining methods or properties here; they
     // automatically become part of the API.
+    static newScope(scope) {
+      return Object.create(scope);
+    }
   };
+
   const GlobalScope = new Scope();
 
   //
@@ -376,14 +381,15 @@ function newLisp(lispOpts = {}) {
 
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
-    if (scope == null) scope = this;
-    else if (rest === NIL) scope = GlobalScope;
+    if (scope == null) scope = this;  // Default is the current scope
+    else if (scope === NIL) scope = GlobalScope; // NIL, specifically, means use the global scope
     if (typeof expr === 'string')
       expr = parseSExpr(expr);
     return _eval(expr, scope);
   }
 
   queueTests(function() {
+    PUSHSCOPE()
     EXPECT(`
       (define (factoral x)
         (? (<= x 1) 
@@ -395,6 +401,7 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (factoral 10n) `, 3628800n);
     EXPECT(` (factoral 171) `, Infinity);
     EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
+    POPSCOPE();
   });
 
   defineGlobalSymbol("apply", apply);
@@ -887,7 +894,7 @@ function newLisp(lispOpts = {}) {
   // still benefiting from Scopes internally.
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0, lift: 1 }, "let", "let*");
   function letrec(bindings, forms) {
-    let scope = new Object(this);
+    let scope = Scope.newScope(this);
     while (isCons(bindings)) {
       let binding = bindings[CAR];
       if (!isCons(binding))
@@ -1124,7 +1131,7 @@ function newLisp(lispOpts = {}) {
     } catch (e) {
       if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
           || e instanceof typeMatch) {
-        let scope = new Object(this);
+        let scope = Scope.newScope(this);
         scope[catchVar] = e;
         while (isCons(catchForms)) {
           val = _eval(catchForms[CAR], scope);
@@ -1153,7 +1160,7 @@ function newLisp(lispOpts = {}) {
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${_toString(variable)}`);
-    this[name] = value;  // Or maybe GlobalScope?
+    this[name] = value;
     return name;
   }
 
@@ -1234,7 +1241,7 @@ function newLisp(lispOpts = {}) {
         let forms = fn[CDR][CDR];
         if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
           args = evalArgs(args, scope);
-        scope = new Object(scope);
+        scope = Scope.newScope(scope);
         let origFormalParams = params;
         while (isCons(params)) {
           let param = params[CAR];
@@ -2144,7 +2151,7 @@ function newLisp(lispOpts = {}) {
         let forms = fn[CDR][CDR];
         if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
           args = evalArgs(args, scope);
-        scope = new Object(scope);
+        XXX scope = new Object(scope); XXX
         let origFormalParams = params;
         while (isCons(params)) {
           let param = params[CAR];
@@ -2316,10 +2323,10 @@ function newLisp(lispOpts = {}) {
     }
   }
 
-  // Tiny unit test system
+  // Tiny unit test system.
   // I need something special here because the internal functions are not accessible
   // externally. I also just like the idea of the tests being with the code itself.
-  // I may change my mind once this is a module
+  // I may change my mind once this is a module.
 
   class TestFailureError extends LispError {
     constructor(message, test, result, expected) {
@@ -2340,41 +2347,67 @@ function newLisp(lispOpts = {}) {
     console.info("SUCCEEDED", test, result, expected);
   }
 
+  let testScope = GlobalScope, testScopeStack = [];
+  
+  function PUSHSCOPE() {
+    testScopeStack.push(testScope);
+    testScope = Scope.newScope(testScope);
+  }
+
+  function POPSCOPE() {
+    let scope = testScopeStack.pop();
+    if (!scope) throw new LogicError("Test scope push and pop not paired");
+    testScope = scope;
+  }
+
   function EXPECT(test, expected) {
-    let result, ok;
-    try {
-      if (typeof test === 'string') {
-      result = GlobalScope.eval(test);
-        if (typeof expected === 'string')
-          expected = GlobalScope.eval(expected);
-      } else {
-        test.call(GlobalScope);
-      }
-    } catch (error) {
-      reportTestFailed("exception", test, error, expected);
-      return;
+    let pushed = false;
+    if (testScope === GlobalScope) {
+      PUSHSCOPE();
+      pushed = true;
     }
-    if (typeof expected === 'function')
-      ok = expected(result);
-    else
-      ok = deep_eq(result, expected);
-    if (!ok)
-      reportTestFailed("unexpected", test, result, expected);
-    else
-      reportTestSucceeded(test, result, expected);
+    try {
+      let result, ok;
+      try {
+        if (typeof test === 'string') {
+        result = testScope.eval(test);
+          if (typeof expected === 'string')
+            expected = testScope.eval(expected);
+        } else {
+          test.call(testScope);
+        }
+      } catch (error) {
+        reportTestFailed("exception", test, error, expected);
+        return;
+      }
+      if (typeof expected === 'function')
+        ok = expected(result);
+      else
+        ok = deep_eq(result, expected);
+      if (!ok)
+        reportTestFailed("unexpected", test, result, expected);
+      else
+        reportTestSucceeded(test, result, expected);
+    } finally {
+      if (pushed) POPSCOPE();
+    }
   }
 
   function EXPECT_ERROR(test, expected) {
-    let result;
+    let result, pushed = false;
+    if (testScope === GlobalScope) {
+      PUSHSCOPE();
+      pushed = true;
+    }
     try {
       if (typeof test === 'string') {
-        result = GlobalScope.eval(test);
+        result = testScope.eval(test);
       } else {
-        test.call(GlobalScope);
+        test.call(testScope);
       }
     } catch (error) {
       if (typeof test === 'string' && typeof expected === 'string')
-        expected = GlobalScope.eval(expected);
+        expected = testScope.eval(expected);
       if (error === expected
           || (error instanceof expected || expected instanceof Object.getPrototypeOf(error))
           || (typeof expected === 'function' && expected(error))) {
@@ -2383,6 +2416,8 @@ function newLisp(lispOpts = {}) {
         reportTestFailed("wrong exception", test, error, expected);
       }
       return;
+    } finally {
+      if (pushed) POPSCOPE();
     }
     reportTestFailed("expected exception", test, result, expected);
   }
@@ -2392,8 +2427,11 @@ function newLisp(lispOpts = {}) {
   }
 
   if (unitTest) {
-    for (let tests of testQueue)
-      tests.call(GlobalScope);
+    for (let tests of testQueue) {
+      tests.call(testScope);
+      if (testScope !== GlobalScope || testScopeStack.length !== 0)
+        throw new LogicError("Test scope push and pop not paired");
+    }
   }
 
   return GlobalScope;
@@ -2403,7 +2441,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
   let fs = require('fs');
   let inputFd, closeFd, oldRawMode;
   try {
-    try {
+    try {5
       if (process.platform === 'win32') {
         inputFd = process.stdin.fd;
         if (process.stdin.setRawMode) {
