@@ -454,7 +454,8 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (void) `, undefined);
     EXPECT(` (undefined? (void)) `, true);
     EXPECT(` (void 1 2 3) `, undefined);
-     // Args are evaled, but undefined is returned; this is one way to materialize an "undefined" value
+     // Args are evaled, but undefined is returned;
+     // this is one way to deliberately materialize an "undefined" value
     EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError);
   });
 
@@ -519,7 +520,14 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (* 1 2) `, 2);
     EXPECT(` (* 1 2 3) `, 6);
     EXPECT(` (* 1 2 3 4) `, 24);
-    EXPECT(` (+ 1n 2n) `, 3n);
+    EXPECT(` (* 300n 200n) `, 60000n);
+    EXPECT(` (/) `, NaN);
+    EXPECT(` (/ 5) `, 1/5);
+    EXPECT(` (/5) `, 1/5);  // tokenizer won't combine prefix of symbols with a number
+    EXPECT(` (/ 0) `, Infinity);
+    EXPECT(` (/ -1 0) `, -Infinity);
+    EXPECT(' (/ 3 7) ', 3/7);
+    EXPECT(' (/ 100000 10 10 10) ', 100);
  });
 
   defineGlobalSymbol("&", (...args) => {
@@ -542,6 +550,21 @@ function newLisp(lispOpts = {}) {
       a ^= b;
     return a;
   }, "bit-xor");
+
+  queueTests(function() {
+    EXPECT(` (&) `, ~0);
+    EXPECT(` (& 76134) `, 76134);
+    EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
+    EXPECT(` (& 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 & 0b1110101011 & 0b11110111101111);
+    EXPECT(` (|) `, 0);
+    EXPECT(` (| 76134) `, 76134);
+    EXPECT(` (| 0b1001101011 0b1110101011) `, 0b1001101011 | 0b1110101011);
+    EXPECT(` (| 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 | 0b1110101011 | 0b11110111101111);
+    EXPECT(` (^) `, 0);
+    EXPECT(` (^ 76134) `, 76134);
+    EXPECT(` (^ 0b1001101011 0b1110101011) `, 0b1001101011 ^ 0b1110101011);
+    EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
+  });
 
   defineGlobalSymbol("<", lt, { evalArgs: 0, lift: 0 }, "lt");
   function lt(forms) {
@@ -669,29 +692,33 @@ function newLisp(lispOpts = {}) {
     return val;
   }, { lift: 1 });
 
+  queueTests(function() {
+    // XXX
+  });
+
  // logical & conditional
 
- defineGlobalSymbol("&&", and, { evalArgs: 0, lift: 0 }, "and");
- function and(forms) {
-   let val = true;
-   while (isCons(forms)) {
-     val = _eval(forms[CAR], this);
-     if (!_bool(val)) return val;
-     forms = forms[CDR];
-   }
-   return val;
- }
+  defineGlobalSymbol("&&", and, { evalArgs: 0, lift: 0 }, "and");
+  function and(forms) {
+    let val = true;
+    while (isCons(forms)) {
+      val = _eval(forms[CAR], this);
+      if (!_bool(val)) return val;
+      forms = forms[CDR];
+    }
+    return val;
+  }
 
- defineGlobalSymbol("||", or, { evalArgs: 0, lift: 0 }, "or");
- function or(forms) {
-   let val = false;
-   while (isCons(forms)) {
-     val = _eval(forms[CAR], this);
-     if (_bool(val)) return val;
-     forms = forms[CDR];
-   }
-   return val;
- }
+  defineGlobalSymbol("||", or, { evalArgs: 0, lift: 0 }, "or");
+  function or(forms) {
+    let val = false;
+    while (isCons(forms)) {
+      val = _eval(forms[CAR], this);
+      if (_bool(val)) return val;
+      forms = forms[CDR];
+    }
+    return val;
+  }
 
   // XXX TODO: What happens if more that 3 args?
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3, compileHook: ifelseHook }, "if");
