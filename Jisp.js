@@ -298,6 +298,29 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("cddar", cddar, { lift: 1 });
   defineGlobalSymbol("cdddr", cdddr, { lift: 1 });
   defineGlobalSymbol("cddr", cddr, { lift: 1 });
+  queueTests(function() {
+    EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
+    EXPECT(` (car '(1 . 2)) `, ` 1 `);
+    EXPECT(` (cdr '(1 . 2)) `, 2);
+    EXPECT(` (car '(1 2 3)) `, ` '1 `);
+    EXPECT(` (cdr '(1 2 3)) `, ` '(2 3) `);
+    EXPECT_ERROR( ` (car NIL) `, EvalError );
+    EXPECT_ERROR( ` (cdr NIL) `, EvalError );
+    const testList = `'(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd)))`;
+    EXPECT(` (caaar ${testList}) `, ` 'aaa `);
+    EXPECT(` (cdaar ${testList}) `, ` 'daa `);
+    EXPECT(` (cadar ${testList}) `, ` 'ada `);
+    EXPECT(` (cddar ${testList}) `, ` 'dda `);
+    EXPECT(` (caadr ${testList}) `, ` 'aad `);
+    EXPECT(` (cdadr ${testList}) `, ` 'dad `);
+    EXPECT(` (caddr ${testList}) `, ` 'add `);
+    EXPECT(` (cdddr ${testList}) `, ` 'ddd `);
+    EXPECT(` (caar ${testList}) `, ` '(aaa.daa) `);
+    EXPECT(` (cdar ${testList}) `, ` '(ada.dda) `);
+    EXPECT(` (cadr ${testList}) `, ` '(aad.dad) `);
+    EXPECT(` (cddr ${testList}) `, ` '(add.ddd) `);
+  });
+
   defineGlobalSymbol("typeof", a => typeof a);
   defineGlobalSymbol("undefined?", a => typeof a === 'undefined');
   defineGlobalSymbol("null?", a => a === NIL);  // SIOD clained it first. Maybe rethink the naming here.
@@ -326,34 +349,22 @@ function newLisp(lispOpts = {}) {
       defineGlobalSymbol(name, value);
   }
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
+  queueTests(function() {
+    EXPECT(` (sqrt 2) `, Math.sqrt(2));
+    EXPECT(` NaN `, NaN);
+    EXPECT(` Infinity `, Infinity);
+    EXPECT(` (- Infinity) `, -Infinity);
+    EXPECT(` (abs 3) `, 3);
+    EXPECT(` (abs -3) `, 3);
+    EXPECT(` (abs 3n) `, 3n);
+    EXPECT(` (abs -3n) `, 3n);
+  });
+
   defineGlobalSymbol("intern", a => Atom(a));
   defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
   defineGlobalSymbol("Number", a => Number(a));
   defineGlobalSymbol("BigInt", a => BigInt(a));
   defineGlobalSymbol("lisp-tokens", a => toList(lispTokenGenerator(a)));
-
-  queueTests(function() {
-    EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
-    EXPECT(` (car '(1 . 2)) `, ` 1 `);
-    EXPECT(` (cdr '(1 . 2)) `, 2);
-    EXPECT(` (car '(1 2 3)) `, ` '1 `);
-    EXPECT(` (cdr '(1 2 3)) `, ` '(2 3) `);
-    EXPECT_ERROR( ` (car NIL) `, EvalError );
-    EXPECT_ERROR( ` (cdr NIL) `, EvalError );
-    const testList = `'(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd)))`;
-    EXPECT(` (caaar ${testList}) `, ` 'aaa `);
-    EXPECT(` (cdaar ${testList}) `, ` 'daa `);
-    EXPECT(` (cadar ${testList}) `, ` 'ada `);
-    EXPECT(` (cddar ${testList}) `, ` 'dda `);
-    EXPECT(` (caadr ${testList}) `, ` 'aad `);
-    EXPECT(` (cdadr ${testList}) `, ` 'dad `);
-    EXPECT(` (caddr ${testList}) `, ` 'add `);
-    EXPECT(` (cdddr ${testList}) `, ` 'ddd `);
-    EXPECT(` (caar ${testList}) `, ` '(aaa.daa) `);
-    EXPECT(` (cdar ${testList}) `, ` '(ada.dda) `);
-    EXPECT(` (cadr ${testList}) `, ` '(aad.dad) `);
-    EXPECT(` (cddr ${testList}) `, ` '(add.ddd) `);
-  });
 
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
@@ -883,6 +894,7 @@ function newLisp(lispOpts = {}) {
   function deep_eq(a, b, maxDepth) {
     if (!_bool(maxDepth)) maxDepth = 10000; // Protection for circular lists
     if (a === b) return true;
+    if (isNaN(a) && isNaN(b)) return true;
     if (maxDepth <= 0) return false;
     maxDepth -= 1;
 
