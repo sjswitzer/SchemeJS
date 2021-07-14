@@ -421,8 +421,7 @@ function newLisp(lispOpts = {}) {
   //   XXX TODO: "delete", setting props and array elements
   defineGlobalSymbol("@", (a, b) => b[a]);  // indexing and member access
   defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
-  defineGlobalSymbol("parseFloat", parseFloat);
-  defineGlobalSymbol("parseInt", parseInt);
+  defineGlobalSymbol("void", _ => undefined);
   queueTests(function() {
     EXPECT(` (! true) `, false);
     EXPECT(` (! false) `, true);
@@ -442,9 +441,17 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (% 1235 37) `, 1235%37);
     EXPECT(` (<< 234 4) `, 234 << 4);
     EXPECT(` (>> 345 3) `, 345 >> 3);
+    EXPECT(` (>> -345 3) `, -345 >> 3);
     EXPECT(` (>>> -1 4) `, -1 >>> 4);
     EXPECT(` (>>> 1 4) `, 1 >>> 4);
     EXPECT(` (in "a" {a: 1}) `, true);
+    EXPECT(` (in "b" {a: 1}) `, false);
+    EXPECT(` (new RangeError) `, res => res instanceof RangeError);
+    EXPECT(` (@ 3 '[a b c d e]) `, ` 'd `);
+    EXPECT(` (void) `, undefined);
+    EXPECT(` (undefined? (void)) `, true);
+    EXPECT(` (void 1 2 3) `, undefined);
+    EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError); // Args are evaled, but undefined is returned
   });
 
   //
