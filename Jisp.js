@@ -300,8 +300,8 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("cddr", cddr, { lift: 1 });
   defineGlobalSymbol("typeof", a => typeof a);
   defineGlobalSymbol("undefined?", a => typeof a === 'undefined');
-  defineGlobalSymbol("null?", a => a === NIL);  // XXX scheme clained it first. Maybe rethink the naming here.
-  defineGlobalSymbol("nullJS?", a => a === null);
+  defineGlobalSymbol("null?", a => a === NIL);  // SIOD clained it first. Maybe rethink the naming here.
+  defineGlobalSymbol("jsnull?", a => a === null);
   defineGlobalSymbol("nullish?", a => a == null);
   defineGlobalSymbol("boolean?", a => typeof a === 'boolean');
   defineGlobalSymbol("number?", a => typeof a === 'number');
@@ -328,9 +328,9 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
   defineGlobalSymbol("intern", a => Atom(a));
   defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
-  defineGlobalSymbol("toNumber", a => Number(a));
-  defineGlobalSymbol("toBigInt", a => BigInt(a));
-  defineGlobalSymbol("lispTokens", a => [ ... lispTokenGenerator(a) ]);
+  defineGlobalSymbol("Number", a => Number(a));
+  defineGlobalSymbol("BigInt", a => BigInt(a));
+  defineGlobalSymbol("lisp-tokens", a => toList(lispTokenGenerator(a)));
 
   queueTests(function() {
     EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
@@ -1366,17 +1366,16 @@ function newLisp(lispOpts = {}) {
         return obj[TO_LISP_SYMBOL].call(this, opts);
       if (obj[Symbol.iterator]) {
         let list = NIL, last;
-        for (value of obj) {
-          let { done, value } = iterator.next();
+        for (let value of obj) {
           if (depth > 1 && value[Symbol.iterator])
             value = toList.call(this, value, depth-1);
-          if (done) return list;
           if (last) last = last[CDR] = cons(value, NIL);
           else list = last = cons(value, NIL);
         }
+        return list;
       }
     }
-    return obj;
+    return NIL;
   }
 
   // Turns iterable objects like lists into arrays, recursively to "depth" (default 1) deep.
@@ -2399,7 +2398,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
         return fileContent;
       }
       let lisp = newLisp( { readFile });
-      // getLine("Attach debugger and hit return!");  // uncomment to do what it says
+      // getLine("Attach debugger and hit return!");  // Uncomment to do what it says
       lisp.eval('(define (test) (load "test.scm"))');
       lisp.REPL(getLine);
     }
