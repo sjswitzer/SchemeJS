@@ -380,7 +380,7 @@ function newLisp(lispOpts = {}) {
 
   queueTests(function() {
     EXPECT(` (intern "abc") `, ` 'abc `);
-    EXPECT(` (Symbol  "a") `, x => typeof x === 'symbol');
+    EXPECT(` (Symbol  "a") `, x => typeof x === 'symbol' && x.description === "a");
     EXPECT(` (Number "10") `, 10);
     EXPECT(` (Number "foo") `, NaN);
     EXPECT(` (BigInt "10") `, 10n);
@@ -396,24 +396,6 @@ function newLisp(lispOpts = {}) {
       expr = parseSExpr(expr);
     return _eval(expr, scope);
   }
-
-  queueTests(function() {
-    SAVESCOPE();
-    EXPECT(`
-      (define (factoral x)
-        (? (<= x 1) 
-          (? (bigint? x) 1n 1)
-          (* x (factoral (- x (? (bigint? x) 1n 1))))
-      ))`,
-      ` 'factoral `);
-    EXPECT(` (factoral 10) `, 3628800);
-    EXPECT(` (factoral 10n) `, 3628800n);
-    EXPECT(` (factoral 171) `, Infinity);
-    EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
-    RESTORESCOPE();
-    // Factoral should be undefined now
-    EXPECT_ERROR(` (factoral 10) `, EvalError);
-  });
 
   defineGlobalSymbol("apply", apply);
   function apply(fn, args, scope) {
@@ -1178,6 +1160,24 @@ function newLisp(lispOpts = {}) {
     this[name] = value;
     return name;
   }
+
+  queueTests(function() {
+    SAVESCOPE();
+    EXPECT(`
+      (define (factoral x)
+        (? (<= x 1) 
+          (? (bigint? x) 1n 1)
+          (* x (factoral (- x (? (bigint? x) 1n 1))))
+      ))`,
+      ` 'factoral `);
+    EXPECT(` (factoral 10) `, 3628800);
+    EXPECT(` (factoral 10n) `, 3628800n);
+    EXPECT(` (factoral 171) `, Infinity);
+    EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
+    RESTORESCOPE();
+    // Factoral should be undefined now
+    EXPECT_ERROR(` (factoral 10) `, EvalError);
+  });
 
   //
   // This is where the magic happens
