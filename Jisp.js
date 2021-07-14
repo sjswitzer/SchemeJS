@@ -59,7 +59,7 @@ function newLisp(lispOpts = {}) {
   Cons.prototype[CONS] = true;
 
   // Trust the JIT to inline this
-  const isCons = a => typeof a === 'object' && a[CONS] === true;
+  const isCons = a => a !== null && typeof a === 'object' && a[CONS] === true;
 
   function nextCons() {  // Cons iterator function
     let current = this._current, done = !isCons(current), value;
@@ -309,8 +309,8 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (cdr '(1 . 2)) `, 2);
     EXPECT(` (car '(1 2 3)) `, ` '1 `);
     EXPECT(` (cdr '(1 2 3)) `, ` '(2 3) `);
-    EXPECT_ERROR( ` (car NIL) `, EvalError );
-    EXPECT_ERROR( ` (cdr NIL) `, EvalError );
+    EXPECT_ERROR( ` (car nil) `, EvalError );
+    EXPECT_ERROR( ` (cdr nil) `, EvalError );
     const testList = `'(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd)))`;
     EXPECT(` (caaar ${testList}) `, ` 'aaa `);
     EXPECT(` (cdaar ${testList}) `, ` 'daa `);
@@ -739,6 +739,7 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (!== 3 3 3 3 4 3) `, true);   // not all equal
     EXPECT_ERROR(` (!== 3 3 3 3 3 3 (oops!)) `, EvalError);
     EXPECT(` (!== 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
+    // XXX TODO: difference between === and ==
   });
 
   defineGlobalSymbol("max", (val, ...rest) => {
@@ -792,32 +793,48 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3, compileHook: ifelseHook }, "if");
   function ifelse(p, t, f) { return _bool(p) ? _eval(t, this) : _eval(f, this); }
 
+  queueTests(function() {
+    EXPECT(` (&&) `, true);
+    EXPECT(` (&& 1) `, 1);
+    EXPECT(` (&& 1 2) `, 2);
+    EXPECT(` (&& 1 false 2) `, false);
+    EXPECT(` (&& 1 false (oops!)) `, false);  // short-circuits
+    EXPECT_ERROR(` (&& 1 true (oops!)) `, EvalError);
+    EXPECT(` (||) `, false);
+    EXPECT(` (|| 1) `, 1);
+    EXPECT(` (|| 1 2) `, 1);
+    EXPECT(` (|| nil null (void) false 2 3) `, 2); 
+    // Only false, nil, null, and undefined are false; specifically, 0 and "" are NOT false
+    EXPECT(` (|| nil null (void) false 0 2 3) `, 0);
+    EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
+    EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
+    EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
+  });
+
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", begin, { evalArgs: 0 });
-  function begin(...forms) {
-    let res = NIL;
-    for (let form of forms)
-      res = _eval(form, this);
-    return res;
+  defineGlobalSymbol("begin", begin, { evalArgs: 0, lift: 0 });
+  function begin(forms) {
+    return evalArgs(forms, this, MAX_INTEGER);
   }
 
   // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", prog1, { evalArgs: 0 });
-  function prog1(...forms) {
+  defineGlobalSymbol("prog1", prog1, { evalArgs: 0, lift: 0 });
+  function prog1(forms) {
     let res = NIL, first = true;
-    for (let form of forms) {
+    while (isCons(forms)) {
       let val = _eval(form, this);
       if (first)
         res = val;
       first = false;
+      forms = cdr(forms);
     }
     return res;
   }
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  defineGlobalSymbol("cond", cond, { evalArgs: 0 });
-  function cond(...clauses) {
-    for (let clause of clauses) {
+  defineGlobalSymbol("cond", cond, { evalArgs: 0, lift: 0 });
+  function cond(clauses) {
+    while (isCons(clauses)) {
       if (!isCons(clause))
         throw new EvalError(`Bad clause in "cond" ${_toString(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
@@ -830,6 +847,7 @@ function newLisp(lispOpts = {}) {
         }
         return res;
       }
+      clauses = cdr(clauses);
     }
     return NIL;
   }
@@ -1352,7 +1370,7 @@ function newLisp(lispOpts = {}) {
     //   Values that are evaluable are expanded and placed in
     //   a new Object or Array in correspoding position.
     // XXX Investigate Symbol.species (also for mapcar, etc.)
-    if (typeof expr === 'object') {
+    if (expr !== null && typeof expr === 'object') {
       if (expr instanceof Array) {
         let res = [];
         for (let item of expr) {
