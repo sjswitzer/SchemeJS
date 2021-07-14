@@ -687,6 +687,9 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (< 1 2 3 4 5 6) `, true);  // each less than the previous
     EXPECT(` (< 1 2 3 4 4 5 6) `, false);
     EXPECT(` (< 1 2 3 10 4 5 6) `, false);
+    EXPECT_ERROR(` (< 1 2 3 4 5 6 (oops!)) `, EvalError);
+    EXPECT(` (< 1 2 3 4 4 5 6 (oops!)) `, false); // Short-circuits on false
+    EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false);
     EXPECT(` (<=) `, true);  // nothing is not equal to itself
     EXPECT(` (<= 5) `, true);  // anything is equal to itself
     EXPECT(` (<= 5 3) `, false);
@@ -695,6 +698,9 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (<= 1 2 3 4 5 6) `, true);  // each less or equal to than the previous
     EXPECT(` (<= 1 2 3 4 4 5 6) `, true);
     EXPECT(` (<= 1 2 3 10 4 5 6) `, false);
+    EXPECT_ERROR(` (<= 1 2 3 4 5 6 (oops!)) `, EvalError);
+    EXPECT_ERROR(` (<= 1 2 3 4 4 5 6 (oops!)) `, EvalError);
+    EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (>) `, false);  // nothing is not greater than itself
     EXPECT(` (> 5) `, false);  // anything is not greater than itself
     EXPECT(` (> 5 3) `, true);
@@ -703,6 +709,9 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (> 6 5 4 3 2 1) `, true);  // each greater than the previous
     EXPECT(` (> 6 5 4 4 3 2 1) `, false);
     EXPECT(` (> 6 5 4 10 3 2 1) `, false);
+    EXPECT_ERROR(` (> 6 5 4 3 2 1 (oops!)) `, EvalError);
+    EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
+    EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false);
     EXPECT(` (>=) `, true);  // nothing is equal to itself
     EXPECT(` (>= 5) `, true);  // anything equal to itself
     EXPECT(` (>= 5 3) `, true);
@@ -711,6 +720,9 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (>= 6 5 4 3 2 1) `, true);  // each greater than or equal to the previous
     EXPECT(` (>= 6 5 4 4 3 2 1) `, true);
     EXPECT(` (>= 6 5 4 10 3 2 1) `, false);
+    EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, EvalError);
+    EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, EvalError);
+    EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (==) `, true);  // nothing is equal to itself
     EXPECT(` (== 5) `, true);  // anything equal to itself
     EXPECT(` (== 5 3) `, false);
@@ -718,6 +730,8 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (== 3 3) `, true);
     EXPECT(` (== 3 3 3 3 3 3) `, true);  // each equal to the previous
     EXPECT(` (== 3 3 3 3 4 3) `, false);
+    EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
+    EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
   });
 
   defineGlobalSymbol("max", (val, ...rest) => {
