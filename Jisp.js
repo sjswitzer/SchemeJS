@@ -131,7 +131,9 @@ function newLisp(lispOpts = {}) {
   ATOMS["\\"] = ATOMS["\u03BB"] = LAMBDA_ATOM;  // Some aliases for Lambda
   const SLAMBDA_ATOM = Atom("special-lambda");
   ATOMS["\\\\"] = SLAMBDA_ATOM;
-  
+
+  const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
+
   //
   // Everything is encapsulated in a function scope because JITs
   // can resolve lexically-scoped references most easily.
@@ -958,7 +960,7 @@ function newLisp(lispOpts = {}) {
           else res = last = cons(list[CAR], NIL);
           list = list[CDR];
         }
-      } else {  // other iterables
+      } else if (isIterable(list)) {  // other iterables
         for (let element of list)
           if (last) last = last[CDR] = cons(element, NIL);
           else res = last = cons(element, NIL);
@@ -968,24 +970,70 @@ function newLisp(lispOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("last", (list) => {
-    while (isCons(list)) {
-      let next = list[CDR];
-      if (next === NIL)
-        return list[CAR];
-      list = next;
+  defineGlobalSymbol("last", last);
+  function last(list) {
+    let res = NIL;
+    if (isCons(list)) {
+      while (isCons(list)) {
+        res = list[CAR];
+        list = list[CDR];
+      }
+    } else {
+      // Don't special-case string. Its iterator returns code points by combining surrogate pairs
+      if (Array.isArray(list)) {
+        if (list.length > 0)
+          return list[list.length-1];
+        return NIL;
+      }
+      if (isIterable(list)) {
+        for (let item of list)
+          res = item;
+      }
     }
-    return list;  // list was empty or not terminated with NIL
-  });
+    return res;
+  }
 
-  defineGlobalSymbol("length", (list) => {
+  defineGlobalSymbol("butlast", butlast);
+  function butlast(list) {
+    let res = NIL, last;
+    if (isCons(list)) {
+      while (isCons(list) && isCons(list[CDR])) {
+        if (last) last = last[CDR] = cons(list[CAR], NIL);
+        else res = last = cons(list[CAR], NIL);
+        list = list[CDR];
+      }
+    } else if (isIterable(list)) {
+      let prev, first = true;
+      for (item of list) {
+        if (!first)
+          if (last) last = last[CDR] = cons(prev, NIL);
+          else res = last = cons(prev, NIL);
+        prev = item;
+        first = false;
+      }
+    }
+    return res;
+  }
+
+  defineGlobalSymbol("length", list, { lift: 0 });
+  function length(list) {
     let n = 0;
-    while (isCons(list)) {
-      n += 1;
-      list = list[CDR];
+    if (isCons(list)) {
+      while (isCons(list)) {
+        n += 1;
+        list = list[CDR];
+      }
+    } else {
+      // Don't special-case string. Its iterator returns code points by combining surrogate pairs
+      if (Array.isArray(list) && list.length > 0)
+        return list.length;
+      if (isIterable(list)) {
+        for (let item of list)
+          n += 1;
+      }
     }
     return n;
-  });
+  }
 
   queueTests(function(){
     EXPECT(` (append) `, NIL);
@@ -996,7 +1044,25 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (append '[a b c]) ` , ` '(a b c) `);
     EXPECT(` (append '[a b c] '[d e f]) ` , ` '(a b c d e f) `);
     EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
-    EXPECT(` (append '(a b c) '[d e f] '(g h i)) ` , ` '(a b c d e f g h i) `);
+    EXPECT(` (append '(a b c) '[d e f] "ghi") ` , ` '(a b c d e f "g" "h" "i") `);
+    EXPECT(` (last) `, NIL);
+    EXPECT(` (last 'a) `, NIL);  // arg is not a list?
+    EXPECT(` (last ()) `, NIL);
+    EXPECT(` (last '(a)) `, ` 'a `);
+    EXPECT(` (last '(a b)) `, ` 'b `);
+    EXPECT(` (last '(a b c)) `, ` 'c `);
+    EXPECT(` (last '[]) `, NIL);
+    EXPECT(` (last '[a]) `, ` 'a `);
+    EXPECT(` (last '[a b]) `, ` 'b `);
+    EXPECT(` (last '[a b c]) `, ` 'c `);
+    EXPECT(` (last "abc") `, ` "c" `);
+    EXPECT(` (butlast) `, NIL);
+    EXPECT(` (butlast 'a) `, NIL);  // arg is not a list?
+    EXPECT(` (butlast ()) `, NIL);
+    EXPECT(` (butlast '(a)) `, NIL );
+    EXPECT(` (butlast '(a b)) `, ` '(a) `);
+    EXPECT(` (butlast '(a b c)) `, ` '(a b) `);
+    // XXX length
   });
 
   defineGlobalSymbol("list", (...args) => {
@@ -1005,6 +1071,13 @@ function newLisp(lispOpts = {}) {
       res = cons(args[i-1], res);
     return res;
   });
+  queueTests(function(){
+    EXPECT(` (list) `, NIL);
+    EXPECT(` (list 'a) `, ` '(a) `);
+    EXPECT(` (list 'a 'b) `, ` '(a b) `);
+    EXPECT(` (list 'a 'b 'c) `, ` '(a b c) `);
+    EXPECT(` (list 'a '(b c) 'd) `, ` '(a (b c) d) `);
+  });
 
   defineGlobalSymbol("reverse", reverse);
   function reverse(list) {
@@ -1012,16 +1085,6 @@ function newLisp(lispOpts = {}) {
     while (isCons(list)) {
       res = cons(list[CAR], res)
       list = list[CDR];
-    }
-    return res;
-  }
-
-  defineGlobalSymbol("butlast", butlast);
-  function butlast(list) {
-    let res = NIL, last;
-    while (isCons(list) && isCons(list[CDR])) {
-      if (last) last = last[CDR] = cons(list[CAR], NIL);
-      else res = last = cons(list[CAR], NIL);
     }
     return res;
   }
@@ -1196,7 +1259,6 @@ function newLisp(lispOpts = {}) {
   //     The width and precision are both optional.
   // (parse-number str)
   // (print object stream) -- Same as prin1 followed by output of a newline.
-  //     A special form which evaluates all its subforms but returns the value of the first one.
   // (qsort list predicate-fcn access-fcn)
   // (rand modulus) -- Computes a random number from 0 to modulus-1. Uses C library rand. (srand seed)
   // (random modulus) -- Computes a random number from 0 to modulus-1. Uses C library random. (srandom seed)
@@ -1662,7 +1724,7 @@ function newLisp(lispOpts = {}) {
       if (obj[CONS]) return obj;  // Careful; Cons is iterable itself
       if (obj[TO_LISP_SYMBOL])  // User can specialize this
         return obj[TO_LISP_SYMBOL].call(this, opts);
-      if (obj[Symbol.iterator]) {
+      if (isIterable(obj)) {
         let list = NIL, last;
         for (let value of obj) {
           if (depth > 1 && value[Symbol.iterator])
@@ -1683,7 +1745,7 @@ function newLisp(lispOpts = {}) {
     if (depth <= 0) return obj;
     res = [];
     for (let item of obj) {
-      if (depth > 1 && obj[Symbol.iterator])
+      if (depth > 1 && isIterable(obj))
         value = toArray.call(this, item, depth-1);
       res.push(item);
     }
@@ -1711,7 +1773,7 @@ function newLisp(lispOpts = {}) {
 
   function* lispTokenGenerator(characterGenerator) {
     if (!(typeof characterGenerator.next === 'function')) {
-      if (typeof characterGenerator[Symbol.iterator] === 'function') {
+      if (isIterable(characterGenerator)) {
         let generator = characterGenerator[Symbol.iterator]();
         if (!(typeof generator.next === 'function'))
           throw new LogicError(`Not an iterator or iterable ${characterGenerator}`);
@@ -1857,7 +1919,7 @@ function newLisp(lispOpts = {}) {
     if (typeof tokenGenerator === 'string')
       tokenGenerator = lispTokenGenerator(tokenGenerator);
     if (!(typeof tokenGenerator.next === 'function')) {
-      if (typeof tokenGenerator[Symbol.iterator] === 'function') {
+      if (isIterable(tokenGenerator)) {
         let generator = tokenGenerator[Symbol.iterator]();
         if (!(typeof generator.next === 'function'))
           throw new LogicError(`Not an iterator or iterable ${tokenGenerator}`);
