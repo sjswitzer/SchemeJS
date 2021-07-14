@@ -630,13 +630,12 @@ function newLisp(lispOpts = {}) {
     while (isCons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a == b)) return false;
-      a = b;
       forms = forms[CDR];
     }
     return true;
   }
 
-  defineGlobalSymbol("===", eeq, { evalArgs: 0, lift: 0 }, "eq?");
+  defineGlobalSymbol("===", eeq, { evalArgs: 0, lift: 0 }, "eeq", "eq?");
   function eeq(forms) {
     if (!isCons(forms)) return true;
     let a = _eval(forms[CAR], this);
@@ -644,7 +643,6 @@ function newLisp(lispOpts = {}) {
     while (isCons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a === b)) return false;
-      a = b;
       forms = forms[CDR];
     }
     return true;
@@ -652,30 +650,12 @@ function newLisp(lispOpts = {}) {
 
   defineGlobalSymbol("!=", ne, { evalArgs: 0, lift: 0 }, "ne");
   function ne(forms) {
-    if (!isCons(forms)) return false;
-    let a = _eval(forms[CAR], this);
-    forms = forms[CDR];
-    while (isCons(forms)) {
-      let b = _eval(forms[CAR], this);
-      if (!(a != b)) return false;
-      a = b;
-      forms = forms[CDR];
-    }
-    return true;
+    return !this.eq(forms);
   }
 
   defineGlobalSymbol("!==", neq, { evalArgs: 0, lift: 0 }, "neq");
   function neq(forms) {
-    if (!isCons(forms)) return false;
-    let a = _eval(forms[CAR], this);
-    forms = forms[CDR];
-    while (isCons(forms)) {
-      let b = _eval(forms[CAR], this);
-      if (!(a !== b)) return false;
-      a = b;
-      forms = forms[CDR];
-    }
-    return true;
+    return !this.eeq(forms);
   }
 
   queueTests(function(){
@@ -728,10 +708,37 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (== 5 3) `, false);
     EXPECT(` (== 3 5) `, false);
     EXPECT(` (== 3 3) `, true);
-    EXPECT(` (== 3 3 3 3 3 3) `, true);  // each equal to the previous
-    EXPECT(` (== 3 3 3 3 4 3) `, false);
+    EXPECT(` (== 3 3 3 3 3 3) `, true);  // all equal
+    EXPECT(` (== 3 3 3 3 4 3) `, false); // not all equal
     EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
     EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
+    EXPECT(` (!=) `, false);  // nothing is not equal to itself
+    EXPECT(` (!= 5) `, false);  // anything not equal to itself
+    EXPECT(` (!= 5 3) `, true);
+    EXPECT(` (!= 3 5) `, true);
+    EXPECT(` (!= 3 3) `, false);
+    EXPECT(` (!= 3 3 3 3 3 3) `, false);  // all equal
+    EXPECT(` (!= 3 3 3 3 4 3) `, true);   // not all equal
+    EXPECT_ERROR(` (!= 3 3 3 3 3 3 (oops!)) `, EvalError);
+    EXPECT(` (!= 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
+    EXPECT(` (===) `, true);  // nothing is equal to itself
+    EXPECT(` (=== 5) `, true);  // anything equal to itself
+    EXPECT(` (=== 5 3) `, false);
+    EXPECT(` (=== 3 5) `, false);
+    EXPECT(` (=== 3 3) `, true);
+    EXPECT(` (=== 3 3 3 3 3 3) `, true);  // all equal
+    EXPECT(` (=== 3 3 3 3 4 3) `, false); // not all equal
+    EXPECT_ERROR(` (=== 3 3 3 3 3 3 (oops!)) `, EvalError);
+    EXPECT(` (=== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
+    EXPECT(` (!==) `, false);  // nothing is not equal to itself
+    EXPECT(` (!== 5) `, false);  // anything not equal to itself
+    EXPECT(` (!== 5 3) `, true);
+    EXPECT(` (!== 3 5) `, true);
+    EXPECT(` (!== 3 3) `, false);
+    EXPECT(` (!== 3 3 3 3 3 3) `, false);  // all equal
+    EXPECT(` (!== 3 3 3 3 4 3) `, true);   // not all equal
+    EXPECT_ERROR(` (!== 3 3 3 3 3 3 (oops!)) `, EvalError);
+    EXPECT(` (!== 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
   });
 
   defineGlobalSymbol("max", (val, ...rest) => {
