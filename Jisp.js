@@ -32,7 +32,7 @@ function newLisp(lispOpts = {}) {
   // cells can't use "instanceof AbstractCons" or whatever.
   //
   // Instead, the method is:
-  //    typeof obj === 'object' && obj[PAIR] === true
+  //    typeof obj === 'object' && obj[CONS] === true
   //
   // The typeof check is free because JITs always knows the type
   // of an object and need to check it before property access anyway.
@@ -43,7 +43,7 @@ function newLisp(lispOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("*car*"), CDR = Symbol("*cdr*"), PAIR = Symbol("*pair*");
+  const CAR = Symbol("*car*"), CDR = Symbol("*cdr*"), CONS = Symbol("*cons*");
 
   class Cons {
     constructor(car, cdr) {
@@ -56,10 +56,10 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  Cons.prototype[PAIR] = true;
+  Cons.prototype[CONS] = true;
 
   // Trust the JIT to inline this
-  const isCons = a => typeof a === 'object' && a[PAIR] === true;
+  const isCons = a => typeof a === 'object' && a[CONS] === true;
 
   function nextCons() {  // Cons iterator function
     let current = this._current, done = !isCons(current), value;
@@ -225,7 +225,7 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  LazyCarCons.prototype[PAIR] = true;
+  LazyCarCons.prototype[CONS] = true;
 
   class LazyCdrCons {
     // User inplements "get cdr()" in a subclass and ideally seals the object
@@ -238,7 +238,7 @@ function newLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  LazyCdrCons.prototype[PAIR] = true;
+  LazyCdrCons.prototype[CONS] = true;
 
   //
   // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
@@ -1302,7 +1302,7 @@ function newLisp(lispOpts = {}) {
       let saveIndent = indent;
       // XXX special printing for native functions
       if (objType === 'object') {
-        if (obj[PAIR]) {
+        if (obj[CONS]) {
           put("(");
           indent += indentMore;
           sep = "";
@@ -1381,7 +1381,7 @@ function newLisp(lispOpts = {}) {
     if (!_bool(depth)) depth = 1;
     if (depth <= 0) return obj;
     if (typeof obj === 'object') {
-      if (obj[PAIR]) return obj;  // Careful; Cons is iterable itself
+      if (obj[CONS]) return obj;  // Careful; Cons is iterable itself
       if (obj[TO_LISP_SYMBOL])  // User can specialize this
         return obj[TO_LISP_SYMBOL].call(this, opts);
       if (obj[Symbol.iterator]) {
