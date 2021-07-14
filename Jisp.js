@@ -448,6 +448,9 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (in "b" {a: 1}) `, false);
     EXPECT(` (new RangeError) `, res => res instanceof RangeError);
     EXPECT(` (@ 3 '[a b c d e]) `, ` 'd `);
+    EXPECT(` (?@ 3 '[a b c d e]) `, ` 'd `);
+    EXPECT_ERROR(` (@ 3 (void)) `, TypeError);
+    EXPECT(` (?@ 3 (void)) `, undefined);
     EXPECT(` (void) `, undefined);
     EXPECT(` (undefined? (void)) `, true);
     EXPECT(` (void 1 2 3) `, undefined);
