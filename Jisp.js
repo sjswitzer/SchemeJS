@@ -8,6 +8,8 @@
 
 "use strict";
 
+const { memoryUsage } = require('process');
+
 // TODO: make this a JS module
 
 //
@@ -393,9 +395,13 @@ function newLisp(lispOpts = {}) {
   function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
     if (scope == null) scope = this;  // Default is the current scope
     else if (scope === NIL) scope = GlobalScope; // NIL, specifically, means use the global scope
-    if (typeof expr === 'string')
-      expr = parseSExpr(expr);
     return _eval(expr, scope);
+  }
+
+  defineGlobalSymbol("eval-string", evalString, "evalString");
+  function evalString(str, scope) {
+    let expr = parseSExpr(str);
+    return eval_.call(this, expr, scope);
   }
 
   defineGlobalSymbol("apply", apply);
@@ -1224,6 +1230,136 @@ function newLisp(lispOpts = {}) {
     return res;
   }
 
+  // (qsort list predicate-fcn access-fcn)
+  //   "qsort" is a lie for API compatibility but this sort is at least as good as qsort and
+  //   often much better.
+  defineGlobalSymbol("sort", mergesort, "qsort");
+  function mergesort(list, predicateFn, accessFn) {
+    if (!list || list === NIL)
+      return NIL;
+    if (isCons(list)) {
+      // llsort is in-place, so first copy the list.
+      // There are no new Cons cells after this.
+      let copied = NIL, tail;
+      while (isCons(list)) {
+        let next = list[CDR];
+        if (tail) tail = tail[CDR] = list;
+        else copied = tail =list;
+      }
+      return llsort(copied);
+    }
+    if (!accessFn && isIterable(list)) { // bail out to JavaScript sort
+      // This expands iterables into an array. It also copies arrays,
+      // which is good because JavaScript sort is in-place
+      let array = [ ... list ];
+      if (predicateFn)
+        array.sort((a,b) => predicateFn.call(this, a, b));
+      else
+        array.sort();
+      return array;
+    }
+
+    throw new EvalError(`not a list or iterable ${_toString(list)}`);
+  
+    // This is a bottom-up mergesort that coalesces runs of ascending or
+    // descending items. Runs are extended on either end, so runs include more than
+    // strictly ascending or descending sequences. The upshot of this is that it executes
+    // in O(n log m) where "m" is the number of runs.
+    // Lists that are mostly or partly ordered sort MUCH faster and already-sorted
+    // or even reverse-sorted lists sort in linear time because there's only one run.
+    //
+    // This combines run-accumulation from TimSort with the well-known (bottom-up) mergesort.
+    // A run will always be at least two elements long (as long as there are two elements
+    // remaining) but will often be much longer. As far as I know, this is novel.
+
+    //    https://en.wikipedia.org/wiki/Merge_sort#Bottom-up_implementation_using_lists
+    //    https://gist.github.com/sjswitzer/1dc76dc0b4dcf67a7fef
+    //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
+    
+    function llSort(list) {
+      let stack = [];
+      while (isCons(list)) {
+        // Accumulate a run that's already sorted.
+        let head = list, tail = list;
+        let headKey = accessFn ? accessFn.call(this, headKey[CAR]) : headKey[CAR];
+        let tailKey = headKey;
+        while (isCons(list)) {
+          let item = list;
+          list = list[CDR];
+          let itemKey = accessFn ? accessFn.call(this, item[CAR]) : item[CAR];
+          let itemLess = !!predicateFn ? predicateFn.call(this, itemKey, headKey) < 0 : itemKey < headKey0;
+          if (itemLess) {
+            list[CDR] = head;
+            head = list;
+            headKey = itemKey;
+          }
+          else {
+            let itemLess = !!predicateFn ? predicateFn.call(this, itemKey, tailKey) < 0 : itemKey < tailKey;
+            if (!itemLess) {
+              tail[CDR] = list;
+              tail = list;
+              tailKey = itemKey;
+            }
+          }
+        }
+        tail[CDR] = NIL;
+        let run = head;
+        // The number of runs at stack[i] is either zero or 2^i and the stack size is bounded
+        // 1+log2(nruns). There's a passing similarity to Timsort here, though Timsort maintains its stack using
+        // something like a Fibonacci sequence where this uses powers of two.
+        let i = 0
+        for ( ; i < stack.length; ++i) {
+          if (stack[i] === NIL) break;
+          let run = merge(stack[i], run);
+          stack[i] = NIL;
+        }
+        if (i < stack.length)
+          stack[i] = run; // It will have been NIL
+        else
+          stack.push(run);
+      }
+      // Merge all remaining stack elements
+      res = NIL;
+      for (let i = 0; i < stack.length; ++i)
+        run = merge(stack[i], run);
+      return run;
+    }
+
+    function merge(a, b) {
+      // When equal, a goes before b
+      merged = NIL, last;
+      while (isCons(a) && isCons(b)) {
+        let aKey = accessFn ? accessFn.call(this, a[CAR]) : a[CAR];
+        let bKey = accessFn ? accessFn.call(this, b[CAR]) : b[CAR];
+        let bLess = !!predicateFn ? predicateFn.call(this, bKey, aKey) < 0 : bKey < aKey;
+        if (bLess) {
+          let item = b, next = item[CDR];
+          if (last) item[CDR] = last;
+          else merged = item;
+          last = item;
+          b = next;
+        } else {
+          let item = a, next = item[CDR];
+          if (last) item[CDR] = last;
+          else merged = item;
+          last = item;
+          a = next;
+        }
+      }
+      if (last)
+        last[CDR] = NIL;
+      // Can't both be cons cells; the loop above ensures it
+      if (isCons(a)) {
+        if (last) last[CDR] = a;
+        else merged = a;
+      } else if (isCons(b)) {
+        if (last) last[CDR] = b;
+        else merged = b;
+      }
+      return merged;
+    }
+  }
+
   // For testing, mostly
   defineGlobalSymbol("deep-eq", deep_eq, { evalArgs: 0, lift: 2 });
   function deep_eq(a, b, maxDepth) {
@@ -1271,7 +1407,6 @@ function newLisp(lispOpts = {}) {
   //     The width and precision are both optional.
   // (parse-number str)
   // (print object stream) -- Same as prin1 followed by output of a newline.
-  // (qsort list predicate-fcn access-fcn)
   // (rand modulus) -- Computes a random number from 0 to modulus-1. Uses C library rand. (srand seed)
   // (random modulus) -- Computes a random number from 0 to modulus-1. Uses C library random. (srandom seed)
   // (runtime)
@@ -2704,9 +2839,9 @@ function newLisp(lispOpts = {}) {
       let result, ok;
       try {
         if (typeof test === 'string') {
-        result = testScope.eval(test);
+        result = testScope.evalString(test);
           if (typeof expected === 'string')
-            expected = testScope.eval(expected);
+            expected = testScope.evalString(expected);
         } else {
           test.call(testScope);
         }
@@ -2735,13 +2870,13 @@ function newLisp(lispOpts = {}) {
     }
     try {
       if (typeof test === 'string') {
-        result = testScope.eval(test);
+        result = testScope.evalString(test);
       } else {
         test.call(testScope);
       }
     } catch (error) {
       if (typeof test === 'string' && typeof expected === 'string')
-        expected = testScope.eval(expected);
+        expected = testScope.evalString(expected);
       if (error === expected || (error instanceof expected)) {
         reportTestSucceeded(test, error, expected);
       } else {
@@ -2805,7 +2940,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
       let lisp = newLisp( { readFile });
       // getLine("Attach debugger and hit return!");  // Uncomment to do what it says
-      lisp.eval('(define (test) (load "test.scm"))');
+      lisp.evalString('(define (test) (load "test.scm"))');
       lisp.REPL(getLine);
     }
   } finally {
