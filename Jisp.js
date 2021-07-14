@@ -73,13 +73,24 @@ function newLisp(lispOpts = {}) {
   // Hide the Nil class because there's never any reason to
   // reference it or instantiate it it more than once. Having it visible
   // just invites errors. But it's good to have a distinct class for NIL
-  // for various reasons including that it looks better in a JS debugger.
+  // for various reasons including that it looks better in a JS debugger
+  // and provides a way to trap attempts to get or set [CAR] and [CDR].
   const NIL = new (class Nil {
-    constructor() {
-      Object.freeze(this);
-    }
     *[Symbol.iterator]() { return { next: () => ({ done: true, value: undefined }) } }
   });
+
+  // There does not appear to be an ES6 syntax for this
+  Object.defineProperties(Object.getPrototypeOf(NIL), {
+    [CAR]: {
+      get: function(){ throw new EvalError("get car of nil"); },
+      set: function(){ throw new EvalError("set car of nil"); },
+    },
+    [CDR]: {
+      get: function(){ throw new EvalError("get cdr of nil"); },
+      set: function(){ throw new EvalError("set cdr of nil"); },
+    },
+  });
+  
 
   // Create a new scope with "new Object(oldScope)".
   // this way, a scope chain is a prototype chain and resolving
@@ -243,21 +254,20 @@ function newLisp(lispOpts = {}) {
   }
 
   const cons = (car, cdr) => new Cons(car, cdr);
-  const car = cons => cons[CAR];
-  const cdr = cons => cons[CDR];
-  // Beware the order here; in JS it's in reversed
-  const caaar = cons => cons[CAR][CAR][CAR];
-  const caadr = cons => cons[CDR][CAR][CAR];
-  const caar = cons => cons[CAR][CAR];
-  const cadar = cons => cons[CAR][CDR][CAR];
-  const caddr = cons => cons[CDR][CDR][CAR];
-  const cadr = cons => cons[CDR][CAR];
-  const cdaar = cons => cons[CAR][CAR][CDR];
-  const cdadr = cons => cons[CDR][CAR][CDR]
-  const cdar = cons => cons[CAR][CDR];
-  const cddar = cons => cons[CAR][CDR][CDR];
-  const cdddr = cons => cons[CDR][CDR][CDR];
-  const cddr = cons => cons[CDR][CDR];
+  const car = a => a[CAR];
+  const cdr = a => a[CDR];
+  const caaar = a => car(car(car(a)));
+  const caadr = a => car(car(cdr(a)));
+  const caar = a => car(car(a));
+  const cadar = a => car(cdr(car(a)));
+  const caddr = a => car(cdr(cdr(a)));
+  const cadr = a => car(cdr(a));
+  const cdaar = a => cdr(car(car(a)));
+  const cdadr = a => cdr(car(cdr(a)));
+  const cdar = a => cdr(car(a));
+  const cddar = a => cdr(cdr(car(a)));
+  const cdddr = a => cdr(cdr(cdr(a)));
+  const cddr = a => cdr(cdr(a));
 
   exportDefinition("list", list);
   function list(...elements) {  // easy list builder
@@ -276,7 +286,7 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("cons", cons, { lift: 2 });  // lift guarantees two arguments that aren't "undefined"
   defineGlobalSymbol("car", car, { lift: 1 }, "first"); // lift guarantees one argument that isn't "undefined"
   defineGlobalSymbol("cdr", cdr, { lift: 1 }, "rest");
-  defineGlobalSymbol("caaar", caadr, { lift: 1 });
+  defineGlobalSymbol("caaar", caaar, { lift: 1 });
   defineGlobalSymbol("caar", caar, { lift: 1 });
   defineGlobalSymbol("caadr", caadr, { lift: 1 });
   defineGlobalSymbol("cadar", cadar, { lift: 1 });
@@ -323,7 +333,26 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("lispTokens", a => [ ... lispTokenGenerator(a) ]);
 
   queueTests(function() {
-    EXPECT(`(cdr '(a b c))`, `'(b c)`);
+    EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
+    EXPECT(` (car '(1 . 2)) `, ` 1 `);
+    EXPECT(` (cdr '(1 . 2)) `, 2);
+    EXPECT(` (car '(1 2 3)) `, ` '1 `);
+    EXPECT(` (cdr '(1 2 3)) `, ` '(2 3) `);
+    EXPECT_ERROR( ` (car NIL) `, EvalError );
+    EXPECT_ERROR( ` (cdr NIL) `, EvalError );
+    const testList = `'(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd)))`;
+    EXPECT(` (caaar ${testList}) `, ` 'aaa `);
+    EXPECT(` (cdaar ${testList}) `, ` 'daa `);
+    EXPECT(` (cadar ${testList}) `, ` 'ada `);
+    EXPECT(` (cddar ${testList}) `, ` 'dda `);
+    EXPECT(` (caadr ${testList}) `, ` 'aad `);
+    EXPECT(` (cdadr ${testList}) `, ` 'dad `);
+    EXPECT(` (caddr ${testList}) `, ` 'add `);
+    EXPECT(` (cdddr ${testList}) `, ` 'ddd `);
+    EXPECT(` (caar ${testList}) `, ` '(aaa.daa) `);
+    EXPECT(` (cdar ${testList}) `, ` '(ada.dda) `);
+    EXPECT(` (cadr ${testList}) `, ` '(aad.dad) `);
+    EXPECT(` (cddr ${testList}) `, ` '(add.ddd) `);
   });
 
   defineGlobalSymbol("eval", eval_);
@@ -1083,6 +1112,8 @@ function newLisp(lispOpts = {}) {
       value = _eval(value, this);
     }
     if (typeof name === 'string') name = Atom(name);
+    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
+    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${_toString(variable)}`);
     this[name] = value;  // Or maybe GlobalScope?
@@ -1511,8 +1542,10 @@ function newLisp(lispOpts = {}) {
         continue;
       }
 
+      if (!ch) break;
+
       yield { type: 'garbage', value: ch };
-      nextc()
+      nextc();
     }
     yield { type: 'end' };
   }
@@ -2295,23 +2328,26 @@ function newLisp(lispOpts = {}) {
     }
   }
 
-  function EXPECT_THROW(test, expected) {
+  function EXPECT_ERROR(test, expected) {
     let result;
     try {
       if (typeof test === 'string') {
         result = GlobalScope.eval(test);
-        if (typeof expected === 'string')
-          expected = GlobalScope.eval(expected);
       } else {
         test.call(GlobalScope);
       }
     } catch (error) {
+      if (typeof test === 'string' && typeof expected === 'string')
+        expected = GlobalScope.eval(expected);
+
       if (error === expected
-          || (expected instanceof error && error instanceof expected)
+          || (error instanceof expected || expected instanceof Object.getPrototypeOf(error))
           || (typeof expected === 'function' && expected(error))) {
-        reportTestSucceeded(test, result, expected);
+        reportTestSucceeded(test, error, expected);
+      } else {
+        reportTestFailed("wrong exception", test, error, expected);
       }
-      reportTestFailed("wrong exception", test, result, expected);
+      return;
     }
     reportTestFailed("expected exception", test, result, expected);
   }
