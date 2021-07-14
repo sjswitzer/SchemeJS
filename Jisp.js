@@ -1152,10 +1152,22 @@ function newLisp(lispOpts = {}) {
     // Actually, this will work for any iterables and lists are iterable.
     let res = NIL, last;
     for (let list of lists) {
-      for (let item of list) {
-        item = fn.call(this, item);
-        if (last) last = last[CDR] = cons(item, NIL);
-        else res = last = cons(item, NIL);
+      if (isCons(list)) {
+        // Could just let the list iterator handle it but might as well just follow the Cons chain
+        // and not have to manufacture an iterator.
+        while (isCons(list)) {
+          let item = list[CAR];
+          item = fn.call(this, item);
+          if (last) last = last[CDR] = cons(item, NIL);
+          else res = last = cons(item, NIL);
+            list = list[CDR];
+        }
+      } else {
+        for (let item of list) {
+          item = fn.call(this, item);
+          if (last) last = last[CDR] = cons(item, NIL);
+          else res = last = cons(item, NIL);
+        }
       }
     }
     return res;
