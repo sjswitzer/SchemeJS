@@ -336,7 +336,7 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("object?", a => typeof a === 'object');
   defineGlobalSymbol("array?", a => Array.isArray(a));
   defineGlobalSymbol("NaN", NaN);
-  defineGlobalSymbol("isNaN", isNaN, "nan?");
+  defineGlobalSymbol("isNaN", isNaN, "NaN?", "nan?");
   defineGlobalSymbol("Infinity", Infinity);
   defineGlobalSymbol("isFinite", isFinite, "finite?");
   // Stuff the whole Math class in there!
@@ -352,8 +352,16 @@ function newLisp(lispOpts = {}) {
   queueTests(function() {
     EXPECT(` (sqrt 2) `, Math.sqrt(2));
     EXPECT(` NaN `, NaN);
+    EXPECT(` (NaN? 1) `, false);
+    EXPECT(` (nan? NaN) `, true);
     EXPECT(` Infinity `, Infinity);
     EXPECT(` (- Infinity) `, -Infinity);
+    EXPECT(` (finite? NaN) `, false);
+    EXPECT(` (finite? (/ 3 4)) `, true);
+    EXPECT(` (finite? (/ 3 0)) `, false);
+    EXPECT(` (finite? Infinity) `, false);
+    EXPECT(` (finite? NaN) `, false);
+    EXPECT(` (finite? "string") `, false);
     EXPECT(` (abs 3) `, 3);
     EXPECT(` (abs -3) `, 3);
     EXPECT(` (abs 3n) `, 3n);
