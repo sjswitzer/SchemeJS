@@ -809,12 +809,33 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
     EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
     EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
+    EXPECT(` (?) `, NIL);
+    EXPECT(` (? true) `, NIL);
+    EXPECT(` (? false) `, NIL);
+    EXPECT(` (? true 1) `, 1);
+    EXPECT(` (? false 2) `, NIL);
+    EXPECT(` (? true 1 2) `, 1);
+    EXPECT(` (? false 1 2) `, 2);
+    EXPECT(` (? true 1 2 (oops!)) `, 1);
+    EXPECT(` (? false 1 2 (oops!)) `, 2);
+    EXPECT(` (? true 1 (oops!)) `, 1);
+    EXPECT_ERROR(` (? false 1 (oops!)) `, EvalError);
+    EXPECT_ERROR(` (? true (oops!) 2) `, EvalError);
+    EXPECT(` (? false (oops!) 2) `, 2);
+    EXPECT_ERROR(` (? (oops!) 1 2) `, EvalError);
+    EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
+    EXPECT(` (? (> 3 5) (+ 3 4) (* 3 4)) `, 12);
   });
 
   // (begin form1 form2 ...)
   defineGlobalSymbol("begin", begin, { evalArgs: 0, lift: 0 });
   function begin(forms) {
-    return evalArgs(forms, this, MAX_INTEGER);
+    let res = NIL;
+    while (isCons(forms)) {
+      res = _eval(car(forms), this);
+      forms = cdr(forms);
+    }
+    return res;
   }
 
   // (prog1 form1 form2 form3 ...)
@@ -822,7 +843,7 @@ function newLisp(lispOpts = {}) {
   function prog1(forms) {
     let res = NIL, first = true;
     while (isCons(forms)) {
-      let val = _eval(form, this);
+      let val = _eval(car(forms), this);
       if (first)
         res = val;
       first = false;
@@ -830,6 +851,17 @@ function newLisp(lispOpts = {}) {
     }
     return res;
   }
+
+  queueTests(function(){
+    EXPECT(` (begin) `, NIL);
+    EXPECT(` (begin 1) `, 1);
+    EXPECT(` (begin 1 2 3) `, 3);
+    EXPECT(` (begin (+ 3 4) (* 3 4)) `, 12);
+    EXPECT(` (prog1) `, NIL);
+    EXPECT(` (prog1 1) `, 1);
+    EXPECT(` (prog1 1 2 3) `, 1);
+    EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
+  });
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
   defineGlobalSymbol("cond", cond, { evalArgs: 0, lift: 0 });
