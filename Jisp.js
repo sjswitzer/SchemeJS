@@ -8,8 +8,6 @@
 
 "use strict";
 
-const { memoryUsage } = require('process');
-
 // TODO: make this a JS module
 
 //
@@ -22,7 +20,7 @@ function newLisp(lispOpts = {}) {
   let _reportError = lispOpts.reportError = error => console.log(error); // Don't call this one
   let reportLispError = lispOpts.reportLispError ?? _reportError; // Call these instead
   let reportSystemError = lispOpts.reportError ?? _reportError;
-  let reportLoadResult = lispOpts.reportLoadResult ?? (result => console.log(_toString(result)));
+  let reportLoadResult = lispOpts.reportLoadResult ?? (result => console.log(toString(result)));
   let unitTest = lispOpts.unitTest;
   let reportTestFailed = lispOpts.reportTestFailure ?? testFailed;
   let reportTestSucceeded = lispOpts.reportTestSuccess ?? testSucceeded;
@@ -54,7 +52,7 @@ function newLisp(lispOpts = {}) {
       this[CDR] = cdr;
     }
     toString() {
-      return _toString(this, { maxDepth: 4 });
+      return toString(this, { maxDepth: 4 });
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -121,7 +119,7 @@ function newLisp(lispOpts = {}) {
         return name;
     }
     if (typeof name !== 'string')
-      name = _toString(name);
+      name = toString(name);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -230,7 +228,7 @@ function newLisp(lispOpts = {}) {
       this[CDR] = cdr;
     }
     toString() {
-      return _toString(this);
+      return toString(this);
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -243,7 +241,7 @@ function newLisp(lispOpts = {}) {
       this[CAR] = car;
     }
     toString() {
-      return _toString(this);
+      return toString(this);
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -849,7 +847,7 @@ function newLisp(lispOpts = {}) {
     while (isCons(clauses)) {
       let clause = clauses[CAR];
       if (!isCons(clause))
-        throw new EvalError(`Bad clause in "cond" ${_toString(clause)}`);
+        throw new EvalError(`Bad clause in "cond" ${toString(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
       if (_bool(evaled)) {
@@ -899,7 +897,7 @@ function newLisp(lispOpts = {}) {
       if (!readFile) throw new EvalError("No file reader defined");
       fileContent = readFile(path);
     } catch (error) {
-      let loadError = new EvalError(`Load failed ${_toString(path)}`);
+      let loadError = new EvalError(`Load failed ${toString(path)}`);
       loadError.cause = error;
       loadError.path = path;
       return false;
@@ -1113,7 +1111,7 @@ function newLisp(lispOpts = {}) {
     while (scope && scope !== Object) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
-        let name = _toString(symbol);
+        let name = toString(symbol);
         if (name.toLowerCase().includes(substring))
           matches.push(symbol);
       }
@@ -1182,10 +1180,10 @@ function newLisp(lispOpts = {}) {
     while (isCons(bindings)) {
       let binding = bindings[CAR];
       if (!isCons(binding))
-        throw new EvalError(`Bad binding ${_toString(binding)}`);
+        throw new EvalError(`Bad binding ${toString(binding)}`);
       let boundVar = binding[CAR], bindingForms = binding[CDR];
       if (typeof boundVar !== 'symbol')
-        throw new EvalError(`Bad binding ${_toString(binding)}`);
+        throw new EvalError(`Bad binding ${toString(binding)}`);
       let val = NIL;
       while (isCons(bindingForms)) {
         val = _eval(bindingForms[CAR], scope);
@@ -1233,7 +1231,7 @@ function newLisp(lispOpts = {}) {
       array.sort((a,b) => predicateFn.call(this, a, b));
       return array;
     }
-    throw new EvalError(`Not a list or iterable ${_toString(list)}`);
+    throw new EvalError(`Not a list or iterable ${toString(list)}`);
   
     // A bottom-up mergesort that coalesces runs of ascending or descending items.
     // Runs are extended on either end, so runs include more than strictly ascending
@@ -1504,7 +1502,7 @@ function newLisp(lispOpts = {}) {
       this.value = value;
     }
     toString() {
-      return `${super.toString()} ${this.tag} ${_toString(this.value)}`;
+      return `${super.toString()} ${this.tag} ${toString(this.value)}`;
     }
   };
   LispThrow.prototype.name = "LispThrow";
@@ -1536,17 +1534,17 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0, lift: 1 });
   function lispJSCatch(catchClause, forms) {
     if (!isCons(catchClause))
-      throw new EvalError(`Bad catch clause ${_toString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${toString(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     if (!isCons(catchForms))
-      throw new EvalError(`Bad catch clause ${_toString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${toString(catchClause)}`);
     var typeMatch;
     if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
       typeMatch = catchForms[CAR];
       catchForms = catchForms[CDR];
     }
     if (!isCons(catchForms))
-      throw new EvalError(`Bad catch clause ${_toString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${toString(catchClause)}`);
     let val = NIL;
     try {
       while (isCons(forms)) {
@@ -1584,7 +1582,7 @@ function newLisp(lispOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
-      throw new EvalError(`must define symbol or string ${_toString(variable)}`);
+      throw new EvalError(`must define symbol or string ${toString(variable)}`);
     this[name] = value;
     return name;
   }
@@ -1702,7 +1700,7 @@ function newLisp(lispOpts = {}) {
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           scope[params] = args;
         else if (params !== NIL)
-          throw new EvalError(`Bad parameter list ${_toString(origFormalParams)}`);
+          throw new EvalError(`Bad parameter list ${toString(origFormalParams)}`);
         let res = NIL;
         while (isCons(forms)) {
           res = _eval(forms[CAR], scope);
@@ -1739,8 +1737,9 @@ function newLisp(lispOpts = {}) {
   // Implements "toString()" for Lisp objects.
   // We can't just implement toString() because it needs to work for
   // non-Object types too. Cons.toString() calls this.
-  defineGlobalSymbol("toString", a => _toString(a));
-  function _toString(obj, opts = {}) {
+  defineGlobalSymbol("to-string", to_string);
+  function to_string(a) { return toString(a) } // Hides the innards from String(x)
+  function toString(obj, opts = {}) {
     opts = { ...lispOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 80;
     let wrapChar = opts.wrapChar ?? "\n";
@@ -2093,7 +2092,7 @@ function newLisp(lispOpts = {}) {
         let tok = _toks.shift();
         if (tok.type === 'newline' || tok.type === 'end')
           return str === '' ? null : str;
-        str += sep + (tok.value !== undefined ? _toString(tok.value) : tok.type);
+        str += sep + (tok.value !== undefined ? toString(tok.value) : tok.type);
         sep = " ";
       }
       for (;;) {
@@ -2102,7 +2101,7 @@ function newLisp(lispOpts = {}) {
         if (tok.type === 'newline' || tok.type === 'end')
           return str;
         let val = tok.value;
-        str += sep + (tok.value !== undefined ? _toString(tok.value) : tok.type);
+        str += sep + (tok.value !== undefined ? toString(tok.value) : tok.type);
         sep = " ";
       }
     }
@@ -2484,11 +2483,11 @@ function newLisp(lispOpts = {}) {
   function compileFunction(functionName, params, forms, scope, newTemp, indent) {
     let invokeScope = this;
     if (!typeof functionName === 'symbol')
-      throw new CompileError(`Function name is not an atom ${_toString(functionName)}`);
+      throw new CompileError(`Function name is not an atom ${toString(functionName)}`);
     while (isCons(nameAndParams)) {
       let param = nameAndParams[CAR];
       if (!typeof param === 'symbol')
-        throw new CompileError(`Function parameter is not an atom ${_toString(param)}`);
+        throw new CompileError(`Function parameter is not an atom ${toString(param)}`);
       params.push(param);
       nameAndParams = nameAndParams[CDR];
     }
@@ -2543,7 +2542,7 @@ function newLisp(lispOpts = {}) {
     }
     if (typeof expr === 'number' || typeof expr === 'bigint' || typeof expr === 'string'
         || typeof expr === 'boolean' || expr == null) {
-      return { val: _toString(expr), emit };
+      return { val: toString(expr), emit };
     }
     // XXX TODO: deal with object and array literals.
     throw new CompileError(`Cannot compile expression ${expr}`);
@@ -2735,7 +2734,7 @@ function newLisp(lispOpts = {}) {
     // readline(prompt) => str | nullish
     let name = opts.name ?? "Jisp";
     let prompt = opts.prompt ?? name + " > ";
-    let print = opts.print ?? (x => console.log(name + ":", _toString(x)));
+    let print = opts.print ?? (x => console.log(name + ":", toString(x)));
     let reportLispError = opts.reportLispError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
     let replHints = { prompt };
@@ -2779,7 +2778,7 @@ function newLisp(lispOpts = {}) {
 
   class TestFailureError extends LispError {
     constructor(message, test, result, expected) {
-      super(`${_toString(test)}; ${message}: ${_toString(result)}, expected: ${_toString(expected)}`);
+      super(`${toString(test)}; ${message}: ${toString(result)}, expected: ${toString(expected)}`);
       this.test = test;
       this.result = result;
       this.expected = expected;
