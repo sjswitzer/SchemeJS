@@ -45,7 +45,7 @@ function newLisp(lispOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("*car*"), CDR = Symbol("*cdr*"), CONS = Symbol("*cons*");
+  const CAR = Symbol("car"), CDR = Symbol("cdr"), CONS = Symbol("cons");
 
   class Cons {
     constructor(car, cdr) {
@@ -72,12 +72,12 @@ function newLisp(lispOpts = {}) {
     return { done, value };
   }
 
-  // Hide the Nil class because there's never any reason to
+  // Hide the nil class because there's never any reason to
   // reference it or instantiate it it more than once. Having it visible
   // just invites errors. But it's good to have a distinct class for NIL
   // for various reasons including that it looks better in a JS debugger
   // and provides a way to trap attempts to get or set [CAR] and [CDR].
-  const NIL = new (class Nil {
+  const NIL = new (class nil {
     *[Symbol.iterator]() { return { next: () => ({ done: true, value: undefined }) } }
   });
 
@@ -1231,86 +1231,90 @@ function newLisp(lispOpts = {}) {
   }
 
   // (qsort list predicate-fcn access-fcn)
-  //   "qsort" is a lie for API compatibility but this sort is at least as good as qsort and
-  //   often much better.
+  //   "qsort" is a lie for API compatibility with SIOD, but this sort has
+  //   comparable performance and is excellent with partially-sorted lists.
   defineGlobalSymbol("sort", mergesort, "qsort");
   function mergesort(list, predicateFn, accessFn) {
     if (!list || list === NIL)
       return NIL;
     if (isCons(list)) {
       // llsort is in-place, so first copy the list.
-      // There are no new Cons cells after this.
+      // There are no new Cons cells after this, so it's a bargain.
       let copied = NIL, tail;
       while (isCons(list)) {
         let next = list[CDR];
         if (tail) tail = tail[CDR] = list;
-        else copied = tail =list;
+        else copied = tail = list;
+        list = next;
       }
       return llsort(copied);
     }
-    if (!accessFn && isIterable(list)) { // bail out to JavaScript sort
+    if (!accessFn && isIterable(list)) { // Bail out to JavaScript sort
       // This expands iterables into an array. It also copies arrays,
-      // which is good because JavaScript sort is in-place
-      let array = [ ... list ];
-      if (predicateFn)
-        array.sort((a,b) => predicateFn.call(this, a, b));
-      else
-        array.sort();
+      // which is good because JavaScript sort is in-place.
+      // The JavaScript sort algorithm sorts as if keys were were strings;
+      // this is very bad for numbers.
+      // That's not what we did for lists, so we override that.
+      let array = [ ...list ];
+      if (!predicateFn)
+        predicateFn = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+      array.sort((a,b) => predicateFn.call(this, a, b));
       return array;
     }
-
-    throw new EvalError(`not a list or iterable ${_toString(list)}`);
+    throw new EvalError(`Not a list or iterable ${_toString(list)}`);
   
-    // This is a bottom-up mergesort that coalesces runs of ascending or
-    // descending items. Runs are extended on either end, so runs include more than
-    // strictly ascending or descending sequences. The upshot of this is that it executes
-    // in O(n log m) where "m" is the number of runs.
-    // Lists that are mostly or partly ordered sort MUCH faster and already-sorted
-    // or even reverse-sorted lists sort in linear time because there's only one run.
+    // A bottom-up mergesort that coalesces runs of ascending or descending items.
+    // Runs are extended on either end, so runs include more than strictly ascending
+    // or descending sequences. The upshot is that it executes in O(n log m) where "m"
+    // is the number of runs. Lists that are mostly or partly ordered sort MUCH faster
+    // and already-sorted or even reverse-sorted lists sort in linear time because
+    // there's only one run.
     //
     // This combines run-accumulation from TimSort with the well-known (bottom-up) mergesort.
     // A run will always be at least two elements long (as long as there are two elements
     // remaining) but will often be much longer. As far as I know, this is novel.
-
     //    https://en.wikipedia.org/wiki/Merge_sort#Bottom-up_implementation_using_lists
     //    https://gist.github.com/sjswitzer/1dc76dc0b4dcf67a7fef
     //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
-    
-    function llSort(list) {
-      let stack = [];
+  
+    function llsort(list) {
+      let stack = [], run = NIL;
       while (isCons(list)) {
         // Accumulate a run that's already sorted.
-        let head = list, tail = list;
-        let headKey = accessFn ? accessFn.call(this, headKey[CAR]) : headKey[CAR];
+        run = list;
+        let tail = list;
+        list = list[CDR];
+        let headKey = accessFn ? accessFn.call(this, run[CAR]) : run[CAR];
         let tailKey = headKey;
         while (isCons(list)) {
-          let item = list;
-          list = list[CDR];
-          let itemKey = accessFn ? accessFn.call(this, item[CAR]) : item[CAR];
-          let itemLess = !!predicateFn ? predicateFn.call(this, itemKey, headKey) < 0 : itemKey < headKey0;
+          let nextList = list[CDR];
+          tail[CDR] = NIL;
+          // "item" is the head of the list
+          let itemKey = accessFn ? accessFn.call(this, list[CAR]) : list[CAR];
+          let itemLess = predicateFn ? predicateFn.call(this, itemKey, headKey) < 0 : itemKey < headKey;
           if (itemLess) {
-            list[CDR] = head;
-            head = list;
+            list[CDR] = run;
+            run = list;
             headKey = itemKey;
-          }
-          else {
-            let itemLess = !!predicateFn ? predicateFn.call(this, itemKey, tailKey) < 0 : itemKey < tailKey;
+          } else {
+            let itemLess = predicateFn ? predicateFn.call(this, itemKey, tailKey) < 0 : itemKey < tailKey;
             if (!itemLess) {
               tail[CDR] = list;
               tail = list;
               tailKey = itemKey;
+            } else {
+              break;ß
             }
           }
+          list = nextList;
         }
-        tail[CDR] = NIL;
-        let run = head;
-        // The number of runs at stack[i] is either zero or 2^i and the stack size is bounded
-        // 1+log2(nruns). There's a passing similarity to Timsort here, though Timsort maintains its stack using
+        // The number of runs at stack[i] is either zero or 2^i and the stack size is bounded by 1+log2(nruns).
+        // There's a passing similarity to Timsort here, though Timsort maintains its stack using
         // something like a Fibonacci sequence where this uses powers of two.
-        let i = 0
+        let i = 0;
         for ( ; i < stack.length; ++i) {
           if (stack[i] === NIL) break;
-          let run = merge(stack[i], run);
+          run = merge(stack[i], run);
           stack[i] = NIL;
         }
         if (i < stack.length)
@@ -1319,7 +1323,7 @@ function newLisp(lispOpts = {}) {
           stack.push(run);
       }
       // Merge all remaining stack elements
-      res = NIL;
+      run = NIL;
       for (let i = 0; i < stack.length; ++i)
         run = merge(stack[i], run);
       return run;
@@ -1327,28 +1331,27 @@ function newLisp(lispOpts = {}) {
 
     function merge(a, b) {
       // When equal, a goes before b
-      merged = NIL, last;
+      let merged = NIL, last;
       while (isCons(a) && isCons(b)) {
         let aKey = accessFn ? accessFn.call(this, a[CAR]) : a[CAR];
         let bKey = accessFn ? accessFn.call(this, b[CAR]) : b[CAR];
         let bLess = !!predicateFn ? predicateFn.call(this, bKey, aKey) < 0 : bKey < aKey;
         if (bLess) {
           let item = b, next = item[CDR];
-          if (last) item[CDR] = last;
+          if (last) last[CDR] = item;
           else merged = item;
           last = item;
           b = next;
         } else {
           let item = a, next = item[CDR];
-          if (last) item[CDR] = last;
+          if (last) last[CDR] = item;
           else merged = item;
           last = item;
           a = next;
         }
-      }
-      if (last)
         last[CDR] = NIL;
-      // Can't both be cons cells; the loop above ensures it
+      }
+      // Can't both be Cons cells; the loop above ensures it
       if (isCons(a)) {
         if (last) last[CDR] = a;
         else merged = a;
@@ -1360,10 +1363,16 @@ function newLisp(lispOpts = {}) {
     }
   }
 
+  queueTests(function(){
+    EXPECT(` (sort) `, NIL);
+    EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
+    EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `, result => le.call(testScope, result));
+  });
+
   // For testing, mostly
   defineGlobalSymbol("deep-eq", deep_eq, { evalArgs: 0, lift: 2 });
   function deep_eq(a, b, maxDepth) {
-    if (!_bool(maxDepth)) maxDepth = 10000; // Protection for circular lists
+    if (!_bool(maxDepth)) maxDepth = 10000; // Protection from circular lists
     if (a === b) return true;
     // Normally NaNs are not equal to anything, including NaNs, but for
     // the purposes of this routine they are
@@ -2850,7 +2859,7 @@ function newLisp(lispOpts = {}) {
         return;
       }
       if (typeof expected === 'function')
-        ok = expected(result);
+        ok = expected.call(testScope, result);
       else
         ok = deep_eq(result, expected);
       if (!ok)
