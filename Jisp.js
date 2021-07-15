@@ -1366,6 +1366,7 @@ function newLisp(lispOpts = {}) {
   queueTests(function(){
     EXPECT(` (sort) `, NIL);
     EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
+    EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
     EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `, result => le.call(testScope, result));
   });
 
@@ -1392,7 +1393,7 @@ function newLisp(lispOpts = {}) {
       if (!Array.isArray(b)) return false;
       if (a.length !== b.length) return false;
       for (let i = 0; i < a.length; ++i)
-        if (!deep_eq(a[i], b[i]), maxDepth) return false;
+        if (!deep_eq(a[i], b[i], maxDepth)) return false;
       return true;
     }
     if (Array.isArray(b)) return false;
