@@ -20,7 +20,7 @@ function createLisp(lispOpts = {}) {
   let _reportError = lispOpts.reportError = error => console.log(error); // Don't call this one
   let reportLispError = lispOpts.reportLispError ?? _reportError; // Call these instead
   let reportSystemError = lispOpts.reportError ?? _reportError;
-  let reportLoadResult = lispOpts.reportLoadResult ?? (result => console.log(toString(result)));
+  let reportLoadResult = lispOpts.reportLoadResult ?? (result => console.log(str(result)));
   let unitTest = lispOpts.unitTest;
   let reportTestFailed = lispOpts.reportTestFailure ?? testFailed;
   let reportTestSucceeded = lispOpts.reportTestSuccess ?? testSucceeded;
@@ -53,7 +53,7 @@ function createLisp(lispOpts = {}) {
       this[CDR] = cdr;
     }
     toString() {
-      return toString(this, { maxDepth: 4 });
+      return str(this, { maxDepth: 4 });
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -115,7 +115,7 @@ function createLisp(lispOpts = {}) {
         return name;
     }
     if (typeof name !== 'string')
-      name = toString(name);
+      name = str(name);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -225,7 +225,7 @@ function createLisp(lispOpts = {}) {
       this[CDR] = cdr;
     }
     toString() {
-      return toString(this);
+      return str(this);
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -238,7 +238,7 @@ function createLisp(lispOpts = {}) {
       this[CAR] = car;
     }
     toString() {
-      return toString(this);
+      return str(this);
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -785,10 +785,10 @@ function createLisp(lispOpts = {}) {
     EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
     EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
     EXPECT(` (?) `, NIL);
-    EXPECT(` (? true) `, NIL);
-    EXPECT(` (? false) `, NIL);
-    EXPECT(` (? true 1) `, 1);
-    EXPECT(` (? false 2) `, NIL);
+    EXPECT(` (? true) `, isClosure);
+    EXPECT(` (? false) `, isClosure);
+    EXPECT(` (? true 1) `, isClosure);
+    EXPECT(` (? false 2) `, isClosure);
     EXPECT(` (? true 1 2) `, 1);
     EXPECT(` (? false 1 2) `, 2);
     EXPECT(` (? true 1 2 (oops!)) `, 1);
@@ -844,7 +844,7 @@ function createLisp(lispOpts = {}) {
     while (isCons(clauses)) {
       let clause = clauses[CAR];
       if (!isCons(clause))
-        throw new EvalError(`Bad clause in "cond" ${toString(clause)}`);
+        throw new EvalError(`Bad clause in "cond" ${str(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
       if (_bool(evaled)) {
@@ -894,7 +894,7 @@ function createLisp(lispOpts = {}) {
       if (!readFile) throw new EvalError("No file reader defined");
       fileContent = readFile(path);
     } catch (error) {
-      let loadError = new EvalError(`Load failed ${toString(path)}`);
+      let loadError = new EvalError(`Load failed ${str(path)}`);
       loadError.cause = error;
       loadError.path = path;
       return false;
@@ -1105,7 +1105,7 @@ function createLisp(lispOpts = {}) {
   defineGlobalSymbol("nth", nth);
   function nth(index, list) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
-      throw new EvalError(`Not an integer ${toString(index)}`);
+      throw new EvalError(`Not an integer ${str(index)}`);
     if (index < 0) return NIL;
     if (list === NIL || isCons(list)) {
       while (index > 0 && isCons(list)) {
@@ -1164,7 +1164,7 @@ function createLisp(lispOpts = {}) {
     while (scope && scope !== Object) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
-        let name = toString(symbol);
+        let name = str(symbol);
         if (name.toLowerCase().includes(substring))
           matches.push(symbol);
       }
@@ -1240,10 +1240,10 @@ function createLisp(lispOpts = {}) {
     while (isCons(bindings)) {
       let binding = bindings[CAR];
       if (!isCons(binding))
-        throw new EvalError(`Bad binding ${toString(binding)}`);
+        throw new EvalError(`Bad binding ${str(binding)}`);
       let boundVar = binding[CAR], bindingForms = binding[CDR];
       if (typeof boundVar !== 'symbol')
-        throw new EvalError(`Bad binding ${toString(binding)}`);
+        throw new EvalError(`Bad binding ${str(binding)}`);
       let val = NIL;
       while (isCons(bindingForms)) {
         val = _eval(bindingForms[CAR], scope);
@@ -1291,7 +1291,7 @@ function createLisp(lispOpts = {}) {
       array.sort((a,b) => predicateFn.call(this, a, b));
       return array;
     }
-    throw new EvalError(`Not a list or iterable ${toString(list)}`);
+    throw new EvalError(`Not a list or iterable ${str(list)}`);
   
     // A bottom-up mergesort that coalesces runs of ascending or descending items.
     // Runs are extended on either end, so runs include more than strictly ascending
@@ -1544,6 +1544,8 @@ function createLisp(lispOpts = {}) {
     return closure;
   }
 
+  const isClosure = form => isCons(form) && car(form) === CLOSURE_ATOM;
+  defineGlobalSymbol("closure?", isClosure);
   //
   // try/catch/filnally. Just a sketch for now.
   //
@@ -1555,7 +1557,7 @@ function createLisp(lispOpts = {}) {
       this.value = value;
     }
     toString() {
-      return `${super.toString()} ${this.tag} ${toString(this.value)}`;
+      return `${super.toString()} ${this.tag} ${str(this.value)}`;
     }
   };
   LispThrow.prototype.name = "LispThrow";
@@ -1587,17 +1589,17 @@ function createLisp(lispOpts = {}) {
   defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0, lift: 1 });
   function lispJSCatch(catchClause, forms) {
     if (!isCons(catchClause))
-      throw new EvalError(`Bad catch clause ${toString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${str(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     if (!isCons(catchForms))
-      throw new EvalError(`Bad catch clause ${toString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${str(catchClause)}`);
     var typeMatch;
     if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
       typeMatch = catchForms[CAR];
       catchForms = catchForms[CDR];
     }
     if (!isCons(catchForms))
-      throw new EvalError(`Bad catch clause ${toString(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${str(catchClause)}`);
     let val = NIL;
     try {
       while (isCons(forms)) {
@@ -1635,7 +1637,7 @@ function createLisp(lispOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
-      throw new EvalError(`must define symbol or string ${toString(variable)}`);
+      throw new EvalError(`must define symbol or string ${str(variable)}`);
     GlobalScope[name] = value;
     return name;
   }
@@ -1726,6 +1728,7 @@ function createLisp(lispOpts = {}) {
           realArgCount += 1;
         } else { 
           if (lift > 0 && lift < 0xff && realArgCount > 0) {
+            // Partial application of built-in functions
             let pnum = lift-realArgCount+1, paramList = NIL;
             while (pnum > 0)
               paramList = cons(Atom(`p${(pnum--)+1}`), paramList);
@@ -1750,15 +1753,15 @@ function createLisp(lispOpts = {}) {
     if (isCons(form)) {
       let opSym = form[CAR];
       let body = form[CDR];
-      if (!isCons(body)) throw new EvalError(`Bad form ${toString(form)}`);
+      if (!isCons(body)) throw new EvalError(`Bad form ${str(form)}`);
       if (opSym === CLOSURE_ATOM) {
-        if (!isCons(body)) throw new EvalError(`Bad closure ${toString(form)}`);
+        if (!isCons(body)) throw new EvalError(`Bad closure ${str(form)}`);
         scope = body[CAR];
         body = body[CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        if (!isCons(body)) throw new EvalError(`Bad lambda ${toString(form)}`);
+        if (!isCons(body)) throw new EvalError(`Bad lambda ${str(form)}`);
         let params = body[CAR];
         let forms = body[CDR];
         if (typeof params === 'symbol') { // Curry notation :)
@@ -1785,7 +1788,7 @@ function createLisp(lispOpts = {}) {
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           scope[params] = args;
         else if (params !== NIL)
-          throw new EvalError(`Bad parameter list ${toString(origFormalParams)}`);
+          throw new EvalError(`Bad parameter list ${str(origFormalParams)}`);
         let res = NIL;
         while (isCons(forms)) {
           res = _eval(forms[CAR], scope);
@@ -1823,8 +1826,8 @@ function createLisp(lispOpts = {}) {
   // We can't just implement toString() because it needs to work for
   // non-Object types too. Cons.toString() calls this.
   defineGlobalSymbol("to-string", to_string);
-  function to_string(a) { return toString(a) } // Hides the innards from String(x)
-  function toString(obj, opts = {}) {
+  function to_string(a) { return str(a) } // Hides the innards from String(x)
+  function str(obj, opts = {}) {
     opts = { ...lispOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 80;
     let wrapChar = opts.wrapChar ?? "\n";
@@ -2183,7 +2186,7 @@ function createLisp(lispOpts = {}) {
         let tok = _toks.shift();
         if (tok.type === 'newline' || tok.type === 'end')
           return str === '' ? null : str;
-        str += sep + (tok.value !== undefined ? toString(tok.value) : tok.type);
+        str += sep + (tok.value !== undefined ? str(tok.value) : tok.type);
         sep = " ";
       }
       for (;;) {
@@ -2192,7 +2195,7 @@ function createLisp(lispOpts = {}) {
         if (tok.type === 'newline' || tok.type === 'end')
           return str;
         let val = tok.value;
-        str += sep + (tok.value !== undefined ? toString(tok.value) : tok.type);
+        str += sep + (tok.value !== undefined ? str(tok.value) : tok.type);
         sep = " ";
       }
     }
@@ -2576,11 +2579,11 @@ function createLisp(lispOpts = {}) {
   function compileFunction(functionName, params, forms, scope, newTemp, indent) {
     let invokeScope = this;
     if (!typeof functionName === 'symbol')
-      throw new CompileError(`Function name is not an atom ${toString(functionName)}`);
+      throw new CompileError(`Function name is not an atom ${str(functionName)}`);
     while (isCons(nameAndParams)) {
       let param = nameAndParams[CAR];
       if (!typeof param === 'symbol')
-        throw new CompileError(`Function parameter is not an atom ${toString(param)}`);
+        throw new CompileError(`Function parameter is not an atom ${str(param)}`);
       params.push(param);
       nameAndParams = nameAndParams[CDR];
     }
@@ -2635,7 +2638,7 @@ function createLisp(lispOpts = {}) {
     }
     if (typeof expr === 'number' || typeof expr === 'bigint' || typeof expr === 'string'
         || typeof expr === 'boolean' || expr == null) {
-      return { val: toString(expr), emit };
+      return { val: str(expr), emit };
     }
     // XXX TODO: deal with object and array literals.
     throw new CompileError(`Cannot compile expression ${expr}`);
@@ -2827,7 +2830,7 @@ function createLisp(lispOpts = {}) {
     // readline(prompt) => str | nullish
     let name = opts.name ?? "Jisp";
     let prompt = opts.prompt ?? name + " > ";
-    let print = opts.print ?? (x => console.log(name + ":", toString(x)));
+    let print = opts.print ?? (x => console.log(name + ":", str(x)));
     let reportLispError = opts.reportLispError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
     let replHints = { prompt };
@@ -2871,7 +2874,7 @@ function createLisp(lispOpts = {}) {
 
   class TestFailureError extends LispError {
     constructor(message, test, result, expected) {
-      super(`${toString(test)}; ${message}: ${toString(result)}, expected: ${toString(expected)}`);
+      super(`${str(test)}; ${message}: ${str(result)}, expected: ${str(expected)}`);
       this.test = test;
       this.result = result;
       this.expected = expected;
