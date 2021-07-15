@@ -100,7 +100,7 @@ function createLisp(lispOpts = {}) {
     // automatically become part of the API.
   };
 
-  const GlobalScope = new Scope();
+  let GlobalScope = new Scope();
   const newScope = scope => Object.create(scope);
 
   //
@@ -1397,7 +1397,7 @@ function createLisp(lispOpts = {}) {
     EXPECT(` (sort) `, NIL);
     EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
     EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
-    EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `, result => le.call(testScope, result));
+    EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `, result => le.apply(GlobalScope, result));
   });
 
   // For testing, mostly
@@ -1637,7 +1637,7 @@ function createLisp(lispOpts = {}) {
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${toString(variable)}`);
-    scope[name] = value;
+    GlobalScope[name] = value;
     return name;
   }
 
@@ -1764,13 +1764,9 @@ function createLisp(lispOpts = {}) {
             scope[param] = args[CAR];
             if (isCons(args)) args = args[CDR];
           } else {
-            /***/
             // Curry up now!
             let closure = cons(CLOSURE_ATOM, cons(scope, cons(params, forms)));
             return closure;
-            /*/
-            scope[param] = NIL;
-            /***/
           }
           params = params[CDR];
         }
@@ -2879,24 +2875,24 @@ function createLisp(lispOpts = {}) {
     console.info("SUCCEEDED", test, result, expected);
   }
 
-  let testScope = GlobalScope, testScopeStack = [];
+  let testScopeStack = [], originalGlobalScope = GlobalScope;
   
   function SAVESCOPE() {
     // The idea here is to let the following series of steps to share a scope
     // Otherwise, each test gets a fresh scope.
-    testScopeStack.push(testScope);
-    testScope = newScope(testScope);
+    testScopeStack.push(GlobalScope);
+    GlobalScope = newScope(GlobalScope);
   }
 
   function RESTORESCOPE() {
     let scope = testScopeStack.pop();
     if (!scope) throw new LogicError("Test scope push and pop not paired");
-    testScope = scope;
+    GlobalScope = scope;
   }
 
   function EXPECT(test, expected) {
     let pushed = false;
-    if (testScope === GlobalScope) {
+    if (GlobalScope === originalGlobalScope) {
       SAVESCOPE();
       pushed = true;
     }
@@ -2904,18 +2900,18 @@ function createLisp(lispOpts = {}) {
       let result, ok;
       try {
         if (typeof test === 'string') {
-        result = testScope.evalString(test);
+        result = GlobalScope.evalString(test);
           if (typeof expected === 'string')
-            expected = testScope.evalString(expected);
+            expected = GlobalScope.evalString(expected);
         } else {
-          test.call(testScope);
+          test.call(GlobalScope);
         }
       } catch (error) {
         reportTestFailed("exception", test, error, expected);
         return;
       }
       if (typeof expected === 'function')
-        ok = expected.call(testScope, result);
+        ok = expected.call(GlobalScope, result);
       else
         ok = deep_eq(result, expected);
       if (!ok)
@@ -2929,19 +2925,19 @@ function createLisp(lispOpts = {}) {
 
   function EXPECT_ERROR(test, expected) {
     let result, pushed = false;
-    if (testScope === GlobalScope) {
+    if (GlobalScope === originalGlobalScope) {
       SAVESCOPE();
       pushed = true;
     }
     try {
       if (typeof test === 'string') {
-        result = testScope.evalString(test);
+        result = GlobalScope.evalString(test);
       } else {
-        test.call(testScope);
+        test.call(GlobalScope);
       }
     } catch (error) {
       if (typeof test === 'string' && typeof expected === 'string')
-        expected = testScope.evalString(expected);
+        expected = GlobalScope.evalString(expected);
       if (error === expected || (error instanceof expected)) {
         reportTestSucceeded(test, error, expected);
       } else {
@@ -2960,8 +2956,8 @@ function createLisp(lispOpts = {}) {
 
   if (unitTest) {
     for (let tests of testQueue) {
-      tests.call(testScope);
-      if (testScope !== GlobalScope || testScopeStack.length !== 0)
+      tests.call(GlobalScope);
+      if (GlobalScope !== originalGlobalScope || testScopeStack.length !== 0)
         throw new LogicError("Test scope push and pop not paired");
     }
   }
