@@ -1055,13 +1055,6 @@ function newLisp(lispOpts = {}) {
       res = cons(args[i-1], res);
     return res;
   });
-  queueTests(function(){
-    EXPECT(` (list) `, NIL);
-    EXPECT(` (list 'a) `, ` '(a) `);
-    EXPECT(` (list 'a 'b) `, ` '(a b) `);
-    EXPECT(` (list 'a 'b 'c) `, ` '(a b c) `);
-    EXPECT(` (list 'a '(b c) 'd) `, ` '(a (b c) d) `);
-  });
 
   defineGlobalSymbol("reverse", reverse);
   function reverse(list) {
@@ -1072,6 +1065,19 @@ function newLisp(lispOpts = {}) {
     }
     return res;
   }
+
+  queueTests(function(){
+    EXPECT(` (list) `, NIL);
+    EXPECT(` (list 'a) `, ` '(a) `);
+    EXPECT(` (list 'a 'b) `, ` '(a b) `);
+    EXPECT(` (list 'a 'b 'c) `, ` '(a b c) `);
+    EXPECT(` (list 'a '(b c) 'd) `, ` '(a (b c) d) `);
+    EXPECT(` (reverse) `, NIL);
+    EXPECT(` (reverse 'a) `, NIL); // not a list. XXX maybe should be exception?
+    EXPECT(` (reverse '(a)) `, ` '(a) `);
+    EXPECT(` (reverse '(a b)) `, ` '(b a) `);
+    EXPECT(` (reverse '(a b c)) `, ` '(c b a) `);
+  });
 
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
