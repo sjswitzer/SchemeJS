@@ -126,8 +126,8 @@ function createLisp(lispOpts = {}) {
     return atom;
   }
 
-  const LAMBDA_ATOM = Atom("lambda");
-  ATOMS["\\"] = ATOMS["\u03BB"] = LAMBDA_ATOM;  // Some aliases for Lambda
+  const LAMBDA_ATOM = Atom("lambda"), LAMBDA_CHAR = "\u03BB";
+  ATOMS["\\"] = ATOMS[LAMBDA_CHAR] = LAMBDA_ATOM;  // Some aliases for Lambda
   const SLAMBDA_ATOM = Atom("special-lambda");
   ATOMS["\\\\"] = SLAMBDA_ATOM;
   const CLOSURE_ATOM = Atom("%%closure");
@@ -1533,7 +1533,6 @@ function createLisp(lispOpts = {}) {
   // Promises
 
   // (\ (params) (body1) (body2) ...)
-  // (\ param . form) -- Curry notation
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
   function lambda(body) {
     /*
@@ -1720,12 +1719,12 @@ function createLisp(lispOpts = {}) {
     return expr;
   }
 
-  function _apply(fn, args, scope) {
-    if (typeof fn === 'function') {
+  function _apply(form, args, scope) {
+    if (typeof form === 'function') {
       // lift encoded as: (~evalCount << 8) | lift&0xff;
       // If there's no LIFT_ARGS, the default is to eval and lift everything.
       // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
-      let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
+      let lift = (form[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
        // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
        let evalCount = ~lift >> 7 >>> 1;
       lift = lift << 24 >> 23 >>> 1;
@@ -1746,23 +1745,26 @@ function createLisp(lispOpts = {}) {
       }
       if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
         jsArgs.push(args);
-      return fn.apply(scope, jsArgs);  // ??? scope[fn](...jsArgs);
+      return form.apply(scope, jsArgs);  // ??? scope[fn](...jsArgs);
     }
-    if (isCons(fn)) {
-      let opSym = fn[CAR];
+    if (isCons(form)) {
+      let opSym = form[CAR];
+      let body = form[CDR];
+      if (!isCons(body)) throw new EvalError(`Bad form ${toString(form)}`);
       if (opSym === CLOSURE_ATOM) {
-        let closureBody = fn[CDR];
-        if (!isCons(closureBody)) throw new EvalError(`Bad closure ${toString(fn)}`);
-        scope = closureBody[CAR];
-        fn = closureBody[CDR];
+        if (!isCons(body)) throw new EvalError(`Bad closure ${toString(form)}`);
+        scope = body[CAR];
+        form = body[CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        if (!isCons(fn[CDR])) throw new EvalError(`Bad lambda ${toString(fn)}`);
-        let params = fn[CDR][CAR];
-        if (typeof params === 'symbol')  // Curry notation!
+        if (!isCons(body)) throw new EvalError(`Bad lambda ${toString(form)}`);
+        let params = body[CAR];
+        let forms = body[CDR];
+        if (typeof params === 'symbol') { // Curry notation :)
           params = cons(params, NIL);
-        let forms = fn[CDR][CDR];
+          forms = cons(forms, NIL);
+        }
         if (opSym !== SLAMBDA_ATOM)
           args = evalArgs(args, scope);
         scope = Scope.newScope(scope);
@@ -1790,7 +1792,7 @@ function createLisp(lispOpts = {}) {
         return res;
       }
     }
-    throw new EvalError(`Can't apply ${fn}`);
+    throw new EvalError(`Can't apply ${form}`);
   }
 
   function evalArgs(args, scope, evalCount = MAX_INTEGER) {
@@ -1833,7 +1835,7 @@ function createLisp(lispOpts = {}) {
       lines.push(line);
     return lines.join(wrapChar);
     function put(str) {
-      if (line.length + str.length > stringWrap) {
+      if (line.length > 0 && line.length + str.length > stringWrap) {
         line += sep;
         lines.push(line);
         line = indent + prefix + str;
@@ -2102,7 +2104,11 @@ function createLisp(lispOpts = {}) {
       if (IDENT1[ch]) {
         let str = "", operatorPrefix = OPERATORS[ch];
         while (ch && IDENT2[ch]) {
-          if (operatorPrefix && DIGITS[ch])  // a prefix of operators breaks at a digit
+          // a prefix of operators breaks at a digit so we can write (*1 2)
+          if (operatorPrefix && DIGITS[ch])
+            break;
+          // lambda symbols are special so we can parse \x as \ x
+          if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && JSIDENT[ch])
             break;
           if (!OPERATORS[ch]) operatorPrefix = false;
           str += ch, nextc();
