@@ -1181,10 +1181,11 @@ function newLisp(lispOpts = {}) {
   // (mapcar fn list1 list2 ...)
   defineGlobalSymbol("mapcar", mapcar);
   function mapcar(fn, ...lists) {
+    if (!fn) return NIL;
     // Actually, this will work for any iterables and lists are iterable.
     let res = NIL, last;
     for (let list of lists) {
-      if (isCons(list)) {
+      if (list === NIL || isCons(list)) {
         // Could just let the list iterator handle it but might as well just follow the Cons chain
         // and not have to manufacture an iterator.
         while (isCons(list)) {
@@ -1194,7 +1195,7 @@ function newLisp(lispOpts = {}) {
           else res = last = cons(item, NIL);
             list = list[CDR];
         }
-      } else {
+      } else if (isIterable(list)) {
         for (let item of list) {
           item = fn.call(this, item);
           if (last) last = last[CDR] = cons(item, NIL);
@@ -1206,7 +1207,7 @@ function newLisp(lispOpts = {}) {
   }
 
   // Same as mapcar but results in an Array
-  defineGlobalSymbol("map->array", map_to_array);
+  defineGlobalSymbol("map->array", map_to_array);  // XXX name
   function map_to_array(fn, ...lists) {
     let res = [];
     for (let list of lists) {
@@ -1217,6 +1218,12 @@ function newLisp(lispOpts = {}) {
     }
     return res;
   }
+
+  queueTests(function(){
+    EXPECT(` (mapcar) `, NIL);
+    // EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
+    // XXX TODO
+  });
 
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
@@ -1304,30 +1311,29 @@ function newLisp(lispOpts = {}) {
     //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
   
     function llsort(list) {
-      let stack = [], run = NIL;
+      let stack = [];
       while (isCons(list)) {
         // Accumulate a run that's already sorted.
-        run = list;
-        let tail = list;
+        let run = list, runTail = list;
         list = list[CDR];
         let headKey = accessFn ? accessFn.call(this, run[CAR]) : run[CAR];
         let tailKey = headKey;
         while (isCons(list)) {
           let nextList = list[CDR];
-          tail[CDR] = NIL;
+          runTail[CDR] = NIL;
           // "item" is the head of the list
           let itemKey = accessFn ? accessFn.call(this, list[CAR]) : list[CAR];
-          let itemLess = predicateFn ? predicateFn.call(this, itemKey, headKey) < 0 : itemKey < headKey;
-          if (itemLess) {
-            list[CDR] = run;
-            run = list;
-            headKey = itemKey;
+          let itemLess = predicateFn ? predicateFn.call(this, itemKey, tailKey) < 0 : itemKey < tailKey;
+          if (!itemLess) {
+            runTail[CDR] = list;
+            runTail = list;
+            tailKey = itemKey;
           } else {
-            let itemLess = predicateFn ? predicateFn.call(this, itemKey, tailKey) < 0 : itemKey < tailKey;
-            if (!itemLess) {
-              tail[CDR] = list;
-              tail = list;
-              tailKey = itemKey;
+            let itemLess = predicateFn ? predicateFn.call(this, itemKey, headKey) < 0 : itemKey < headKey;
+            if (itemLess) {
+              list[CDR] = run;
+              run = list;
+              headKey = itemKey;
             } else {
               break;ß
             }
@@ -1349,41 +1355,41 @@ function newLisp(lispOpts = {}) {
           stack.push(run);
       }
       // Merge all remaining stack elements
-      run = NIL;
+      let result = NIL;
       for (let i = 0; i < stack.length; ++i)
-        run = merge(stack[i], run);
-      return run;
+        result = merge(stack[i], result);
+      return result;
     }
 
-    function merge(a, b) {
-      // When equal, a goes before b
+    function merge(left, right) {
+      // When equal, left goes before right
       let merged = NIL, last;
-      while (isCons(a) && isCons(b)) {
-        let aKey = accessFn ? accessFn.call(this, a[CAR]) : a[CAR];
-        let bKey = accessFn ? accessFn.call(this, b[CAR]) : b[CAR];
-        let bLess = !!predicateFn ? predicateFn.call(this, bKey, aKey) < 0 : bKey < aKey;
-        if (bLess) {
-          let item = b, next = item[CDR];
-          if (last) last[CDR] = item;
-          else merged = item;
-          last = item;
-          b = next;
+      while (isCons(left) && isCons(right)) {
+        let leftKey = accessFn ? accessFn.call(this, left[CAR]) : left[CAR];
+        let rightKey = accessFn ? accessFn.call(this, right[CAR]) : right[CAR];
+        let rightLess = !!predicateFn ? predicateFn.call(this, rightKey, leftKey) < 0 : rightKey < leftKey;
+        if (rightLess) {
+          let next = right[CDR];
+          if (last) last[CDR] = right;
+          else merged = right;
+          last = right;
+          right = next;
         } else {
-          let item = a, next = item[CDR];
-          if (last) last[CDR] = item;
-          else merged = item;
-          last = item;
-          a = next;
+          let next = left[CDR];
+          if (last) last[CDR] = left;
+          else merged = left;
+          last = left;
+          left = next;
         }
         last[CDR] = NIL;
       }
       // Can't both be Cons cells; the loop above ensures it
-      if (isCons(a)) {
-        if (last) last[CDR] = a;
-        else merged = a;
-      } else if (isCons(b)) {
-        if (last) last[CDR] = b;
-        else merged = b;
+      if (isCons(left)) {
+        if (last) last[CDR] = left;
+        else merged = left;
+      } else if (isCons(right)) {
+        if (last) last[CDR] = right;
+        else merged = right;
       }
       return merged;
     }
@@ -1522,7 +1528,8 @@ function newLisp(lispOpts = {}) {
   // (while pred-form form1 form2 ...)
   //    If pred-form evaluates true it will evaluate all the other forms and then loop.
 
-  // maybe some relation between of generators and Lazy eval?
+  // maybe some relation between of generators and Lazy eval? <<< YES!
+  // maybe a non-recursive evaluator with explicit stack?
   // Promises
 
   // (\ (params) (body1) (body2) ...)
