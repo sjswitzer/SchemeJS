@@ -991,7 +991,7 @@ function newLisp(lispOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("length", list, { lift: 0 });
+  defineGlobalSymbol("length", length);
   function length(list) {
     let n = 0;
     if (isCons(list)) {
@@ -1038,7 +1038,15 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (butlast '(a)) `, NIL );
     EXPECT(` (butlast '(a b)) `, ` '(a) `);
     EXPECT(` (butlast '(a b c)) `, ` '(a b) `);
-    // XXX length
+    EXPECT(` (length) `, 0);
+    EXPECT(` (length 'a) `, 0);  // Not a list or iterable
+    EXPECT(` (length 1) `, 0);  // Not a list or iterable
+    EXPECT(` (length '()) `, 0);
+    EXPECT(` (length '(a)) `, 1);
+    EXPECT(` (length '(a b)) `, 2);
+    EXPECT(` (length '(a b c d)) `, 4);
+    EXPECT(` (length '[a b c d]) `, 4);
+    EXPECT(` (length "abcd") `, 4);
   });
 
   defineGlobalSymbol("list", (...args) => {
