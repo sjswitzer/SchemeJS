@@ -1764,7 +1764,13 @@ function createLisp(lispOpts = {}) {
             scope[param] = args[CAR];
             if (isCons(args)) args = args[CDR];
           } else {
+            /***/
+            // Curry up now!
+            let closure = cons(CLOSURE_ATOM, cons(scope, cons(params, forms)));
+            return closure;
+            /*/
             scope[param] = NIL;
+            /***/
           }
           params = params[CDR];
         }
