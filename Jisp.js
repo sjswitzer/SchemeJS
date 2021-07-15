@@ -929,7 +929,7 @@ function newLisp(lispOpts = {}) {
     let res = NIL, last;
     while (isCons(lists)) {
       let list = lists[CAR];
-      if (isCons(list)) {
+      if (list === NIL || isCons(list)) {
         // Could handle as iterable, but faster not to
         while (isCons(list)) {
           if (last) last = last[CDR] = cons(list[CAR], NIL);
@@ -949,7 +949,7 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("last", last);
   function last(list) {
     let res = NIL;
-    if (isCons(list)) {
+    if (list === NIL || isCons(list)) {
       while (isCons(list)) {
         res = list[CAR];
         list = list[CDR];
@@ -972,7 +972,7 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("butlast", butlast);
   function butlast(list) {
     let res = NIL, last;
-    if (isCons(list)) {
+    if (list === NIL || isCons(list)) {
       while (isCons(list) && isCons(list[CDR])) {
         if (last) last = last[CDR] = cons(list[CAR], NIL);
         else res = last = cons(list[CAR], NIL);
@@ -994,7 +994,7 @@ function newLisp(lispOpts = {}) {
   defineGlobalSymbol("length", length);
   function length(list) {
     let n = 0;
-    if (isCons(list)) {
+    if (list === NIL || isCons(list)) {
       while (isCons(list)) {
         n += 1;
         list = list[CDR];
@@ -1107,14 +1107,56 @@ function newLisp(lispOpts = {}) {
   //     Reference the list using index, with the first element being index 0.
   defineGlobalSymbol("nth", nth);
   function nth(index, list) {
-    while (index > 0 && isCons(list)) {
-      index -= 1;
-      list = list[CDR];
+    if (typeof index !== 'number' || Math.trunc(index) !== index)
+      throw new EvalError(`Not an integer ${toString(index)}`);
+    if (index < 0) return NIL;
+    if (list === NIL || isCons(list)) {
+      while (index > 0 && isCons(list)) {
+        index -= 1;
+        list = list[CDR];
+      }
+      if (isCons(list))
+        return list[CAR];
+  ``} else if (Array.isArray(list)) {
+      if (index < list.length)
+        return list[index];
+    } else if (isIterable(list)) {
+      for (let item of list) {
+        if (index <= 0)
+          return item;
+        index -= 1;
+      }
     }
-    if (isCons(list))
-      return list[CAR];
     return NIL;
   }
+
+  queueTests(function(){
+    EXPECT(` (memq) `, NIL);
+    EXPECT(` (memq 'a) `, NIL);
+    EXPECT(` (memq 'a 1) `, NIL);
+    EXPECT(` (memq 'c '(a b c d e f g)) `, ` '(c d e f g) `);
+    EXPECT(` (memq 'z '(a b c d e f g)) `, NIL);
+    EXPECT_ERROR(` (nth) `, EvalError);
+    EXPECT_ERROR(` (nth 'a) `, EvalError);
+    EXPECT_ERROR(` (nth 1.5) `, EvalError);
+    EXPECT(` (nth 0) `, NIL);
+    EXPECT(` (nth 100) `, NIL);
+    EXPECT(` (nth 4 '(a b c d e f g)) `, ` 'e `);
+    EXPECT(` (nth 4 '[a b c d e f g]) `, ` 'e `);
+    EXPECT(` (nth 4 "abcde") `, ` "e" `);
+    EXPECT(` (nth 0 '(a b c d e f g)) `, ` 'a `);
+    EXPECT(` (nth 0 '[a b c d e f g]) `, ` 'a `);
+    EXPECT(` (nth 0 "abcde") `, ` "a" `);
+    EXPECT(` (nth 6 '(a b c d e f g)) `, ` 'g `);
+    EXPECT(` (nth 6 '[a b c d e f g]) `, ` 'g `);
+    EXPECT(` (nth 6 "abcdefg") `, ` "g" `);
+    EXPECT(` (nth -1 '(a b c d e f g)) `, NIL);
+    EXPECT(` (nth -1 '[a b c d e f g]) `, NIL);
+    EXPECT(` (nth -1 "abcdefg") `, NIL);
+    EXPECT(` (nth 7 '(a b c d e f g)) `, NIL);
+    EXPECT(` (nth 7 '[a b c d e f g]) `, NIL);
+    EXPECT(` (nth 7 "abcdefg") `, NIL);
+  });
 
   // (apropos substring) -- Returns a list of all symbols containing the given substring
   defineGlobalSymbol("apropos", apropos);
@@ -1221,7 +1263,7 @@ function newLisp(lispOpts = {}) {
   function mergesort(list, predicateFn, accessFn) {
     if (!list || list === NIL)
       return NIL;
-    if (isCons(list)) {
+    if (list === NIL || isCons(list)) {
       // llsort is in-place, so first copy the list.
       // There are no new Cons cells after this, so it's a bargain.
       let copied = NIL, tail;
@@ -1862,6 +1904,7 @@ function newLisp(lispOpts = {}) {
   function toList(obj, depth) {
     if (!_bool(depth)) depth = 1;
     if (depth <= 0) return obj;
+    if (obj === NIL || isCons(obj)) return obj;
     if (typeof obj === 'object') {
       if (obj[CONS]) return obj;  // Careful; Cons is iterable itself
       if (obj[TO_LISP_SYMBOL])  // User can specialize this
