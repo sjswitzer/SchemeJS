@@ -15,7 +15,7 @@
 // Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design.
 //
-function newLisp(lispOpts = {}) {
+function createLisp(lispOpts = {}) {
   let readFile = lispOpts.readFile;
   let _reportError = lispOpts.reportError = error => console.log(error); // Don't call this one
   let reportLispError = lispOpts.reportLispError ?? _reportError; // Call these instead
@@ -43,7 +43,7 @@ function newLisp(lispOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("car"), CDR = Symbol("cdr"), CONS = Symbol("cons");
+  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), CONS = Symbol("CONS");
 
   class Cons {
     constructor(car, cdr) {
@@ -91,9 +91,8 @@ function newLisp(lispOpts = {}) {
     },
   });
   
-
   // Create a new scope with Scope.newScope(oldScope).
-  // That creates a new scope whose prototype is the old scope.
+  // A new scope's prototype is the enclosing scope.
   // This way, a scope chain is a prototype chain and resolving
   // a symbol is as simple as "scope[sym]"!
   class Scope {
@@ -131,6 +130,7 @@ function newLisp(lispOpts = {}) {
   ATOMS["\\"] = ATOMS["\u03BB"] = LAMBDA_ATOM;  // Some aliases for Lambda
   const SLAMBDA_ATOM = Atom("special-lambda");
   ATOMS["\\\\"] = SLAMBDA_ATOM;
+  const CLOSURE_ATOM = Atom("%%closure");
 
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
 
@@ -1536,10 +1536,14 @@ function newLisp(lispOpts = {}) {
   // (\ param . form) -- Curry notation
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
   function lambda(body) {
+    /*
+    let closure = cons(CLOSURE_ATOM, cons(this, body));
+    /*/
     let scope = this;
     let closure = args => _apply(cons(LAMBDA_ATOM, body), args, scope);
     let lift = 0, evalCount = MAX_INTEGER;
     closure[LIFT_ARGS] = (~evalCount << 8) | lift&0xff;
+    /**/
     return closure;
   }
 
@@ -1681,9 +1685,15 @@ function newLisp(lispOpts = {}) {
     }
     if (isCons(expr)) {
       let fn = expr[CAR], args = expr[CDR];
-      if (typeof fn !== 'function' &&
-          !(isCons(fn) && (fn[CAR] === LAMBDA_ATOM || fn[CAR] === SLAMBDA_ATOM)))
-        fn = _eval(fn, scope);
+      if (typeof fn !== 'function') {
+        if (isCons(fn)) {
+          let fnCar = fn[CAR];
+          if (!fnCar === LAMBDA_ATOM || fnCar === CLOSURE_ATOM || fnCar === SLAMBDA_ATOM)
+            fn = _eval(fn, scope);
+        } else {
+          fn = _eval(fn, scope);
+        }
+      }
       return _apply(fn, args, scope);
     }
     // Experimental special eval for JS arrays and objects:
@@ -1740,12 +1750,20 @@ function newLisp(lispOpts = {}) {
     }
     if (isCons(fn)) {
       let opSym = fn[CAR];
+      if (opSym === CLOSURE_ATOM) {
+        let closureBody = fn[CDR];
+        if (!isCons(closureBody)) throw new EvalError(`Bad closure ${toString(fn)}`);
+        scope = closureBody[CAR];
+        fn = closureBody[CDR];
+        opSym = LAMBDA_ATOM;
+      }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
+        if (!isCons(fn[CDR])) throw new EvalError(`Bad lambda ${toString(fn)}`);
         let params = fn[CDR][CAR];
         if (typeof params === 'symbol')  // Curry notation!
           params = cons(params, NIL);
         let forms = fn[CDR][CDR];
-        if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
+        if (opSym !== SLAMBDA_ATOM)
           args = evalArgs(args, scope);
         scope = Scope.newScope(scope);
         let origFormalParams = params;
@@ -2965,7 +2983,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
     } catch(e) {
       console.info("Can't open termnal", e);
-      newLisp({ unitTest: true });  // XXX silly debugging hack
+      createLisp({ unitTest: true });  // XXX silly debugging hack
     }
     if (inputFd !== undefined) {
       console.log(`Jisp 1.1 REPL. Type "." to exit.`);
@@ -2983,7 +3001,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
         fileContent = fileContent.toString();
         return fileContent;
       }
-      let lisp = newLisp( { readFile });
+      let lisp = createLisp( { readFile });
       // getLine("Attach debugger and hit return!");  // Uncomment to do what it says
       lisp.evalString('(define (test) (load "test.scm"))');
       lisp.REPL(getLine);
