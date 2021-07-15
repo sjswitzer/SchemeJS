@@ -32,18 +32,19 @@ function createLisp(lispOpts = {}) {
   // cells can't use "instanceof AbstractCons" or whatever.
   //
   // Instead, the method is:
-  //    typeof obj === 'object' && obj[CONS] === true
+  //    obj != null && obj[PAIR] === true
   //
-  // The typeof check is free because JITs always knows the type
-  // of an object and need to check it before property access anyway.
-  // Fetching properties is something JITs really focusses on making
-  // as fast as possible. It's probably even as fast as or faster than "instanceof".
+  // Fetching properties is something JITs really optimize.
+  // It's probably as fast as or faster than "instanceof".
   //
   // Beware when traversing lists. Things purported to be lists might not be
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
   const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR");
+
+  // Trust the JIT to inline this
+  const isCons = obj => obj != null && obj[PAIR] === true;
 
   class Cons {
     constructor(car, cdr) {
@@ -57,9 +58,6 @@ function createLisp(lispOpts = {}) {
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
   Cons.prototype[PAIR] = true;
-
-  // Trust the JIT to inline this
-  const isCons = a => a != null && a[PAIR] === true;
 
   function nextCons() {  // Cons iterator function
     let current = this._current, done = !isCons(current), value;
@@ -98,6 +96,7 @@ function createLisp(lispOpts = {}) {
   class Scope {
     // Be careful defining methods or properties here; they
     // automatically become part of the API.
+    static toString() { return `{*scope*}`}
   };
 
   let GlobalScope = new Scope();
@@ -1709,21 +1708,34 @@ function createLisp(lispOpts = {}) {
 
   function _apply(form, args, scope) {
     if (typeof form === 'function') {
+      let fn = form;
       // lift encoded as: (~evalCount << 8) | lift&0xff;
       // If there's no LIFT_ARGS, the default is to eval and lift everything.
       // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
-      let lift = (form[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
+      let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
        // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
        let evalCount = ~lift >> 7 >>> 1;
       lift = lift << 24 >> 23 >>> 1;
       args = evalArgs(args, scope, evalCount);
-      let jsArgs = [];
+      let jsArgs = [], realArgCount = 0;
       while (lift > 0) {
         // Promote "lift" arguments to JS arguments, filling with NIL
         if (isCons(args)) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
-        } else {
+          realArgCount += 1;
+        } else { 
+          if (lift > 0 && lift < 0xff && realArgCount > 0) {
+            let pnum = lift-realArgCount+1, paramList = NIL;
+            while (pnum > 0)
+              paramList = cons(Atom(`p${(pnum--)+1}`), paramList);
+            let argList = paramList;
+            for (let i = realArgCount; i > 0; --i)
+              argList = cons(jsArgs[i-1], argList);
+            let forms = cons(cons(fn, argList), NIL);
+            let closure = cons(CLOSURE_ATOM, cons(scope, cons(paramList, forms)));
+            return closure;
+          }
           // don't let cons, etc, be seeing any undefined parmaters
           if (lift > 0xff) // but not indefinitely many of them!
             break;
@@ -1764,7 +1776,7 @@ function createLisp(lispOpts = {}) {
             scope[param] = args[CAR];
             if (isCons(args)) args = args[CDR];
           } else {
-            // Curry up now!
+            // Curry up now! (partial application)
             let closure = cons(CLOSURE_ATOM, cons(scope, cons(params, forms)));
             return closure;
           }
@@ -1843,6 +1855,7 @@ function createLisp(lispOpts = {}) {
       let saveIndent = indent;
       // XXX special printing for native functions
       if (objType === 'object') {
+        if (obj instanceof Scope) return put(`{*scope*}`);
         if (obj[PAIR]) {
           put("(");
           indent += indentMore;
