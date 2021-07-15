@@ -8,8 +8,8 @@
 
 (factoral 100)
 (factoral 100n)
-(factoral 200)
-(factoral 200n)
+(factoral 171)
+(factoral 171n)
 
 (begin (+ 1 2 3 4) (* 1 2 3 4))
 (prog1 (+ 1 2 3 4) (* 1 2 3 4))
@@ -19,9 +19,11 @@
   ((< 3 4) '"e" '"f")
   ((< 2 4) '"g" '"h"))
 
-(define (increment-by n) (\(x) (+ x n)))
+;; (define (increment-by n) (\(x) (+ x n)))
+(define (increment-by n) (\x . (+ x n)))  ;; Curry form is allowed; both styles OK
 (define increment-by-3 (increment-by 3))
 (increment-by-3 4)
+increment-by-3
 
 '(1 2 3  345  32 345 3245 235 325 325 325 345 3245 32 53245 325 325 325 325 325 325 35 35 353
     () (a b .c ) (a.b)(a b . (c)) (a.2)

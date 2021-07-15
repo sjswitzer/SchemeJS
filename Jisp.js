@@ -1535,7 +1535,7 @@ function createLisp(lispOpts = {}) {
   // (\ (params) (body1) (body2) ...)
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
   function lambda(body) {
-    /*
+    /**/
     let closure = cons(CLOSURE_ATOM, cons(this, body));
     /*/
     let scope = this;
@@ -1754,7 +1754,7 @@ function createLisp(lispOpts = {}) {
       if (opSym === CLOSURE_ATOM) {
         if (!isCons(body)) throw new EvalError(`Bad closure ${toString(form)}`);
         scope = body[CAR];
-        form = body[CDR];
+        body = body[CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
