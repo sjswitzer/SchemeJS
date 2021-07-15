@@ -2337,9 +2337,7 @@ function createLisp(lispOpts = {}) {
     return res;
   }
 
-  let selfTest = lispOpts.selfTest;  // TODO: convert to unit tests
-
-  function analyzeJSFunction(fn, result, args) {
+  function analyzeJSFunction(fn) {
     // The idea here is to use the intrinsic functions themselves as code generation
     // templates. That works as long as the functions don't call _eval. In that case
     // we need specialized compile hooks to generate code.
@@ -2348,66 +2346,18 @@ function createLisp(lispOpts = {}) {
     // But it's conservative in that it doesn't recognize any functions that
     // don't end in a particular sequence of tokens or that use "return" more than once.
     let str = fn.toString(), pos = 0, token = "";
-    let functionName, params = [], restParam, resultVal, body;
-    if (selfTest) console.log('TEST analyzeJSFunction', str, result, args);
-    nextToken();
-    if (token === 'function') {
-      nextToken();
-      if (token !== '(') {
-        functionName = token;
-        nextToken();
-      }
-      if (token !== '(')
-        return {};
-      nextToken();
-      for (;;) {
-        if (token === "...") {
-          nextToken();
-          restParam = token;
-          nextToken()
-        } else {
-          params.push(token);
+    let name, params = [], restParam, value, body, native;
+    parse: {
+      if (nextToken() === 'function') {
+        if (nextToken() !== '(') {
+          name = token;
           nextToken();
         }
-        if (token === ')') {
-          nextToken();
-          break;
-        }
-        if (token !== ",")
+        if (token !== '(')
           return {};
-        nextToken();
-      }
-      if (token === '{') {
-        while (WSNL[str[pos]]) ++pos;
-        let bodyPos = pos, returnPos = bodyPos;
-        while (token && token !== 'return') {
-          returnPos = pos;
-          nextToken();
-        }
-        if (token === "return") {
-          // If there's a return, it has to be followed by a variable,
-          // an optional semicolon, an "}", and NOTHING FURTHER.
-          // We capture the name of the return variable and clip the body
-          // prior to the return.
-          nextToken();
-          resultVal = token;
-          nextToken();
-          while (token === ';') nextToken();
-          if (token !== '}')
-            return {};
-          nextToken();
-          if (token !== "")
-            return {};
-          body = str.substring(bodyPos, returnPos);
-        }
-      }
-    } else { // Arrow functions
-      if (token === '(') {
-        nextToken();
         for (;;) {
-          if (token === "...") {
-            nextToken();
-            restParam = token;
+          if (nextToken() === "...") {
+            restParam = nextToken();
             nextToken();
           } else {
             params.push(token);
@@ -2421,79 +2371,69 @@ function createLisp(lispOpts = {}) {
             return {};
           nextToken();
         }
-      } else {
-        params.push(token);
-        nextToken();
-      }
-      if (!(token === '=>'))
-        return {};
-      while (WSNL[str[pos]]) ++pos;
-      resultVal = str.substr(pos);
-    }
-    if (!resultVal)
-      return {};
-
-    /*
-      let jsArgs = [], noPad = lift === MAX_INTEGER;
-      while (lift > 0) {
-        // Promote "lift" arguments to JS arguments, filling with NIL
-        if (isCons(args)) {
-          jsArgs.push(args[CAR]);
-          args = args[CDR];
-        } else {
-          // Don't let cons, etc, be seeing any undefined parmaters
-          if (noPad) // but not infinitely many of them!
-            break;
-          jsArgs.push(NIL);
+        if (token === '{') {
+          while (WSNL[str[pos]]) ++pos;
+          let bodyPos = pos, returnPos = bodyPos, firstTok = true;;
+          while (token) {
+            if (firstTok && token === '[') {
+              if (nextToken() === 'native' && nextToken() === 'code' &&
+                  nextToken() === ']' && nextToken() === '}' && nextToken() === undefined) {
+                native = true;
+                break parse;
+              }
+            }
+            if (token === 'return') {
+              returnPos = pos;
+              nextToken();
+              break;
+            }
+            nextToken();
+            firstTok = false;
+          }
+          if (token === "return") {
+            // If there's a return, it has to be followed by a variable,
+            // an optional semicolon, an "}", and NOTHING FURTHER.
+            // We capture the name of the return variable and clip the body
+            // prior to the return.
+            let possibleValue = nextToken();
+            while (nextToken() === ';');
+            if (token !== '}')
+              return {};
+            nextToken();
+            if (token !== "") break parse;
+            value = possibleValue;
+            body = str.substring(bodyPos, returnPos);
+          }
         }
-        --lift;
-      }
-      if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
-        jsArgs.push(args);
-      return fn.apply(scope, jsArgs);  // "this" is the scope!
-    */
-    if (selfTest) console.log('TEST analyzeJSFunction (analyzed)', params, restParam, functionName, resultVal, body);
-    let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
-    // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-    let evalCount = ~lift >> 7 >>> 1;
-    lift = lift << 24 >> 23 >>> 1;
-    let decompiled = `let ${result}; {${functionName ? "// " + functionName : ""}\n`;
-    let paramsCopy = [...params], argsCopy = [...args];
-    // See corresponding code in _apply!
-    while (lift > 0) {
-      if (paramsCopy.length > 0) {
-        let param = paramsCopy.shift();
-        let arg = argsCopy.shift();
-        decompiled += `let ${param} = ${arg};\n`
-      } else {
-        if (lift > 0xff) break;
-        decompiled += `let ${param} = NIL;\n`
-      }
-      lift -= 1;
-    }
-    if (restParam) {
-      // Q: Are "cons" and "NIL" in scope?
-      // A: No, not inherently, but the top-level function will hoist them from
-      // the scope ("this") object. So "no" and "yes."
-      decompiled += `let ${restParam} = `;
-      if (args.length > 0) {
-        let lng = args.length;
-        for (let i = 0; i < lng; ++i)
-          decompiled += `cons(${args[i]}, `;
-        decompiled += `NIL`;
-        for (let i = 0; i < lng; ++i)
-          decompiled += `)`;
-        decompiled += `;\n`;
-      } else {
-        decompiled += `let ${restParam} = undefined;\n`;
+      } else { // Arrow functions
+        if (token === '(') {
+          nextToken();
+          for (;;) {
+            if (token === "...") {
+              restParam = nextToken();
+              nextToken();
+            } else {
+              params.push(token);
+              nextToken();
+            }
+            if (token === ')') {
+              nextToken();
+              break;
+            }
+            if (token !== ",") break parse;
+            nextToken();
+          }
+        } else {
+          params.push(token);
+          nextToken();
+        }
+        if (!(token === '=>'))
+          return {};
+        while (WSNL[str[pos]]) ++pos;
+        value = str.substr(pos);
       }
     }
-      
-    if (body)
-      decompiled += `${body}\n`;
-    decompiled += `${result} = ${resultVal};\n}\n`
-    if (selfTest) console.log("TEST analyzeJSFunction (decompiled)", decompiled);
-    return { result, name: functionName, params, restParam, body, decompiled, fn };
+    return { functionName: name, params, value, body, restParam, native: true };
 
     function nextToken() {
       // Super janky tokenizer.
@@ -2532,26 +2472,74 @@ function createLisp(lispOpts = {}) {
       return token = str[pos++];
     }
   }
- 
+
+  let selfTest = lispOpts.selfTest;  // TODO: convert to unit tests
   if (selfTest) {
-    let resultTmp = "tmp$15", args = ["tmp$1", "tmp$4", "tmp$3", "tmp$7"];
-    analyzeJSFunction(x => x * x, resultTmp, args);
-    analyzeJSFunction((x) => x * x, resultTmp, args);
-    analyzeJSFunction((x, y) => x * y, resultTmp, args);
-    analyzeJSFunction((x, ...y) => x * y, resultTmp, args);
-    analyzeJSFunction((x, y, ...z) => x * y, resultTmp, args);
-    analyzeJSFunction((...x) => x * x, resultTmp, args);
-    analyzeJSFunction(function (a) { a = 2 * a; return a; }, resultTmp, args);
-    analyzeJSFunction(function (a, b, c) { a = 2 * a; return a; }, resultTmp, args);
-    analyzeJSFunction(function someFunction(a) { a = 2 * a; return a; }, resultTmp, args);
-    analyzeJSFunction(function someFunction(a, b, c) { a = 2 * a; return a; }, resultTmp, args);
-    analyzeJSFunction(function (a, ...rest) { return a; }, resultTmp, args);
-    analyzeJSFunction(function (a, b, c, ...rest) { return a; }, resultTmp, args);
-    analyzeJSFunction(function someFunction(a, ...rest) { return a; }, resultTmp, args);
-    analyzeJSFunction(function someFunction(a, ...rest) { return a; }, resultTmp, ["tmp$1"]);
-    analyzeJSFunction(function someFunction(a, b, c, ...rest) { return a; }, resultTmp, args);
-    analyzeJSFunction(function someFunction(...rest) { return a; }, resultTmp, args);
-    analyzeJSFunction(function (...rest) { return a; }, resultTmp, args);
+    function testAnalyzeJSFunction(fn) {
+      let res = analyzeJSFunction(fn);
+      console.log("TEST analyzeJSFunction", fn, res);
+    }
+    testAnalyzeJSFunction(x => x * x)
+    testAnalyzeJSFunction((x) => x * x);
+    testAnalyzeJSFunction((x, y) => x * y);
+    testAnalyzeJSFunction((x, ...y) => x * y);
+    testAnalyzeJSFunction((x, y, ...z) => x * y);
+    testAnalyzeJSFunction((...x) => x * x);
+    testAnalyzeJSFunction(function (a) { a = 2 * a; return a; });
+    testAnalyzeJSFunction(function (a, b, c) { a = 2 * a; return a; });
+    testAnalyzeJSFunction(function someFunction(a) { a = 2 * a; return a; });
+    testAnalyzeJSFunction(function someFunction(a, b, c) { a = 2 * a; return a; });
+    testAnalyzeJSFunction(function (a, ...rest) { return a; });
+    testAnalyzeJSFunction(function (a, b, c, ...rest) { return a; });
+    testAnalyzeJSFunction(function someFunction(a, ...rest) { return a; });
+    testAnalyzeJSFunction(function someFunction(a, ...rest) { return a; });
+    testAnalyzeJSFunction(function someFunction(a, b, c, ...rest) { return a; });
+    testAnalyzeJSFunction(function someFunction(...rest) { return a; });
+    testAnalyzeJSFunction(function (...rest) { return a; });
+  }
+
+      
+ function compileTemplateSketch() {
+    let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
+    // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
+    let evalCount = ~lift >> 7 >>> 1;
+    lift = lift << 24 >> 23 >>> 1;
+    let decompiled = `let ${result}; {${name ? "// " + name : ""}\n`;
+    let paramsCopy = [...params], argsCopy = [...args];
+    // See corresponding code in _apply!
+    while (lift > 0) {
+      if (paramsCopy.length > 0) {
+        let param = paramsCopy.shift();
+        let arg = argsCopy.shift();
+        decompiled += `let ${param} = ${arg};\n`
+      } else {
+        if (lift > 0xff) break;
+        decompiled += `let ${param} = NIL;\n`
+      }
+      lift -= 1;
+    }
+    if (restParam) {
+      // Q: Are "cons" and "NIL" in scope?
+      // A: No, not inherently, but the top-level function will hoist them from
+      // the scope ("this") object. So "no" and "yes."
+      decompiled += `let ${restParam} = `;
+      if (args.length > 0) {
+        let lng = args.length;
+        for (let i = 0; i < lng; ++i)
+          decompiled += `cons(${args[i]}, `;
+        decompiled += `NIL`;
+        for (let i = 0; i < lng; ++i)
+          decompiled += `)`;
+        decompiled += `;\n`;
+      } else {
+        decompiled += `let ${restParam} = undefined;\n`;
+      }
+    }
+      
+    if (body)
+      decompiled += `${body}\n`;
+    decompiled += `${result} = ${value};\n}\n`
+    return { result, name: name, params, restParam, body, decompiled, fn };
   }
 
   function compileDefinition(expr) {
@@ -2997,7 +2985,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
     } catch(e) {
       console.info("Can't open termnal", e);
-      createLisp({ unitTest: true });  // XXX silly debugging hack
+      createLisp({ unitTest: false, selfTest: true });  // XXX silly debugging hack
     }
     if (inputFd !== undefined) {
       console.log(`Jisp 1.1 REPL. Type "." to exit.`);
