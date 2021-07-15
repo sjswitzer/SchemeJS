@@ -59,7 +59,7 @@ function createLisp(lispOpts = {}) {
   Cons.prototype[CONS] = true;
 
   // Trust the JIT to inline this
-  const isCons = a => a !== null && typeof a === 'object' && a[CONS] === true;
+  const isCons = a => a != null && a[CONS] === true;
 
   function nextCons() {  // Cons iterator function
     let current = this._current, done = !isCons(current), value;
@@ -2264,6 +2264,8 @@ function createLisp(lispOpts = {}) {
             let sym = token().value;
             if (typeof sym === 'symbol')
               sym = sym.description;
+            if (typeof sym === 'number')
+              sym = String(sym);
             consumeToken();
             if (token().type === ':') {
               consumeToken();
