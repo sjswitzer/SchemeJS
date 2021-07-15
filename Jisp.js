@@ -43,7 +43,7 @@ function createLisp(lispOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), CONS = Symbol("CONS");
+  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR");
 
   class Cons {
     constructor(car, cdr) {
@@ -56,10 +56,10 @@ function createLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  Cons.prototype[CONS] = true;
+  Cons.prototype[PAIR] = true;
 
   // Trust the JIT to inline this
-  const isCons = a => a != null && a[CONS] === true;
+  const isCons = a => a != null && a[PAIR] === true;
 
   function nextCons() {  // Cons iterator function
     let current = this._current, done = !isCons(current), value;
@@ -91,19 +91,17 @@ function createLisp(lispOpts = {}) {
     },
   });
   
-  // Create a new scope with Scope.newScope(oldScope).
+  // Create a new scope with newScope(oldScope).
   // A new scope's prototype is the enclosing scope.
   // This way, a scope chain is a prototype chain and resolving
   // a symbol is as simple as "scope[sym]"!
   class Scope {
     // Be careful defining methods or properties here; they
     // automatically become part of the API.
-    static newScope(scope) {
-      return Object.create(scope);
-    }
   };
 
   const GlobalScope = new Scope();
+  const newScope = scope => Object.create(scope);
 
   //
   // Atoms are Symbols
@@ -232,7 +230,7 @@ function createLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  LazyCarCons.prototype[CONS] = true;
+  LazyCarCons.prototype[PAIR] = true;
 
   class LazyCdrCons {
     // User inplements "get cdr()" in a subclass and ideally seals the object
@@ -245,7 +243,7 @@ function createLisp(lispOpts = {}) {
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
-  LazyCdrCons.prototype[CONS] = true;
+  LazyCdrCons.prototype[PAIR] = true;
 
   //
   // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
@@ -1239,7 +1237,7 @@ function createLisp(lispOpts = {}) {
   // still benefiting from Scopes internally.
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0, lift: 1 }, "let", "let*");
   function letrec(bindings, forms) {
-    let scope = Scope.newScope(this);
+    let scope = newScope(this);
     while (isCons(bindings)) {
       let binding = bindings[CAR];
       if (!isCons(binding))
@@ -1534,17 +1532,7 @@ function createLisp(lispOpts = {}) {
 
   // (\ (params) (body1) (body2) ...)
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
-  function lambda(body) {
-    /**/
-    let closure = cons(CLOSURE_ATOM, cons(this, body));
-    /*/
-    let scope = this;
-    let closure = args => _apply(cons(LAMBDA_ATOM, body), args, scope);
-    let lift = 0, evalCount = MAX_INTEGER;
-    closure[LIFT_ARGS] = (~evalCount << 8) | lift&0xff;
-    /**/
-    return closure;
-  }
+  function lambda(body) { return cons(CLOSURE_ATOM, cons(this, body)) }
 
   // (\\ (params) (body1) (body2) ...)
   // (\\ param . form) -- Curry notation
@@ -1620,7 +1608,7 @@ function createLisp(lispOpts = {}) {
     } catch (e) {
       if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
           || e instanceof typeMatch) {
-        let scope = Scope.newScope(this);
+        let scope = newScope(this);
         scope[catchVar] = e;
         while (isCons(catchForms)) {
           val = _eval(catchForms[CAR], scope);
@@ -1642,14 +1630,14 @@ function createLisp(lispOpts = {}) {
       let args = variable[CDR];
       value = list(LAMBDA_ATOM, args, value);
     } else {
-      value = _eval(value, this);
+      value = _eval(value, scope);
     }
     if (typeof name === 'string') name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${toString(variable)}`);
-    this[name] = value;
+    scope[name] = value;
     return name;
   }
 
@@ -1767,7 +1755,7 @@ function createLisp(lispOpts = {}) {
         }
         if (opSym !== SLAMBDA_ATOM)
           args = evalArgs(args, scope);
-        scope = Scope.newScope(scope);
+        scope = newScope(scope);
         let origFormalParams = params;
         while (isCons(params)) {
           let param = params[CAR];
@@ -1853,7 +1841,7 @@ function createLisp(lispOpts = {}) {
       let saveIndent = indent;
       // XXX special printing for native functions
       if (objType === 'object') {
-        if (obj[CONS]) {
+        if (obj[PAIR]) {
           put("(");
           indent += indentMore;
           sep = "";
@@ -1933,7 +1921,7 @@ function createLisp(lispOpts = {}) {
     if (depth <= 0) return obj;
     if (obj === NIL || isCons(obj)) return obj;
     if (typeof obj === 'object') {
-      if (obj[CONS]) return obj;  // Careful; Cons is iterable itself
+      if (obj[PAIR]) return obj;  // Careful; Cons is iterable itself
       if (obj[TO_LISP_SYMBOL])  // User can specialize this
         return obj[TO_LISP_SYMBOL].call(this, opts);
       if (isIterable(obj)) {
@@ -2891,7 +2879,7 @@ function createLisp(lispOpts = {}) {
     // The idea here is to let the following series of steps to share a scope
     // Otherwise, each test gets a fresh scope.
     testScopeStack.push(testScope);
-    testScope = Scope.newScope(testScope);
+    testScope = newScope(testScope);
   }
 
   function RESTORESCOPE() {
