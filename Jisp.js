@@ -630,21 +630,8 @@ function newLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 0, lift: 0 }, "eq");
+  defineGlobalSymbol("==", eq, { evalArgs: 0, lift: 0 }, "eq?");
   function eq(forms) {
-    if (!isCons(forms)) return true;
-    let a = _eval(forms[CAR], this);
-    forms = forms[CDR];
-    while (isCons(forms)) {
-      let b = _eval(forms[CAR], this);
-      if (!(a == b)) return false;
-      forms = forms[CDR];
-    }
-    return true;
-  }
-
-  defineGlobalSymbol("===", eeq, { evalArgs: 0, lift: 0 }, "eeq", "eq?");
-  function eeq(forms) {
     if (!isCons(forms)) return true;
     let a = _eval(forms[CAR], this);
     forms = forms[CDR];
@@ -656,14 +643,12 @@ function newLisp(lispOpts = {}) {
     return true;
   }
 
+  // Sorry, "equal?"" does not get the variadic treatment at this time
+  defineGlobalSymbol("equal?", deep_eq, "equal?");
+
   defineGlobalSymbol("!=", ne, { evalArgs: 0, lift: 0 }, "ne");
   function ne(forms) {
     return !eq.call(this, forms);
-  }
-
-  defineGlobalSymbol("!==", neq, { evalArgs: 0, lift: 0 }, "neq");
-  function neq(forms) {
-    return !eeq.call(this, forms);
   }
 
   queueTests(function(){
@@ -729,25 +714,12 @@ function newLisp(lispOpts = {}) {
     EXPECT(` (!= 3 3 3 3 4 3) `, true);   // not all equal
     EXPECT_ERROR(` (!= 3 3 3 3 3 3 (oops!)) `, EvalError);
     EXPECT(` (!= 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
-    EXPECT(` (===) `, true);  // nothing is equal to itself
-    EXPECT(` (=== 5) `, true);  // anything equal to itself
-    EXPECT(` (=== 5 3) `, false);
-    EXPECT(` (=== 3 5) `, false);
-    EXPECT(` (=== 3 3) `, true);
-    EXPECT(` (=== 3 3 3 3 3 3) `, true);  // all equal
-    EXPECT(` (=== 3 3 3 3 4 3) `, false); // not all equal
-    EXPECT_ERROR(` (=== 3 3 3 3 3 3 (oops!)) `, EvalError);
-    EXPECT(` (=== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (!==) `, false);  // nothing is not equal to itself
-    EXPECT(` (!== 5) `, false);  // anything not equal to itself
-    EXPECT(` (!== 5 3) `, true);
-    EXPECT(` (!== 3 5) `, true);
-    EXPECT(` (!== 3 3) `, false);
-    EXPECT(` (!== 3 3 3 3 3 3) `, false);  // all equal
-    EXPECT(` (!== 3 3 3 3 4 3) `, true);   // not all equal
-    EXPECT_ERROR(` (!== 3 3 3 3 3 3 (oops!)) `, EvalError);
-    EXPECT(` (!== 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
-    // XXX TODO: difference between === and ==
+    let list1 = `(a b (c d) 2 3)`, list2 = `(1 2 (7 3) x)`;
+    EXPECT(` (== == eq?) `, true);
+    EXPECT(` (eq? '${list1} '${list1}) `, false);
+    EXPECT(` (equal? '${list1} '${list1}) `, true);
+    EXPECT(` (eq? '${list1} '${list2}) `, false);
+    EXPECT(` (equal? '${list1} '${list2}) `, false);
   });
 
   defineGlobalSymbol("max", (val, ...rest) => {
