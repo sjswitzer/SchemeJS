@@ -1273,7 +1273,10 @@ function createLisp(lispOpts = {}) {
   // a Scope. That will maintain Scheme API compatibility while
   // still benefiting from Scopes internally.
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0 }, "let", "let*");
-  function letrec(bindings, forms) {
+  function letrec(forms) {
+    if (!isCons(forms)) throw new EvalError(`No bindings`);
+    let bindings = forms[CAR];
+    forms = forms[CDR];
     let scope = newScope(this, "letrec");
     while (isCons(bindings)) {
       let binding = bindings[CAR];
