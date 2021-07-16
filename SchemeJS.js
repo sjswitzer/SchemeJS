@@ -1794,6 +1794,7 @@ function SchemeJS(lispOpts = {}) {
   function _apply(form, args, scope) {
     if (typeof form === 'function') {
       let fn = form;
+      // Rename "lift"
       // lift encoded as: (~evalCount << 8) | lift&0xff;
       // If there's no LIFT_ARGS, the default is to eval and lift everything.
       // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
