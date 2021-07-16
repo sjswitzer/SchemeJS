@@ -183,6 +183,7 @@ function SchemeJS(lispOpts = {}) {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       let fnInfo = analyzeJSFunction(value);
       let lift = fnInfo.params.length;
+      if (evalCount !== MAX_INTEGER) lift -= 1;
       if (lift >= 0xff) throw new LogicError("Too big a lift");
       if (fnInfo.native) lift = MAX_INTEGER;
       // Encoding chosen so that small values mean eval everything and lift that many.
@@ -708,7 +709,7 @@ function SchemeJS(lispOpts = {}) {
     EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, EvalError);
     EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, EvalError);
     EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (==) `, false);
+    EXPECT(` (==) `, true);   // nothing is equal to itself
     EXPECT(` (== 5) `, isClosure);
     EXPECT(` (== 5 3) `, false);
     EXPECT(` (== 3 5) `, false);
@@ -717,7 +718,7 @@ function SchemeJS(lispOpts = {}) {
     EXPECT(` (== 3 3 3 3 4 3) `, false); // not all equal
     EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
     EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (!=) `, true);
+    EXPECT(` (!=) `, false);  // nothing isn't equal to itself
     EXPECT(` (!= 5) `, isClosure);
     EXPECT(` (!= 5 3) `, true);
     EXPECT(` (!= 3 5) `, true);
@@ -765,9 +766,8 @@ function SchemeJS(lispOpts = {}) {
 
   defineGlobalSymbol("&&", and, { evalArgs: 1 }, "and");
   function and(val, forms) {
-    while (isCons(forms)) {
+    while (_bool(val) && isCons(forms)) {
       val = _eval(forms[CAR], this);
-      if (!_bool(val)) return val;
       forms = forms[CDR];
     }
     return val;
@@ -775,9 +775,8 @@ function SchemeJS(lispOpts = {}) {
 
   defineGlobalSymbol("||", or, { evalArgs: 1 }, "or");
   function or(val, forms) {
-    while (isCons(forms)) {
+    while (!_bool(val) && isCons(forms)) {
       val = _eval(forms[CAR], this);
-      if (_bool(val)) return val;
       forms = forms[CDR];
     }
     return val;
@@ -794,13 +793,13 @@ function SchemeJS(lispOpts = {}) {
   }
 
   queueTests(function() {
-    EXPECT(` (&&) `, true);
+    EXPECT(` (&&) `, undefined);
     EXPECT(` (&& 1) `, 1);
     EXPECT(` (&& 1 2) `, 2);
     EXPECT(` (&& 1 false 2) `, false);
     EXPECT(` (&& 1 false (oops!)) `, false);  // short-circuits
     EXPECT_ERROR(` (&& 1 true (oops!)) `, EvalError);
-    EXPECT(` (||) `, false);
+    EXPECT(` (||) `, undefined);
     EXPECT(` (|| 1) `, 1);
     EXPECT(` (|| 1 2) `, 1);
     EXPECT(` (|| nil null (void) false 2 3) `, 2); 
@@ -839,24 +838,20 @@ function SchemeJS(lispOpts = {}) {
 
   // (prog1 form1 form2 form3 ...)
   defineGlobalSymbol("prog1", prog1, { evalArgs: 1 });
-  function prog1(res, forms) {
-    let first = true;
+  function prog1(val, forms) {
     while (isCons(forms)) {
-      let val = _eval(forms[CAR], this);
-      if (first)
-        res = val;
-      first = false;
+       _eval(forms[CAR], this);
       forms = forms[CDR];
     }
-    return res;
+    return val;
   }
 
   queueTests(function(){
-    EXPECT(` (begin) `, NIL);
+    EXPECT(` (begin) `, undefined);
     EXPECT(` (begin 1) `, 1);
     EXPECT(` (begin 1 2 3) `, 3);
     EXPECT(` (begin (+ 3 4) (* 3 4)) `, 12);
-    EXPECT(` (prog1) `, NIL);
+    EXPECT(` (prog1) `, undefined);
     EXPECT(` (prog1 1) `, 1);
     EXPECT(` (prog1 1 2 3) `, 1);
     EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
@@ -1068,7 +1063,7 @@ function SchemeJS(lispOpts = {}) {
     EXPECT(` (length "abcd") `, 4);
   });
 
-  exportDefinition("list", list);
+  defineGlobalSymbol("list", list);
   function list(...elements) {  // easy list builder
     let val = NIL;
     for (let i = elements.length; i > 0; --i)
@@ -1805,7 +1800,15 @@ function SchemeJS(lispOpts = {}) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
         } else { 
-          if (lift !== MAX_INTEGER && i > 0 && i < lift) {
+          if (lift !== MAX_INTEGER && i < lift) {
+            if (i < 1) {
+              // We can't partially apply without any arguments, but the function wants
+              // parameters anyway so we supply undefined. This will allow the
+              // "forms" parameter to go int the correct parameter.
+              while (i < lift--)
+                jsArgs.push(undefined);
+              break;
+            }
             // Partial application of built-in functions
             let paramList = NIL;
             for (let pnum = lift; pnum > i; --pnum)
