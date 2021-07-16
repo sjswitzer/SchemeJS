@@ -2533,6 +2533,8 @@ function createLisp(lispOpts = {}) {
       { name: 'baz', params: [], restParam: 'rest', value: 'a', body: '', native: false });
     EXPECT(testAnalyze(function (...rest) { return a; }),
       { name: undefined, params: [], restParam: 'rest', value: 'a', body: '', native: false });
+    EXPECT(testAnalyze([].sort),
+      { name: 'sort', params: [], restParam: undefined, value: undefined, body: undefined, native: true });
   });
       
   function compileTemplateSketch() {
