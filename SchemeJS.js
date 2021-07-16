@@ -1242,17 +1242,18 @@ function SchemeJS(schemeOpts = {}) {
   function apropos(substring) {
     if (!substring) substring = "";
     substring = substring.toLowerCase();
-    let matches = [], scope = this;
+    let matches = NIL, scope = this;
     while (scope && scope !== Object) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
+        if (!isAtom(symbol)) continue;
         let name = _string(symbol);
         if (name.toLowerCase().includes(substring))
-          matches.push(symbol);
+          matches = cons(symbol, matches);
       }
       scope = Object.getPrototypeOf(scope);
     }
-    matches.sort((a,b) => a.description < b.description ? -1 : a.description > b.description ? 1 : 0);
+    GlobalScope.sort(matches, (a,b) => a.description < b.description ? -1 : a.description > b.description ? 1 : 0);
     return toList(matches);
   }
 
@@ -1298,7 +1299,7 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   queueTests(function(){
-    EXPECT(` (apropos "a") `, isCons);  // weak test but gets coverage
+    EXPECT(` (apropos "c") `, isCons);  // weak test but gets coverage
     EXPECT(` (mapcar) `, NIL);
     EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
     EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
@@ -1352,7 +1353,6 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("sort", mergesort, "qsort");
   function mergesort(list, ...rest) {
     let predicateFn = rest[0], accessFn = rest[1];
-    if (rest.length > 0) prediceteFn = rest[0];
     if (!list || list === NIL)
       return NIL;
     if (list === NIL || isCons(list)) {
