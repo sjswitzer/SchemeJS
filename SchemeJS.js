@@ -274,6 +274,62 @@ function SchemeJS(schemeOpts = {}) {
   }
   LazyCdrCons.prototype[PAIR] = true;
 
+  class IteratorList {
+    _carVal; _cdrVal; _iterator; _haveCar = false;
+    constructor(iterator) {
+      if (isIterable(iterator)) {
+        iterator = iterator[Symbol.iterator]();
+      }
+      this._iterator = iterator;
+    }
+    toString() {
+      return `(${_string(this[CAR])} ...)`;
+    }
+  }
+  IteratorList.prototype[PAIR] = true;
+  // There does not appear to be an ES6 syntax for this
+  Object.defineProperties(IteratorList, {
+    [CAR]: {
+      get: function(){ 
+        if (!this._haveCar) {
+          if (this._iterator) {
+            let { done, value } = this._iterator.next();
+            if (!done) {
+              this._cdrVal = new IteratorList(this._iterator);
+              this._iterator = undefined;
+              this._haveCar = true;
+              return this._carVal = value;
+            }
+          }
+          throw new EvalError("car of nil");
+        }
+        return this._carVal;
+      },
+      set: function(){ throw new EvalError("set car of lazy list"); },
+    },
+    [CDR]: {
+      get: function(){
+        if (this._iterator) {
+          let { done, value } = this._iterator.next();
+          if (done) {
+            this._iterator = undefined;
+            return this._cdrVal = NIL;
+          }
+          this._carVal = value;
+          this._haveCar = true;
+          this._cdrVal = new IteratorList(this._iterator);
+          this._iterator = undefined;
+          return this._cdrVal;
+        }
+        return this._cdrVal;
+      },
+      set: function(){ throw new EvalError("set cdr of lazy list"); },
+    },
+  });
+  
+
+
+
   //
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
   // In SchemeJS, NIL, null, undefined, and false are false and everything else is true.
