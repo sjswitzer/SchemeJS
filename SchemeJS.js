@@ -1809,7 +1809,7 @@ function SchemeJS(lispOpts = {}) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
         } else { 
-          if (lift !== MAX_INTEGER && i < lift) {
+          if (lift !== MAX_INTEGER && i > 0 && i < lift) {
             // Partial application of built-in functions
             let paramList = NIL;
             for (let pnum = lift; pnum > i; --pnum)
