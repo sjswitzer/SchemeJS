@@ -1808,7 +1808,7 @@ function SchemeJS(schemeOpts = {}) {
       if (typeof fn !== 'function') {
         if (isCons(fn)) {
           let fnCar = fn[CAR];
-          if (!fnCar === LAMBDA_ATOM || fnCar === CLOSURE_ATOM || fnCar === SLAMBDA_ATOM)
+          if (!(fnCar === LAMBDA_ATOM || fnCar === CLOSURE_ATOM || fnCar === SLAMBDA_ATOM))
             fn = _eval(fn, scope);
         } else {
           fn = _eval(fn, scope);
@@ -1931,7 +1931,6 @@ function SchemeJS(schemeOpts = {}) {
         }
         return res;
       }
-      return _eval(form, scope);  // XXX this isn't right. try: ((+ 5) 6). Should be 11
     }
     throw new EvalError(`Can't apply ${form}`);
   }
