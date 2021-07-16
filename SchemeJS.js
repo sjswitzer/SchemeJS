@@ -130,6 +130,11 @@ function SchemeJS(schemeOpts = {}) {
     return atom;
   }
 
+  function isAtom(obj) {
+    if (typeof obj !== 'symbol') return false;
+    return ATOMS[obj.description] === obj;
+  }
+
   const LAMBDA_ATOM = Atom("lambda"), LAMBDA_CHAR = "\u03BB";
   ATOMS["\\"] = ATOMS[LAMBDA_CHAR] = LAMBDA_ATOM;  // Some aliases for Lambda
   const SLAMBDA_ATOM = Atom("special-lambda");
@@ -1245,7 +1250,6 @@ function SchemeJS(schemeOpts = {}) {
         if (name.toLowerCase().includes(substring))
           matches.push(symbol);
       }
-      if (scope === GlobalScope) break;
       scope = Object.getPrototypeOf(scope);
     }
     matches.sort((a,b) => a.description < b.description ? -1 : a.description > b.description ? 1 : 0);
@@ -1264,14 +1268,14 @@ function SchemeJS(schemeOpts = {}) {
         // and not have to manufacture an iterator.
         while (isCons(list)) {
           let item = list[CAR];
-          item = fn.call(this, item);
+          item = _apply(fn, cons(item, NIL), this);
           if (last) last = last[CDR] = cons(item, NIL);
           else res = last = cons(item, NIL);
             list = list[CDR];
         }
       } else if (isIterable(list)) {
         for (let item of list) {
-          item = fn.call(this, item);
+          item = _apply(fn, cons(item, NIL), this);
           if (last) last = last[CDR] = cons(item, NIL);
           else res = last = cons(item, NIL);
         }
@@ -1294,8 +1298,10 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   queueTests(function(){
+    EXPECT(` (apropos "a") `, isCons);  // weak test but gets coverage
     EXPECT(` (mapcar) `, NIL);
-    // EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
+    EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
+    EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
     // XXX TODO
   });
 
@@ -1388,7 +1394,6 @@ function SchemeJS(schemeOpts = {}) {
     //    https://en.wikipedia.org/wiki/Merge_sort#Bottom-up_implementation_using_lists
     //    https://gist.github.com/sjswitzer/1dc76dc0b4dcf67a7fef
     //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
-  
     function llsort(list) {
       let stack = [];
       while (isCons(list)) {
@@ -1816,8 +1821,8 @@ function SchemeJS(schemeOpts = {}) {
       }
       return _apply(fn, args, scope);
     }
-    // Experimental special eval for JS arrays and objects:
-    //   Values that are evaluable are expanded and placed in
+    // Special eval for JS arrays and objects:
+    //   Values that are evaluated and placed in
     //   a new Object or Array in correspoding position.
     // XXX Investigate Symbol.species (also for mapcar, etc.)
     if (expr !== null && typeof expr === 'object') {
@@ -1883,7 +1888,7 @@ function SchemeJS(schemeOpts = {}) {
       }
       if (evalCount !== MAX_INTEGER)
         jsArgs.push(args);
-      return form.apply(scope, jsArgs);  // ??? scope[fn](...jsArgs);
+      return form.apply(scope, jsArgs);
     }
     if (isCons(form)) {
       let opSym = form[CAR];
@@ -2018,8 +2023,8 @@ function SchemeJS(schemeOpts = {}) {
           let symStrs = "";
           if (obj !== GlobalScope) {
             for (let sym of Object.getOwnPropertySymbols(obj)) {
+              if (!isAtom(sym)) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
               let desc = sym.description;
-              if (ATOMS[desc] !== sym) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
               if (symStrs.length + desc.length > 20) {
                 symStrs += "...";
                 break;
