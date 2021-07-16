@@ -20,10 +20,12 @@ function SchemeJS(lispOpts = {}) {
   let _reportError = lispOpts.reportError = error => console.log(error); // Don't call this one
   let reportLispError = lispOpts.reportLispError ?? _reportError; // Call these instead
   let reportSystemError = lispOpts.reportError ?? _reportError;
-  let reportLoadResult = lispOpts.reportLoadResult ?? (result => console.log(str(result)));
+  let reportLoadResult = lispOpts.reportLoadResult ?? (result => console.log(_string(result)));
   let unitTest = lispOpts.unitTest;
   let reportTestFailed = lispOpts.reportTestFailure ?? testFailed;
   let reportTestSucceeded = lispOpts.reportTestSuccess ?? testSucceeded;
+  let lambdaStr = lispOpts.lambdaStr ?? "\\";
+  let slambdaStr = lispOpts.lsambdaStr ?? "\\\\";
 
   // Creating a Cons should be as cheap as possible, so no subclassing
   // or calls to super. But I want people to be able to define their
@@ -53,7 +55,7 @@ function SchemeJS(lispOpts = {}) {
       this[CDR] = cdr;
     }
     toString() {
-      return str(this, { maxDepth: 4 });
+      return _string(this, { maxDepth: 4 });
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -120,7 +122,7 @@ function SchemeJS(lispOpts = {}) {
         return name;
     }
     if (typeof name !== 'string')
-      name = str(name);
+      name = _string(name);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -253,7 +255,7 @@ function SchemeJS(lispOpts = {}) {
       this[CDR] = cdr;
     }
     toString() {
-      return str(this);
+      return _string(this);
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -266,7 +268,7 @@ function SchemeJS(lispOpts = {}) {
       this[CAR] = car;
     }
     toString() {
-      return str(this);
+      return _string(this);
     }
     *[Symbol.iterator]() { return { next: nextCons, _current: this } }
   }
@@ -866,7 +868,7 @@ function SchemeJS(lispOpts = {}) {
     while (isCons(clauses)) {
       let clause = clauses[CAR];
       if (!isCons(clause))
-        throw new EvalError(`Bad clause in "cond" ${str(clause)}`);
+        throw new EvalError(`Bad clause in "cond" ${_string(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
       if (_bool(evaled)) {
@@ -916,7 +918,7 @@ function SchemeJS(lispOpts = {}) {
       if (!readFile) throw new EvalError("No file reader defined");
       fileContent = readFile(path);
     } catch (error) {
-      let loadError = new EvalError(`Load failed ${str(path)}`);
+      let loadError = new EvalError(`Load failed ${_string(path)}`);
       loadError.cause = error;
       loadError.path = path;
       return false;
@@ -1126,7 +1128,7 @@ function SchemeJS(lispOpts = {}) {
   defineGlobalSymbol("nth", nth);
   function nth(index, list) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
-      throw new EvalError(`Not an integer ${str(index)}`);
+      throw new EvalError(`Not an integer ${_string(index)}`);
     if (index < 0) return NIL;
     if (list === NIL || isCons(list)) {
       while (index > 0 && isCons(list)) {
@@ -1183,7 +1185,7 @@ function SchemeJS(lispOpts = {}) {
     while (scope && scope !== Object) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
-        let name = str(symbol);
+        let name = _string(symbol);
         if (name.toLowerCase().includes(substring))
           matches.push(symbol);
       }
@@ -1262,10 +1264,10 @@ function SchemeJS(lispOpts = {}) {
     while (isCons(bindings)) {
       let binding = bindings[CAR];
       if (!isCons(binding))
-        throw new EvalError(`Bad binding ${str(binding)}`);
+        throw new EvalError(`Bad binding ${_string(binding)}`);
       let boundVar = binding[CAR], bindingForms = binding[CDR];
       if (typeof boundVar !== 'symbol')
-        throw new EvalError(`Bad binding ${str(binding)}`);
+        throw new EvalError(`Bad binding ${_string(binding)}`);
       let val = NIL;
       while (isCons(bindingForms)) {
         val = _eval(bindingForms[CAR], scope);
@@ -1315,7 +1317,7 @@ function SchemeJS(lispOpts = {}) {
       array.sort((a,b) => predicateFn.call(this, a, b));
       return array;
     }
-    throw new EvalError(`Not a list or iterable ${str(list)}`);
+    throw new EvalError(`Not a list or iterable ${_string(list)}`);
   
     // A bottom-up mergesort that coalesces runs of ascending or descending items.
     // Runs are extended on either end, so runs include more than strictly ascending
@@ -1626,7 +1628,7 @@ function SchemeJS(lispOpts = {}) {
       this.value = value;
     }
     toString() {
-      return `${super.toString()} ${this.tag} ${str(this.value)}`;
+      return `${super.toString()} ${this.tag} ${_string(this.value)}`;
     }
   };
   LispThrow.prototype.name = "LispThrow";
@@ -1658,17 +1660,17 @@ function SchemeJS(lispOpts = {}) {
   defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0 });
   function lispJSCatch(catchClause, forms) {
     if (!isCons(catchClause))
-      throw new EvalError(`Bad catch clause ${str(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${_string(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     if (!isCons(catchForms))
-      throw new EvalError(`Bad catch clause ${str(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${_string(catchClause)}`);
     var typeMatch;
     if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
       typeMatch = catchForms[CAR];
       catchForms = catchForms[CDR];
     }
     if (!isCons(catchForms))
-      throw new EvalError(`Bad catch clause ${str(catchClause)}`);
+      throw new EvalError(`Bad catch clause ${_string(catchClause)}`);
     let val = NIL;
     try {
       while (isCons(forms)) {
@@ -1709,7 +1711,7 @@ function SchemeJS(lispOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
-      throw new EvalError(`must define symbol or string ${str(defined)}`);
+      throw new EvalError(`must define symbol or string ${_string(defined)}`);
     GlobalScope[name] = value;
     return name;
   }
@@ -1828,15 +1830,15 @@ function SchemeJS(lispOpts = {}) {
     if (isCons(form)) {
       let opSym = form[CAR];
       let body = form[CDR];
-      if (!isCons(body)) throw new EvalError(`Bad form ${str(form)}`);
+      if (!isCons(body)) throw new EvalError(`Bad form ${_string(form)}`);
       if (opSym === CLOSURE_ATOM) {
-        if (!isCons(body)) throw new EvalError(`Bad closure ${str(form)}`);
+        if (!isCons(body)) throw new EvalError(`Bad closure ${_string(form)}`);
         scope = body[CAR];
         body = body[CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        if (!isCons(body)) throw new EvalError(`Bad lambda ${str(form)}`);
+        if (!isCons(body)) throw new EvalError(`Bad lambda ${_string(form)}`);
         let params = body[CAR];
         let forms = body[CDR];
         if (typeof params === 'symbol') { // Curry notation :)
@@ -1863,7 +1865,7 @@ function SchemeJS(lispOpts = {}) {
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           scope[params] = args;
         else if (params !== NIL)
-          throw new EvalError(`Bad parameter list ${str(origFormalParams)}`);
+          throw new EvalError(`Bad parameter list ${_string(origFormalParams)}`);
         let res = NIL;
         while (isCons(forms)) {
           res = _eval(forms[CAR], scope);
@@ -1899,10 +1901,10 @@ function SchemeJS(lispOpts = {}) {
 
   // Implements "toString()" for Lisp objects.
   // We can't just implement toString() because it needs to work for
-  // non-Object types too. Cons.toString() calls this.
+  // non-Object types too, but Cons.toString() calls this.
   defineGlobalSymbol("to-string", to_string);
-  function to_string(a) { return str(a) } // Hides the innards from String(x)
-  function str(obj, opts = {}) {
+  function to_string(a) { return _string(a) } // Hides the innards from String(x)
+  function _string(obj, opts = {}) {
     opts = { ...lispOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 80;
     let wrapChar = opts.wrapChar ?? "\n";
@@ -1924,8 +1926,9 @@ function SchemeJS(lispOpts = {}) {
       }
       sep = prefix = "";
     }
-    function toString(obj, maxdepth) {
+    function toString(obj, maxDepth) {
       if (maxDepth <= 0) return put("...");
+      maxDepth -= 1;
       if (obj === NIL) return put("()");
       if (obj === undefined) return put("undefined");
       if (obj === null) return put( "null");   // remember: typeof null === 'object'!
@@ -1969,18 +1972,31 @@ function SchemeJS(lispOpts = {}) {
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
         if (obj[PAIR]) {
+          let objCar = obj[CAR];
+          if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM) && isCons(obj[CDR])) {
+            // Specal treatment of lambda
+            let str = "(", params = obj[CDR][CAR], forms = obj[CDR][CDR];
+            if (objCar === LAMBDA_ATOM) str += lambdaStr;
+            if (objCar === SLAMBDA_ATOM) str += slambdaStr;
+            if (typeof params === 'symbol') {  // curry notation
+              str += `${params.description}.`;
+              put(str);
+              toString(forms, maxDepth);
+              return put(")")
+            }
+          }
           put("(");
           indent += indentMore;
           sep = "";
           while (isCons(obj)) {
-            toString(obj[CAR], maxDepth-1);
+            toString(obj[CAR], maxDepth);
             sep = " ";
             obj = obj[CDR];
           }
           if (obj !== NIL) {
             put(".");
             sep = " ";
-            toString(obj, maxDepth-1)
+            toString(obj, maxDepth)
           }
           sep = "";
           put(")");
@@ -1992,7 +2008,7 @@ function SchemeJS(lispOpts = {}) {
           indent += indentMore;
           sep = "";
           for (let item of obj) {
-            toString(item, maxDepth-1);
+            toString(item, maxDepth);
             sep = ", ";
           }
           sep = "";
@@ -2008,7 +2024,7 @@ function SchemeJS(lispOpts = {}) {
           for (let name of Object.getOwnPropertyNames(obj)) {
             let item = obj[name];
             prefix = `${name}: `;
-            toString(item, maxDepth-1);
+            toString(item, maxDepth);
             sep = ", ";
           }
           sep = "";
@@ -2017,8 +2033,11 @@ function SchemeJS(lispOpts = {}) {
           return;
         }
       }
-      if (objType === 'symbol')
+      if (objType === 'symbol') {
+        if (obj === LAMBDA_ATOM) return put(lambdaStr);
+        if (obj === SLAMBDA_ATOM) return put(slambdaStr);
         return put(obj.description);
+      }
       if (objType === 'string') {
         let str = '"';
         for (let ch of obj) {
@@ -2280,7 +2299,7 @@ function SchemeJS(lispOpts = {}) {
         let tok = _toks.shift();
         if (tok.type === 'newline' || tok.type === 'end')
           return str === '' ? null : str;
-        str += sep + (tok.value !== undefined ? str(tok.value) : tok.type);
+        str += sep + (tok.value !== undefined ? _string(tok.value) : tok.type);
         sep = " ";
       }
       for (;;) {
@@ -2289,7 +2308,7 @@ function SchemeJS(lispOpts = {}) {
         if (tok.type === 'newline' || tok.type === 'end')
           return str;
         let val = tok.value;
-        str += sep + (tok.value !== undefined ? str(tok.value) : tok.type);
+        str += sep + (tok.value !== undefined ? _string(tok.value) : tok.type);
         sep = " ";
       }
     }
@@ -2644,11 +2663,11 @@ function SchemeJS(lispOpts = {}) {
   function compileFunction(functionName, params, forms, scope, newTemp, indent) {
     let invokeScope = this;
     if (!typeof functionName === 'symbol')
-      throw new CompileError(`Function name is not an atom ${str(functionName)}`);
+      throw new CompileError(`Function name is not an atom ${_string(functionName)}`);
     while (isCons(nameAndParams)) {
       let param = nameAndParams[CAR];
       if (!typeof param === 'symbol')
-        throw new CompileError(`Function parameter is not an atom ${str(param)}`);
+        throw new CompileError(`Function parameter is not an atom ${_string(param)}`);
       params.push(param);
       nameAndParams = nameAndParams[CDR];
     }
@@ -2703,7 +2722,7 @@ function SchemeJS(lispOpts = {}) {
     }
     if (typeof expr === 'number' || typeof expr === 'bigint' || typeof expr === 'string'
         || typeof expr === 'boolean' || expr == null) {
-      return { val: str(expr), emit };
+      return { val: _string(expr), emit };
     }
     // XXX TODO: deal with object and array literals.
     throw new CompileError(`Cannot compile expression ${expr}`);
@@ -2896,7 +2915,7 @@ function SchemeJS(lispOpts = {}) {
     // readline(prompt) => str | nullish
     let name = opts.name ?? "SchemeJS";
     let prompt = opts.prompt ?? name + " > ";
-    let print = opts.print ?? (x => console.log(name + ":", str(x)));
+    let print = opts.print ?? (x => console.log(name + ":", _string(x)));
     let reportLispError = opts.reportLispError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
     let replHints = { prompt };
@@ -2940,7 +2959,7 @@ function SchemeJS(lispOpts = {}) {
 
   class TestFailureError extends LispError {
     constructor(message, test, result, expected) {
-      super(`${str(test)}; ${message}: ${str(result)}, expected: ${str(expected)}`);
+      super(`${_string(test)}; ${message}: ${_string(result)}, expected: ${_string(expected)}`);
       this.test = test;
       this.result = result;
       this.expected = expected;
