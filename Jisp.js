@@ -616,11 +616,11 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol("<=", le, { evalArgs: 0 }, "le");
-  function le(forms) {
-    if (!isCons(forms)) return true;
-    let a = _eval(forms[CAR], this);
-    forms = forms[CDR];
+  defineGlobalSymbol("<=", le, { evalArgs: 2 }, "le");
+  function le(a, b, forms) {
+    if (forms === undefined) return a <= b;
+    if (!(a <= b)) return false;
+    a = b;
     while (isCons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a <= b)) return false;
@@ -630,11 +630,11 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol(">", gt, { evalArgs: 0 }, "gt");
-  function gt(forms) {
-    if (!(isCons(forms) && isCons(forms[CDR]))) return false;
-    let a = _eval(forms[CAR], this);
-    forms = forms[CDR];
+  defineGlobalSymbol(">", gt, { evalArgs: 2 }, "gt");
+  function gt(a, b, forms) {
+    if (forms === undefined) return a > b;
+    if (!(a > b)) return false;
+    a = b;
     while (isCons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a > b)) return false;
@@ -644,11 +644,11 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol(">=", ge, { evalArgs: 0 }, "ge");
-  function ge(forms) {
-    if (!isCons(forms)) return true;
-    let a = _eval(forms[CAR], this);
-    forms = forms[CDR];
+  defineGlobalSymbol(">=", ge, { evalArgs: 2 }, "ge");
+  function ge(a, b, forms) {
+    if (forms === undefined) return a >= b;
+    if (!(a >= b)) return false;
+    a = b;
     while (isCons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a >= b)) return false;
@@ -658,11 +658,11 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 0 }, "eq?");
-  function eq(forms) {
-    if (!isCons(forms)) return true;
-    let a = _eval(forms[CAR], this);
-    forms = forms[CDR];
+  defineGlobalSymbol("==", eq, { evalArgs: 2 }, "eq?");
+  function eq(a, b, forms) {
+    if (forms === undefined) return a == b;
+    if (!(a == b)) return false;
+    a = b;
     while (isCons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a === b)) return false;
@@ -677,14 +677,14 @@ function createLisp(lispOpts = {}) {
   const equalp = (a, b) =>  deep_eq(a, b);
   defineGlobalSymbol("equal?", equalp, "equal?");
 
-  defineGlobalSymbol("!=", ne, { evalArgs: 0 }, "ne");
-  function ne(forms) {
-    return !eq.call(this, forms);
+  defineGlobalSymbol("!=", ne, { evalArgs: 2 }, "ne");
+  function ne(a, b, forms) {
+    return !eq.call(this, a, b, forms);
   }
 
   queueTests(function(){
-    EXPECT(` (<) `, false);  // nothing is not less than itself
-    EXPECT(` (< 5) `, isClosure);  // anything is not less than itself
+    EXPECT(` (<) `, false);
+    EXPECT(` (< 5) `, isClosure);
     EXPECT(` (< 5 3) `, false);
     EXPECT(` (< 3 5) `, true);
     EXPECT(` (< 3 3) `, false);
@@ -694,8 +694,8 @@ function createLisp(lispOpts = {}) {
     EXPECT_ERROR(` (< 1 2 3 4 5 6 (oops!)) `, EvalError);
     EXPECT(` (< 1 2 3 4 4 5 6 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false);
-    EXPECT(` (<=) `, true);  // nothing is not equal to itself
-    EXPECT(` (<= 5) `, true);  // anything is equal to itself
+    EXPECT(` (<=) `, false);
+    EXPECT(` (<= 5) `, isClosure)
     EXPECT(` (<= 5 3) `, false);
     EXPECT(` (<= 3 5) `, true);
     EXPECT(` (<= 3 3) `, true);
@@ -705,8 +705,8 @@ function createLisp(lispOpts = {}) {
     EXPECT_ERROR(` (<= 1 2 3 4 5 6 (oops!)) `, EvalError);
     EXPECT_ERROR(` (<= 1 2 3 4 4 5 6 (oops!)) `, EvalError);
     EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (>) `, false);  // nothing is not greater than itself
-    EXPECT(` (> 5) `, false);  // anything is not greater than itself
+    EXPECT(` (>) `, false);
+    EXPECT(` (> 5) `, isClosure);
     EXPECT(` (> 5 3) `, true);
     EXPECT(` (> 3 5) `, false);
     EXPECT(` (> 3 3) `, false);
@@ -716,8 +716,8 @@ function createLisp(lispOpts = {}) {
     EXPECT_ERROR(` (> 6 5 4 3 2 1 (oops!)) `, EvalError);
     EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false);
-    EXPECT(` (>=) `, true);  // nothing is equal to itself
-    EXPECT(` (>= 5) `, true);  // anything equal to itself
+    EXPECT(` (>=) `, false);
+    EXPECT(` (>= 5) `, isClosure);
     EXPECT(` (>= 5 3) `, true);
     EXPECT(` (>= 3 5) `, false);
     EXPECT(` (>= 3 3) `, true);
@@ -727,8 +727,8 @@ function createLisp(lispOpts = {}) {
     EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, EvalError);
     EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, EvalError);
     EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (==) `, true);  // nothing is equal to itself
-    EXPECT(` (== 5) `, true);  // anything equal to itself
+    EXPECT(` (==) `, true); // No good reason for this but it is what it is
+    EXPECT(` (== 5) `, isClosure);
     EXPECT(` (== 5 3) `, false);
     EXPECT(` (== 3 5) `, false);
     EXPECT(` (== 3 3) `, true);
@@ -736,8 +736,8 @@ function createLisp(lispOpts = {}) {
     EXPECT(` (== 3 3 3 3 4 3) `, false); // not all equal
     EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
     EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (!=) `, false);  // nothing is not equal to itself
-    EXPECT(` (!= 5) `, false);  // anything not equal to itself
+    EXPECT(` (!=) `, false);
+    EXPECT(` (!= 5) `, isClosure);
     EXPECT(` (!= 5 3) `, true);
     EXPECT(` (!= 3 5) `, true);
     EXPECT(` (!= 3 3) `, false);
@@ -820,7 +820,7 @@ function createLisp(lispOpts = {}) {
     EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
     EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
     EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
-    EXPECT(` (?) `, NIL);
+    EXPECT(` (?) `, undefined); // Why?
     EXPECT(` (? true) `, isClosure);
     EXPECT(` (? false) `, isClosure);
     EXPECT(` (? true 1) `, isClosure);
