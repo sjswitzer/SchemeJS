@@ -2781,7 +2781,7 @@ function createLisp(lispOpts = {}) {
   const JS_IDENT_REPLACEMENTS  = {
     '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
     '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$minus', '=': '$eq', '<': '$lt',
-    '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$wut'
+    '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
   };
 
   function toJSname(name) {
@@ -2799,19 +2799,19 @@ function createLisp(lispOpts = {}) {
       }
     }
     newName += fragment;
-    if (selfTest) console.log("TEST toJSname", name, newName);
     return newName;
   }
 
-  let selfTest = lispOpts.selfTest;  // TODO: convert to unit tests
-  if (selfTest) {
-    toJSname("aNormal_name0234");
-    toJSname("aname%with&/specialChars?");
-    toJSname("_begins_with_underscore");
-    toJSname("number?");
-    toJSname("&&");
-    toJSname("?");
-  }
+  queueTests(function(){
+    const testToJSname = name => () => toJSname(name);
+    EXPECT(testToJSname("aNormal_name0234"), "_aNormal_name0234");
+    EXPECT(testToJSname("aname%with&/specialChars?"), "_aname$pct_with$and$stroke_specialChars$q");
+    EXPECT(testToJSname("_begins_with_underscore"), "__begins_with_underscore");
+    EXPECT(testToJSname("number?"), "_number$q");
+    EXPECT(testToJSname("&&"), "$and$and");
+    EXPECT(testToJSname("$"), "$cash");
+    EXPECT(testToJSname("?"), "$q");
+  });
 
   function ifelseHook(args, scope, newTemp) {
     if (args.length < 3) return {}; // XXX what happens when more than 3?
@@ -3022,7 +3022,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
     } catch(e) {
       console.info("Can't open termnal", e);
-      createLisp({ unitTest: true, selfTest: true });  // XXX silly debugging hack
+      createLisp({ unitTest: true });  // XXX silly debugging hack
     }
     if (inputFd !== undefined) {
       console.log(`Jisp 1.1 REPL. Type "." to exit.`);
