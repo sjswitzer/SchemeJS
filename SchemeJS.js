@@ -18,7 +18,7 @@
 function SchemeJS(schemeOpts = {}) {
   let readFile = schemeOpts.readFile;
   let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
-  let reportLispError = schemeOpts.reportLispError ?? _reportError; // Call these instead
+  let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   let reportSystemError = schemeOpts.reportError ?? _reportError;
   let reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(_string(result)));
   let unitTest = schemeOpts.unitTest;
@@ -158,7 +158,7 @@ function SchemeJS(schemeOpts = {}) {
   //
   // Everything is encapsulated in a function scope because JITs
   // can resolve lexically-scoped references most easily.
-  // Since "this" is used as the current scope, a Lisp instance
+  // Since "this" is used as the current scope, a SchemeJS instance
   // is the global scope itself!
   //
   function exportDefinition(name, value, ...aliases) {
@@ -169,11 +169,11 @@ function SchemeJS(schemeOpts = {}) {
 
   //
   // Unlike exportDefinition, which exports an API to clients, defineGlobalSymbol
-  // defines a symbol for the lisp environment AND exports it as an API.
+  // defines a symbol for the SchemeJS environment AND exports it as an API.
   // Be careful which one you use!
   // 
-  const FUNCTION_DESCRIPTOR_SYMBOL = Symbol("*lisp-function-descriptor*");
-  const COMPILE_HOOK = Symbol("*lisp-compile-hook*");
+  const FUNCTION_DESCRIPTOR_SYMBOL = Symbol("*schemeJS-function-descriptor*");
+  const COMPILE_HOOK = Symbol("*schemeJS-compile-hook*");
   const MAX_INTEGER = 2**31-1;  // Presumably allows JIT to do small-int optimizations
 
   exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
@@ -210,19 +210,19 @@ function SchemeJS(schemeOpts = {}) {
 
   let testQueue = [];
 
-  class LispError extends Error {};
-  LispError.prototype.name = "LispError";
-  defineGlobalSymbol("LispError", LispError);
+  class SchemeJSError extends Error {};
+  SchemeJSError.prototype.name = "SchemeJSError";
+  defineGlobalSymbol("SchemeJSError", SchemeJSError);
 
-  class EvalError extends LispError {};
+  class EvalError extends SchemeJSError {};
   EvalError.prototype.name = "EvalError";
   defineGlobalSymbol("EvalError", EvalError);
 
-  class CompileError extends LispError {};
+  class CompileError extends SchemeJSError {};
   CompileError.prototype.name = "CompileError";
   defineGlobalSymbol("CompileError", CompileError);
 
-  class ParseError extends LispError {};
+  class ParseError extends SchemeJSError {};
   ParseError.prototype.name = "ParseError";
   defineGlobalSymbol("ParseError", ParseError);
 
@@ -923,10 +923,10 @@ function SchemeJS(schemeOpts = {}) {
       loadError.path = path;
       return false;
     }
-    let tokenGenerator = lispTokenGenerator(fileContent);
+    let tokenGenerator = schemeTokenGenerator(fileContent);
     for(;;) {
       try {
-        let expr = parseSExpr(tokenGenerator, { lispOpts: schemeOpts });
+        let expr = parseSExpr(tokenGenerator);
         if (!expr) break;
         if (noEval) {
           if (last) last = last[CDR] = cons(expr, NIL);
@@ -936,8 +936,8 @@ function SchemeJS(schemeOpts = {}) {
           reportLoadResult(evaluated);
         }
       } catch (error) {
-        if (error instanceof LispError)
-          reportLispError(error);
+        if (error instanceof SchemeJSError)
+          reportSchemeError(error);
         else
           reportSystemError(error);
       }
@@ -1620,7 +1620,7 @@ function SchemeJS(schemeOpts = {}) {
   //
   // try/catch/filnally.
   //
-  class LispThrow extends LispError {
+  class SchemeJSThrow extends SchemeJSError {
     constructor(tag, value, msg) {
       value;
       super(msg);
@@ -1631,11 +1631,11 @@ function SchemeJS(schemeOpts = {}) {
       return `${super.toString()} ${this.tag} ${_string(this.value)}`;
     }
   };
-  LispThrow.prototype.name = "LispThrow";
+  SchemeJSThrow.prototype.name = "SchemeJSThrow";
 
   // (*throw tag value) -- SIOD style
   defineGlobalSymbol("*throw", schemeThrow);
-  function schemeThrow(tag, value) { throw new LispThrow(tag, value)}
+  function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style
   defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1 });
@@ -1647,7 +1647,7 @@ function SchemeJS(schemeOpts = {}) {
         forms = forms[CDR];
       }
     } catch (e) {
-      if (!(e instanceof LispThrow)) throw e;  // rethrow
+      if (!(e instanceof SchemeJSThrow)) throw e;  // rethrow
       if (e.tag !== tag) throw e;
       val = e.value;
     }
@@ -1901,7 +1901,7 @@ function SchemeJS(schemeOpts = {}) {
     return res;
   })();
 
-  // Implements "toString()" for Lisp objects.
+  // Implements "toString()" for SchemeJS objects.
   // We can't just implement toString() because it needs to work for
   // non-Object types too, but Cons.toString() calls this.
   defineGlobalSymbol("to-string", to_string);
@@ -2084,9 +2084,6 @@ function SchemeJS(schemeOpts = {}) {
     }
   }
 
-  const TO_LISP_SYMBOL = Symbol("*lisp-to-lisp*");
-  exportDefinition("TO_LISP_SYMBOL", TO_LISP_SYMBOL);
-
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
   defineGlobalSymbol("toList", toList);
   function toList(obj, depth) {
@@ -2095,8 +2092,6 @@ function SchemeJS(schemeOpts = {}) {
     if (obj === NIL || isCons(obj)) return obj;
     if (typeof obj === 'object') {
       if (obj[PAIR]) return obj;  // Careful; Cons is iterable itself
-      if (obj[TO_LISP_SYMBOL])  // User can specialize this
-        return obj[TO_LISP_SYMBOL].call(this, opts);
       if (isIterable(obj)) {
         let list = NIL, last;
         for (let value of obj) {
@@ -2129,7 +2124,7 @@ function SchemeJS(schemeOpts = {}) {
   // S-epression parser
   //
 
-  function* lispTokenGenerator(characterGenerator) {
+  function* schemeTokenGenerator(characterGenerator) {
     if (!(typeof characterGenerator.next === 'function')) {
       if (isIterable(characterGenerator)) {
         let generator = characterGenerator[Symbol.iterator]();
@@ -2279,7 +2274,7 @@ function SchemeJS(schemeOpts = {}) {
     let promptMore = opts.promptMore = "  ";
     let quotePromptMore = opts.quotePromptMore ?? promptMore;
     if (typeof tokenGenerator === 'string')
-      tokenGenerator = lispTokenGenerator(tokenGenerator);
+      tokenGenerator = schemeTokenGenerator(tokenGenerator);
     if (!(typeof tokenGenerator.next === 'function')) {
       if (isIterable(tokenGenerator)) {
         let generator = tokenGenerator[Symbol.iterator]();
@@ -2954,7 +2949,7 @@ function SchemeJS(schemeOpts = {}) {
     let name = opts.name ?? "SchemeJS";
     let prompt = opts.prompt ?? name + " > ";
     let print = opts.print ?? (x => console.log(_string(x)));
-    let reportLispError = opts.reportLispError ?? (x => console.log(String(x)));;
+    let reportSchemeError = opts.reportSchemeError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
     let replHints = { prompt };
     let endTest = opts.endTest ?? (line => line === ".");  // end on a "."
@@ -2974,7 +2969,7 @@ function SchemeJS(schemeOpts = {}) {
       }
     }
     let charStream = charStreamPromptInput();
-    let tokenGenerator = lispTokenGenerator(charStream);
+    let tokenGenerator = schemeTokenGenerator(charStream);
     while (!done) {
       try {
         let expr = parseSExpr(tokenGenerator, { ...opts, replHints });
@@ -2982,8 +2977,8 @@ function SchemeJS(schemeOpts = {}) {
         let evaluated = _eval(expr, scope);
         print (evaluated);
       } catch (error) {
-        if (error instanceof LispError)
-          reportLispError(error);
+        if (error instanceof SchemeJSError)
+          reportSchemeError(error);
         else
           reportSystemError(error);
       }
@@ -2995,7 +2990,7 @@ function SchemeJS(schemeOpts = {}) {
   // externally. I also just like the idea of the tests being with the code itself.
   // But I'll separate them when I finally make this a JavaScript module.
 
-  class TestFailureError extends LispError {
+  class TestFailureError extends SchemeJSError {
     constructor(message, test, result, expected) {
       super(`${_string(test)}; ${message}: ${_string(result)}, expected: ${_string(expected)}`);
       this.test = test;
@@ -3140,10 +3135,10 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
         return fileContent;
       }
       // It isn't really a "constructor" but can be invoked with or without "new"
-      let lisp = new SchemeJS( { readFile });
+      let schemeJS = new SchemeJS( { readFile });
       // getLine("Attach debugger and hit return!");  // Uncomment to do what it says
-      lisp.evalString('(define (test) (load "test.scm"))');
-      lisp.REPL(getLine);
+      schemeJS.evalString('(define (test) (load "test.scm"))');
+      schemeJS.REPL(getLine);
     }
   } finally {
     if (closeFd !== undefined)

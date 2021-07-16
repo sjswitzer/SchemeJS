@@ -1,4 +1,4 @@
-;; Jisp tests
+;; SchemeJS tests
 
 (define (factoral x)
   (? (<= x 1) 
