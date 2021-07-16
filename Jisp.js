@@ -604,7 +604,7 @@ function createLisp(lispOpts = {}) {
 
   defineGlobalSymbol("<", lt, { evalArgs: 2 }, "lt");
   function lt(a, b, forms) {
-    if (rest === NIL) return a < b;
+    if (forms === NIL) return a < b;
     if (!(a < b)) return false;
     a = b;
     while (isCons(forms)) {
@@ -684,7 +684,7 @@ function createLisp(lispOpts = {}) {
 
   queueTests(function(){
     EXPECT(` (<) `, false);  // nothing is not less than itself
-    EXPECT(` (< 5) `, false);  // anything is not less than itself
+    EXPECT(` (< 5) `, isClosure);  // anything is not less than itself
     EXPECT(` (< 5 3) `, false);
     EXPECT(` (< 3 5) `, true);
     EXPECT(` (< 3 3) `, false);
@@ -1824,6 +1824,8 @@ function createLisp(lispOpts = {}) {
             return closure;
           }
           /**/
+          break;
+          /*/
           // don't let cons, etc, be seeing any undefined parmaters
           if (lift > 0xff) // but not indefinitely many of them!
             break;
