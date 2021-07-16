@@ -179,15 +179,15 @@ function createLisp(lispOpts = {}) {
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
     if (typeof value === 'function') {
-      /***/
       let fnInfo = analyzeJSFunction(value);
       let lift = MAX_INTEGER;
-      if (!fnInfo.native && !fnInfo.restParam)
-        lift = fnInfo.params.length;
-      /*/
-      let lift = opts.lift ?? MAX_INTEGER;
-      /***/
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
+      if (evalCount !== MAX_INTEGER) {
+        lift = evalCount+1;
+      } else {
+        if (!fnInfo.native && !fnInfo.restParam)
+          lift = fnInfo.params.length;
+      }
       if (lift !== MAX_INTEGER && lift >= 0xff) throw new LogicError("Too big a lift");
       // Encoding chosen so that small values mean eval everything and lift that many.
       lift = (~evalCount << 8) | lift&0xff;
@@ -1799,8 +1799,8 @@ function createLisp(lispOpts = {}) {
       // If there's no LIFT_ARGS, the default is to eval and lift everything.
       // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
       let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
-       // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-       let evalCount = ~lift >> 7 >>> 1;
+      // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
+      let evalCount = ~lift >> 7 >>> 1;
       lift = lift << 24 >> 23 >>> 1;
       args = evalArgs(args, scope, evalCount);
       let jsArgs = [], realArgCount = 0;
@@ -1823,10 +1823,12 @@ function createLisp(lispOpts = {}) {
             let closure = cons(CLOSURE_ATOM, cons(scope, cons(paramList, forms)));
             return closure;
           }
+          /**/
           // don't let cons, etc, be seeing any undefined parmaters
           if (lift > 0xff) // but not indefinitely many of them!
             break;
           jsArgs.push(NIL);
+          /**/
         }
         --lift;
       }
