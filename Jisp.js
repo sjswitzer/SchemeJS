@@ -96,7 +96,7 @@ function createLisp(lispOpts = {}) {
   class Scope {
     // Be careful defining methods or properties here; they
     // automatically become part of the API.
-    _scope_is = "global scope";
+    _scope_is = "global";
   };
 
   let GlobalScope = new Scope();
@@ -135,6 +135,23 @@ function createLisp(lispOpts = {}) {
 
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
 
+  // Character clases for parsing
+  const TOKS = {}, DIGITS = {}, IDENT1 = {}, IDENT2 = {},
+  NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {}, WSNL = {}, JSIDENT = {};
+  for (let ch of `()[]{},':`) TOKS[ch] = true;
+  for (let ch of ` \t`) WS[ch] = WSNL[ch] = true;
+  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = true;
+  for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
+    IDENT1[ch] = IDENT2[ch] = JSIDENT[ch] = true;
+  for (let ch of `0123456789`)
+    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = true;
+  for (let ch of `+-.`)
+    NUM1[ch] = NUM2[ch] = true;
+  for (let ch of `eEoOxXbBn`)
+    NUM2[ch] = true;
+  for (let ch of `~!@#$%^&|*_-+-=|\\<>?/`)
+    OPERATORS[ch] = IDENT1[ch] = IDENT2[ch] = true;
+
   //
   // Everything is encapsulated in a function scope because JITs
   // can resolve lexically-scoped references most easily.
@@ -162,7 +179,14 @@ function createLisp(lispOpts = {}) {
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
     if (typeof value === 'function') {
+      /***/
+      let fnInfo = analyzeJSFunction(value);
+      let lift = MAX_INTEGER;
+      if (!fnInfo.native && !fnInfo.restParam)
+        lift = fnInfo.params.length;
+      /*/
       let lift = opts.lift ?? MAX_INTEGER;
+      /***/
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       if (lift !== MAX_INTEGER && lift >= 0xff) throw new LogicError("Too big a lift");
       // Encoding chosen so that small values mean eval everything and lift that many.
@@ -285,27 +309,27 @@ function createLisp(lispOpts = {}) {
     return val;
   }
 
-  const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0, lift: 1 }, "'");
+  const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0 }, "'");
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
   defineGlobalSymbol("false", false);
   defineGlobalSymbol("isCons", isCons, "pair?");
-  defineGlobalSymbol("cons", cons, { lift: 2 });  // lift guarantees two arguments that aren't "undefined"
-  defineGlobalSymbol("car", car, { lift: 1 }, "first"); // lift guarantees one argument that isn't "undefined"
-  defineGlobalSymbol("cdr", cdr, { lift: 1 }, "rest");
-  defineGlobalSymbol("caaar", caaar, { lift: 1 });
-  defineGlobalSymbol("caar", caar, { lift: 1 });
-  defineGlobalSymbol("caadr", caadr, { lift: 1 });
-  defineGlobalSymbol("cadar", cadar, { lift: 1 });
-  defineGlobalSymbol("caddr", caddr, { lift: 1 });
-  defineGlobalSymbol("cadr", cadr, { lift: 1 });
-  defineGlobalSymbol("cdaar", cdaar, { lift: 1 });
-  defineGlobalSymbol("cdadr", cdadr, { lift: 1 });
-  defineGlobalSymbol("cdar", cdar, { lift: 1 });
-  defineGlobalSymbol("cddar", cddar, { lift: 1 });
-  defineGlobalSymbol("cdddr", cdddr, { lift: 1 });
-  defineGlobalSymbol("cddr", cddr, { lift: 1 });
+  defineGlobalSymbol("cons", cons);
+  defineGlobalSymbol("car", car, "first");
+  defineGlobalSymbol("cdr", cdr, "rest");
+  defineGlobalSymbol("caaar", caaar);
+  defineGlobalSymbol("caar", caar);
+  defineGlobalSymbol("caadr", caadr);
+  defineGlobalSymbol("cadar", cadar);
+  defineGlobalSymbol("caddr", caddr);
+  defineGlobalSymbol("cadr", cadr);
+  defineGlobalSymbol("cdaar", cdaar);
+  defineGlobalSymbol("cdadr", cdadr);
+  defineGlobalSymbol("cdar", cdar);
+  defineGlobalSymbol("cddar", cddar);
+  defineGlobalSymbol("cdddr", cdddr);
+  defineGlobalSymbol("cddr", cddr);
   queueTests(function() {
     EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
     EXPECT(` (car '(1 . 2)) `, ` 1 `);
@@ -403,12 +427,17 @@ function createLisp(lispOpts = {}) {
     return eval_.call(this, expr, scope);
   }
 
+  defineGlobalSymbol("GlobalScope", GlobalScope);
+
   defineGlobalSymbol("apply", apply);
-  function apply(fn, args, scope) {
-    if (scope == null) scope = this;
-    else if (rest === NIL) scope = GlobalScope;
+  function apply(fn, args, ...rest) {
+    let scope = this;
+    if (rest.length > 0)
+      scope = rest[0];
+    if (!(scope instanceof Scope)) scope = this;
     return _apply(fn, args, scope);
   }
+
   queueTests(function() {
     EXPECT(` (apply + '(1 2)) `, 3);
   });
@@ -573,11 +602,11 @@ function createLisp(lispOpts = {}) {
     EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
   });
 
-  defineGlobalSymbol("<", lt, { evalArgs: 0, lift: 0 }, "lt");
-  function lt(forms) {
-    if (!(isCons(forms) && isCons(cdr(forms)))) return false;
-    let a = _eval(forms[CAR], this);
-    forms = forms[CDR];
+  defineGlobalSymbol("<", lt, { evalArgs: 2 }, "lt");
+  function lt(a, b, forms) {
+    if (rest === NIL) return a < b;
+    if (!(a < b)) return false;
+    a = b;
     while (isCons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a < b)) return false;
@@ -587,7 +616,7 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol("<=", le, { evalArgs: 0, lift: 0 }, "le");
+  defineGlobalSymbol("<=", le, { evalArgs: 0 }, "le");
   function le(forms) {
     if (!isCons(forms)) return true;
     let a = _eval(forms[CAR], this);
@@ -601,7 +630,7 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol(">", gt, { evalArgs: 0, lift: 0 }, "gt");
+  defineGlobalSymbol(">", gt, { evalArgs: 0 }, "gt");
   function gt(forms) {
     if (!(isCons(forms) && isCons(forms[CDR]))) return false;
     let a = _eval(forms[CAR], this);
@@ -615,7 +644,7 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol(">=", ge, { evalArgs: 0, lift: 0 }, "ge");
+  defineGlobalSymbol(">=", ge, { evalArgs: 0 }, "ge");
   function ge(forms) {
     if (!isCons(forms)) return true;
     let a = _eval(forms[CAR], this);
@@ -629,7 +658,7 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 0, lift: 0 }, "eq?");
+  defineGlobalSymbol("==", eq, { evalArgs: 0 }, "eq?");
   function eq(forms) {
     if (!isCons(forms)) return true;
     let a = _eval(forms[CAR], this);
@@ -648,7 +677,7 @@ function createLisp(lispOpts = {}) {
   const equalp = (a, b) =>  deep_eq(a, b);
   defineGlobalSymbol("equal?", equalp, "equal?");
 
-  defineGlobalSymbol("!=", ne, { evalArgs: 0, lift: 0 }, "ne");
+  defineGlobalSymbol("!=", ne, { evalArgs: 0 }, "ne");
   function ne(forms) {
     return !eq.call(this, forms);
   }
@@ -749,7 +778,7 @@ function createLisp(lispOpts = {}) {
 
  // logical & conditional
 
-  defineGlobalSymbol("&&", and, { evalArgs: 0, lift: 0 }, "and");
+  defineGlobalSymbol("&&", and, { evalArgs: 0 }, "and");
   function and(forms) {
     let val = true;
     while (isCons(forms)) {
@@ -760,7 +789,7 @@ function createLisp(lispOpts = {}) {
     return val;
   }
 
-  defineGlobalSymbol("||", or, { evalArgs: 0, lift: 0 }, "or");
+  defineGlobalSymbol("||", or, { evalArgs: 0 }, "or");
   function or(forms) {
     let val = false;
     while (isCons(forms)) {
@@ -772,7 +801,7 @@ function createLisp(lispOpts = {}) {
   }
 
   // XXX TODO: What happens if more that 3 args?
-  defineGlobalSymbol("?", ifelse, { evalArgs: 1, lift: 3, compileHook: ifelseHook }, "if");
+  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelseHook }, "if");
   function ifelse(p, t, f) { return _bool(p) ? _eval(t, this) : _eval(f, this); }
 
   queueTests(function() {
@@ -810,7 +839,7 @@ function createLisp(lispOpts = {}) {
   });
 
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", begin, { evalArgs: 0, lift: 0 });
+  defineGlobalSymbol("begin", begin, { evalArgs: 0 });
   function begin(forms) {
     let res = NIL;
     while (isCons(forms)) {
@@ -821,7 +850,7 @@ function createLisp(lispOpts = {}) {
   }
 
   // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", prog1, { evalArgs: 0, lift: 0 });
+  defineGlobalSymbol("prog1", prog1, { evalArgs: 0 });
   function prog1(forms) {
     let res = NIL, first = true;
     while (isCons(forms)) {
@@ -846,7 +875,7 @@ function createLisp(lispOpts = {}) {
   });
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  defineGlobalSymbol("cond", cond, { evalArgs: 0, lift: 0 });
+  defineGlobalSymbol("cond", cond, { evalArgs: 0 });
   function cond(clauses) {
     while (isCons(clauses)) {
       let clause = clauses[CAR];
@@ -928,7 +957,7 @@ function createLisp(lispOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("append", append, { lift: 0 });
+  defineGlobalSymbol("append", append);
   function append(lists) {
     let res = NIL, last;
     while (isCons(lists)) {
@@ -1241,7 +1270,7 @@ function createLisp(lispOpts = {}) {
   // functions that take an "env" param should transform it back into
   // a Scope. That will maintain Scheme API compatibility while
   // still benefiting from Scopes internally.
-  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, lift: 1 }, "let", "let*");
+  defineGlobalSymbol("letrec", letrec, { evalArgs: 0 }, "let", "let*");
   function letrec(bindings, forms) {
     let scope = newScope(this, "letrec");
     while (isCons(bindings)) {
@@ -1585,12 +1614,12 @@ function createLisp(lispOpts = {}) {
   // Promises
 
   // (\ (params) (body1) (body2) ...)
-  defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0, lift: 0 });
+  defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0 });
   function lambda(body) { return cons(CLOSURE_ATOM, cons(this, body)) }
 
   // (\\ (params) (body1) (body2) ...)
   // (\\ param . form) -- Curry notation
-  defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0, lift: 0 });
+  defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
   function special_lambda(body) {
     let scope = this;
     let closure = args => _apply(cons(SLAMBDA_ATOM, body), args, scope);
@@ -1621,7 +1650,7 @@ function createLisp(lispOpts = {}) {
   defineGlobalSymbol("*throw", (tag, value) => { throw new LispThrow(tag, value)});
 
   // (*catch tag form ...) -- SIOD style
-  defineGlobalSymbol("*catch", lispCatch, { evalArgs: 1, lift: 1 });
+  defineGlobalSymbol("*catch", lispCatch, { evalArgs: 1 });
   function lispCatch(tag, forms) {  // XXX order of args?
     let val = NIL;
     try {
@@ -1641,7 +1670,7 @@ function createLisp(lispOpts = {}) {
   defineGlobalSymbol("throw", value => { throw value});
 
   // (catch (var [type] forms) forms) -- Java/JavaScript style
-  defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0, lift: 1 });
+  defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0 });
   function lispJSCatch(catchClause, forms) {
     if (!isCons(catchClause))
       throw new EvalError(`Bad catch clause ${str(catchClause)}`);
@@ -1678,7 +1707,7 @@ function createLisp(lispOpts = {}) {
   }
 
   // (define variable value)
-  defineGlobalSymbol("define", define, { evalArgs: 0, lift: 2 });
+  defineGlobalSymbol("define", define, { evalArgs: 0 });
   function define(variable, value) {
     let scope = this, name = variable;
     if (isCons(variable)) {
@@ -1913,7 +1942,7 @@ function createLisp(lispOpts = {}) {
       let saveIndent = indent;
       // XXX special printing for functions?
       if (objType === 'object') {
-        if (obj instanceof Scope) return put(`{*scope* ${obj._scope_is}}`);
+        if (obj instanceof Scope) return put(`{*scope(${obj._scope_is})*}`);
         if (obj[PAIR]) {
           put("(");
           indent += indentMore;
@@ -2028,21 +2057,6 @@ function createLisp(lispOpts = {}) {
   //
   // S-epression parser
   //
-  const TOKS = {}, DIGITS = {}, IDENT1 = {}, IDENT2 = {},
-      NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {}, WSNL = {}, JSIDENT = {};
-  for (let ch of `()[]{},':`) TOKS[ch] = true;
-  for (let ch of ` \t`) WS[ch] = WSNL[ch] = true;
-  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = true;
-  for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
-    IDENT1[ch] = IDENT2[ch] = JSIDENT[ch] = true;
-  for (let ch of `0123456789`)
-    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = true;
-  for (let ch of `+-.`)
-    NUM1[ch] = NUM2[ch] = true;
-  for (let ch of `eEoOxXbBn`)
-    NUM2[ch] = true;
-  for (let ch of `~!@#$%^&|*_-+-=|\\<>?/`)
-    OPERATORS[ch] = IDENT1[ch] = IDENT2[ch] = true;
 
   function* lispTokenGenerator(characterGenerator) {
     if (!(typeof characterGenerator.next === 'function')) {
@@ -2924,7 +2938,8 @@ function createLisp(lispOpts = {}) {
     // The idea here is to let the following series of steps to share a scope
     // Otherwise, each test gets a fresh scope.
     testScopeStack.push(GlobalScope);
-    GlobalScope = newScope(GlobalScope, "test global scope");
+    GlobalScope = newScope(GlobalScope, "test-global");
+    GlobalScope.GlobalScope = GlobalScope;  // A damn lie
   }
 
   function RESTORESCOPE() {
