@@ -1712,11 +1712,14 @@ function createLisp(lispOpts = {}) {
 
   // (define variable value)
   defineGlobalSymbol("define", define, { evalArgs: 0 });
-  function define(variable, value) {
-    let scope = this, name = variable;
-    if (isCons(variable)) {
-      name = variable[CAR];
-      let args = variable[CDR];
+  function define(forms) {
+    if (!(isCons(forms) && isCons(forms[CDR])))
+      throw new EvalError(`Define requires two parameters`);
+    let defined = forms[CAR], value = forms[CDR][CAR];
+    let scope = this, name = defined;
+    if (isCons(defined)) {
+      name = defined[CAR];
+      let args = defined[CDR];
       value = list(LAMBDA_ATOM, args, value);
     } else {
       value = _eval(value, scope);
@@ -1725,7 +1728,7 @@ function createLisp(lispOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
-      throw new EvalError(`must define symbol or string ${str(variable)}`);
+      throw new EvalError(`must define symbol or string ${str(defined)}`);
     GlobalScope[name] = value;
     return name;
   }
