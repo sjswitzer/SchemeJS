@@ -1,5 +1,5 @@
 //
-// JavaScript Lisp
+// SchemeJS: Scheme in JavaScript
 //
 // Copyright 2021 Stan Switzer
 //   This work is licensed under a Creative Commons Attribution-ShareAlike
@@ -15,7 +15,7 @@
 // Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design.
 //
-function createLisp(lispOpts = {}) {
+function SchemeJS(lispOpts = {}) {
   let readFile = lispOpts.readFile;
   let _reportError = lispOpts.reportError = error => console.log(error); // Don't call this one
   let reportLispError = lispOpts.reportLispError ?? _reportError; // Call these instead
@@ -273,8 +273,8 @@ function createLisp(lispOpts = {}) {
   LazyCdrCons.prototype[PAIR] = true;
 
   //
-  // Jisp strives to maintain JavaScript consistency wherever possibe but enough is enough.
-  // In Jisp, NIL, null, undefined, and false are false and everything else is true.
+  // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
+  // In SchemeJS, NIL, null, undefined, and false are false and everything else is true.
   //
   exportDefinition("toBool", _bool);
   function  _bool(val) {
@@ -2219,7 +2219,7 @@ function createLisp(lispOpts = {}) {
   function parseSExpr(tokenGenerator, opts = {}) {
     opts = { ...lispOpts, ...opts };
     let replHints = opts.replHints ?? {};
-    let prompt = opts.prompt ?? "Jisp > ";
+    let prompt = opts.prompt ?? "SchemeJS > ";
     let promptMore = opts.promptMore = "  ";
     let quotePromptMore = opts.quotePromptMore ?? promptMore;
     if (typeof tokenGenerator === 'string')
@@ -2884,7 +2884,7 @@ function createLisp(lispOpts = {}) {
     let scope = this;
     opts = { ...lispOpts, ...opts };
     // readline(prompt) => str | nullish
-    let name = opts.name ?? "Jisp";
+    let name = opts.name ?? "SchemeJS";
     let prompt = opts.prompt ?? name + " > ";
     let print = opts.print ?? (x => console.log(name + ":", str(x)));
     let reportLispError = opts.reportLispError ?? (x => console.log(String(x)));;
@@ -3054,10 +3054,10 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
     } catch(e) {
       console.info("Can't open termnal", e);
-      createLisp({ unitTest: true });  // XXX silly debugging hack
+      SchemeJS({ unitTest: true });  // XXX silly debugging hack
     }
     if (inputFd !== undefined) {
-      console.log(`Jisp 1.1 REPL. Type "." to exit.`);
+      console.log(`SchemeJS 1.1 REPL. Type "." to exit.`);
       let buffer = Buffer.alloc(2000);
       function getLine(prompt) {
         process.stdout.write(prompt);
@@ -3072,7 +3072,8 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
         fileContent = fileContent.toString();
         return fileContent;
       }
-      let lisp = createLisp( { readFile });
+      // It isn't really a "constructor" but can be invoked with or without "new"
+      let lisp = new SchemeJS( { readFile });
       // getLine("Attach debugger and hit return!");  // Uncomment to do what it says
       lisp.evalString('(define (test) (load "test.scm"))');
       lisp.REPL(getLine);
