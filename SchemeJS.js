@@ -93,16 +93,17 @@ function SchemeJS(lispOpts = {}) {
   // A new scope's prototype is the enclosing scope.
   // This way, a scope chain is a prototype chain and resolving
   // a symbol is as simple as "scope[sym]"!
+  const SCOPE_IS_SYMBOL = Symbol("SCOPE_IS");
   class Scope {
     // Be careful defining methods or properties here; they
     // automatically become part of the API.
-    _scope_is = "global";
   };
+  Scope.prototype[SCOPE_IS_SYMBOL] = "global-scope";
 
   let GlobalScope = new Scope();
   function newScope(enclosingScope, scope_is) {
     let scope = Object.create(enclosingScope);
-    scope._scope_is = scope_is;
+    scope[SCOPE_IS_SYMBOL] = scope_is;
     return scope;
   }
 
@@ -1277,7 +1278,7 @@ function SchemeJS(lispOpts = {}) {
     if (!isCons(forms)) throw new EvalError(`No bindings`);
     let bindings = forms[CAR];
     forms = forms[CDR];
-    let scope = newScope(this, "letrec");
+    let scope = newScope(this, "letrec-scope");
     while (isCons(bindings)) {
       let binding = bindings[CAR];
       if (!isCons(binding))
@@ -1700,7 +1701,7 @@ function SchemeJS(lispOpts = {}) {
     } catch (e) {
       if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
           || e instanceof typeMatch) {
-        let scope = newScope(this, "catch");
+        let scope = newScope(this, "catch-scope");
         scope[catchVar] = e;
         while (isCons(catchForms)) {
           val = _eval(catchForms[CAR], scope);
@@ -1869,7 +1870,7 @@ function SchemeJS(lispOpts = {}) {
         }
         if (opSym !== SLAMBDA_ATOM)
           args = evalArgs(args, scope);
-        scope = newScope(scope, "lambda");
+        scope = newScope(scope, "lambda-scope");
         let origFormalParams = params;
         while (isCons(params)) {
           let param = params[CAR];
@@ -1957,7 +1958,21 @@ function SchemeJS(lispOpts = {}) {
       let saveIndent = indent;
       // XXX special printing for functions?
       if (objType === 'object') {
-        if (obj instanceof Scope) return put(`{*scope(${obj._scope_is})*}`);
+        if (obj instanceof Scope) {
+          let symStrs = "";
+          if (obj !== GlobalScope) {
+            for (let sym of Object.getOwnPropertySymbols(obj)) {
+              let desc = sym.description;
+              if (ATOMS[desc] !== sym) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
+              if (symStrs.length + desc.length > 20) {
+                symStrs += "...";
+                break;
+              }
+              symStrs += ` ${desc}`;
+            }
+          }
+          return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
+        }
         if (obj[PAIR]) {
           put("(");
           indent += indentMore;
@@ -2953,7 +2968,7 @@ function SchemeJS(lispOpts = {}) {
     // The idea here is to let the following series of steps to share a scope
     // Otherwise, each test gets a fresh scope.
     testScopeStack.push(GlobalScope);
-    GlobalScope = newScope(GlobalScope, "test-global");
+    GlobalScope = newScope(GlobalScope, "test-global-scope");
     GlobalScope.GlobalScope = GlobalScope;  // A damn lie
   }
 
