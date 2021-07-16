@@ -1956,7 +1956,27 @@ function SchemeJS(lispOpts = {}) {
       if (obj === null) return put( "null");   // remember: typeof null === 'object'!
       let objType = typeof obj;
       let saveIndent = indent;
-      // XXX special printing for functions?
+      if (typeof obj === 'function') {
+        let fnDesc = analyzeJSFunction(obj);
+        let name = fnDesc.name ? ` ${fnDesc.name}` : '';
+        let params = "";
+        for (let param of fnDesc.params) {
+          if (params) params += ', ';
+          params += param;
+        }
+        if (fnDesc.restParam) {
+          if (params) params += ', ';
+          params = `${params}...${fnDesc.restParam}`;
+        }
+        params = `(${params})`;
+        if (fnDesc.native)
+          return put(`{function${name}${params} native}`);
+        if (fnDesc.value && !fnDesc.body)
+          return put(`{${params} => ${fnDesc.value}}`);
+        if (fnDesc.body)
+          return put(`{function${name}${params} ...}`);
+        return put('{function}');  // shouldn't happen
+      }
       if (objType === 'object') {
         if (obj instanceof Scope) {
           let symStrs = "";
