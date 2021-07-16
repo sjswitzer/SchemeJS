@@ -75,9 +75,12 @@ function SchemeJS(schemeOpts = {}) {
   // just invites errors. But it's good to have a distinct class for NIL
   // for various reasons including that it looks better in a JS debugger
   // and provides a way to trap attempts to get or set [CAR] and [CDR].
-  const NIL = new (class nil {
-    *[Symbol.iterator]() { return { next: () => ({ done: true, value: undefined }) } }
-  });
+  const NIL = new ((_ => {
+    class nil {
+      *[Symbol.iterator]() { return { next: () => ({ done: true, value: undefined }) } }
+    }
+    return nil;
+  })());
 
   // There does not appear to be an ES6 syntax for this
   Object.defineProperties(Object.getPrototypeOf(NIL), {
@@ -1291,8 +1294,8 @@ function SchemeJS(schemeOpts = {}) {
     let res = [];
     for (let list of lists) {
       for (let item of list) {
-        item = fn.call(this, item);
-        res.push(fn.call(this, item));
+        item = _apply(fn, cons(item, NIL), this);
+        res.push(item);
       }
     }
     return res;
@@ -1302,8 +1305,9 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(` (apropos "c") `, isCons);  // weak test but gets coverage
     EXPECT(` (mapcar) `, NIL);
     EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
+    EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
     EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
-    // XXX TODO
+    EXPECT(` (map->array (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
   });
 
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
