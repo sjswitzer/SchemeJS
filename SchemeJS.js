@@ -1931,6 +1931,7 @@ function SchemeJS(schemeOpts = {}) {
         }
         return res;
       }
+      return _eval(form, scope);  // XXX this isn't right. try: ((+ 5) 6). Should be 11
     }
     throw new EvalError(`Can't apply ${form}`);
   }
