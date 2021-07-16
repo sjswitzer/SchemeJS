@@ -11,7 +11,7 @@
 // TODO: make this a JS module
 
 //
-// Creates a Lisp instance, independent of any others.
+// Creates a Scheme instance, independent of any others.
 // Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design.
 //
@@ -194,7 +194,7 @@ function SchemeJS(schemeOpts = {}) {
       // Encoding chosen so that small values mean eval everything and lift that many.
       let functionDescriptor = (~evalCount << 8) | paramCount&0xff;
       value[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
-      // XXX TODO: make sure that every defn with evalArgs !== MAX_INTEGER has a compile hook.
+      // XXX TODO: make sure that every defn with evalCount !== MAX_INTEGER has a compile hook.
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
     }
     let atom = typeof name === 'symbol' ? name : Atom(name);
@@ -1634,11 +1634,12 @@ function SchemeJS(schemeOpts = {}) {
   LispThrow.prototype.name = "LispThrow";
 
   // (*throw tag value) -- SIOD style
-  defineGlobalSymbol("*throw", (tag, value) => { throw new LispThrow(tag, value)});
+  defineGlobalSymbol("*throw", schemeThrow);
+  function schemeThrow(tag, value) { throw new LispThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style
-  defineGlobalSymbol("*catch", lispCatch, { evalArgs: 1 });
-  function lispCatch(tag, forms) {  // XXX order of args?
+  defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1 });
+  function schemeCatch(tag, forms) {  // XXX order of args?
     let val = NIL;
     try {
       while (isCons(forms)) {
@@ -1654,11 +1655,12 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   // (throw value) -- Java/JavaScript style
-  defineGlobalSymbol("throw", value => { throw value});
+  defineGlobalSymbol("throw", jsThrow);
+  function jsThrow(value) { throw value }
 
   // (catch (var [type] forms) forms) -- Java/JavaScript style
-  defineGlobalSymbol("catch", lispJSCatch, { evalArgs: 0 });
-  function lispJSCatch(catchClause, forms) {
+  defineGlobalSymbol("catch", jsCatch, { evalArgs: 0 });
+  function jsCatch(catchClause, forms) {
     if (!isCons(catchClause))
       throw new EvalError(`Bad catch clause ${_string(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
@@ -2499,32 +2501,8 @@ function SchemeJS(schemeOpts = {}) {
           else
             params.push(token);
         }
-      if (nextToken() === '{') {
-          while (WSNL[str[pos]]) ++pos;
-          let bodyPos = pos, returnPos = pos, nTok = 0;
-          while (nextToken() && token !== 'return') {
-            returnPos = pos;
-            if (nTok++ === 0 && token === '[') {
-              if (nextToken() === 'native' && nextToken() === 'code' &&
-                  nextToken() === ']' && nextToken() === '}' && nextToken() === '') {
-                native = true;
-                break parse;
-              }
-            }
-          }
-          if (token === "return") {
-            // If there's a return, it has to be followed by a variable,
-            // an optional semicolon, an "}", and NOTHING FURTHER.
-            // We capture the name of the return variable and clip the body
-            // prior to the return.
-            let possibleValue = nextToken();
-            while (nextToken() === ';');
-            if (token !== '}') break parse;
-            if (nextToken() !== '') break parse;
-            value = possibleValue;
-            body = str.substring(bodyPos, returnPos);
-          }
-        }
+        nextToken();
+        parseBody();
       } else { // Arrow functions
         if (token === '(') {
           while (nextToken() && token !==')') {
@@ -2539,10 +2517,43 @@ function SchemeJS(schemeOpts = {}) {
         }
         if (nextToken() !== '=>') break parse;
         while (WSNL[str[pos]]) ++pos;
-        value = str.substr(pos);
+        let possibleValue = str.substr(pos);
+        if (nextToken() === '{')
+          parseBody()
+        else
+          value = possibleValue;
       }
     }
     return { name, params, restParam, value, body, native };
+
+    function parseBody() {
+      if ( token === '{') {
+        while (WSNL[str[pos]]) ++pos;
+        let bodyPos = pos, returnPos = pos, nTok = 0;
+        while (nextToken() && token !== 'return') {
+          returnPos = pos;
+          if (nTok++ === 0 && token === '[') {
+            if (nextToken() === 'native' && nextToken() === 'code' &&
+                nextToken() === ']' && nextToken() === '}' && nextToken() === '') {
+              native = true;
+              return;
+            }
+          }
+        }
+        if (token === "return") {
+          // If there's a return, it has to be followed by a variable,
+          // an optional semicolon, an "}", and NOTHING FURTHER.
+          // We capture the name of the return variable and clip the body
+          // prior to the return.
+          let possibleValue = nextToken();
+          while (nextToken() === ';');
+          if (token !== '}') return;
+          if (nextToken() !== '') return;
+          value = possibleValue;
+          body = str.substring(bodyPos, returnPos);
+        }
+      }
+    }
 
     function nextToken() {
       // Super janky tokenizer.
@@ -2595,7 +2606,9 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(testAnalyze((x, y, ...z) => x * y),
       { name: undefined, params: ['x','y'], restParam: 'z', value: 'x * y', body: undefined, native: false });
     EXPECT(testAnalyze((...x) => x * x),
-      { name: undefined, params: [], restParam: 'x', value: 'x * x', body:undefined, native: false });
+      { name: undefined, params: [], restParam: 'x', value: 'x * x', body: undefined, native: false });
+    EXPECT(testAnalyze((...x) => { let res = x * x; return res }),
+      { name: undefined, params: [], restParam: 'x', value: 'res', body: 'let res = x * x;', native: false });
     EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
       { name: undefined, params: ['a'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
     EXPECT(testAnalyze(function (a, b, c) { a = 2 * a; return a; }),
