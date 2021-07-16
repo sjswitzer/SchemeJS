@@ -183,7 +183,7 @@ function createLisp(lispOpts = {}) {
       let lift = MAX_INTEGER;
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       if (evalCount !== MAX_INTEGER) {
-        lift = evalCount+1;
+        lift = evalCount;
       } else {
         if (!fnInfo.native && !fnInfo.restParam)
           lift = fnInfo.params.length;
@@ -309,7 +309,7 @@ function createLisp(lispOpts = {}) {
     return val;
   }
 
-  const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted, { evalArgs: 0 }, "'");
+  const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted[CAR], { evalArgs: 0 }, "'");
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
@@ -604,7 +604,7 @@ function createLisp(lispOpts = {}) {
 
   defineGlobalSymbol("<", lt, { evalArgs: 2 }, "lt");
   function lt(a, b, forms) {
-    if (forms === NIL) return a < b;
+    if (forms === undefined) return a < b;
     if (!(a < b)) return false;
     a = b;
     while (isCons(forms)) {
@@ -1834,8 +1834,9 @@ function createLisp(lispOpts = {}) {
         }
         --lift;
       }
-      if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
+      if (args !== NIL) {
         jsArgs.push(args);
+      }
       return form.apply(scope, jsArgs);  // ??? scope[fn](...jsArgs);
     }
     if (isCons(form)) {
