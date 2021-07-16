@@ -928,9 +928,9 @@ function createLisp(lispOpts = {}) {
   // (load fname noeval-flag)
   //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
   defineGlobalSymbol("load", load);
-  function load(path, noEval) {
+  function load(path, ...rest) {
     let scope = this, result = NIL, last;
-    noEval = _bool(noEval);
+    let noEval = rest.length > 0 &&_bool(rest[0]);
     let fileContent;
     try {
       if (!readFile) throw new EvalError("No file reader defined");
