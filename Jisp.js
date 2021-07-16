@@ -964,10 +964,9 @@ function createLisp(lispOpts = {}) {
   }
 
   defineGlobalSymbol("append", append);
-  function append(lists) {
+  function append(...lists) {
     let res = NIL, last;
-    while (isCons(lists)) {
-      let list = lists[CAR];
+    for (let list of lists) {
       if (list === NIL || isCons(list)) {
         // Could handle as iterable, but faster not to
         while (isCons(list)) {
@@ -980,7 +979,6 @@ function createLisp(lispOpts = {}) {
           if (last) last = last[CDR] = cons(element, NIL);
           else res = last = cons(element, NIL);
       }
-      lists = lists[CDR];
     }
     return res;
   }
