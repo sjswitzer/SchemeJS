@@ -1973,16 +1973,41 @@ function SchemeJS(lispOpts = {}) {
         }
         if (obj[PAIR]) {
           let objCar = obj[CAR];
-          if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM) && isCons(obj[CDR])) {
-            // Specal treatment of lambda
+          if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM || objCar == CLOSURE_ATOM)
+                && isCons(obj[CDR])) {
+            // Specal treatment of lambdas and closures with curry notation
+            if (objCar == CLOSURE_ATOM) {
+              if (isCons(obj[CDR][CDR])) {
+                let params = obj[CDR][CDR][CAR];
+                if (typeof params === 'symbol') {
+                  put("(");
+                  indent += indentMore;
+                  sep = "";
+                  toString(objCar, maxDepth);  // %%closure
+                  sep = " ";
+                  toString(obj[CDR][CAR], maxDepth);  // scope
+                  sep = " ";
+                  toString(params, maxDepth);  // actually the atom
+                  sep = ""; put(".");
+                  toString(obj[CDR][CDR][CDR], maxDepth);  // the form
+                  sep = ""; put(")");
+                  indent = saveIndent;
+                  return
+                }
+              }
+            }
             let str = "(", params = obj[CDR][CAR], forms = obj[CDR][CDR];
             if (objCar === LAMBDA_ATOM) str += lambdaStr;
             if (objCar === SLAMBDA_ATOM) str += slambdaStr;
             if (typeof params === 'symbol') {  // curry notation
               str += `${params.description}.`;
               put(str);
+              indent += indentMore;
               toString(forms, maxDepth);
-              return put(")")
+              sep = "";
+              put(")");
+              indent = saveIndent;
+              return;
             }
           }
           put("(");
