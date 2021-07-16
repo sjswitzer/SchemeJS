@@ -180,16 +180,11 @@ function SchemeJS(lispOpts = {}) {
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
     if (typeof value === 'function') {
-      let fnInfo = analyzeJSFunction(value);
-      let lift = MAX_INTEGER;
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
-      if (evalCount !== MAX_INTEGER) {
-        lift = evalCount;
-      } else {
-        if (!fnInfo.native && !fnInfo.restParam)
-          lift = fnInfo.params.length;
-      }
-      if (lift !== MAX_INTEGER && lift >= 0xff) throw new LogicError("Too big a lift");
+      let fnInfo = analyzeJSFunction(value);
+      let lift = fnInfo.params.length;
+      if (lift >= 0xff) throw new LogicError("Too big a lift");
+      if (fnInfo.native) lift = MAX_INTEGER;
       // Encoding chosen so that small values mean eval everything and lift that many.
       lift = (~evalCount << 8) | lift&0xff;
       value[LIFT_ARGS] = lift;
@@ -378,7 +373,7 @@ function SchemeJS(lispOpts = {}) {
     if (typeof value === 'number')
       name = `*${name.toLowerCase()}*`;
     // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
-    if (typeof value === 'number' || typeof value === 'function')
+    if (typeof value === 'function')
       defineGlobalSymbol(name, value);
   }
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
@@ -499,20 +494,13 @@ function SchemeJS(lispOpts = {}) {
   //
   // Variable args definitions
   //
-  defineGlobalSymbol("+", (...args) => {
-    let a = 0, first = true;
-    for (let b of args) {
-      if (first) {
-        first = false;
-        if (typeof b === 'bigint')
-          a = 0n;
-        else if (typeof b === 'string')
-          a = "";
-      }
+  defineGlobalSymbol("+", add, "add");
+  function add(a, b, ...rest) {
+    a += b;
+    for (b of rest)
       a += b;
-    }
     return a;
-  }, "add");
+  }
 
   defineGlobalSymbol("-", (a, ...rest) => {
     if (rest.length === 0) return -a;
@@ -542,8 +530,8 @@ function SchemeJS(lispOpts = {}) {
   }, "/");
 
   queueTests(function() {
-    EXPECT(` (+) `, 0);
-    EXPECT(` (+ 1) `, 1);
+    EXPECT(` (+) `, NaN);
+    EXPECT(` (+ 1) `, isClosure);
     EXPECT(` (+ 1 2) `, 3);
     EXPECT(` (+ 1 2 3) `, 6);
     EXPECT(` (+ 1n 2n) `, 3n);
@@ -1814,40 +1802,29 @@ function SchemeJS(lispOpts = {}) {
       let evalCount = ~lift >> 7 >>> 1;
       lift = lift << 24 >> 23 >>> 1;
       args = evalArgs(args, scope, evalCount);
-      let jsArgs = [], realArgCount = 0;
-      while (lift > 0) {
-        // Promote "lift" arguments to JS arguments, filling with NIL
+      let jsArgs = [];
+      for (let i = 0; i < evalCount; ++i) {
         if (isCons(args)) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
-          realArgCount += 1;
         } else { 
-          if (lift > 0 && lift < 0xff && realArgCount > 0) {
+          if (lift !== MAX_INTEGER && i < lift) {
             // Partial application of built-in functions
-            let pnum = lift-realArgCount+1, paramList = NIL;
-            while (pnum > 0)
-              paramList = cons(Atom(`p${(pnum--)+1}`), paramList);
+            let paramList = NIL;
+            for (let pnum = lift; pnum > i; --pnum)
+              paramList = cons(Atom(`p${(pnum)}`), paramList);
             let argList = paramList;
-            for (let i = realArgCount; i > 0; --i)
-              argList = cons(jsArgs[i-1], argList);
+            for (let anum = i; anum > 0; --anum)
+              argList = cons(jsArgs[anum-1], argList);
             let forms = cons(cons(fn, argList), NIL);
             let closure = cons(CLOSURE_ATOM, cons(scope, cons(paramList, forms)));
             return closure;
           }
-          /**/
           break;
-          /*/
-          // don't let cons, etc, be seeing any undefined parmaters
-          if (lift > 0xff) // but not indefinitely many of them!
-            break;
-          jsArgs.push(NIL);
-          /**/
         }
-        --lift;
       }
-      if (args !== NIL) {
+      if (evalCount !== MAX_INTEGER)
         jsArgs.push(args);
-      }
       return form.apply(scope, jsArgs);  // ??? scope[fn](...jsArgs);
     }
     if (isCons(form)) {
