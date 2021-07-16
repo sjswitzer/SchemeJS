@@ -297,14 +297,6 @@ function SchemeJS(lispOpts = {}) {
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
 
-  exportDefinition("list", list);
-  function list(...elements) {  // easy list builder
-    let val = NIL;
-    for (let i = elements.length; i > 0; --i)
-      val = cons(elements[i-1], val);
-    return val;
-  }
-
   const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted[CAR], { evalArgs: 0 }, "'");
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
@@ -502,32 +494,29 @@ function SchemeJS(lispOpts = {}) {
     return a;
   }
 
-  defineGlobalSymbol("-", (a, ...rest) => {
+  defineGlobalSymbol("-", sub, "sub");
+  function sub(a, ...rest) {
     if (rest.length === 0) return -a;
     for (let b of rest)
       a -= b;
     return a;
-  }, "sub");
+  }
 
-  defineGlobalSymbol("*", (...args) => {
-    let a = 1, first = true;
-    for (let b of args) {
-      if (first) {
-        first = false;
-        if (typeof b === 'bigint')
-          a = 1n;
-      }
+  defineGlobalSymbol("*", mul, "mul");
+  function mul(a, b, ...rest) {
+    a *= b;
+    for (let b of rest)
       a *= b;
-    }
     return a;
-  }, "mul");
+  }
 
-  defineGlobalSymbol('/', (a, ...rest) => {
-    if (rest.length === 0) return 1/a;  // XXX ???
+  defineGlobalSymbol('/', div, "div");
+  function div(a, ...rest) {
+    if (rest.length === 0) return 1/a;
     for (let b of rest)
       a /= b;
     return a;
-  }, "/");
+  }
 
   queueTests(function() {
     EXPECT(` (+) `, NaN);
@@ -540,8 +529,8 @@ function SchemeJS(lispOpts = {}) {
     EXPECT(` (- 3) `, -3);
     EXPECT(` (- 3n) `, -3n);
     EXPECT(` (- 100 2 5 10) `, 83);
-    EXPECT(` (*) `, 1);
-    EXPECT(` (* 1) `, 1);
+    EXPECT(` (*) `, NaN);
+    EXPECT(` (* 1) `, isClosure);
     EXPECT(` (* 1 2) `, 2);
     EXPECT(` (* 1 2 3) `, 6);
     EXPECT(` (* 1 2 3 4) `, 24);
@@ -555,38 +544,41 @@ function SchemeJS(lispOpts = {}) {
     EXPECT(' (/ 100000 10 10 10) ', 100);
  });
 
-  defineGlobalSymbol("&", (...args) => {
-    let a = ~0;
-    for (let b of args)
+  defineGlobalSymbol("&", bit_and, "bit-and");
+  function bit_and(a, b, ...rest) {
+    a &= b;
+    for (b of rest)
       a &= b;
     return a;
-  }, "bit-and");
+  }
 
-  defineGlobalSymbol("|", (...args) => {
-    let a = 0;
-    for (let b of args)
+  defineGlobalSymbol("|", bit_or, "bit-or");
+  function bit_or(a, b, ...rest) {
+    a |= b;
+    for (let b of rest)
       a |= b;
     return a;
-  }, "bit-or");
+  }
 
-  defineGlobalSymbol("^", (...args) => {
-    let a = 0;
-    for (let b of args)
+  defineGlobalSymbol("^", bit_xor, "bit-xor");
+  function bit_xor(a, b, ...rest) {
+    a ^= b;
+    for (let b of rest)
       a ^= b;
     return a;
-  }, "bit-xor");
+  }
 
   queueTests(function() {
-    EXPECT(` (&) `, ~0);
-    EXPECT(` (& 76134) `, 76134);
+    EXPECT(` (&) `, 0);
+    EXPECT(` (& 76134) `, isClosure);
     EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
     EXPECT(` (& 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 & 0b1110101011 & 0b11110111101111);
     EXPECT(` (|) `, 0);
-    EXPECT(` (| 76134) `, 76134);
+    EXPECT(` (| 76134) `, isClosure);
     EXPECT(` (| 0b1001101011 0b1110101011) `, 0b1001101011 | 0b1110101011);
     EXPECT(` (| 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 | 0b1110101011 | 0b11110111101111);
     EXPECT(` (^) `, 0);
-    EXPECT(` (^ 76134) `, 76134);
+    EXPECT(` (^ 76134) `, isClosure);
     EXPECT(` (^ 0b1001101011 0b1110101011) `, 0b1001101011 ^ 0b1110101011);
     EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
   });
@@ -716,7 +708,7 @@ function SchemeJS(lispOpts = {}) {
     EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, EvalError);
     EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, EvalError);
     EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (==) `, true); // No good reason for this but it is what it is
+    EXPECT(` (==) `, false);
     EXPECT(` (== 5) `, isClosure);
     EXPECT(` (== 5 3) `, false);
     EXPECT(` (== 3 5) `, false);
@@ -725,7 +717,7 @@ function SchemeJS(lispOpts = {}) {
     EXPECT(` (== 3 3 3 3 4 3) `, false); // not all equal
     EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
     EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (!=) `, false);
+    EXPECT(` (!=) `, true);
     EXPECT(` (!= 5) `, isClosure);
     EXPECT(` (!= 5 3) `, true);
     EXPECT(` (!= 3 5) `, true);
@@ -742,34 +734,37 @@ function SchemeJS(lispOpts = {}) {
     EXPECT(` (equal? '${list1} '${list2}) `, false);
   });
 
-  defineGlobalSymbol("max", (val, ...rest) => {
-    for (let b of rest)
-      if (b > val)
-        val = b;
+  defineGlobalSymbol("max", max);
+  function max(a, b, ...rest) {
+    let val = a;
+    if (val < b) val = b;
+    for (b of rest)
+      if (val < b) val = b;
     return val;
-  });
+  }
 
-  defineGlobalSymbol("min", (val, ...rest) => {
-    for (let b of rest)
-      if (b < val)
-        val = b;
+  defineGlobalSymbol("min", min);
+  function min(a, b, ...rest) {
+    let val = a;
+    if (val > b) val = b;
+    for (b of rest)
+      if (val > b) val = b;
     return val;
-  });
+  }
 
   queueTests(function() {
     EXPECT(` (max) `, undefined);
-    EXPECT(` (max 5) `, 5);
+    EXPECT(` (max 5) `, isClosure);
     EXPECT(` (max 3 7 9 2 4) `, 9);
     EXPECT(` (min) `, undefined);
-    EXPECT(` (min 5) `, 5);
+    EXPECT(` (min 5) `, isClosure);
     EXPECT(` (min 3 7 9 2 4) `, 2);
   });
 
  // logical & conditional
 
-  defineGlobalSymbol("&&", and, { evalArgs: 0 }, "and");
-  function and(forms) {
-    let val = true;
+  defineGlobalSymbol("&&", and, { evalArgs: 1 }, "and");
+  function and(val, forms) {
     while (isCons(forms)) {
       val = _eval(forms[CAR], this);
       if (!_bool(val)) return val;
@@ -778,9 +773,8 @@ function SchemeJS(lispOpts = {}) {
     return val;
   }
 
-  defineGlobalSymbol("||", or, { evalArgs: 0 }, "or");
-  function or(forms) {
-    let val = false;
+  defineGlobalSymbol("||", or, { evalArgs: 1 }, "or");
+  function or(val, forms) {
     while (isCons(forms)) {
       val = _eval(forms[CAR], this);
       if (_bool(val)) return val;
@@ -834,9 +828,8 @@ function SchemeJS(lispOpts = {}) {
   });
 
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", begin, { evalArgs: 0 });
-  function begin(forms) {
-    let res = NIL;
+  defineGlobalSymbol("begin", begin, { evalArgs: 1 });
+  function begin(res, forms) {
     while (isCons(forms)) {
       res = _eval(forms[CAR], this);
       forms = forms[CDR];
@@ -845,9 +838,9 @@ function SchemeJS(lispOpts = {}) {
   }
 
   // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", prog1, { evalArgs: 0 });
-  function prog1(forms) {
-    let res = NIL, first = true;
+  defineGlobalSymbol("prog1", prog1, { evalArgs: 1 });
+  function prog1(res, forms) {
+    let first = true;
     while (isCons(forms)) {
       let val = _eval(forms[CAR], this);
       if (first)
@@ -1075,12 +1068,13 @@ function SchemeJS(lispOpts = {}) {
     EXPECT(` (length "abcd") `, 4);
   });
 
-  defineGlobalSymbol("list", (...args) => {
-    let res = NIL;
-    for (let i = args.length; i > 0; --i)
-      res = cons(args[i-1], res);
-    return res;
-  });
+  exportDefinition("list", list);
+  function list(...elements) {  // easy list builder
+    let val = NIL;
+    for (let i = elements.length; i > 0; --i)
+      val = cons(elements[i-1], val);
+    return val;
+  }
 
   defineGlobalSymbol("reverse", reverse);
   function reverse(list) {
@@ -1617,6 +1611,7 @@ function SchemeJS(lispOpts = {}) {
   // (\\ param . form) -- Curry notation
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
   function special_lambda(body) {
+    // XXX this doesn't seem right
     let scope = this;
     let closure = args => _apply(cons(SLAMBDA_ATOM, body), args, scope);
     let lift = 0, evalCount = 0;
@@ -1626,8 +1621,9 @@ function SchemeJS(lispOpts = {}) {
 
   const isClosure = form => isCons(form) && car(form) === CLOSURE_ATOM;
   defineGlobalSymbol("closure?", isClosure);
+
   //
-  // try/catch/filnally. Just a sketch for now.
+  // try/catch/filnally.
   //
   class LispThrow extends LispError {
     constructor(tag, value, msg) {
