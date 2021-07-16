@@ -15,17 +15,17 @@
 // Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design.
 //
-function SchemeJS(lispOpts = {}) {
-  let readFile = lispOpts.readFile;
-  let _reportError = lispOpts.reportError = error => console.log(error); // Don't call this one
-  let reportLispError = lispOpts.reportLispError ?? _reportError; // Call these instead
-  let reportSystemError = lispOpts.reportError ?? _reportError;
-  let reportLoadResult = lispOpts.reportLoadResult ?? (result => console.log(_string(result)));
-  let unitTest = lispOpts.unitTest;
-  let reportTestFailed = lispOpts.reportTestFailure ?? testFailed;
-  let reportTestSucceeded = lispOpts.reportTestSuccess ?? testSucceeded;
-  let lambdaStr = lispOpts.lambdaStr ?? "\\";
-  let slambdaStr = lispOpts.lsambdaStr ?? "\\\\";
+function SchemeJS(schemeOpts = {}) {
+  let readFile = schemeOpts.readFile;
+  let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
+  let reportLispError = schemeOpts.reportLispError ?? _reportError; // Call these instead
+  let reportSystemError = schemeOpts.reportError ?? _reportError;
+  let reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(_string(result)));
+  let unitTest = schemeOpts.unitTest;
+  let reportTestFailed = schemeOpts.reportTestFailure ?? testFailed;
+  let reportTestSucceeded = schemeOpts.reportTestSuccess ?? testSucceeded;
+  let lambdaStr = schemeOpts.lambdaStr ?? "\\";
+  let slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
 
   // Creating a Cons should be as cheap as possible, so no subclassing
   // or calls to super. But I want people to be able to define their
@@ -926,7 +926,7 @@ function SchemeJS(lispOpts = {}) {
     let tokenGenerator = lispTokenGenerator(fileContent);
     for(;;) {
       try {
-        let expr = parseSExpr(tokenGenerator, { lispOpts });
+        let expr = parseSExpr(tokenGenerator, { lispOpts: schemeOpts });
         if (!expr) break;
         if (noEval) {
           if (last) last = last[CDR] = cons(expr, NIL);
@@ -1905,7 +1905,7 @@ function SchemeJS(lispOpts = {}) {
   defineGlobalSymbol("to-string", to_string);
   function to_string(a) { return _string(a) } // Hides the innards from String(x)
   function _string(obj, opts = {}) {
-    opts = { ...lispOpts, ...opts };
+    opts = { ...schemeOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 80;
     let wrapChar = opts.wrapChar ?? "\n";
     let maxDepth = opts.maxDepth ?? 100;
@@ -2271,7 +2271,7 @@ function SchemeJS(lispOpts = {}) {
 
   defineGlobalSymbol("parse", a => parseSExpr(a));
   function parseSExpr(tokenGenerator, opts = {}) {
-    opts = { ...lispOpts, ...opts };
+    opts = { ...schemeOpts, ...opts };
     let replHints = opts.replHints ?? {};
     let prompt = opts.prompt ?? "SchemeJS > ";
     let promptMore = opts.promptMore = "  ";
@@ -2936,11 +2936,11 @@ function SchemeJS(lispOpts = {}) {
   defineGlobalSymbol("REPL", REPL);
   function REPL(readline, opts = {}) {
     let scope = this;
-    opts = { ...lispOpts, ...opts };
+    opts = { ...schemeOpts, ...opts };
     // readline(prompt) => str | nullish
     let name = opts.name ?? "SchemeJS";
     let prompt = opts.prompt ?? name + " > ";
-    let print = opts.print ?? (x => console.log(name + ":", _string(x)));
+    let print = opts.print ?? (x => console.log(_string(x)));
     let reportLispError = opts.reportLispError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
     let replHints = { prompt };
