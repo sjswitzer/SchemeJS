@@ -1169,16 +1169,14 @@ function createLisp(lispOpts = {}) {
 
   queueTests(function(){
     EXPECT(` (memq) `, NIL);
-    EXPECT(` (memq 'a) `, NIL);
+    EXPECT(` (memq 'a) `, isClosure);
     EXPECT(` (memq 'a 1) `, NIL);
     EXPECT(` (memq 'c '(a b c d e f g)) `, ` '(c d e f g) `);
     EXPECT(` (memq 'z '(a b c d e f g)) `, NIL);
     EXPECT_ERROR(` (nth) `, EvalError);
-    EXPECT_ERROR(` (nth 'a) `, EvalError);
-    EXPECT_ERROR(` (nth 1.5) `, EvalError);
-    EXPECT(` (nth 0) `, NIL);
-    EXPECT(` (nth 100) `, NIL);
+    EXPECT(` (nth 'a) `, isClosure);
     EXPECT(` (nth 4 '(a b c d e f g)) `, ` 'e `);
+    EXPECT_ERROR(` (nth 4.5 '(a b c d e f g)) `, EvalError);
     EXPECT(` (nth 4 '[a b c d e f g]) `, ` 'e `);
     EXPECT(` (nth 4 "abcde") `, ` "e" `);
     EXPECT(` (nth 0 '(a b c d e f g)) `, ` 'a `);
