@@ -802,7 +802,13 @@ function createLisp(lispOpts = {}) {
 
   // XXX TODO: What happens if more that 3 args?
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelseHook }, "if");
-  function ifelse(p, t, f) { return _bool(p) ? _eval(t, this) : _eval(f, this); }
+  function ifelse(p, forms) {
+    if (!isCons(forms)) return undefined;
+    if (_bool(p)) return _eval(forms[CAR], this);
+    forms = forms[CDR];
+    if (!isCons(forms)) return undefined;
+    return _eval(forms[CAR], this);
+  }
 
   queueTests(function() {
     EXPECT(` (&&) `, true);
@@ -820,11 +826,11 @@ function createLisp(lispOpts = {}) {
     EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
     EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
     EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
-    EXPECT(` (?) `, undefined); // Why?
-    EXPECT(` (? true) `, isClosure);
-    EXPECT(` (? false) `, isClosure);
-    EXPECT(` (? true 1) `, isClosure);
-    EXPECT(` (? false 2) `, isClosure);
+    EXPECT(` (?) `, undefined); // Why not?
+    EXPECT(` (? true) `, undefined);
+    EXPECT(` (? false) `, undefined);
+    EXPECT(` (? true 1) `, 1);
+    EXPECT(` (? false 2) `, undefined);
     EXPECT(` (? true 1 2) `, 1);
     EXPECT(` (? false 1 2) `, 2);
     EXPECT(` (? true 1 2 (oops!)) `, 1);
