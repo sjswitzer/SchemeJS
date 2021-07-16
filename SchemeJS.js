@@ -170,7 +170,7 @@ function SchemeJS(lispOpts = {}) {
   // defines a symbol for the lisp environment AND exports it as an API.
   // Be careful which one you use!
   // 
-  const LIFT_ARGS = Symbol("*lisp-lift-args*");
+  const FUNCTION_DESCRIPTOR_SYMBOL = Symbol("*lisp-function-descriptor*");
   const COMPILE_HOOK = Symbol("*lisp-compile-hook*");
   const MAX_INTEGER = 2**31-1;  // Presumably allows JIT to do small-int optimizations
 
@@ -182,13 +182,16 @@ function SchemeJS(lispOpts = {}) {
     if (typeof value === 'function') {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       let fnInfo = analyzeJSFunction(value);
-      let lift = fnInfo.params.length;
-      if (evalCount !== MAX_INTEGER) lift -= 1;
-      if (lift >= 0xff) throw new LogicError("Too big a lift");
-      if (fnInfo.native) lift = MAX_INTEGER;
+      let paramCount = fnInfo.params.length;
+      // If this function doesn't evaluate all of its parameters, the last parameter
+      // recieves the unevaluated forms, so don't count that as a normal one.
+      if (evalCount !== MAX_INTEGER)
+        paramCount -= 1;
+      if (paramCount >= 0xff) throw new LogicError("Too many params");
+      if (fnInfo.native) paramCount = MAX_INTEGER;
       // Encoding chosen so that small values mean eval everything and lift that many.
-      lift = (~evalCount << 8) | lift&0xff;
-      value[LIFT_ARGS] = lift;
+      let functionDescriptor = (~evalCount << 8) | paramCount&0xff;
+      value[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
       // XXX TODO: make sure that every defn with evalArgs !== MAX_INTEGER has a compile hook.
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
     }
@@ -1606,12 +1609,7 @@ function SchemeJS(lispOpts = {}) {
   // (\\ param . form) -- Curry notation
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
   function special_lambda(body) {
-    // XXX this doesn't seem right
-    let scope = this;
-    let closure = args => _apply(cons(SLAMBDA_ATOM, body), args, scope);
-    let lift = 0, evalCount = 0;
-    closure[LIFT_ARGS] = (~evalCount << 8) | lift&0xff;
-    return closure;
+    // XXX TODO
   }
 
   const isClosure = form => isCons(form) && car(form) === CLOSURE_ATOM;
@@ -1785,14 +1783,14 @@ function SchemeJS(lispOpts = {}) {
   function _apply(form, args, scope) {
     if (typeof form === 'function') {
       let fn = form;
-      // Rename "lift"
-      // lift encoded as: (~evalCount << 8) | lift&0xff;
-      // If there's no LIFT_ARGS, the default is to eval and lift everything.
+      // The function descriptor is encoded as follows:
+      // lift encoded as: (~evalCount << 8) | paramCount&0xff;
+      // If there's no function descriptor the default is to eval and lift every argument.
       // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
-      let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
-      // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-      let evalCount = ~lift >> 7 >>> 1;
-      lift = lift << 24 >> 23 >>> 1;
+      let functionDescriptor = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
+      // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
+      let evalCount = ~functionDescriptor >> 7 >>> 1;
+      let paramCount = functionDescriptor << 24 >> 23 >>> 1;
       args = evalArgs(args, scope, evalCount);
       let jsArgs = [];
       for (let i = 0; i < evalCount; ++i) {
@@ -1800,18 +1798,18 @@ function SchemeJS(lispOpts = {}) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
         } else { 
-          if (lift !== MAX_INTEGER && i < lift) {
+          if (paramCount !== MAX_INTEGER && i < paramCount) {
             if (i < 1) {
               // We can't partially apply without any arguments, but the function wants
               // parameters anyway so we supply undefined. This will allow the
               // "forms" parameter to go int the correct parameter.
-              while (i < lift--)
+              while (i++ < paramCount)
                 jsArgs.push(undefined);
               break;
             }
             // Partial application of built-in functions
             let paramList = NIL;
-            for (let pnum = lift; pnum > i; --pnum)
+            for (let pnum = paramCount; pnum > i; --pnum)
               paramList = cons(Atom(`p${(pnum)}`), paramList);
             let argList = paramList;
             for (let anum = i; anum > 0; --anum)
@@ -2579,7 +2577,7 @@ function SchemeJS(lispOpts = {}) {
   });
       
   function compileTemplateSketch() {
-    let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
+    let lift = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
     // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
     let evalCount = ~lift >> 7 >>> 1;
     lift = lift << 24 >> 23 >>> 1;
@@ -2713,7 +2711,7 @@ function SchemeJS(lispOpts = {}) {
 
   function compileApply(fn, fnVal, args, scope, invokeScope, newTemp, indent) {
     if (typeof fn === 'function') {
-      let lift = (fn[LIFT_ARGS] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
+      let lift = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
       let evalCount = MAX_INTEGER;
       if (lift < 0) {  // This is tedious but it's got to be faster than reading a second property
         evalCount = lift >> 4;
