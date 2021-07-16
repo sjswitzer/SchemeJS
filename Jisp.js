@@ -89,18 +89,22 @@ function createLisp(lispOpts = {}) {
     },
   });
   
-  // Create a new scope with newScope(oldScope).
+  // Create a new scope with newScope(oldScope, "description").
   // A new scope's prototype is the enclosing scope.
   // This way, a scope chain is a prototype chain and resolving
   // a symbol is as simple as "scope[sym]"!
   class Scope {
     // Be careful defining methods or properties here; they
     // automatically become part of the API.
-    static toString() { return `{*scope*}`}
+    _scope_is = "global scope";
   };
 
   let GlobalScope = new Scope();
-  const newScope = scope => Object.create(scope);
+  function newScope(enclosingScope, scope_is) {
+    let scope = Object.create(enclosingScope);
+    scope._scope_is = scope_is;
+    return scope;
+  }
 
   //
   // Atoms are Symbols
@@ -638,8 +642,11 @@ function createLisp(lispOpts = {}) {
     return true;
   }
 
+  // XXX define === and !==
+
   // Sorry, "equal?"" does not get the variadic treatment at this time
-  defineGlobalSymbol("equal?", deep_eq, "equal?");
+  const equalp = (a, b) =>  deep_eq(a, b);
+  defineGlobalSymbol("equal?", equalp, "equal?");
 
   defineGlobalSymbol("!=", ne, { evalArgs: 0, lift: 0 }, "ne");
   function ne(forms) {
@@ -1236,7 +1243,7 @@ function createLisp(lispOpts = {}) {
   // still benefiting from Scopes internally.
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0, lift: 1 }, "let", "let*");
   function letrec(bindings, forms) {
-    let scope = newScope(this);
+    let scope = newScope(this, "letrec");
     while (isCons(bindings)) {
       let binding = bindings[CAR];
       if (!isCons(binding))
@@ -1399,40 +1406,88 @@ function createLisp(lispOpts = {}) {
     EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `, result => le.apply(GlobalScope, result));
   });
 
-  // For testing, mostly
-  defineGlobalSymbol("deep-eq", deep_eq, { evalArgs: 0, lift: 2 });
-  function deep_eq(a, b, maxDepth) {
+  function deep_eq(a, b, maxDepth, report) {
     if (!_bool(maxDepth)) maxDepth = 10000; // Protection from circular lists
-    if (a === b) return true;
-    // Normally NaNs are not equal to anything, including NaNs, but for
-    // the purposes of this routine they are
-    if (typeof a === 'number' && typeof b === 'number'
-        && isNaN(a) && isNaN(b)) return true;
-    if (a == null || b == null) return false; // nullish and we already know thay aren't equal
-    if (maxDepth <= 0) return false;
-    maxDepth -= 1;
+    return deep_eq(a, b, maxDepth);
+    function deep_eq(a, b, maxDepth) {
+      if (a === b)
+        return true;
+      if (typeof a !== typeof b) {
+        if (report) report.a = a, report.b = b;
+        return false;
+      }
+      // Normally NaNs are not equal to anything, including NaNs, but for
+      // the purposes of this routine they are
+      if (typeof a === 'number' && isNaN(a) && isNaN(b))
+        return true;
+      if (a == null || b == null) { // nullish and we already know thay aren't equal
+        if (report) report.a = a, report.b = b;
+        return false;
+      }
+      if (maxDepth <= 0) {
+        if (report) report.depth = true;
+        return false;
+      }
+      maxDepth -= 1;
 
-    if (isCons(a)) {
-      if (!isCons(b)) return false;
-      return deep_eq(a[CAR], b[CAR]) && deep_eq(a[CDR], b[CDR], maxDepth);
-    }
-    if (isCons(b)) return false;
-    
-    if (Array.isArray(a)) {
-      if (!Array.isArray(b)) return false;
-      if (a.length !== b.length) return false;
-      for (let i = 0; i < a.length; ++i)
-        if (!deep_eq(a[i], b[i], maxDepth)) return false;
-      return true;
-    }
-    if (Array.isArray(b)) return false;
-    
-    for (let prop of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a)))
-      if (!b.hasOwnProperty(prop)) return false;
-    for (let prop of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b)))
-      if (!a.hasOwnProperty(prop) || deep_eq(b[prop], a[prop], maxDepth)) return false;
+      if (isCons(a)) {
+        if (!isCons(b)) {
+          if (report) report.a = a, report.b = b;
+          return false;
+        }
+        return deep_eq(a[CAR], b[CAR]) && deep_eq(a[CDR], b[CDR], maxDepth);
+      }
+      if (isCons(b)) {
+        if (report) report.a = a, report.b = b;
+        return false;
+      }
+      
+      if (Array.isArray(a)) {
+        if (!Array.isArray(b) || a.length !== b.length) {
+          if (report) report.a = a, report.b = b;
+          return false;
+        }
+        for (let i = 0; i < a.length; ++i)
+          if (!deep_eq(a[i], b[i], maxDepth)) {
+            if (report) {
+              report.a = a, report.b = b, report.index = i;
+              report = undefined;  // Don't let this report get overwritten!
+            }
+            return false;
+          }
+        return true;
+      }
+      if (Array.isArray(b)) {
+        if (report) report.a = a, report.b = b;
+        return false;
+      }
+      
+      if (typeof a === 'object') {
+        for (let prop of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a)))
+          if (!b.hasOwnProperty(prop)) {
+            if (report) {
+              report.a = a, report.b = b, report.prop = prop;
+              report.aVal = a[prop], report.bVal = b[prop];
+              report = undefined;  // Don't let this report get overwritten!
+            }
+            return false;
+          }
+        for (let prop of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b)))
+          if (!(a.hasOwnProperty(prop) && deep_eq(a[prop], b[prop], maxDepth))) {
+            if (report) {
+              report.a = a, report.b = b, report.prop = prop;
+              report.aVal = a[prop], report.bVal = b[prop];
+              report.hasProp = a.hasOwnProperty(prop);
+              report = undefined;  // Don't let this report get overwritten!
+            }
+            return false;
+          }
+        return true;
+      }
 
-    return false;
+      if (report) report.a = a, report.b = b;
+      return false;
+    }
   }
 
   // SIOD compatibility checklist:
@@ -1609,7 +1664,7 @@ function createLisp(lispOpts = {}) {
     } catch (e) {
       if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
           || e instanceof typeMatch) {
-        let scope = newScope(this);
+        let scope = newScope(this, "catch");
         scope[catchVar] = e;
         while (isCons(catchForms)) {
           val = _eval(catchForms[CAR], scope);
@@ -1770,7 +1825,7 @@ function createLisp(lispOpts = {}) {
         }
         if (opSym !== SLAMBDA_ATOM)
           args = evalArgs(args, scope);
-        scope = newScope(scope);
+        scope = newScope(scope, "lambda");
         let origFormalParams = params;
         while (isCons(params)) {
           let param = params[CAR];
@@ -1856,9 +1911,9 @@ function createLisp(lispOpts = {}) {
       if (obj === null) return put( "null");   // remember: typeof null === 'object'!
       let objType = typeof obj;
       let saveIndent = indent;
-      // XXX special printing for native functions
+      // XXX special printing for functions?
       if (objType === 'object') {
-        if (obj instanceof Scope) return put(`{*scope*}`);
+        if (obj instanceof Scope) return put(`{*scope* ${obj._scope_is}}`);
         if (obj[PAIR]) {
           put("(");
           indent += indentMore;
@@ -2346,49 +2401,33 @@ function createLisp(lispOpts = {}) {
     // But it's conservative in that it doesn't recognize any functions that
     // don't end in a particular sequence of tokens or that use "return" more than once.
     let str = fn.toString(), pos = 0, token = "";
-    let name, params = [], restParam, value, body, native;
+    let name, params = [], restParam, value, body, native = false;
     parse: {
       if (nextToken() === 'function') {
         if (nextToken() !== '(') {
           name = token;
           nextToken();
         }
-        if (token !== '(')
-          return {};
-        for (;;) {
-          if (nextToken() === "...") {
+        if (token !== '(') break parse;
+        while (nextToken() && token !==')') {
+          if (token === ",") nextToken();
+          if (token === "...")
             restParam = nextToken();
-            nextToken();
-          } else {
+          else
             params.push(token);
-            nextToken();
-          }
-          if (token === ')') {
-            nextToken();
-            break;
-          }
-          if (token !== ",")
-            return {};
-          nextToken();
         }
-        if (token === '{') {
+      if (nextToken() === '{') {
           while (WSNL[str[pos]]) ++pos;
-          let bodyPos = pos, returnPos = bodyPos, firstTok = true;;
-          while (token) {
-            if (firstTok && token === '[') {
+          let bodyPos = pos, returnPos = pos, nTok = 0;
+          while (nextToken() && token !== 'return') {
+            returnPos = pos;
+            if (nTok++ === 0 && token === '[') {
               if (nextToken() === 'native' && nextToken() === 'code' &&
-                  nextToken() === ']' && nextToken() === '}' && nextToken() === undefined) {
+                  nextToken() === ']' && nextToken() === '}' && nextToken() === '') {
                 native = true;
                 break parse;
               }
             }
-            if (token === 'return') {
-              returnPos = pos;
-              nextToken();
-              break;
-            }
-            nextToken();
-            firstTok = false;
           }
           if (token === "return") {
             // If there's a return, it has to be followed by a variable,
@@ -2397,49 +2436,36 @@ function createLisp(lispOpts = {}) {
             // prior to the return.
             let possibleValue = nextToken();
             while (nextToken() === ';');
-            if (token !== '}')
-              return {};
-            nextToken();
-            if (token !== "") break parse;
+            if (token !== '}') break parse;
+            if (nextToken() !== '') break parse;
             value = possibleValue;
             body = str.substring(bodyPos, returnPos);
           }
         }
       } else { // Arrow functions
         if (token === '(') {
-          nextToken();
-          for (;;) {
-            if (token === "...") {
+          while (nextToken() && token !==')') {
+            if (token === ",") nextToken();
+            if (token === "...")
               restParam = nextToken();
-              nextToken();
-            } else {
+            else
               params.push(token);
-              nextToken();
-            }
-            if (token === ')') {
-              nextToken();
-              break;
-            }
-            if (token !== ",") break parse;
-            nextToken();
           }
         } else {
           params.push(token);
-          nextToken();
         }
-        if (!(token === '=>'))
-          return {};
+        if (nextToken() !== '=>') break parse;
         while (WSNL[str[pos]]) ++pos;
         value = str.substr(pos);
       }
     }
-    return { functionName: name, params, value, body, restParam, native: true };
+    return { name, params, restParam, value, body, native };
 
     function nextToken() {
       // Super janky tokenizer.
       // Most of what it returns is garbage, but it returns anything we actually care about.
       // The assumption is that what JS returns is well-formed, so it takes a lot of liberties.
-      if (pos >= str.length) return token = "";
+      if (pos >= str.length) return token = '';
       let ch = str[pos]; // ch is always str[pos]
       while (WSNL[ch]) ch = str[++pos];
       if (JSIDENT[ch]) {
@@ -2469,37 +2495,47 @@ function createLisp(lispOpts = {}) {
         ++pos;
         return token = 'quoted';
       }
-      return token = str[pos++];
+      return token = str[pos++] ?? '';
     }
   }
 
-  let selfTest = lispOpts.selfTest;  // TODO: convert to unit tests
-  if (selfTest) {
-    function testAnalyzeJSFunction(fn) {
-      let res = analyzeJSFunction(fn);
-      console.log("TEST analyzeJSFunction", fn, res);
-    }
-    testAnalyzeJSFunction(x => x * x)
-    testAnalyzeJSFunction((x) => x * x);
-    testAnalyzeJSFunction((x, y) => x * y);
-    testAnalyzeJSFunction((x, ...y) => x * y);
-    testAnalyzeJSFunction((x, y, ...z) => x * y);
-    testAnalyzeJSFunction((...x) => x * x);
-    testAnalyzeJSFunction(function (a) { a = 2 * a; return a; });
-    testAnalyzeJSFunction(function (a, b, c) { a = 2 * a; return a; });
-    testAnalyzeJSFunction(function someFunction(a) { a = 2 * a; return a; });
-    testAnalyzeJSFunction(function someFunction(a, b, c) { a = 2 * a; return a; });
-    testAnalyzeJSFunction(function (a, ...rest) { return a; });
-    testAnalyzeJSFunction(function (a, b, c, ...rest) { return a; });
-    testAnalyzeJSFunction(function someFunction(a, ...rest) { return a; });
-    testAnalyzeJSFunction(function someFunction(a, ...rest) { return a; });
-    testAnalyzeJSFunction(function someFunction(a, b, c, ...rest) { return a; });
-    testAnalyzeJSFunction(function someFunction(...rest) { return a; });
-    testAnalyzeJSFunction(function (...rest) { return a; });
-  }
-
+  queueTests(function(){
+    const testAnalyze = (fn) => () => analyzeJSFunction(fn);
+    EXPECT(testAnalyze(x => x * x),
+      { name: undefined, params: ['x'], restParam: undefined, value: 'x * x', body: undefined, native: false });
+    EXPECT(testAnalyze((x) => x * x),
+      { name: undefined, params: ['x'], restParam: undefined, value: 'x * x', body: undefined, native: false });
+    EXPECT(testAnalyze((x, y) => x * y),
+      { name: undefined, params: ['x', 'y'], restParam: undefined, value: 'x * y', body: undefined, native: false });
+    EXPECT(testAnalyze((x, ...y) => x * y),
+      { name: undefined, params: ['x'], restParam: 'y', value: 'x * y', body: undefined, native: false });
+    EXPECT(testAnalyze((x, y, ...z) => x * y),
+      { name: undefined, params: ['x','y'], restParam: 'z', value: 'x * y', body: undefined, native: false });
+    EXPECT(testAnalyze((...x) => x * x),
+      { name: undefined, params: [], restParam: 'x', value: 'x * x', body:undefined, native: false });
+    EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
+      { name: undefined, params: ['a'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
+    EXPECT(testAnalyze(function (a, b, c) { a = 2 * a; return a; }),
+      { name: undefined, params: ['a','b','c'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
+    EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
+      { name: 'fn', params: ['a'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
+    EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * a; return a; }),
+      { name: 'fn', params: ['a','b','c'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
+    EXPECT(testAnalyze(function (a, ...rest) { return a; }),
+      { name: undefined, params: ['a'], restParam: 'rest', value: 'a', body: '', native: false });
+    EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
+      { name: undefined, params: ['a','b','c'], restParam: 'rest', value: 'a', body: '', native: false });
+    EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
+      { name: 'foo', params: ['a'], restParam: 'rest', value: 'a', body: '', native: false });
+    EXPECT(testAnalyze(function bar(a, b, c, ...rest) { return a; }),
+      { name: 'bar', params: ['a','b','c'], restParam: 'rest', value: 'a', body: '', native: false });
+    EXPECT(testAnalyze(function baz(...rest) { return a; }),
+      { name: 'baz', params: [], restParam: 'rest', value: 'a', body: '', native: false });
+    EXPECT(testAnalyze(function (...rest) { return a; }),
+      { name: undefined, params: [], restParam: 'rest', value: 'a', body: '', native: false });
+  });
       
- function compileTemplateSketch() {
+  function compileTemplateSketch() {
     let lift = (fn[LIFT_ARGS] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
     // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
     let evalCount = ~lift >> 7 >>> 1;
@@ -2767,6 +2803,7 @@ function createLisp(lispOpts = {}) {
     return newName;
   }
 
+  let selfTest = lispOpts.selfTest;  // TODO: convert to unit tests
   if (selfTest) {
     toJSname("aNormal_name0234");
     toJSname("aname%with&/specialChars?");
@@ -2870,8 +2907,8 @@ function createLisp(lispOpts = {}) {
   }
   TestFailureError.prototype.name = "TestFailureError";
 
-  function testFailed(message, test, result, expected) {
-    console.info("FAILED", test, result, expected);
+  function testFailed(message, test, result, expected, report) {
+    console.info("FAILED", test, result, expected, report);
     throw new TestFailureError(message, test, result, expected);
   }
 
@@ -2885,7 +2922,7 @@ function createLisp(lispOpts = {}) {
     // The idea here is to let the following series of steps to share a scope
     // Otherwise, each test gets a fresh scope.
     testScopeStack.push(GlobalScope);
-    GlobalScope = newScope(GlobalScope);
+    GlobalScope = newScope(GlobalScope, "test global scope");
   }
 
   function RESTORESCOPE() {
@@ -2901,14 +2938,14 @@ function createLisp(lispOpts = {}) {
       pushed = true;
     }
     try {
-      let result, ok;
+      let result, ok, report = {};
       try {
         if (typeof test === 'string') {
         result = GlobalScope.evalString(test);
           if (typeof expected === 'string')
             expected = GlobalScope.evalString(expected);
         } else {
-          test.call(GlobalScope);
+          result = test.call(GlobalScope);
         }
       } catch (error) {
         reportTestFailed("exception", test, error, expected);
@@ -2917,9 +2954,9 @@ function createLisp(lispOpts = {}) {
       if (typeof expected === 'function')
         ok = expected.call(GlobalScope, result);
       else
-        ok = deep_eq(result, expected);
+        ok = deep_eq(result, expected, 100, report);
       if (!ok)
-        reportTestFailed("got", test, result, expected);
+        reportTestFailed("got", test, result, expected, report);
       else
         reportTestSucceeded(test, result, expected);
     } finally {
@@ -2937,7 +2974,7 @@ function createLisp(lispOpts = {}) {
       if (typeof test === 'string') {
         result = GlobalScope.evalString(test);
       } else {
-        test.call(GlobalScope);
+        result = test.call(GlobalScope);
       }
     } catch (error) {
       if (typeof test === 'string' && typeof expected === 'string')
@@ -2985,7 +3022,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
       }
     } catch(e) {
       console.info("Can't open termnal", e);
-      createLisp({ unitTest: false, selfTest: true });  // XXX silly debugging hack
+      createLisp({ unitTest: true, selfTest: true });  // XXX silly debugging hack
     }
     if (inputFd !== undefined) {
       console.log(`Jisp 1.1 REPL. Type "." to exit.`);
