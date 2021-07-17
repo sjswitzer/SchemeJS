@@ -1283,8 +1283,8 @@ function SchemeJS(schemeOpts = {}) {
 
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
-  //      (y 20))
-  //      (+ x y))
+  //           (y 20))
+  //       (+ x y))
   // Because of this implementation uses a scope chain instead
   // of an environment, each kind of let is as piwerful as "letrec".
   //
@@ -1321,6 +1321,12 @@ function SchemeJS(schemeOpts = {}) {
     }
     return res;
   }
+
+  queueTests(function(){
+    EXPECT(` (let ((x 10)
+                   (y 20))
+                (+ x y)) `, 30);
+  });
 
   // (qsort list predicate-fcn access-fcn)
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
