@@ -57,19 +57,20 @@ function SchemeJS(schemeOpts = {}) {
     toString() {
       return _string(this, { maxDepth: 4 });
     }
-    *[Symbol.iterator]() { return { next: nextCons, _current: this } }
+    [Symbol.iterator]() {
+      let current = this;
+      return {
+        next() {
+          if (!isCons(current)) return { done: true };
+          let value = current[CAR];
+          current = current[CDR];
+          return { done: false, value };
+        }
+      }
+    }
   }
   Cons.prototype[PAIR] = true;
-
-  function nextCons() {  // Cons iterator function
-    let current = this._current, done = !isCons(current), value;
-    if (!done) {
-      this._current = current[CDR];
-      value = current[CAR];
-    }
-    return { done, value };
-  }
-
+  
   // Hide the nil class because there's never any reason to
   // reference it or instantiate it it more than once. Having it visible
   // just invites errors. But it's good to have a distinct class for NIL
@@ -77,7 +78,7 @@ function SchemeJS(schemeOpts = {}) {
   // and provides a way to trap attempts to get or set [CAR] and [CDR].
   const NIL = new ((_ => {
     class nil {
-      *[Symbol.iterator]() { return { next: () => ({ done: true, value: undefined }) } }
+      [Symbol.iterator]() { return { next: () => { done: true } } }
     }
     return nil;
   })());
@@ -255,33 +256,6 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("TypeError", TypeError);
   defineGlobalSymbol("EvalError", EvalError);
 
-  // Just a sketch of lazy evaluation.
-  class LazyCarCons {
-    // User inplements "get car()" in a subclass and ideally seals the object
-    cdr;
-    constructor(cdr) {
-      this[CDR] = cdr;
-    }
-    toString() {
-      return _string(this);
-    }
-    *[Symbol.iterator]() { return { next: nextCons, _current: this } }
-  }
-  LazyCarCons.prototype[PAIR] = true;
-
-  class LazyCdrCons {
-    // User inplements "get cdr()" in a subclass and ideally seals the object
-    car;
-    constructor(car) {
-      this[CAR] = car;
-    }
-    toString() {
-      return _string(this);
-    }
-    *[Symbol.iterator]() { return { next: nextCons, _current: this } }
-  }
-  LazyCdrCons.prototype[PAIR] = true;
-
   class IteratorList {
     _carVal; _cdrVal; _iterator; _haveCar = false;
     constructor(iterator) {
@@ -334,9 +308,6 @@ function SchemeJS(schemeOpts = {}) {
       set: function(){ throw new EvalError("set cdr of lazy list"); },
     },
   });
-  
-
-
 
   //
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
