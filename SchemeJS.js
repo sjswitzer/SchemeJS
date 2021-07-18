@@ -339,8 +339,8 @@ function SchemeJS(schemeOpts = {}) {
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
 
-  const quote = quoted => quoted[CAR];  // TODO: move handling of quote into eval
   const QUOTE_ATOM = defineGlobalSymbol("quote", quote, { evalArgs: 0 }, "'");
+  function quote(quoted) { return quoted[CAR] }
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
@@ -385,7 +385,7 @@ function SchemeJS(schemeOpts = {}) {
   });
 
   defineGlobalSymbol("typeof", a => typeof a);
-  defineGlobalSymbol("undefined?", a => typeof a === 'undefined');
+  defineGlobalSymbol("undefined?", a => a === undefined);
   defineGlobalSymbol("null?", a => a === NIL);  // SIOD clained it first. Maybe rethink the naming here.
   defineGlobalSymbol("jsnull?", a => a === null);
   defineGlobalSymbol("nullish?", a => a == null);
@@ -1656,8 +1656,10 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
   function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(this, body)) }
 
-  const isClosure = form => isCons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
   defineGlobalSymbol("closure?", isClosure);
+  function isClosure(form) {
+    return isCons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
+  }
 
   //
   // try/catch/filnally.
@@ -1967,8 +1969,7 @@ function SchemeJS(schemeOpts = {}) {
   // Implements "toString()" for SchemeJS objects.
   // We can't just implement toString() because it needs to work for
   // non-Object types too, but Cons.toString() calls this.
-  defineGlobalSymbol("to-string", to_string);
-  function to_string(a) { return _string(a) } // Hides the innards from String(x)
+  defineGlobalSymbol("to-string", _string);
   function _string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 80;
@@ -2013,10 +2014,10 @@ function SchemeJS(schemeOpts = {}) {
         }
         params = `(${params})`;
         if (fnDesc.native)
-          return put(`{function${name}${params} native}`);
+          return put(`{function${name}${params}}`);
         if (fnDesc.value && !fnDesc.body)
           return put(`{${params} => ${fnDesc.value}}`);
-        return put(`{function${name}${params} ...}`);
+        return put(`{function${name}${params}}`);
       }
       if (objType === 'object') {
         if (obj instanceof Scope) {
@@ -2327,7 +2328,7 @@ function SchemeJS(schemeOpts = {}) {
     yield { type: 'end' };
   }
 
-  defineGlobalSymbol("parse", a => parseSExpr(a));
+  defineGlobalSymbol("parse", parseSExpr);
   function parseSExpr(tokenGenerator, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let replHints = opts.replHints ?? {};
