@@ -1790,17 +1790,15 @@ function SchemeJS(schemeOpts = {}) {
     }
     if (isCons(expr)) {
       let fn = expr[CAR], args = expr[CDR];
-      let evalCount = MAX_INTEGER, paramCount = MAX_INTEGER;
       if (isCons(fn)) {
         let fnCar = fn[CAR];
-        if (fnCar === SLAMBDA_ATOM) {
-          evalCount = 0;
-        } else if (fnCar === LAMBDA_ATOM) {
-        } else {
+        if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
           fn = _eval(fn, scope);
-        }
       }
-      return _apply(fn, evalledArgs, scope, evalCount);
+      // Unconventionally shifting the job of evaluating the args to the _apply function
+      // because it has better visibility on the function's attributes.
+      // It won't evaluate the arguments unless passed an evalCount.
+      return _apply(fn, args, scope, MAX_INTEGER);
     }
     // Special eval for JS arrays and objects:
     //   Values that are evaluated and placed in
@@ -1833,25 +1831,33 @@ function SchemeJS(schemeOpts = {}) {
     // By default apply doesn't evaluate its args, but if evalcount is set (as it is by apply)
     // then it does.
     let paramCount = MAX_INTEGER;
-    if (typeof form === 'function') {
+    if (evalCount === MAX_INTEGER && isCons(form)) {
+      let opSym = form[CAR];
+      // Probably need to do something special here for SCLOSURE_ATOM
+      if (opSym === SLAMBDA_ATOM || opSym === SCLOSURE_ATOM) {
+        evalCount = 0;
+      }
+    } else if (typeof form === 'function') {
       let fn = form;
       // The function descriptor is encoded as: (~evalCount << 8) | paramCount&0xff;
       // If there's no function descriptor the default is to eval and lift every argument.
       // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
       let functionDescriptor = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
       // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-      if (evalCount !== 0) evalCount = ~functionDescriptor >> 7 >>> 1;
+      if (evalCount === MAX_INTEGER) evalCount = ~functionDescriptor >> 7 >>> 1;
       paramCount = functionDescriptor << 24 >> 23 >>> 1;
     }
-    let evalledArgs = NIL, last = undefined;
-    for (let i = 0; i < evalCount && isCons(args); ++i) {
-      let evalled = cons(_eval(args[CAR], scope), evalledArgs);
-      if (last) last = last[CDR] = evalled;
-      else evaledArgs = last = evalled;
-      args = args[CDR];
+    {
+      let evalledArgs = NIL, last = undefined;
+      for (let i = 0; i < evalCount && isCons(args); ++i) {
+        let evalledArgCons = cons(_eval(args[CAR], scope), evalledArgs);
+        if (last) last = last[CDR] = evalledArgCons;
+        else evalledArgs = last = evalledArgCons;
+        args = args[CDR];
+      }
+      if (last) last[CDR] = args;
+      args = evalledArgs;
     }
-    if (last) last[CDR] = args;
-    args = evalledArgs;
     if (typeof form === 'function') {
       let jsArgs = [];
       for (let i = 0; i < evalCount; ++i) {
@@ -1901,9 +1907,9 @@ function SchemeJS(schemeOpts = {}) {
         if (!isCons(body)) throw new EvalError(`Bad closure ${_string(form)}`);
         scope = body[CAR];
         body = body[CDR];
-        opSym = SLAMBDA_ATOM;
+        opSym = LAMBDA_ATOM;
       }
-      if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
+      if (opSym === LAMBDA_ATOM) {
         if (!isCons(body)) throw new EvalError(`Bad lambda ${_string(form)}`);
         let params = body[CAR];
         let forms = body[CDR];
@@ -1940,7 +1946,7 @@ function SchemeJS(schemeOpts = {}) {
         return res;
       }
     }
-    throw new EvalError(`Can't apply ${form}`);
+    throw new EvalError(`Can't apply ${_string(form)}`);
   }
 
   const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\', '\n': '' };
