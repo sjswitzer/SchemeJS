@@ -144,6 +144,7 @@ function SchemeJS(schemeOpts = {}) {
   const SLAMBDA_ATOM = Atom("special-lambda");
   ATOMS["\\\\"] = SLAMBDA_ATOM;
   const CLOSURE_ATOM = Atom("%%closure");
+  const SCLOSURE_ATOM = Atom("%%%closure");
 
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
 
@@ -1652,11 +1653,9 @@ function SchemeJS(schemeOpts = {}) {
   // (\\ (params) (body1) (body2) ...)
   // (\\ param . form) -- Curry notation
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
-  function special_lambda(body) {
-    // XXX TODO
-  }
+  function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(this, body)) }
 
-  const isClosure = form => isCons(form) && car(form) === CLOSURE_ATOM;
+  const isClosure = form => isCons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
   defineGlobalSymbol("closure?", isClosure);
 
   //
@@ -1791,16 +1790,17 @@ function SchemeJS(schemeOpts = {}) {
     }
     if (isCons(expr)) {
       let fn = expr[CAR], args = expr[CDR];
-      if (typeof fn !== 'function') {
-        if (isCons(fn)) {
-          let fnCar = fn[CAR];
-          if (!(fnCar === LAMBDA_ATOM || fnCar === CLOSURE_ATOM || fnCar === SLAMBDA_ATOM))
-            fn = _eval(fn, scope);
+      let evalCount = MAX_INTEGER, paramCount = MAX_INTEGER;
+      if (isCons(fn)) {
+        let fnCar = fn[CAR];
+        if (fnCar === SLAMBDA_ATOM) {
+          evalCount = 0;
+        } else if (fnCar === LAMBDA_ATOM) {
         } else {
           fn = _eval(fn, scope);
         }
       }
-      return _apply(fn, args, scope);
+      return _apply(fn, evalledArgs, scope, evalCount);
     }
     // Special eval for JS arrays and objects:
     //   Values that are evaluated and placed in
@@ -1826,18 +1826,33 @@ function SchemeJS(schemeOpts = {}) {
     return expr;
   }
 
-  function _apply(form, args, scope) {
+  function _apply(form, args, scope, evalCount = 0) {
+    // Typically, it would be eval's job to evaluate the arguments but in the case of JS
+    // functions we don't know how many arguments to evaluate until we've read the
+    // function descriptor and I want the logic for that all in one place. Here, in fact.
+    // By default apply doesn't evaluate its args, but if evalcount is set (as it is by apply)
+    // then it does.
+    let paramCount = MAX_INTEGER;
     if (typeof form === 'function') {
       let fn = form;
-      // The function descriptor is encoded as follows:
-      // lift encoded as: (~evalCount << 8) | paramCount&0xff;
+      // The function descriptor is encoded as: (~evalCount << 8) | paramCount&0xff;
       // If there's no function descriptor the default is to eval and lift every argument.
       // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
       let functionDescriptor = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
       // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-      let evalCount = ~functionDescriptor >> 7 >>> 1;
-      let paramCount = functionDescriptor << 24 >> 23 >>> 1;
-      args = evalArgs(args, scope, evalCount);
+      if (evalCount !== 0) evalCount = ~functionDescriptor >> 7 >>> 1;
+      paramCount = functionDescriptor << 24 >> 23 >>> 1;
+    }
+    let evalledArgs = NIL, last = undefined;
+    for (let i = 0; i < evalCount && isCons(args); ++i) {
+      let evalled = cons(_eval(args[CAR], scope), evalledArgs);
+      if (last) last = last[CDR] = evalled;
+      else evaledArgs = last = evalled;
+      args = args[CDR];
+    }
+    if (last) last[CDR] = args;
+    args = evalledArgs;
+    if (typeof form === 'function') {
       let jsArgs = [];
       for (let i = 0; i < evalCount; ++i) {
         if (isCons(args)) {
@@ -1861,6 +1876,7 @@ function SchemeJS(schemeOpts = {}) {
             for (let anum = i; anum > 0; --anum)
               argList = cons(jsArgs[anum-1], argList);
             let forms = cons(cons(fn, argList), NIL);
+            // TODO: unevaluated args? Is there an SCLOSURE case?
             let closure = cons(CLOSURE_ATOM, cons(scope, cons(paramList, forms)));
             return closure;
           }
@@ -1881,6 +1897,12 @@ function SchemeJS(schemeOpts = {}) {
         body = body[CDR];
         opSym = LAMBDA_ATOM;
       }
+      if (opSym === SCLOSURE_ATOM) {
+        if (!isCons(body)) throw new EvalError(`Bad closure ${_string(form)}`);
+        scope = body[CAR];
+        body = body[CDR];
+        opSym = SLAMBDA_ATOM;
+      }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
         if (!isCons(body)) throw new EvalError(`Bad lambda ${_string(form)}`);
         let params = body[CAR];
@@ -1889,8 +1911,6 @@ function SchemeJS(schemeOpts = {}) {
           params = cons(params, NIL);
           forms = cons(forms, NIL);
         }
-        if (opSym !== SLAMBDA_ATOM)
-          args = evalArgs(args, scope);
         scope = newScope(scope, "lambda-scope");
         let origFormalParams = params;
         while (isCons(params)) {
@@ -1901,8 +1921,10 @@ function SchemeJS(schemeOpts = {}) {
             if (isCons(args)) args = args[CDR];
           } else {
             // Curry up now! (partial application)
-            let closure = cons(CLOSURE_ATOM, cons(scope, cons(params, forms)));
-            return closure;
+            if (opSym === LAMBDA_ATOM)
+              return cons(CLOSURE_ATOM, cons(scope, cons(params, forms)));
+            else
+              return cons(CSLOSURE_ATOM, cons(scope, cons(params, forms)));
           }
           params = params[CDR];
         }
@@ -1919,20 +1941,6 @@ function SchemeJS(schemeOpts = {}) {
       }
     }
     throw new EvalError(`Can't apply ${form}`);
-  }
-
-  function evalArgs(args, scope, evalCount = MAX_INTEGER) {
-    evalCount = evalCount|0;  // really an int
-    if (evalCount <= 0 || args === NIL) return args;
-    let argv = [];
-    while (evalCount > 0 && isCons(args)) {
-      argv.push(_eval(args[CAR], scope));
-      args = args[CDR];
-      evalCount -= 1;
-    }
-    for (let i = argv.length; i > 0; --i)
-      args = cons(argv[i-1], args);
-    return args;
   }
 
   const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\', '\n': '' };
@@ -2020,14 +2028,14 @@ function SchemeJS(schemeOpts = {}) {
           if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM || objCar == CLOSURE_ATOM)
                 && isCons(obj[CDR])) {
             // Specal treatment of lambdas and closures with curry notation
-            if (objCar == CLOSURE_ATOM) {
+            if (objCar == CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
               if (isCons(obj[CDR][CDR])) {
                 let params = obj[CDR][CDR][CAR];
                 if (typeof params === 'symbol') {
                   put("(");
                   indent += indentMore;
                   sep = "";
-                  toString(objCar, maxDepth);  // %%closure
+                  toString(objCar, maxDepth);  // %%closure or %%%closure
                   sep = " ";
                   toString(obj[CDR][CAR], maxDepth);  // scope
                   sep = " ";
@@ -2829,77 +2837,9 @@ function SchemeJS(schemeOpts = {}) {
       }
       // XXX TODO
     }
-    /*
-      while (lift > 0) {
-        // Promote "lift" arguments to JS arguments, filling with NIL
-        if (isCons(args)) {
-          jsArgs.push(args[CAR]);
-          args = args[CDR];
-        } else {
-          // don't let cons, etc, be seeing any undefined parmaters
-          if (noPad) // but not infinitely many of them!
-            break;
-          jsArgs.push(NIL);
-        }
-        --lift;
-      }
-      if (args !== NIL)  // "rest" arg; however NIL shows up as "undefined" in this one case
-        jsArgs.push(args);
-      return fn.apply(scope, jsArgs);  // ??? scope[fn](...jsArgs);
-    }
-    if (isCons(fn)) {
-      let opSym = fn[CAR];
-      if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        let params = fn[CDR][CAR];
-        let forms = fn[CDR][CDR];
-        if (opSym === LAMBDA_ATOM || opSym === CLOSURE_ATOM)
-          args = evalArgs(args, scope);
-        XXX scope = new Object(scope); XXX
-        let origFormalParams = params;
-        while (isCons(params)) {
-          let param = params[CAR];
-          if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
-          if (args !== NIL) {
-            scope[param] = args[CAR];
-            if (isCons(args)) args = args[CDR];
-          } else {
-            scope[param] = NIL;
-          }
-          params = params[CDR];
-        }
-        if (typeof params === 'symbol')  // Neat trick for 'rest' params!
-          scope[params] = args;
-        else if (params !== NIL)
-          throw new EvalError(`Bad parameter list ${_toString(origFormalParams)}`);
-        let res = NIL;
-        while (isCons(forms)) {
-          res = _eval(forms[CAR], scope);
-          forms = forms[CDR];
-        }
-        return res;
-      }
-    }
-    throw new EvalError(`Can't apply ${fn}`);
-    */
   }
 
   function compileEvalArgs(args, scope, invokeScope, evalCount, newTemp, indent) {
-    /*
-    function evalArgs(args, scope, evalCount = MAX_INTEGER) {
-      evalCount = evalCount|0;  // really an int
-      if (evalCount <= 0 || args === NIL) return args;
-      let argv = [];
-      let reverse = NIL;
-      while (evalCount > 0 && isCons(args)) {
-        argv.push(_eval(args[CAR], scope));
-        args = args[CDR];
-        evalCount -= 1;
-      }
-      for (let i = argv.length; i > 0; --i)
-        args = cons(argv[i-1], args);
-      return args;
-    }
-  */
     let argv = [], unevaluated, emit = "";
     while (evalCount > 0 && isCons(args)) {
       let { val, emit: emitted } = compileExpr(args[CAR], scope, invokeScope, newTemp, indent);
