@@ -339,7 +339,8 @@ function SchemeJS(schemeOpts = {}) {
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
 
-  const QUOTE_ATOM = defineGlobalSymbol("quote", quoted => quoted[CAR], { evalArgs: 0 }, "'");
+  const quote = quoted => quoted[CAR];  // TODO: move handling of quote into eval
+  const QUOTE_ATOM = defineGlobalSymbol("quote", quote, { evalArgs: 0 }, "'");
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
@@ -1794,11 +1795,14 @@ function SchemeJS(schemeOpts = {}) {
         let fnCar = fn[CAR];
         if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
           fn = _eval(fn, scope);
+      } else {
+        fn = _eval(fn, scope);
       }
       // Unconventionally shifting the job of evaluating the args to the _apply function
       // because it has better visibility on the function's attributes.
       // It won't evaluate the arguments unless passed an evalCount.
-      return _apply(fn, args, scope, MAX_INTEGER);
+      let evaluateParams = true;
+      return _apply(fn, args, scope, evaluateParams);
     }
     // Special eval for JS arrays and objects:
     //   Values that are evaluated and placed in
@@ -1824,18 +1828,19 @@ function SchemeJS(schemeOpts = {}) {
     return expr;
   }
 
-  function _apply(form, args, scope, evalCount = 0) {
+  function _apply(form, args, scope, evaluateArguments) {
     // Typically, it would be eval's job to evaluate the arguments but in the case of JS
     // functions we don't know how many arguments to evaluate until we've read the
     // function descriptor and I want the logic for that all in one place. Here, in fact.
     // By default apply doesn't evaluate its args, but if evalcount is set (as it is by apply)
     // then it does.
-    let paramCount = MAX_INTEGER;
-    if (evalCount === MAX_INTEGER && isCons(form)) {
+    let paramCount = MAX_INTEGER, evalCount = MAX_INTEGER;
+    if (isCons(form)) {
       let opSym = form[CAR];
       // Probably need to do something special here for SCLOSURE_ATOM
       if (opSym === SLAMBDA_ATOM || opSym === SCLOSURE_ATOM) {
-        evalCount = 0;
+        if (!isCons(form[CDR])) throw new EvalError(`Bad form ${_string(form)}`);
+        evalCount = form[CDR][CAR];
       }
     } else if (typeof form === 'function') {
       let fn = form;
@@ -1844,10 +1849,10 @@ function SchemeJS(schemeOpts = {}) {
       // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
       let functionDescriptor = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
       // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-      if (evalCount === MAX_INTEGER) evalCount = ~functionDescriptor >> 7 >>> 1;
+      evalCount = ~functionDescriptor >> 7 >>> 1;
       paramCount = functionDescriptor << 24 >> 23 >>> 1;
     }
-    {
+    if (evaluateArguments) {
       let evalledArgs = NIL, last = undefined;
       for (let i = 0; i < evalCount && isCons(args); ++i) {
         let evalledArgCons = cons(_eval(args[CAR], scope), evalledArgs);
@@ -1855,8 +1860,10 @@ function SchemeJS(schemeOpts = {}) {
         else evalledArgs = last = evalledArgCons;
         args = args[CDR];
       }
-      if (last) last[CDR] = args;
-      args = evalledArgs;
+      if (last) {
+        last[CDR] = args;
+        args = evalledArgs;
+      }
     }
     if (typeof form === 'function') {
       let jsArgs = [];
@@ -1869,7 +1876,7 @@ function SchemeJS(schemeOpts = {}) {
             if (i < 1) {
               // We can't partially apply without any arguments, but the function wants
               // parameters anyway so we supply undefined. This will allow the
-              // "forms" parameter to go int the correct parameter.
+              // "forms" parameter to go into the correct parameter.
               while (i++ < paramCount)
                 jsArgs.push(undefined);
               break;
@@ -1881,7 +1888,7 @@ function SchemeJS(schemeOpts = {}) {
             let argList = paramList;
             for (let anum = i; anum > 0; --anum)
               argList = cons(jsArgs[anum-1], argList);
-            let forms = cons(cons(fn, argList), NIL);
+            let forms = cons(cons(form, argList), NIL);
             // TODO: unevaluated args? Is there an SCLOSURE case?
             let closure = cons(CLOSURE_ATOM, cons(scope, cons(paramList, forms)));
             return closure;
