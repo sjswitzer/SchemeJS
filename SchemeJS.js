@@ -2016,9 +2016,7 @@ function SchemeJS(schemeOpts = {}) {
           return put(`{function${name}${params} native}`);
         if (fnDesc.value && !fnDesc.body)
           return put(`{${params} => ${fnDesc.value}}`);
-        if (fnDesc.body)
-          return put(`{function${name}${params} ...}`);
-        return put('{function}');  // shouldn't happen
+        return put(`{function${name}${params} ...}`);
       }
       if (objType === 'object') {
         if (obj instanceof Scope) {
