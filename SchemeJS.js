@@ -339,8 +339,8 @@ function SchemeJS(schemeOpts = {}) {
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
 
+  const quote = quoted => quoted[CAR];
   const QUOTE_ATOM = defineGlobalSymbol("quote", quote, { evalArgs: 0 }, "'");
-  function quote(quoted) { return quoted[CAR] }
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
@@ -826,13 +826,7 @@ function SchemeJS(schemeOpts = {}) {
 
   // XXX TODO: What happens if more that 3 args?
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelseHook }, "if");
-  function ifelse(p, forms) {
-    if (!isCons(forms)) return undefined;
-    if (_bool(p)) return _eval(forms[CAR], this);
-    forms = forms[CDR];
-    if (!isCons(forms)) return undefined;
-    return _eval(forms[CAR], this);
-  }
+  function ifelse(p, t, f, rest) { return _bool(p) ? _eval(t, this): _eval(f, this) }
 
   queueTests(function() {
     EXPECT(` (&&) `, undefined);
@@ -851,10 +845,10 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
     EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
     EXPECT(` (?) `, undefined); // Why not?
-    EXPECT(` (? true) `, undefined);
-    EXPECT(` (? false) `, undefined);
-    EXPECT(` (? true 1) `, 1);
-    EXPECT(` (? false 2) `, undefined);
+    EXPECT(` (? true) `, isClosure);
+    EXPECT(` (? false) `, isClosure);
+    EXPECT(` (? true 1) `, isClosure);
+    EXPECT(` (? false 2) `, isClosure);
     EXPECT(` (? true 1 2) `, 1);
     EXPECT(` (? false 1 2) `, 2);
     EXPECT(` (? true 1 2 (oops!)) `, 1);
@@ -1793,6 +1787,8 @@ function SchemeJS(schemeOpts = {}) {
     }
     if (isCons(expr)) {
       let fn = expr[CAR], args = expr[CDR];
+      if (fn === QUOTE_ATOM) // QUOTE is a function that will do this, but catch it here anyway.
+        return expr[CDR][CAR];
       if (isCons(fn)) {
         let fnCar = fn[CAR];
         if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
@@ -1877,9 +1873,10 @@ function SchemeJS(schemeOpts = {}) {
         args = evalledArgs;
       }
     }
+    let lift = evalCount > paramCount ? evalCount : paramCount;
     if (typeof form === 'function') {
       let jsArgs = [];
-      for (let i = 0; i < evalCount; ++i) {
+      for (let i = 0; i < lift; ++i) {
         if (isCons(args)) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
@@ -1924,8 +1921,8 @@ function SchemeJS(schemeOpts = {}) {
       }
       if (opSym === SCLOSURE_ATOM) {
         if (!isCons(body)) throw new EvalError(`Bad closure ${_string(form)}`);
-        scope = body[CAR];
-        body = body[CDR];
+        scope = body[CDR][CAR];
+        body = body[CDR][CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === LAMBDA_ATOM) {
@@ -1982,7 +1979,7 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("to-string", _string);
   function _string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
-    let stringWrap = opts.stringWrap ?? 80;
+    let stringWrap = opts.stringWrap ?? 100;
     let wrapChar = opts.wrapChar ?? "\n";
     let maxDepth = opts.maxDepth ?? 100;
     let indentMore = opts.indentMorw ?? "  ";
