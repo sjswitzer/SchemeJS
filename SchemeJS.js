@@ -172,6 +172,9 @@ function SchemeJS(schemeOpts = {}) {
   // Unlike exportDefinition, which exports an API to clients, defineGlobalSymbol
   // defines a symbol for the SchemeJS environment AND exports it as an API.
   // Be careful which one you use!
+  //
+  // Some of the short exported functions are all on one line. This is intentional.
+  // Those function's bodies are included in the string representation used for dispay.
   // 
   const FUNCTION_DESCRIPTOR_SYMBOL = Symbol("*schemeJS-function-descriptor*");
   const COMPILE_HOOK = Symbol("*schemeJS-compile-hook*");
