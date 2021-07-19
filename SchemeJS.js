@@ -1838,8 +1838,9 @@ function SchemeJS(schemeOpts = {}) {
     let paramCount = 0, evalCount = MAX_INTEGER;
     if (isCons(form)) {
       let opSym = form[CAR];
-      // Probably need to do something special here for SCLOSURE_ATOM
-      if (opSym === SLAMBDA_ATOM || opSym === SCLOSURE_ATOM) {
+      if (opSym === SLAMBDA_ATOM) {
+        evalCount = 0;
+      } else if (opSym === SCLOSURE_ATOM) {
         if (!isCons(form[CDR])) throw new EvalError(`Bad form ${_string(form)}`);
         evalCount = form[CDR][CAR];
       }
@@ -1855,7 +1856,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     if (evaluateArguments) {
       let evalledArgs = NIL, last = undefined;
-      for (let i = 0; i < evalCount && isCons(args); ++i) {
+      for (let i = 0; i .desc< evalCount && isCons(args); ++i) {
         let evalledArgCons = cons(_eval(args[CAR], scope), evalledArgs);
         if (last) last = last[CDR] = evalledArgCons;
         else evalledArgs = last = evalledArgCons;
@@ -1918,7 +1919,7 @@ function SchemeJS(schemeOpts = {}) {
         body = body[CDR][CDR];
         opSym = LAMBDA_ATOM;
       }
-      if (opSym === LAMBDA_ATOM) {
+      if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
         if (!isCons(body)) throw new EvalError(`Bad lambda ${_string(form)}`);
         let params = body[CAR];
         let forms = body[CDR];
