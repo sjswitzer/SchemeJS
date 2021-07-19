@@ -1979,16 +1979,6 @@ function SchemeJS(schemeOpts = {}) {
     if (line)
       lines.push(line);
     return lines.join(wrapChar);
-    function put(str) {
-      if (line.length > 0 && line.length + str.length > stringWrap) {
-        line += sep;
-        lines.push(line);
-        line = indent + prefix + str;
-      } else {
-        line += sep + prefix + str;
-      }
-      sep = prefix = "";
-    }
     function toString(obj, maxDepth) {
       if (maxDepth <= 0) return put("...");
       maxDepth -= 1;
@@ -2014,7 +2004,10 @@ function SchemeJS(schemeOpts = {}) {
           return put(`{function${name}${params}}`);
         if (fnDesc.value && !fnDesc.body)
           return put(`{${params} => ${fnDesc.value}}`);
-        return put(`{function${name}${params}}`);
+        let printBody = fnDesc.printBody;
+        if (printBody.length > 60 || printBody.includes('\n'))
+          printBody = '';
+        return put(`{function${name}${params}${printBody}}`);
       }
       if (objType === 'object') {
         if (obj instanceof Scope) {
@@ -2150,6 +2143,16 @@ function SchemeJS(schemeOpts = {}) {
         return put(`${String(obj)}n`);
       }
       return put(String(obj));
+    }
+    function put(str) {
+      if (line.length > 0 && line.length + str.length > stringWrap) {
+        line += sep;
+        lines.push(line);
+        line = indent + prefix + str;
+      } else {
+        line += sep + prefix + str;
+      }
+      sep = prefix = "";
     }
   }
 
@@ -2530,7 +2533,7 @@ function SchemeJS(schemeOpts = {}) {
     // But it's conservative in that it doesn't recognize any functions that
     // don't end in a particular sequence of tokens or that use "return" more than once.
     let str = fn.toString(), pos = 0, token = "";
-    let name, params = [], restParam, value, body, native = false;
+    let name = fn.name, params = [], restParam, value, body, native = false, printBody;
     parse: {
       if (nextToken() === 'function') {
         if (nextToken() !== '(') {
@@ -2545,8 +2548,10 @@ function SchemeJS(schemeOpts = {}) {
           else
             params.push(token);
         }
+        let printBodyPos = pos;
         nextToken();
         parseBody();
+        printBody = str.substr(printBodyPos);
       } else { // Arrow functions
         if (token === '(') {
           while (nextToken() && token !==')') {
@@ -2568,7 +2573,7 @@ function SchemeJS(schemeOpts = {}) {
           value = possibleValue;
       }
     }
-    return { name, params, restParam, value, body, native };
+    return { name, params, restParam, value, body, printBody, native };
 
     function parseBody() {
       if ( token === '{') {
