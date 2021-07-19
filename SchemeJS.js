@@ -2000,8 +2000,6 @@ function SchemeJS(schemeOpts = {}) {
           params = `${params}...${fnDesc.restParam}`;
         }
         params = `(${params})`;
-        if (fnDesc.native)
-          return put(`{function${name}${params}}`);
         if (fnDesc.value && !fnDesc.body)
           return put(`{${params} => ${fnDesc.value}}`);
         let printBody = fnDesc.printBody;
@@ -2645,41 +2643,59 @@ function SchemeJS(schemeOpts = {}) {
   queueTests(function(){
     const testAnalyze = (fn) => () => analyzeJSFunction(fn);
     EXPECT(testAnalyze(x => x * x),
-      { name: undefined, params: ['x'], restParam: undefined, value: 'x * x', body: undefined, native: false });
+      { name: '', params: ['x'], restParam: undefined, value: 'x * x',
+        body: undefined, printBody: undefined, native: false });
     EXPECT(testAnalyze((x) => x * x),
-      { name: undefined, params: ['x'], restParam: undefined, value: 'x * x', body: undefined, native: false });
+      { name: '', params: ['x'], restParam: undefined, value: 'x * x',
+        body: undefined, printBody: undefined, native: false });
     EXPECT(testAnalyze((x, y) => x * y),
-      { name: undefined, params: ['x', 'y'], restParam: undefined, value: 'x * y', body: undefined, native: false });
+      { name: '', params: ['x', 'y'], restParam: undefined, value: 'x * y',
+        body: undefined, printBody: undefined, native: false });
     EXPECT(testAnalyze((x, ...y) => x * y),
-      { name: undefined, params: ['x'], restParam: 'y', value: 'x * y', body: undefined, native: false });
+      { name: '', params: ['x'], restParam: 'y', value: 'x * y',
+        body: undefined, printBody: undefined, native: false });
     EXPECT(testAnalyze((x, y, ...z) => x * y),
-      { name: undefined, params: ['x','y'], restParam: 'z', value: 'x * y', body: undefined, native: false });
+      { name: '', params: ['x','y'], restParam: 'z', value: 'x * y',
+        body: undefined, printBody: undefined, native: false });
     EXPECT(testAnalyze((...x) => x * x),
-      { name: undefined, params: [], restParam: 'x', value: 'x * x', body: undefined, native: false });
+      { name: '', params: [], restParam: 'x', value: 'x * x',
+        body: undefined, printBody: undefined, native: false });
     EXPECT(testAnalyze((...x) => { let res = x * x; return res }),
-      { name: undefined, params: [], restParam: 'x', value: 'res', body: 'let res = x * x;', native: false });
+      { name: '', params: [], restParam: 'x', value: 'res',
+        body: 'let res = x * x;', printBody: undefined, native: false });
     EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
-      { name: undefined, params: ['a'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
+      { name: '', params: ['a'], restParam: undefined, value: 'a',
+        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
     EXPECT(testAnalyze(function (a, b, c) { a = 2 * a; return a; }),
-      { name: undefined, params: ['a','b','c'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
+      { name: '', params: ['a','b','c'], restParam: undefined, value: 'a',
+        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
     EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
-      { name: 'fn', params: ['a'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
+      { name: 'fn', params: ['a'], restParam: undefined, value: 'a',
+        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
     EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * a; return a; }),
-      { name: 'fn', params: ['a','b','c'], restParam: undefined, value: 'a', body: 'a = 2 * a;', native: false });
+      { name: 'fn', params: ['a','b','c'], restParam: undefined, value: 'a',
+        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
     EXPECT(testAnalyze(function (a, ...rest) { return a; }),
-      { name: undefined, params: ['a'], restParam: 'rest', value: 'a', body: '', native: false });
+      { name: '', params: ['a'], restParam: 'rest', value: 'a',
+        body: '', printBody: ' { return a; }', native: false });
     EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
-      { name: undefined, params: ['a','b','c'], restParam: 'rest', value: 'a', body: '', native: false });
+      { name: '', params: ['a','b','c'], restParam: 'rest', value: 'a',
+        body: '', printBody: ' { return a; }', native: false });
     EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
-      { name: 'foo', params: ['a'], restParam: 'rest', value: 'a', body: '', native: false });
+      { name: 'foo', params: ['a'], restParam: 'rest', value: 'a',
+        body: '', printBody: ' { return a; }', native: false });
     EXPECT(testAnalyze(function bar(a, b, c, ...rest) { return a; }),
-      { name: 'bar', params: ['a','b','c'], restParam: 'rest', value: 'a', body: '', native: false });
+      { name: 'bar', params: ['a','b','c'], restParam: 'rest', value: 'a'
+      , body: '', printBody: ' { return a; }', native: false });
     EXPECT(testAnalyze(function baz(...rest) { return a; }),
-      { name: 'baz', params: [], restParam: 'rest', value: 'a', body: '', native: false });
+      { name: 'baz', params: [], restParam: 'rest', value: 'a',
+        body: '', printBody: ' { return a; }', native: false });
     EXPECT(testAnalyze(function (...rest) { return a; }),
-      { name: undefined, params: [], restParam: 'rest', value: 'a', body: '', native: false });
+      { name: '', params: [], restParam: 'rest', value: 'a',
+        body: '', printBody: ' { return a; }', native: false });
     EXPECT(testAnalyze([].sort),
-      { name: 'sort', params: [], restParam: undefined, value: undefined, body: undefined, native: true });
+      { name: 'sort', params: [], restParam: undefined, value: undefined,
+        body: undefined, printBody: ' { [native code] }', native: true });
   });
       
   function compileTemplateSketch() {
