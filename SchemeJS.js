@@ -2700,8 +2700,8 @@ function SchemeJS(schemeOpts = {}) {
   });
 
   // (compile (fn args) forms)
-  defineGlobalSymbol("compile", compile, { evalArgs: 0 });
-  function compile(nameAndParams, forms) {
+  defineGlobalSymbol("compile", transpile, { evalArgs: 0 });
+  function transpile(nameAndParams, forms) {
     if (!isCons(nameAndParams)) new EvalError(`first parameter must be a list`);
     let name = nameAndParams[CAR];
     let args = nameAndParams[CDR];
@@ -2710,10 +2710,17 @@ function SchemeJS(schemeOpts = {}) {
     let lambda = list(LAMBDA_ATOM, args, value);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
-
     let bound = { NIL: NIL }, tempNames = {}, varNum = 0;
-
-    GlobalScope[name] = value;
+    let code = '', scope = new Scope();
+    let nameStr = newTemp(name.description);
+    let { result: lambdaResult, code: lambdaCode } = compileLambda(name, lambda, scope, bind, newTemp, "");
+    for (let bindingName of Object.keys(bound))
+      code += `  let ${bindingName} = bound[${bindingName}];\n`
+    code += lambdaCode;
+    code += ` return ${nameStr};\n`
+    let bindery = new Function('bound', code);
+    let compiled = bindery(bound);
+    GlobalScope[name] = compiled;
     return name;
 
     function bind(obj, name) {
@@ -2772,9 +2779,9 @@ function SchemeJS(schemeOpts = {}) {
             ({ result, code } = compileApply(form, scope, bind, newTemp, indent));
           }
         } else {
-          let { func, code2 } = compileEval(fn, scope, bind, newTemp, indent);
+          let { result: func, code: code2 } = compileEval(fn, scope, bind, newTemp, indent);
           code += code2;
-          ({ result, code2 } = compileApply(func, args, scope, bind, newTemp, indent));
+          ({ result, code: code2 } = compileApply(func, args, scope, bind, newTemp, indent));
           code += code2;
         }
       }
@@ -2790,7 +2797,6 @@ function SchemeJS(schemeOpts = {}) {
     let name, params, value, body;
     if (typeof form === 'function') { // form equals function :)
       ({ name, params, value, body } = analyzeJSFunction(fn));
-      let { name, params, value, body } = analyzeJSFunction(fn);
       let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
       evalCount = ~functionDescriptor >> 7 >>> 1;
       paramCount = params.length;
@@ -2819,7 +2825,7 @@ function SchemeJS(schemeOpts = {}) {
     let argv = [];
     for (let i = 0; isCons(args); ++i) {
       if (i < evalCount) {
-        let { evalResult, evalCode } = compileEval(args[CAR], scope, bind, newTemp, indent)
+        let { result: evalResult, code: evalCode } = compileEval(args[CAR], scope, bind, newTemp, indent)
         code += newCode;
         argv.push(evalResult);
       } else {
@@ -2869,7 +2875,7 @@ function SchemeJS(schemeOpts = {}) {
     if (!isCons(body)) throw new EvalError(`Bad form ${_string(form)}`);
     if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
       // I don't expect to compile closures but maybe there's a reason to do so?
-      let { lambda, lambdaCode } = compileLambda('', form, scope, bind, newTemp, indent);
+      let { result: lambda, code: lambdaCode } = compileLambda('', form, scope, bind, newTemp, indent);
       code += lambdaCode;
       code += indent + `${result} = ${lambda}.call(this`;
       for (param of params)
@@ -2922,7 +2928,7 @@ function SchemeJS(schemeOpts = {}) {
     code += `) {\n`;
     let res = NIL;
     while (isCons(forms)) {
-      let { evalResult, evalCode } = compileEval(forms[CAR], scope, bind, newTemp, indent + " ");
+      let { result: evalResult,code: evalCode } = compileEval(forms[CAR], scope, bind, newTemp, indent + " ");
       code += evalCode;
       forms = forms[CDR];
     }
