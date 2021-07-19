@@ -200,7 +200,7 @@ function SchemeJS(schemeOpts = {}) {
       if (evalCount !== MAX_INTEGER)
         paramCount -= 1;
       if (paramCount >= 0xff) throw new LogicError("Too many params");
-      if (fnInfo.native) paramCount = MAX_INTEGER;
+      if (fnInfo.native) paramCount = 0;
       // Encoding chosen so that small values mean eval everything and lift that many.
       let functionDescriptor = (~evalCount << 8) | paramCount&0xff;
       value[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
@@ -1830,6 +1830,16 @@ function SchemeJS(schemeOpts = {}) {
     return expr;
   }
 
+  // Invocation of JavaScript functions:
+
+  // When defined, a function can be annotated with the number of arguments
+  // to be evaluated. The definition is also examined to determine the number of
+  // non-rest parameters. Every evaluated parameter is passed as a javascript argument.
+  // If there are not as many arguments as parameters, a closure is returned that
+  // binds a partial application of that function.
+  // Functions with unevaluated arguments get those forms as a final parameter, after
+  // the evaluated ones.
+
   function _apply(form, args, scope, evaluateArguments) {
     // Typically, it would be eval's job to evaluate the arguments but in the case of JS
     // functions we don't know how many arguments to evaluate until we've read the
@@ -1847,12 +1857,12 @@ function SchemeJS(schemeOpts = {}) {
     } else if (typeof form === 'function') {
       let fn = form;
       // The function descriptor is encoded as: (~evalCount << 8) | paramCount&0xff;
-      // If there's no function descriptor the default is to eval and lift every argument.
-      // "|0" is the asm.js gimmick to hint the JIT that we're dealing with integers.
-      let functionDescriptor = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
+      // If there's no function descriptor the default is to eval every argument
+      // which, conveniently, is zero.
+      let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
       // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
       evalCount = ~functionDescriptor >> 7 >>> 1;
-      paramCount = functionDescriptor << 24 >> 23 >>> 1;
+      paramCount = functionDescriptor & 0xff;;
     }
     if (evaluateArguments) {
       let evalledArgs = NIL, last = undefined;
@@ -1874,7 +1884,7 @@ function SchemeJS(schemeOpts = {}) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
         } else { 
-          if (paramCount !== MAX_INTEGER && i < paramCount) {
+          if (i < paramCount) {
             if (i < 1) {
               // We can't partially apply without any arguments, but the function wants
               // parameters anyway so we supply undefined. This will allow the
@@ -2037,23 +2047,33 @@ function SchemeJS(schemeOpts = {}) {
         }
         if (obj[PAIR]) {
           let objCar = obj[CAR];
-          if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM || objCar == CLOSURE_ATOM)
+          if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
+               objCar == CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
                 && isCons(obj[CDR])) {
             // Specal treatment of lambdas and closures with curry notation
             if (objCar == CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
               if (isCons(obj[CDR][CDR])) {
-                let params = obj[CDR][CDR][CAR];
+                let evalCount, scopeCons = obj[CDR];
+                if (objCar === SCLOSURE_ATOM) {
+                  evalCount = obj[CDR][CAR];
+                  scopeCons = obj[CDR][CDR];
+                }
+                let params = scopeCons[CDR][CAR];
                 if (typeof params === 'symbol') {
                   put("(");
                   indent += indentMore;
                   sep = "";
+                  if (objCar === SCLOSURE_ATOM) {
+                    toString(evalCount, maxDepth);
+                    sep = " ";
+                  }
                   toString(objCar, maxDepth);  // %%closure or %%%closure
                   sep = " ";
-                  toString(obj[CDR][CAR], maxDepth);  // scope
+                  toString(scopeCons[CAR], maxDepth);  // scope
                   sep = " ";
                   toString(params, maxDepth);  // actually the atom
                   sep = ""; put(".");
-                  toString(obj[CDR][CDR][CDR], maxDepth);  // the form
+                  toString(scopeCons[CDR][CDR], maxDepth);  // the form
                   sep = ""; put(")");
                   indent = saveIndent;
                   return
