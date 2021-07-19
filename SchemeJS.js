@@ -116,8 +116,7 @@ function SchemeJS(schemeOpts = {}) {
       if (ATOMS[name.description] === name)
         return name;
     }
-    if (typeof name !== 'string')
-      name = _string(name);
+    if (typeof name !== 'string') throw new EvalError(`Not a string ${name}`);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -1898,7 +1897,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     if (evaluateArguments) {
       let evalledArgs = NIL, last = undefined;
-      for (let i = 0; i .desc< evalCount && isCons(args); ++i) {
+      for (let i = 0; i < evalCount && isCons(args); ++i) {
         let evalledArgCons = cons(_eval(args[CAR], scope), evalledArgs);
         if (last) last = last[CDR] = evalledArgCons;
         else evalledArgs = last = evalledArgCons;
@@ -2183,7 +2182,7 @@ function SchemeJS(schemeOpts = {}) {
             let s = '0000' + charCode.toString(16);
             ch = s.substr(s.length-4);
           }
-          str += c;
+          str += ch;
         }
         str += '"';
         return put(str);
@@ -2564,6 +2563,7 @@ function SchemeJS(schemeOpts = {}) {
       return expr;
     throw new ParseExtraTokens(unparsed);
   }
+
   function analyzeJSFunction(fn) {
     // The idea here is to use the intrinsic functions themselves as code generation
     // templates. That works as long as the functions don't call _eval. In that case
@@ -2744,9 +2744,8 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("compile", compile, { evalArgs: 0 });
   function compile(nameAndParams, forms) {
     if (!isCons(nameAndParams)) new EvalError(`first parameter must be a list`);
-    let name = nameAndParams[CAR];
+    let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
-    let name = Atom(name);
     if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)
     let lambda = list(LAMBDA_ATOM, args, value);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
@@ -2782,6 +2781,7 @@ function SchemeJS(schemeOpts = {}) {
               name = nameVariation;
               break;
             }
+          }
         }
       }
       tempNames[name] = true;
@@ -2844,8 +2844,7 @@ function SchemeJS(schemeOpts = {}) {
       if (evalCount !== MAX_INTEGER)
         paramCount -= 1;
       if (name === '') name = undefined;
-    }
-    else if (isCons(form)) {
+    } else if (isCons(form)) {
       let opSym = form[CAR];
       if (opSym === SLAMBDA_ATOM) {
         evalCount = 0;
@@ -2861,7 +2860,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     // Materialize the arguments in an array
     let lift = evalCount > paramCount ? evalCount : paramCount;
-    let result = newTemp(`${name}_result`), eval = '';
+    let result = newTemp(`${name}_result`);
     let code = indent + `let ${result}; {${name ? "// " + name : ""}\n`;
     let argv = [];
     for (let i = 0; isCons(args); ++i) {
@@ -2896,32 +2895,33 @@ function SchemeJS(schemeOpts = {}) {
         code += indent + `  ${params[i]} = cons(${args[j]}, ${params[i]};\n`;
     }
     if (typeof form === 'function') {
-    if (value ) {
-      if (body)
-        code += indent + body; 
-      code += indent + `${result} = ${value};\n`;
-    } else {
-      // No template: going to have to call it after all.
-      let bound = bind(fn, name);
-      code += indent + `${result} = ${bound}.call(this`;
-      for (param of params)
-        code += `, ${param}`;
-      code += `);\n`;
-    }
-    code += indent + `}\n`;
-    return { result, code };
-  } else if (isCons(form)) {
-    let opSym = form[CAR];
-    let body = form[CDR];
-    if (!isCons(body)) throw new EvalError(`Bad form ${_string(form)}`);
-    if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-      // I don't expect to compile closures but maybe there's a reason to do so?
-      let { result: lambda, code: lambdaCode } = transpileLambda('', form, scope, bind, newTemp, indent);
-      code += lambdaCode;
-      code += indent + `${result} = ${lambda}.call(this`;
-      for (param of params)
-        code += `, ${param}`;
-      code += `);\n`;
+      if (value ) {
+        if (body)
+          code += indent + body; 
+        code += indent + `${result} = ${value};\n`;
+      } else {
+        // No template: going to have to call it after all.
+        let bound = bind(fn, name);
+        code += indent + `${result} = ${bound}.call(this`;
+        for (param of params)
+          code += `, ${param}`;
+        code += `);\n`;
+      }
+      code += indent + `}\n`;
+      return { result, code };
+    } else if (isCons(form)) {
+      let opSym = form[CAR];
+      let body = form[CDR];
+      if (!isCons(body)) throw new EvalError(`Bad form ${_string(form)}`);
+      if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
+        // I don't expect to compile closures but maybe there's a reason to do so?
+        let { result: lambda, code: lambdaCode } = transpileLambda('', form, scope, bind, newTemp, indent);
+        code += lambdaCode;
+        code += indent + `${result} = ${lambda}.call(this`;
+        for (param of params)
+          code += `, ${param}`;
+        code += `);\n`;
+      }
     }
     return { result, code };
   }
@@ -3179,7 +3179,7 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') { // Runnin
   let fs = require('fs');
   let inputFd, closeFd, oldRawMode;
   try {
-    try {5
+    try {
       if (process.platform === 'win32') {
         inputFd = process.stdin.fd;
         if (process.stdin.setRawMode) {
