@@ -1727,6 +1727,7 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   // (define variable value)
+  // (define (fn args) forms)
   defineGlobalSymbol("define", define, { evalArgs: 0 });
   function define(forms) {
     if (!(isCons(forms) && isCons(forms[CDR])))
@@ -1771,17 +1772,17 @@ function SchemeJS(schemeOpts = {}) {
   // This is where the magic happens
   //
 
-  function _eval(expr, scope) {
-    if (expr === NIL) return expr;
-    if (typeof expr === 'symbol') {
-      let val = scope[expr];
-      if (val === undefined) throw new EvalError(`Undefined symbol ${expr.description}`);
+  function _eval(form, scope) {
+    if (form === NIL) return form;
+    if (typeof form === 'symbol') {
+      let val = scope[form];
+      if (val === undefined) throw new EvalError(`Undefined symbol ${form.description}`);
       return val;
     }
-    if (isCons(expr)) {
-      let fn = expr[CAR], args = expr[CDR];
+    if (isCons(form)) {
+      let fn = form[CAR], args = form[CDR];
       if (fn === QUOTE_ATOM) // QUOTE is a function that will do this, but catch it here anyway.
-        return expr[CDR][CAR];
+        return form[CDR][CAR];
       if (isCons(fn)) {
         let fnCar = fn[CAR];
         if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
@@ -1799,24 +1800,24 @@ function SchemeJS(schemeOpts = {}) {
     //   Values that are evaluated and placed in
     //   a new Object or Array in correspoding position.
     // XXX Investigate Symbol.species (also for mapcar, etc.)
-    if (expr !== null && typeof expr === 'object') {
-      if (expr instanceof Array) {
+    if (form !== null && typeof form === 'object') {
+      if (form instanceof Array) {
         let res = [];
-        for (let item of expr) {
+        for (let item of form) {
           let val = _eval(item, scope);
           res.push(val);
         }
         return res;
       } else {
         let res = {};
-        for (let [key, value] of Object.entries(expr)) {
+        for (let [key, value] of Object.entries(form)) {
           let val = _eval(value, scope);
           res[key] = val;
         }
         return res;
       }
     }
-    return expr;
+    return form;
   }
 
   // Invocation of JavaScript functions:
@@ -2132,11 +2133,16 @@ function SchemeJS(schemeOpts = {}) {
       if (objType === 'string') {
         let str = '"';
         for (let ch of obj) {
-          let replace = STRING_ESCAPES[ch];
-          if (replace)
-            str += "\\" + replace;
-          else
-            str += ch;
+          let charCode = ch.charCodeAt(0);
+          if (charCode >= 0x20 && charCode < 0x7f) {
+            let replace = STRING_ESCAPES[ch];
+            if (replace)
+              ch = replace;
+          } else {
+            let s = '0000' + charCode.toString(16);
+            ch = s.substr(s.length-4);
+          }
+          str += c;
         }
         str += '"';
         return put(str);
@@ -2517,15 +2523,6 @@ function SchemeJS(schemeOpts = {}) {
       return expr;
     throw new ParseExtraTokens(unparsed);
   }
-
-  function compile(expr) {
-    let scope = GlobalScope;
-    let [args, body] = compileLambda(expr, scope);
-    let res = new Function(...[ ... args, body ]);
-    // todo.
-    return res;
-  }
-
   function analyzeJSFunction(fn) {
     // The idea here is to use the intrinsic functions themselves as code generation
     // templates. That works as long as the functions don't call _eval. In that case
@@ -2701,180 +2698,240 @@ function SchemeJS(schemeOpts = {}) {
       { name: 'sort', params: [], restParam: undefined, value: undefined,
         body: undefined, printBody: ' { [native code] }', native: true });
   });
-      
-  function compileTemplateSketch() {
-    let lift = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? (~MAX_INTEGER << 8) | MAX_INTEGER&0xff)|0;
-    // Turns lifts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-    let evalCount = ~lift >> 7 >>> 1;
-    lift = lift << 24 >> 23 >>> 1;
-    let decompiled = `let ${result}; {${name ? "// " + name : ""}\n`;
-    let paramsCopy = [...params], argsCopy = [...args];
-    // See corresponding code in _apply!
-    while (lift > 0) {
-      if (paramsCopy.length > 0) {
-        let param = paramsCopy.shift();
-        let arg = argsCopy.shift();
-        decompiled += `let ${param} = ${arg};\n`
+
+  // (compile (fn args) forms)
+  defineGlobalSymbol("compile", compile, { evalArgs: 0 });
+  function compile(nameAndParams, forms) {
+    if (!isCons(nameAndParams)) new EvalError(`first parameter must be a list`);
+    let name = nameAndParams[CAR];
+    let args = nameAndParams[CDR];
+    let name = Atom(name);
+    if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)
+    let lambda = list(LAMBDA_ATOM, args, value);
+    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
+    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
+
+    let bound = { NIL: NIL }, tempNames = {}, varNum = 0;
+
+    GlobalScope[name] = value;
+    return name;
+
+    function bind(obj, name) {
+      if (obj === NIL) return 'NIL';
+      if (typeof obj === 'symbol') name = newTemp(obj.description);
+      else name = newTemp(name);
+      bound[name] = obj;
+      return name;
+    }
+    function newTemp(name) {
+      if (!name || name === '') name = 't';
+      else {
+        name = toJSname(name);
+        if (tempNames[name]) {
+          for (;;) {
+            let nameVariation = `${name}${varNum++}`;
+            if (!tempNames[nameVariation]) {
+              name = nameVariation;
+              break;
+            }
+        }
+      }
+      tempNames[name] = true;
+      return name;
+    }
+  }
+
+  function compileEval(form, scope, bind, newTemp, indent) {
+    let code = '', result;
+    if (form === undefined) {
+      result = "undefined";
+    } else if (form === null) {
+      result = "null";
+    } else if (typeof form === 'number' || typeof form === 'bigint' || typeof form === string) {
+      value = _string(form);
+    } else if (form === NIL) {
+      result = bind(NIL);
+    } else if (typeof form === 'symbol') {
+      let sym = form;
+      result = scope[sym];
+      if (!result) {
+        let bound = bind(sym);
+        result = newTemp(sym);
+        code += indent + `let ${sym} = this[${bound}];\n`;
+        let err = bind(EvalError);
+        code += indent + `if (${sym} === undefined) throw new ${err}('Undefined symbol ${sym.description}')\n`;
+      }
+    } else if (isCons(form)) {
+      let fn = form[CAR], args = form[CDR];
+      if (fn === QUOTE_ATOM) {
+        result = bind(form[CDR][CAR], "quoted");
+      } {
+        if (isCons(fn)) {
+          let fnCar = fn[CAR];
+          if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
+            ({ result, code } = compileApply(form, scope, bind, newTemp, indent));
+          }
+        } else {
+          let { func, code2 } = compileEval(fn, scope, bind, newTemp, indent);
+          code += code2;
+          ({ result, code2 } = compileApply(func, args, scope, bind, newTemp, indent));
+          code += code2;
+        }
+      }
+    } else {
+      // TODO: handle array and object literals
+      result = bind(form);
+    }
+    return { result, code };
+  }
+  
+  function compileApply(form, args, scope, bind, newTemp, indent) {
+    let paramCount = 0, evalCount = MAX_INTEGER;
+    let name, params, value, body;
+    if (typeof form === 'function') { // form equals function :)
+      ({ name, params, value, body } = analyzeJSFunction(fn));
+      let { name, params, value, body } = analyzeJSFunction(fn);
+      let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
+      evalCount = ~functionDescriptor >> 7 >>> 1;
+      paramCount = params.length;
+      if (evalCount !== MAX_INTEGER)
+        paramCount -= 1;
+      if (name === '') name = undefined;
+    }
+    else if (isCons(form)) {
+      let opSym = form[CAR];
+      if (opSym === SLAMBDA_ATOM) {
+        evalCount = 0;
+      }
+      // Compile closures?
+      if (!isCons(form[CDR])) throw new EvalError(`Bad lambda ${_string(form)}`);
+      if (typeof form[CDR] === 'symbol') {
+        paramCount = 1;
       } else {
-        if (lift > 0xff) break;
-        decompiled += `let ${param} = NIL;\n`
+        for (let params = form[CDR[CAR]], isCons(params), params = params[CDR])
+          paramCount += 1;
       }
-      lift -= 1;
     }
-    if (restParam) {
-      // Q: Are "cons" and "NIL" in scope?
-      // A: No, not inherently, but the top-level function will hoist them from
-      // the scope ("this") object. So "no" and "yes."
-      decompiled += `let ${restParam} = `;
-      if (args.length > 0) {
-        let lng = args.length;
-        for (let i = 0; i < lng; ++i)
-          decompiled += `cons(${args[i]}, `;
-        decompiled += `NIL`;
-        for (let i = 0; i < lng; ++i)
-          decompiled += `)`;
-        decompiled += `;\n`;
+    // Materialize the arguments in an array
+    let lift = evalCount > paramCount ? evalCount : paramCount;
+    let result = newTemp(`${name}_result`), eval = '';
+    let code = indent + `let ${result}; {${name ? "// " + name : ""}\n`;
+    let argv = [];
+    for (let i = 0; isCons(args); ++i) {
+      if (i < evalCount) {
+        let { evalResult, evalCode } = compileEval(args[CAR], scope, bind, newTemp, indent)
+        code += newCode;
+        argv.push(evalResult);
       } else {
-        decompiled += `let ${restParam} = undefined;\n`;
+        argv.push(bind(argv[CAR]));
       }
+      argv = argv[CDR];
     }
-      
-    if (body)
-      decompiled += `${body}\n`;
-    decompiled += `${result} = ${value};\n}\n`
-    return { result, name: name, params, restParam, body, decompiled, fn };
-  }
-
-  function compileDefinition(expr) {
-    let emit = "", _tvar = 0, scope = new Scope();
-    function newTemp(prefix = "tmp") { return `${prefix}${_tvar++}$)`; }
-    if (isCons(expr)) {
-      let nameAndParams = expr[CAR], forms = expr[CDR];
-      if (isCons(nameAndParams)) {
-        let functionName = nameAndParams[CAR], params = [];
-        let { val, emit: emitted, dcl } = compileFunction(functionName, params, forms, scope, "");
-        let emit = `(function ${dcl}) {`;
-        emit += `  let outerScope = this;\n`;
-        emit += "  function resolveSymbol(s) {\n";
-        emit += "    let val = outerScope[s];\n";
-        emit += "    if (val === undefined) throw new EvalError(`Undefined symbol ${expr.description});\n";
-        emit += "  }\n";
-        emit += emitted;
-        emit += `  return ${val};\n`;
-        emit += ")\n";
-        console.log("COMPILED", params, `\b+${emitted}`);
+    let i = 0;
+    for (; i < lift; ++i) {
+      if (i < args.length) {
+        code += indent + `  let ${params[i]} = ${args[i]};\n`;
       }
+      else {
+        if (i < paramCount) {
+          if (i < 1) {
+            code += indent + `let ${params[i]} = undefined;\n`;
+            break;
+          }
+        }
+        // TODO: partial application of builtin; create closure somehow
+      }
+      break;
     }
+    if (evalCount !== MAX_INTEGER && i < params.length) {
+      code += indent + `  let ${params[i]} = NIL;\n`;
+      for (let j = args.length; j > i; --j)
+        code += indent + `  ${params[i]} = cons(${args[j]}, ${params[i]};\n`;
+    }
+    if (typeof form === 'function') {
+    if (value ) {
+      if (body)
+        code += indent + body; 
+      code += indent + `${result} = ${value};\n`;
+    } else {
+      // No template: going to have to call it after all.
+      let bound = bind(fn, name);
+      code += indent + `${result} = ${bound}.call(this`;
+      for (param of params)
+        code += `, ${param}`;
+      code += `);\n`;
+    }
+    code += indent + `}\n`;
+    return { result, code };
+  } else if (isCons(form)) {
+    let opSym = form[CAR];
+    let body = form[CDR];
+    if (!isCons(body)) throw new EvalError(`Bad form ${_string(form)}`);
+    if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
+      // I don't expect to compile closures but maybe there's a reason to do so?
+      let { lambda, lambdaCode } = compileLambda('', form, scope, bind, newTemp, indent);
+      code += lambdaCode;
+      code += indent + `${result} = ${lambda}.call(this`;
+      for (param of params)
+        code += `, ${param}`;
+      code += `);\n`;
+    }
+    return { result, code };
   }
 
-  function compileFunction(functionName, params, forms, scope, newTemp, indent) {
-    let invokeScope = this;
-    if (!typeof functionName === 'symbol')
-      throw new CompileError(`Function name is not an atom ${_string(functionName)}`);
-    while (isCons(nameAndParams)) {
-      let param = nameAndParams[CAR];
-      if (!typeof param === 'symbol')
-        throw new CompileError(`Function parameter is not an atom ${_string(param)}`);
-      params.push(param);
-      nameAndParams = nameAndParams[CDR];
+  function compileLambda(name, form, scope, bind, newTemp, indent) {
+    if (!isCons(form)) throw new EvalError(`Bad lambda ${_string(form)}`);
+    let body = form[CDR];
+    if (!isCons(body)) throw new EvalError(`Bad lambda ${_string(form)}`);
+    let params = body[CAR];
+    let forms = body[CDR];
+    let paramv = [];
+    let result, code = '';
+    scope = newScope(scope, "lambda-scope");
+    if (typeof params === 'symbol') { // Curry notation :)
+      let paramVar = newTemp(params);
+      paramv.push(paramVar);
+      scope[params] = paramVar;
+      forms = cons(forms, NIL);
     }
-    let dcl = `${functionName}(`;
-    let jsFunctionName = scope[functionName] = toJSname(functionName);
-    let sep = "";
-    for (let param in params) {
-      dcl += sep + param;
-      sep = ", ";
-      scope[param] = toJSname(param);
+    let origFormalParams = params;
+    while (isCons(params)) {
+      let param = params[CAR];
+      if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
+      let paramVar = newTemp(param);
+      paramv.push(paramVar);
+      scope[param] = paramVar;
+      params = params[CDR];
     }
-    emit += indent + `function ${dcl} {\n}`;
-    let { val, emit: emitted } = compileForms(forms, scope, invokeScope, newTemp, indent + "  ");
-    emit += indent + `  return ${val};\n`;
-    emit += indent + `}\n`
-    return { val, emit, dcl };
-  }
-
-  function compileForms(forms, scope, invokeScope, newTemp, indent) {
-    let val = newTemp(), emit = indent + `let ${resultVal};\n`;
+    if (typeof params === 'symbol') {
+      // Hmmm... 'rest' params? This is probably not quite right.
+      let paramVar = newTemp(params);
+      paramv.push(paramVar);
+      scope[params] = paramVar;
+    }
+    else if (params !== NIL) {
+      throw new EvalError(`Bad parameter list ${_string(origFormalParams)}`);
+    }
+    result = newTemp(name);
+    let delim = '';
+    code += indent += `function ${result}(`;
+    for (let param of paramv) {
+      code += delim + param;
+      delim = ', ';
+    }
+    code += `) {\n`;
+    let res = NIL;
     while (isCons(forms)) {
-      let form = forms[CAR];
-      let { val: formVal, emit: emitted } = compileExpr(form, scope, invokeScope, newTemp, indent);
-      emit += emitted;
-      emit += indent + `${val} = ${formVal};\n`;
+      let { evalResult, evalCode } = compileEval(forms[CAR], scope, bind, newTemp, indent + " ");
+      code += evalCode;
       forms = forms[CDR];
     }
-    return { val, emit };
-  }
-
-  function compileExpr(expr, scope, invokeScope, newTemp, indent) {
-    let val = newTemp(), emit = "", fnVal;
-    if (typeof expr === 'symbol') {
-      let sym = expr;
-      let val = scope[sym];
-      if (val !== undefined) return { val, emit };
-      let scopeVal = invokeScope[sym];
-      if (typeof scopeVal === 'function')
-        val = scopeVal;
-      else
-        emit += indent + `${val} = resolveSymbol(${sym});\n`;
-      return { val, emit };
-    }
-    if (isCons(expr)) {
-      let fn = expr[CAR], args = expr[CDR], fnVal;
-      if (!(isCons(fn) && (fn[CAR] === LAMBDA_ATOM || fn[CAR] === SLAMBDA_ATOM))) {
-        let { val, emit: emitted } = compileExpr(fn, scope, newTemp, indent);
-        fnVal = val;
-        emit += emitted;
-      }
-      return compileApply(fn, fnVal, args, scope, invokeScope, newTemp, indent);
-    }
-    if (typeof expr === 'number' || typeof expr === 'bigint' || typeof expr === 'string'
-        || typeof expr === 'boolean' || expr == null) {
-      return { val: _string(expr), emit };
-    }
-    // XXX TODO: deal with object and array literals.
-    throw new CompileError(`Cannot compile expression ${expr}`);
-  }
-
-  function compileApply(fn, fnVal, args, scope, invokeScope, newTemp, indent) {
-    if (typeof fn === 'function') {
-      let lift = (fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? MAX_INTEGER)|0;  // |0 tells JS this truly is an integer
-      let evalCount = MAX_INTEGER;
-      if (lift < 0) {  // This is tedious but it's got to be faster than reading a second property
-        evalCount = lift >> 4;
-        lift = lift & 0xf;
-        if (lift === 0xf) lift = MAX_INTEGER;
-        evalCount = ~evalCount; // bitwize not
-      }
-      let { argv, unevaluated } = compileEvalArgs(args, scope, invokeScope, evalCount, newTemp, indent);
-      let jsArgs = [], noPad = lift === MAX_INTEGER;
-      while (lift > 0) {
-        if (argv.length > 0) {
-          jsArgs.push(argv.shift());
-        } else {
-          if (nopad) break;
-          jsArgs.push("NIL");
-        }
-        --lift;
-      }
-      if (unevaluated) {
-        jsArgs.push(unevaluated);
-      }
-      // XXX TODO
-    }
-  }
-
-  function compileEvalArgs(args, scope, invokeScope, evalCount, newTemp, indent) {
-    let argv = [], unevaluated, emit = "";
-    while (evalCount > 0 && isCons(args)) {
-      let { val, emit: emitted } = compileExpr(args[CAR], scope, invokeScope, newTemp, indent);
-      emit += emitted;
-      argv.push(val);
-      args = args[CDR];
-      evalCount -= 1;
-    }
-    if (evalCount > 0)
-      unevaluated = args;
-    return { argv, unevaluated };
+    if (result)
+      code += indent + `  return ${result};\n`;
+    else
+      code += indent + `  return ${bind(NIL)};\n`;
+    code += indent + `}\n`;
+    return { result, code };
   }
   
   const JS_IDENT_REPLACEMENTS  = {
