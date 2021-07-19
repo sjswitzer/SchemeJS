@@ -1654,7 +1654,7 @@ function SchemeJS(schemeOpts = {}) {
   // (\\ (params) (body1) (body2) ...)
   // (\\ param . form) -- Curry notation
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
-  function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(this, body)) }
+  function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(0, cons(this, body))) }
 
   defineGlobalSymbol("closure?", isClosure);
   function isClosure(form) {
@@ -1844,9 +1844,9 @@ function SchemeJS(schemeOpts = {}) {
     // Typically, it would be eval's job to evaluate the arguments but in the case of JS
     // functions we don't know how many arguments to evaluate until we've read the
     // function descriptor and I want the logic for that all in one place. Here, in fact.
-    // By default apply doesn't evaluate its args, but if evalcount is set (as it is by apply)
-    // then it does.
-    let paramCount = MAX_INTEGER, evalCount = MAX_INTEGER;
+    // By default apply doesn't evaluate its args, but if evaluateArguments is set
+    // (as it is by eval) it does.
+    let paramCount = 0, evalCount = MAX_INTEGER;
     if (isCons(form)) {
       let opSym = form[CAR];
       // Probably need to do something special here for SCLOSURE_ATOM
@@ -1858,7 +1858,7 @@ function SchemeJS(schemeOpts = {}) {
       let fn = form;
       // The function descriptor is encoded as: (~evalCount << 8) | paramCount&0xff;
       // If there's no function descriptor the default is to eval every argument
-      // which, conveniently, is zero.
+      // which, by no accident, is zero.
       let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
       // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
       evalCount = ~functionDescriptor >> 7 >>> 1;
@@ -1901,9 +1901,9 @@ function SchemeJS(schemeOpts = {}) {
             for (let anum = i; anum > 0; --anum)
               argList = cons(jsArgs[anum-1], argList);
             let forms = cons(cons(form, argList), NIL);
-            // TODO: unevaluated args? Is there an SCLOSURE case?
-            let closure = cons(CLOSURE_ATOM, cons(scope, cons(paramList, forms)));
-            return closure;
+            if (i < evalCount)
+              return cons(CLOSURE_ATOM, cons(scope, cons(paramList, forms)));
+            return cons(SCLOSURE_ATOM, cons(i-evalCount, cons(scope, cons(paramList, forms))));
           }
           break;
         }
@@ -2519,27 +2519,7 @@ function SchemeJS(schemeOpts = {}) {
         return null;
       throw new ParseExtraTokens(unParesedInput());
     }
-
-    // I'm old enough to be fond of the EvalQuote REPL.
-    // So, as a special case, transform "symbol(a b c)" into "(symbol (quote a) (quote b) (quote c))"
-    let expr;
-    if (token().type === 'ident' && token(1).type === '(') {
-      function quoteArgs(args) {
-        if (!isCons(args)) return NIL;
-        let quoted = args[CAR];
-        quoted = cons(QUOTE_ATOM, cons(quoted, NIL))
-        return cons(quoted, quoteArgs(args[CDR]));
-      }
-      let tok = consumeToken();
-      let sym = Atom(tok.value);
-      let quoted = parseExpr(prompt);
-      if (quoted)
-        expr = cons(sym, quoteArgs(quoted));
-    } else {
-      // Modern form
-      expr = parseExpr(prompt);
-    }
-
+    let expr = parseExpr(prompt);
     let unparsed = unParesedInput();
     if (!unparsed)
       return expr;
