@@ -633,7 +633,7 @@ function SchemeJS(schemeOpts = {}) {
     return true;
   }
 
-  defineGlobalSymbol("<=", le, { evalArgs: 2 }, "le");
+  defineGlobalSymbol("<=", le, { evalArgs: 2, compileHook: le_hook }, "le");
   function le(a, b, forms) {
     if (forms === undefined) return a <= b;
     if (!(a <= b)) return false;
@@ -645,6 +645,29 @@ function SchemeJS(schemeOpts = {}) {
       forms = forms[CDR];
     }
     return true;
+  }
+  function le_hook(args, scope, bind, newTemp, indent) {
+    let result, code = '';
+    if (args.length < 2) {
+      result = 'true';
+    } else if (args.length == 2) {
+      result += `(${args[0]} <= ${args[1]})`;
+    } else {
+      let a = newTemp('le_a'), b = newTemp('le_b'), forms = args[2];
+      code += indent + `let ${result}; $(result): {\n`
+      code += indent + `  let ${a} ${args[0]}, ${b} = ${args[1]};\n`;
+      code += indent + `  ${result} = ${a} <= ${b};\n`;
+      for (i = 2; i < args.length; ++i) {
+        code += indent + `  if (!${result}) break ${result};\n`;
+        code += indent + `  ${a} = ${b};\n`;
+        let { result: evalResult, code: evalCode } = transpileEval(args[i], scope, bind, newtemp, indent);
+        code += evalCode;
+        code += indent + `  $(b) = ${evalResult};\n`;
+        code += indent + `  ${result} = ${a} <= ${b};\n`;
+      }
+      code += indent + `}\n`;
+    }
+    return { result, code };
   }
 
   defineGlobalSymbol(">", gt, { evalArgs: 2 }, "gt");
@@ -818,8 +841,26 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   // XXX TODO: What happens if more that 3 args?
-  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelseHook }, "if");
+  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
   function ifelse(p, t, f, rest) { return _bool(p) ? _eval(t, this): _eval(f, this) }
+  function ifelse_hook(args, scope, bind, newTemp, indent) {
+    if (args.length < 3) return undefined;
+    let p = args[0], t = args[1], f = args[2];
+    let result = newTemp("if"), code = '';
+    code += indent + `let ${result};\n`;
+    code += indent + `if (_bool($p)) {\n`;
+    // function transpileEval(form, scope, bind, newTemp, indent) {
+    let { result: tResult, code: tCode } = transpileEval(t, scope, bind, newTemp, indent + "  ");
+    code += tCode;
+    code += indent + `  ${result} = ${tResult};\n`
+    code += indent + `} else {\n`;
+    let { result: fResult, code: fCode } = transpileEval(f, scope, bind, newTemp, indent + "  ");
+    code += fCode;
+    code += indent + `  ${result} = ${fResult};\n`
+    code += indent + `}\n`;
+    return { result, code };
+  }
+
 
   queueTests(function() {
     EXPECT(` (&&) `, undefined);
@@ -2700,8 +2741,8 @@ function SchemeJS(schemeOpts = {}) {
   });
 
   // (compile (fn args) forms)
-  defineGlobalSymbol("compile", transpile, { evalArgs: 0 });
-  function transpile(nameAndParams, forms) {
+  defineGlobalSymbol("compile", compile, { evalArgs: 0 });
+  function compile(nameAndParams, forms) {
     if (!isCons(nameAndParams)) new EvalError(`first parameter must be a list`);
     let name = nameAndParams[CAR];
     let args = nameAndParams[CDR];
@@ -2713,7 +2754,7 @@ function SchemeJS(schemeOpts = {}) {
     let bound = { NIL: NIL }, tempNames = {}, varNum = 0;
     let code = '', scope = new Scope();
     let nameStr = newTemp(name.description);
-    let { result: lambdaResult, code: lambdaCode } = compileLambda(name, lambda, scope, bind, newTemp, "");
+    let { result: lambdaResult, code: lambdaCode } = transpileLambda(name, lambda, scope, bind, newTemp, "");
     for (let bindingName of Object.keys(bound))
       code += `  let ${bindingName} = bound[${bindingName}];\n`
     code += lambdaCode;
@@ -2748,7 +2789,7 @@ function SchemeJS(schemeOpts = {}) {
     }
   }
 
-  function compileEval(form, scope, bind, newTemp, indent) {
+  function transpileEval(form, scope, bind, newTemp, indent) {
     let code = '', result;
     if (form === undefined) {
       result = "undefined";
@@ -2776,12 +2817,12 @@ function SchemeJS(schemeOpts = {}) {
         if (isCons(fn)) {
           let fnCar = fn[CAR];
           if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
-            ({ result, code } = compileApply(form, scope, bind, newTemp, indent));
+            ({ result, code } = transpileApply(form, scope, bind, newTemp, indent));
           }
         } else {
-          let { result: func, code: code2 } = compileEval(fn, scope, bind, newTemp, indent);
+          let { result: func, code: code2 } = transpileEval(fn, scope, bind, newTemp, indent);
           code += code2;
-          ({ result, code: code2 } = compileApply(func, args, scope, bind, newTemp, indent));
+          ({ result, code: code2 } = transpileApply(func, args, scope, bind, newTemp, indent));
           code += code2;
         }
       }
@@ -2792,7 +2833,7 @@ function SchemeJS(schemeOpts = {}) {
     return { result, code };
   }
   
-  function compileApply(form, args, scope, bind, newTemp, indent) {
+  function transpileApply(form, args, scope, bind, newTemp, indent) {
     let paramCount = 0, evalCount = MAX_INTEGER;
     let name, params, value, body;
     if (typeof form === 'function') { // form equals function :)
@@ -2814,7 +2855,7 @@ function SchemeJS(schemeOpts = {}) {
       if (typeof form[CDR] === 'symbol') {
         paramCount = 1;
       } else {
-        for (let params = form[CDR[CAR]], isCons(params), params = params[CDR])
+        for (let params = form[CDR[CAR]]; isCons(params); params = params[CDR])
           paramCount += 1;
       }
     }
@@ -2825,7 +2866,7 @@ function SchemeJS(schemeOpts = {}) {
     let argv = [];
     for (let i = 0; isCons(args); ++i) {
       if (i < evalCount) {
-        let { result: evalResult, code: evalCode } = compileEval(args[CAR], scope, bind, newTemp, indent)
+        let { result: evalResult, code: evalCode } = transpileEval(args[CAR], scope, bind, newTemp, indent)
         code += newCode;
         argv.push(evalResult);
       } else {
@@ -2875,7 +2916,7 @@ function SchemeJS(schemeOpts = {}) {
     if (!isCons(body)) throw new EvalError(`Bad form ${_string(form)}`);
     if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
       // I don't expect to compile closures but maybe there's a reason to do so?
-      let { result: lambda, code: lambdaCode } = compileLambda('', form, scope, bind, newTemp, indent);
+      let { result: lambda, code: lambdaCode } = transpileLambda('', form, scope, bind, newTemp, indent);
       code += lambdaCode;
       code += indent + `${result} = ${lambda}.call(this`;
       for (param of params)
@@ -2885,7 +2926,7 @@ function SchemeJS(schemeOpts = {}) {
     return { result, code };
   }
 
-  function compileLambda(name, form, scope, bind, newTemp, indent) {
+  function transpileLambda(name, form, scope, bind, newTemp, indent) {
     if (!isCons(form)) throw new EvalError(`Bad lambda ${_string(form)}`);
     let body = form[CDR];
     if (!isCons(body)) throw new EvalError(`Bad lambda ${_string(form)}`);
@@ -2928,7 +2969,7 @@ function SchemeJS(schemeOpts = {}) {
     code += `) {\n`;
     let res = NIL;
     while (isCons(forms)) {
-      let { result: evalResult,code: evalCode } = compileEval(forms[CAR], scope, bind, newTemp, indent + " ");
+      let { result: evalResult,code: evalCode } = transpileEval(forms[CAR], scope, bind, newTemp, indent + " ");
       code += evalCode;
       forms = forms[CDR];
     }
@@ -2974,41 +3015,6 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(testToJSname("$"), "$cash");
     EXPECT(testToJSname("?"), "$q");
   });
-
-  function ifelseHook(args, scope, newTemp) {
-    if (args.length < 3) return {}; // XXX what happens when more than 3?
-    let val = newTemp(), emit = "";
-    let { val: p, emit: emitted } = compileEval(args[0], scope, newTemp);
-    if (!p) return {};
-    emit += emitted;
-    emit += `let ${val};\nif (${p} === true || !(${p} === false || ${p} === NIL || ${p} == null)) {\n`;
-    let { val: tval, emit: t_emitted } = compileEval(args[1], scope, newTemp);
-    if (!tval) return {};
-    emit += t_emitted + `${val} = ${tval};\n} else {\n`;
-    let { val: fval, emit: f_emitted } = compileEval(args[2], scope, newTemp);
-    if (!fval) return {};
-    emit += f_emitted + `${val} = ${fval};\n}\n`;
-    return { val, emit };
-  }
-
-  function leHook(args, scope, newTemp) {
-    let val = newTemp(), emit = `let ${val} = true;\n`;
-    if (args.length < 1) return { val, emit: emit }
-    let { val: val_n, emit: emit0 } = compileEval(forms[CAR], scope, newTemp);
-    if (!val_n) return {};
-    emit += emit0;
-    if (args.length < 2) return { val, emit };
-    emit += `$val: {\n}`;
-    for (let i = 1; i < args.length; ++i) {
-      let { val: val_n, emit: emit_n } = compileEval(args[i], scope, newTemp);
-      if (!val_n) return {};
-      emit += emit_n;
-      emit += `if (!(${val_n} <= ${val_n})) { ${val} = false; break ${val}; }`
-      val_0 = val_n;
-    }
-    emit += '}\n';
-    return { val, emit };
-  }
 
   defineGlobalSymbol("REPL", REPL);
   function REPL(readline, opts = {}) {
