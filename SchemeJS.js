@@ -77,23 +77,14 @@ function SchemeJS(schemeOpts = {}) {
   // for various reasons including that it looks better in a JS debugger
   // and provides a way to trap attempts to get or set [CAR] and [CDR].
   const NIL = new ((_ => {
-    class nil {
+    return class NIL {
       [Symbol.iterator]() { return { next: () => { done: true } } }
+      get [CAR]() { throw new EvalError("car of nil") }
+      set [CAR](_) { throw new EvalError("set car of nil") }
+      get [CDR]() { throw new EvalError("cdr of nil") }
+      set [CDR](_) { throw new EvalError("set cdr of nil") }
     }
-    return nil;
   })());
-
-  // There does not appear to be an ES6 syntax for this
-  Object.defineProperties(Object.getPrototypeOf(NIL), {
-    [CAR]: {
-      get: function(){ throw new EvalError("car of nil"); },
-      set: function(){ throw new EvalError("set car of nil"); },
-    },
-    [CDR]: {
-      get: function(){ throw new EvalError("cdr of nil"); },
-      set: function(){ throw new EvalError("set cdr of nil"); },
-    },
-  });
   
   // Create a new scope with newScope(oldScope, "description").
   // A new scope's prototype is the enclosing scope.
@@ -268,47 +259,46 @@ function SchemeJS(schemeOpts = {}) {
     toString() {
       return `(${_string(this[CAR])} ...)`;
     }
-  }
-  IteratorList.prototype[PAIR] = true;
-  // There does not appear to be an ES6 syntax for this
-  Object.defineProperties(IteratorList, {
-    [CAR]: {
-      get: function(){ 
-        if (!this._haveCar) {
-          if (this._iterator) {
-            let { done, value } = this._iterator.next();
-            if (!done) {
-              this._cdrVal = new IteratorList(this._iterator);
-              this._iterator = undefined;
-              this._haveCar = true;
-              return this._carVal = value;
-            }
-          }
-          throw new EvalError("car of nil");
-        }
-        return this._carVal;
-      },
-      set: function(){ throw new EvalError("set car of lazy list"); },
-    },
-    [CDR]: {
-      get: function(){
+    get [CAR]() { 
+      if (!this._haveCar) {
         if (this._iterator) {
           let { done, value } = this._iterator.next();
-          if (done) {
+          if (!done) {
+            this._cdrVal = new IteratorList(this._iterator);
             this._iterator = undefined;
-            return this._cdrVal = NIL;
+            this._haveCar = true;
+            return this._carVal = value;
           }
-          this._carVal = value;
-          this._haveCar = true;
-          this._cdrVal = new IteratorList(this._iterator);
-          this._iterator = undefined;
-          return this._cdrVal;
         }
+        throw new EvalError("car of nil");
+      }
+      return this._carVal;
+    }
+    set [CAR](val) {
+      this._iterator = undefined;
+      this._carVal = val;
+      this._haveCar = true;
+    }
+    get [CDR]() {
+      if (this._iterator) {
+        let { done, value } = this._iterator.next();
+        this._iterator = undefined;
+        if (done) {
+          return this._cdrVal = NIL;
+        }
+        this._carVal = value;
+        this._haveCar = true;
+        this._cdrVal = new IteratorList(this._iterator);
         return this._cdrVal;
-      },
-      set: function(){ throw new EvalError("set cdr of lazy list"); },
-    },
-  });
+      }
+      return this._cdrVal;
+    }
+    set [CDR](val) {
+      this._iterator = undefined;
+      this._cdrVal = val;
+    }
+  }
+  IteratorList.prototype[PAIR] = true;
 
   //
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
