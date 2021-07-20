@@ -650,7 +650,7 @@ function SchemeJS(schemeOpts = {}) {
     if (args.length < 2) {
       result = 'true';
     } else if (args.length == 2) {
-      result += `(${args[0]} <= ${args[1]})`;
+      result = `(${args[0]} <= ${args[1]})`;
     } else {
       let a = newTemp('le_a'), b = newTemp('le_b'), forms = args[2];
       code += indent + `let ${result}; $(result): {\n`
@@ -843,20 +843,24 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
   function ifelse(p, t, f, rest) { return _bool(p) ? _eval(t, this): _eval(f, this) }
   function ifelse_hook(args, scope, bind, newTemp, indent) {
-    if (args.length < 3) return undefined;
     let p = args[0], t = args[1], f = args[2];
-    let result = newTemp("if"), code = '';
-    code += indent + `let ${result};\n`;
-    code += indent + `if (_bool($p)) {\n`;
-    // function transpileEval(form, scope, bind, newTemp, indent) {
-    let { result: tResult, code: tCode } = transpileEval(t, scope, bind, newTemp, indent + "  ");
-    code += tCode;
-    code += indent + `  ${result} = ${tResult};\n`
-    code += indent + `} else {\n`;
-    let { result: fResult, code: fCode } = transpileEval(f, scope, bind, newTemp, indent + "  ");
-    code += fCode;
-    code += indent + `  ${result} = ${fResult};\n`
-    code += indent + `}\n`;
+    let result, code = '';
+    if (args.length < 3) {
+      result = 'undefined';
+    } else {
+      let p = args[0], t = args[1], f = args[2];
+      result = newTemp("if"), code = '';
+      code += indent + `let ${result};\n`;
+      code += indent + `if (_bool($p)) {\n`;
+      let { result: tResult, code: tCode } = transpileEval(t, scope, bind, newTemp, indent + "  ");
+      code += tCode;
+      code += indent + `  ${result} = ${tResult};\n`
+      code += indent + `} else {\n`;
+      let { result: fResult, code: fCode } = transpileEval(f, scope, bind, newTemp, indent + "  ");
+      code += fCode;
+      code += indent + `  ${result} = ${fResult};\n`
+      code += indent + `}\n`;
+    }
     return { result, code };
   }
 
