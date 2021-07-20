@@ -2742,26 +2742,31 @@ function SchemeJS(schemeOpts = {}) {
 
   // (compile (fn args) forms)
   defineGlobalSymbol("compile", compile, { evalArgs: 0 });
-  function compile(nameAndParams, forms) {
+  function compile(nameAndParams, forms, _) {
     if (!isCons(nameAndParams)) new EvalError(`first parameter must be a list`);
     let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
     if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)
-    let lambda = list(LAMBDA_ATOM, args, value);
+    let form = list(LAMBDA_ATOM, args, forms);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     let bound = { NIL: NIL }, tempNames = {}, varNum = 0;
     let code = '', scope = new Scope();
     let nameStr = newTemp(name.description);
-    let { result: lambdaResult, code: lambdaCode } = transpileLambda(name, lambda, scope, bind, newTemp, "");
+    let { result: lambdaResult, code: lambdaCode } = transpileLambda(name, form, scope, bind, newTemp, "");
     for (let bindingName of Object.keys(bound))
       code += `  let ${bindingName} = bound[${bindingName}];\n`
     code += lambdaCode;
     code += ` return ${nameStr};\n`
+    console.log("COMPILED", code);
+    /**/
+    return code;
+    /*/
     let bindery = new Function('bound', code);
     let compiled = bindery(bound);
     GlobalScope[name] = compiled;
     return name;
+    /**/
 
     function bind(obj, name) {
       if (obj === NIL) return 'NIL';
@@ -2795,8 +2800,8 @@ function SchemeJS(schemeOpts = {}) {
       result = "undefined";
     } else if (form === null) {
       result = "null";
-    } else if (typeof form === 'number' || typeof form === 'bigint' || typeof form === string) {
-      value = _string(form);
+    } else if (typeof form === 'number' || typeof form === 'bigint' || typeof form === 'string') {
+      result = _string(form);
     } else if (form === NIL) {
       result = bind(NIL);
     } else if (typeof form === 'symbol') {
@@ -2805,9 +2810,9 @@ function SchemeJS(schemeOpts = {}) {
       if (!result) {
         let bound = bind(sym);
         result = newTemp(sym);
-        code += indent + `let ${sym} = this[${bound}];\n`;
+        code += indent + `let ${result} = this[${bound}];\n`;
         let err = bind(EvalError);
-        code += indent + `if (${sym} === undefined) throw new ${err}('Undefined symbol ${sym.description}')\n`;
+        code += indent + `if (${result} === undefined) throw new ${err}('Undefined symbol ${sym.description}')\n`;
       }
     } else if (isCons(form)) {
       let fn = form[CAR], args = form[CDR];
@@ -2816,7 +2821,7 @@ function SchemeJS(schemeOpts = {}) {
       } {
         if (isCons(fn)) {
           let fnCar = fn[CAR];
-          if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
+          if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
             ({ result, code } = transpileApply(form, scope, bind, newTemp, indent));
           }
         } else {
@@ -2866,12 +2871,12 @@ function SchemeJS(schemeOpts = {}) {
     for (let i = 0; isCons(args); ++i) {
       if (i < evalCount) {
         let { result: evalResult, code: evalCode } = transpileEval(args[CAR], scope, bind, newTemp, indent)
-        code += newCode;
+        code += evalCode;
         argv.push(evalResult);
       } else {
         argv.push(bind(argv[CAR]));
       }
-      argv = argv[CDR];
+      args = args[CDR];
     }
     let i = 0;
     for (; i < lift; ++i) {
@@ -2988,6 +2993,8 @@ function SchemeJS(schemeOpts = {}) {
   };
 
   function toJSname(name) {
+    if (typeof name === 'symbol')
+      name = name.description;
     let newName = "", fragment = "";
     for (let ch of name) {
       if (JS_IDENT_REPLACEMENTS[ch]) {
