@@ -2764,15 +2764,16 @@ function SchemeJS(schemeOpts = {}) {
     let bindings = {}, bound = new Map(), tempNames = {}, varNum = 0, emitted = [];
 
     let tools = { bind, boundVal, emit, newTemp, compileScope: this, indent: '' };
-    const wellKnownNames = { NIL: true, EvalError: true, cons: true, car: true, cdr: true };
+    const wellKnownNames = { NIL: true, cons: true, car: true, cdr: true,
+        EvalError: true, _string: true };
     let scope = new Scope();
     let nameStr = bind(COMPILE_HOOK, name.description); // used as a token for the function itself
-    let stringStr = bind(_string);
-    let evalErrorStr = bind(EvalError);
+    let stringStr = bind(_string, "_string");
+    let evalErrorStr = bind(EvalError, "EvalError");
     emit(`function outsideScope(x) {`);
     emit(`  let val = scope[x];`);
-    emit(`  if (x === undefined) throw new ${evalErrorStr}("undefined: : + ${stringStr}(x));`);
-    emit(`  return x;`);
+    emit(`  if (val === undefined) throw new ${evalErrorStr}("undefined: " + ${stringStr}(x));`);
+    emit(`  return val;`);
     emit(`}`);
     let lambdaResult = transpileLambda(nameStr, form, scope, tools);
     emit(`return ${nameStr};`);
@@ -2795,12 +2796,17 @@ function SchemeJS(schemeOpts = {}) {
       if (obj === null) return "null";
       let boundSym = bound.get(obj);
       if (boundSym) return boundSym;
-      if (typeof obj === 'symbol')
-        name = newTemp(obj.description);
-      else if (typeof obj == 'function')
-        name = newTemp(obj.name);
-      else if (!wellKnownNames[name])
-        name = newTemp(name);
+      if (name) {
+        if (!wellKnownNames[name])
+          name = newTemp(name);
+      } else {
+        if (typeof obj === 'symbol')
+          name = newTemp(obj.description);
+        else if (typeof obj == 'function')
+          name = newTemp(obj.name);
+        else
+          name = newTemp();
+      }
       bindings[name] = obj;
       bound.set(obj, name);
       return name;
@@ -2828,7 +2834,6 @@ function SchemeJS(schemeOpts = {}) {
       tempNames[name] = true;
       return name;
     }
-    return name;
   }
 
   function transpileEval(form, scope, tools) {
@@ -2980,7 +2985,7 @@ function SchemeJS(schemeOpts = {}) {
     let forms = body[CDR];
     let paramv = [];
     let result;
-    scope = newScope(scope, "lambda-scope");
+    scope = newScope(scope, "transpile-lambda-scope");
     if (typeof params === 'symbol') { // Curry notation :)
       let paramVar = tools.newTemp(params);
       paramv.push(paramVar);
