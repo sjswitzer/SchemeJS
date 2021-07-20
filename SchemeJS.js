@@ -2904,8 +2904,9 @@ function SchemeJS(schemeOpts = {}) {
     let paramCount = 0, evalCount = MAX_INTEGER;
     let name, params, value, body, hook;
     let saveIndent = tools.indent
+    /*
     let boundVal = tools.boundVal(form);
-    if (boundVal) form = boundVal;
+    if (boundVal) form = boundVal; */
     if (typeof form === 'function') { // form equals function :)
       hook = form[COMPILE_HOOK];
       ({ name, params, value, body } = analyzeJSFunction(form));
