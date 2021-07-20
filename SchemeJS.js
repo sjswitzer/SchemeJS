@@ -656,7 +656,7 @@ function SchemeJS(schemeOpts = {}) {
       code += indent + `let ${result}; $(result): {\n`
       code += indent + `  let ${a} ${args[0]}, ${b} = ${args[1]};\n`;
       code += indent + `  ${result} = ${a} <= ${b};\n`;
-      for (i = 2; i < args.length; ++i) {
+      for (let i = 2; i < args.length; ++i) {
         code += indent + `  if (!${result}) break ${result};\n`;
         code += indent + `  ${a} = ${b};\n`;
         let { result: evalResult, code: evalCode } = transpileEval(args[i], scope, bind, newtemp, indent);
@@ -2753,6 +2753,8 @@ function SchemeJS(schemeOpts = {}) {
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     let bindings = {}, bound = new Map(), tempNames = {}, varNum = 0;
     bind(NIL, "NIL");
+    bind.bound = name => typeof name === 'string' && bindings[name];
+    bind.compileScope = this;
     let code = '\n', scope = new Scope();
     let nameStr = newTemp(name.description);
     let { result: lambdaResult, code: lambdaCode } = transpileLambda(name, form, scope, bind, newTemp, "");
@@ -2781,8 +2783,6 @@ function SchemeJS(schemeOpts = {}) {
       bound.set(obj, name);
       return name;
     }
-    bind.bound = name => typeof name === 'string' && bindings[name];
-    bind.compileScope = this;
 
     function newTemp(name) {
       if (!name || name === '') name = 't';
@@ -2856,10 +2856,10 @@ function SchemeJS(schemeOpts = {}) {
     let paramCount = 0, evalCount = MAX_INTEGER;
     let name, params, value, body;
     let boundFVal = bind.bound(form);
-    if (boundForm) form = boundForm;
+    if (boundFVal) form = boundFVal;
     if (typeof form === 'function') { // form equals function :)
-      ({ name, params, value, body } = analyzeJSFunction(fn));
-      let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
+      ({ name, params, value, body } = analyzeJSFunction(form));
+      let functionDescriptor = form[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
       evalCount = ~functionDescriptor >> 7 >>> 1;
       paramCount = params.length;
       if (evalCount !== MAX_INTEGER)
