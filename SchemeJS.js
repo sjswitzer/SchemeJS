@@ -2760,7 +2760,7 @@ function SchemeJS(schemeOpts = {}) {
         body: undefined, printBody: ' { [native code] }', native: true });
   });
 
-  const COMPILE_SENTINEL = Symbol("*compile-sentinal*");
+  const COMPILE_SENTINEL = Symbol("SENTINEL");
 
   // (compile (fn args) forms)
   defineGlobalSymbol("compile", compile, { evalArgs: 0 });
@@ -2836,16 +2836,15 @@ function SchemeJS(schemeOpts = {}) {
       return typeof name === 'string' && bindSymToObj[name];
     }
     function newTemp(name) {
-      if (!name || name === '') name = 'tmp';
-      else {
-        name = toJSname(name);
-        if (tempNames[name]) {
-          for (;;) {
-            let nameVariation = `${name}${varNum++}`;
-            if (!tempNames[nameVariation]) {
-              name = nameVariation;
-              break;
-            }
+      if (!name || name === '')
+        name = 'tmp';
+      name = toJSname(name);
+      if (tempNames[name]) {
+        for (;;) {
+          let nameVariation = `${name}${varNum++}`;
+          if (!tempNames[nameVariation]) {
+            name = nameVariation;
+            break;
           }
         }
       }
@@ -2904,9 +2903,8 @@ function SchemeJS(schemeOpts = {}) {
     let paramCount = 0, evalCount = MAX_INTEGER;
     let name, params, value, body, hook;
     let saveIndent = tools.indent
-    /*
     let boundVal = tools.boundVal(form);
-    if (boundVal) form = boundVal; */
+    if (boundVal) form = boundVal;
     if (typeof form === 'function') { // form equals function :)
       hook = form[COMPILE_HOOK];
       ({ name, params, value, body } = analyzeJSFunction(form));
@@ -2957,7 +2955,7 @@ function SchemeJS(schemeOpts = {}) {
         fname = tools.bind(form);
       for (let arg of argv)
         argvStr += ', ' + arg;
-      tools.emit(`${result} = ${fname}.apply(this${argvStr});`);
+      tools.emit(`${result} = ${fname}.call(this${argvStr});`);
       return result;
     } else {
       tools.emit(`let ${result}; {`);
@@ -3064,7 +3062,7 @@ function SchemeJS(schemeOpts = {}) {
   
   const JS_IDENT_REPLACEMENTS  = {
     '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
-    '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$minus', '=': '$eq', '<': '$lt',
+    '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$dash', '=': '$eq', '<': '$lt',
     '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
   };
 
