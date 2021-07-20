@@ -49,8 +49,8 @@ function SchemeJS(schemeOpts = {}) {
   const isCons = obj => obj != null && obj[PAIR] === true;
 
   class Cons {
+    [CAR]; [CDR];
     constructor(car, cdr) {
-      [CAR]; [CDR];
       this[CAR] = car;
       this[CDR] = cdr;
     }
@@ -646,7 +646,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     return true;
   }
-  function le_hook(args, scope, tools) {
+  function le_hook(args, transpileHook, tools) {
     let result;
     if (args.length < 2) {
       result = 'true';
@@ -663,7 +663,7 @@ function SchemeJS(schemeOpts = {}) {
       for (let i = 2; i < args.length; ++i) {
         tools.emit(`if (!${result}) break ${result};`);
         tools.emit(`${a} = ${b};`);
-        let evalResult = transpileEval(args[i], scope, tools, tools.newTemp);
+        let evalResult = transpileEval(args[i], transpileHook, tools, tools.newTemp);
         tools.emit(`$(b) = ${evalResult};`);
         tools.emit(`${result} = ${a} <= ${b};`);
       }
@@ -846,7 +846,7 @@ function SchemeJS(schemeOpts = {}) {
   // XXX TODO: What happens if more that 3 args?
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
   function ifelse(p, t, f, rest) { return _bool(p) ? _eval(t, this): _eval(f, this) }
-  function ifelse_hook(args, scope, tools) {
+  function ifelse_hook(args, transpileScope, tools) {
     let p = args[0], t = args[1], f = args[2];
     let result;
     if (args.length < 3) {
@@ -858,12 +858,12 @@ function SchemeJS(schemeOpts = {}) {
       tools.emit(`if (_bool(${p})) {`);
       let saveIndent = tools.indent;
       tools.indent = saveIndent + "  ";
-      let tResult = transpileEval(t, scope, tools);
+      let tResult = transpileEval(t, transpileScope, tools);
       tools.emit(`${result} = ${tResult};`);
       tools.indent = saveIndent;
       tools.emit(`} else {`);
       tools.indent = saveIndent + "  ";
-      let fResult = transpileEval(f, scope, tools);
+      let fResult = transpileEval(f, transpileScope, tools);
       tools.emit(`${result} = ${fResult};`);
       tools.indent = saveIndent;
       tools.emit(`}`);
@@ -2763,16 +2763,21 @@ function SchemeJS(schemeOpts = {}) {
     if (!isCons(nameAndParams)) new EvalError(`first parameter must be a list`);
     let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
-    if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)
-    let form = list(LAMBDA_ATOM, args, forms);
+    if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)    
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
+    let form = list(LAMBDA_ATOM, args, forms);
+    let scope = newScope(this);
+    // If you're compiling a dunction that's already been defined, this prevents
+    // the symbol from resolving to the old definition. It also serves as a
+    // sentinel to transpileApply that it's gotten back around to where it started.
+    scope[name] = COMPILE_HOOK;
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     let bindSymToObj = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
     let tools = { bind, boundVal, emit, newTemp, transpiling: form,
-      compileScope: this, indent: '', evalLimit: 100 };
+      scope, indent: '', evalLimit: 100 };
     const wellKnownNames = { NIL: true, cons: true, car: true, cdr: true,
         EvalError: true, string: true };
-    let scope = new Scope();
+    let transpileScope = new Scope();
     let nameStr = bind(name); // used as a token for the function itself
     tools.functionName = nameStr;
     let stringStr = bind(string, "string");
@@ -2783,7 +2788,7 @@ function SchemeJS(schemeOpts = {}) {
     emit(`  if (val === undefined) throw new ${evalErrorStr}("undefined: " + ${stringStr}(x));`);
     emit(`  return val;`);
     emit(`}`);
-    transpileLambda(nameStr, form, scope, tools);
+    transpileLambda(nameStr, form, transpileScope, tools);
     emit(`return ${nameStr};`);
     let saveEmitted = emitted;
     emitted = [];
@@ -2802,8 +2807,6 @@ function SchemeJS(schemeOpts = {}) {
     function bind(obj, name) {
       if (obj === undefined) return "undefined";
       if (obj === null) return "null";
-      if (typeof obj === 'symbol' && !isAtom(obj))
-        throw "wtf?";
       let boundSym = bindObjToSym.get(obj);
       if (boundSym) return boundSym;
       if (name) {
@@ -2846,7 +2849,7 @@ function SchemeJS(schemeOpts = {}) {
     }
   }
 
-  function transpileEval(form, scope, tools) {
+  function transpileEval(form, transpileScope, tools) {
     if (--tools.evalLimit < 0)
       throw new CompileError(`Too comlpex ${string(form)}`);
     let result;
@@ -2860,12 +2863,12 @@ function SchemeJS(schemeOpts = {}) {
       result = "NIL";
     } else if (typeof form === 'symbol') {
       let sym = form;
-      result = scope[sym];
+      result = transpileScope[sym];
       if (!result) {
-        let scopedVal = tools.compileScope[sym];
+        let scopedVal = tools.scope[sym];
         if (scopedVal) {
           result = tools.bind(scopedVal);
-        } else {
+        } else if (scopedVal !== COMPILE_HOOK) {
           let bound = tools.bind(sym);
           result = `outsideScope(${bound})`;
         }
@@ -2878,11 +2881,11 @@ function SchemeJS(schemeOpts = {}) {
         if (isCons(fn)) {
           let fnCar = fn[CAR];
           if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
-            ({ result, code } = transpileApply(form, scope, tools));
+            ({ result, code } = transpileApply(form, transpileScope, tools));
           }
         } else {
-          let evalResult = transpileEval(fn, scope, tools);
-          result = transpileApply(evalResult, args, scope, tools);
+          let evalResult = transpileEval(fn, transpileScope, tools);
+          result = transpileApply(evalResult, args, transpileScope, tools);
         }
       }
     } else {
@@ -2892,12 +2895,13 @@ function SchemeJS(schemeOpts = {}) {
     return result;
   }
   
-  function transpileApply(form, args, scope, tools) {
+  function transpileApply(form, args, transpileScope, tools) {
     let paramCount = 0, evalCount = MAX_INTEGER;
     let name, params, value, body, hook;
     let saveIndent = tools.indent
+    /*
     let boundVal = tools.boundVal(form);
-    if (boundVal) form = boundVal;
+    if (boundVal) form = boundVal; */
     if (typeof form === 'function') { // form equals function :)
       hook = form[COMPILE_HOOK];
       ({ name, params, value, body } = analyzeJSFunction(form));
@@ -2925,11 +2929,11 @@ function SchemeJS(schemeOpts = {}) {
     }
     // Materialize the arguments in an array
     let lift = evalCount > paramCount ? evalCount : paramCount;
-    let result = tools.newTemp(`${name}_result`);
+    let result = tools.newTemp(name ? `${name}_result` : undefined);
     let argv = [];
     for (let i = 0; isCons(args); ++i) {
       if (i < evalCount) {
-        let evalResult = transpileEval(args[CAR], scope, tools);
+        let evalResult = transpileEval(args[CAR], transpileScope, tools);
         argv.push(evalResult);
       } else {
         argv.push(args[CAR]);
@@ -2938,7 +2942,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     if (form[COMPILE_HOOK]) {
       // TODO: partial application
-      result = hook(argv, scope, tools);
+      result = hook(argv, transpileScope, tools);
     } else {
       tools.emit(`let ${result}; {`);
       tools.indent = saveIndent + "  ";
@@ -2964,7 +2968,12 @@ function SchemeJS(schemeOpts = {}) {
         for (let j = args.length; j > i; --j)
           tools.emit(`${params[i]} = cons(${argv[j]}, ${params[i]};`);
       }
-      if (typeof form === 'function') {
+      if (form === COMPILE_HOOK) {
+        for (let param of params)
+          paramStr += `, ${param}`;
+        tools.emit(`${result} = ${tools.functionName}.call(this${paramStr});`);
+        return result;
+      } else if (typeof form === 'function') {
         if (value) {
           if (body)
             tools.emit(body); 
@@ -2979,18 +2988,13 @@ function SchemeJS(schemeOpts = {}) {
         tools.indent = saveIndent;
         tools.emit(`}`);
         return result;
-      } else if (form === tools.transpiling) {
-        for (let param of params)
-          paramStr += `, ${param}`;
-        tools.emit(`${result} = ${tools.functionName}.call(this${paramStr});`);
-        return result;
       } else if (isCons(form)) {
         let opSym = form[CAR];
         let body = form[CDR];
         if (!isCons(body)) throw new EvalError(`Bad form ${string(form)}`);
         if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
           // I don't expect to compile closures but maybe there's a reason to do so?
-          let lambda = transpileLambda('', form, scope, tools);
+          let lambda = transpileLambda('', form, transpileScope, tools);
           let argStr = '';
           for (arg of argv)
             argStr += ', ' + arg;
@@ -3001,7 +3005,7 @@ function SchemeJS(schemeOpts = {}) {
     return result;
   }
 
-  function transpileLambda(name, form, scope, tools) {
+  function transpileLambda(name, form, transpileScope, tools) {
     if (!isCons(form)) throw new EvalError(`Bad lambda ${string(form)}`);
     let body = form[CDR];
     if (!isCons(body)) throw new EvalError(`Bad lambda ${string(form)}`);
@@ -3009,11 +3013,11 @@ function SchemeJS(schemeOpts = {}) {
     let forms = body[CDR];
     let paramv = [];
     let result;
-    scope = newScope(scope, "transpile-lambda-scope");
+    transpileScope = newScope(transpileScope, "transpile-lambda-scope");
     if (typeof params === 'symbol') { // Curry notation :)
       let paramVar = tools.newTemp(params);
       paramv.push(paramVar);
-      scope[params] = paramVar;
+      transpileScope[params] = paramVar;
       forms = cons(forms, NIL);
     }
     let origFormalParams = params;
@@ -3022,14 +3026,14 @@ function SchemeJS(schemeOpts = {}) {
       if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
       let paramVar = tools.newTemp(param);
       paramv.push(paramVar);
-      scope[param] = paramVar;
+      transpileScope[param] = paramVar;
       params = params[CDR];
     }
     if (typeof params === 'symbol') {
       // Hmmm... 'rest' params? This is probably not quite right.
       let paramVar = tools.newTemp(params);
       paramv.push(paramVar);
-      scope[params] = paramVar;
+      transpileScope[params] = paramVar;
     }
     else if (params !== NIL) {
       throw new EvalError(`Bad parameter list ${string(origFormalParams)}`);
@@ -3044,7 +3048,7 @@ function SchemeJS(schemeOpts = {}) {
     tools.indent = saveIndent + "  ";
     let res = NIL;
     while (isCons(forms)) {
-      result = transpileEval(forms[CAR], scope, tools);
+      result = transpileEval(forms[CAR], transpileScope, tools);
       forms = forms[CDR];
     }
     if (result)
