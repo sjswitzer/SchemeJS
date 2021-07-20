@@ -652,7 +652,8 @@ function SchemeJS(schemeOpts = {}) {
     } else if (args.length == 2) {
       result = `(${args[0]} <= ${args[1]})`;
     } else {
-      let a = newTemp('le_a'), b = newTemp('le_b'), forms = args[2];
+      let a = newTemp('a'), b = newTemp('b'), forms = args[2];
+      result = newTemp('le');
       code += indent + `let ${result}; ${result}: {\n`
       code += indent + `  let ${a} ${args[0]}, ${b} = ${args[1]};\n`;
       code += indent + `  ${result} = ${a} <= ${b};\n`;
@@ -2766,7 +2767,7 @@ function SchemeJS(schemeOpts = {}) {
     let nameStr = newTemp(name.description);
     let { result: lambdaResult, code: lambdaCode } = transpileLambda(nameStr, form, scope, bind, newTemp, "");
     for (let bindingName of Object.keys(bindings))
-      code += `let ${bindingName} = bound["${bindingName}"];\n`
+      code += `let ${bindingName} = bound[${_string(bindingName)}];\n`
     code += lambdaCode;
     code += `return ${nameStr};\n`
     console.log("COMPILED", code);
@@ -2888,11 +2889,11 @@ function SchemeJS(schemeOpts = {}) {
     // Materialize the arguments in an array
     let lift = evalCount > paramCount ? evalCount : paramCount;
     let result = newTemp(`${name}_result`);
-    let code = indent + `let ${result}; {${name ? "// " + name : ""}\n`;
+    let code = indent + `let ${result}; {\n`;
     let argv = [];
     for (let i = 0; isCons(args); ++i) {
       if (i < evalCount) {
-        let { result: evalResult, code: evalCode } = transpileEval(args[CAR], scope, bind, newTemp, indent)
+        let { result: evalResult, code: evalCode } = transpileEval(args[CAR], scope, bind, newTemp, indent);
         code += evalCode;
         argv.push(evalResult);
       } else {
