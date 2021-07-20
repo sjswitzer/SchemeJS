@@ -846,9 +846,8 @@ function SchemeJS(schemeOpts = {}) {
     return val;
   }
 
-  // XXX TODO: What happens if more that 3 args?
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
-  function ifelse(p, t, f, rest) { return _bool(p) ? _eval(t, this): _eval(f, this) }
+  function ifelse(p, t, f, _) { return _bool(p) ? _eval(t, this): _eval(f, this) }
   function ifelse_hook(args, transpileScope, tools) {
     let p = args[0], t = args[1], f = args[2];
     let result;
@@ -2815,7 +2814,9 @@ function SchemeJS(schemeOpts = {}) {
       let boundSym = bindObjToSym.get(obj);
       if (boundSym) return boundSym;
       if (name) {
-        if (!wellKnownNames[name])
+        if (typeof name === 'symbol')
+          name = newTemp(name.description);
+        else if (!wellKnownNames[name])
           name = newTemp(name);
       } else {
         if (typeof obj === 'symbol')
@@ -2870,9 +2871,11 @@ function SchemeJS(schemeOpts = {}) {
       result = transpileScope[sym];
       if (!result) {
         let scopedVal = tools.scope[sym];
-        if (scopedVal) {
+        if (scopedVal === COMPILE_SENTINEL) {
+          result = scopedVal;
+        } else if (scopedVal) {
           result = tools.bind(scopedVal);
-        } else if (scopedVal !== COMPILE_SENTINEL) {
+        } else {
           let bound = tools.bind(sym);
           result = `outsideScope(${bound})`;
         }
