@@ -653,7 +653,7 @@ function SchemeJS(schemeOpts = {}) {
       result = `(${args[0]} <= ${args[1]})`;
     } else {
       let a = newTemp('le_a'), b = newTemp('le_b'), forms = args[2];
-      code += indent + `let ${result}; $(result): {\n`
+      code += indent + `let ${result}; ${result}: {\n`
       code += indent + `  let ${a} ${args[0]}, ${b} = ${args[1]};\n`;
       code += indent + `  ${result} = ${a} <= ${b};\n`;
       for (let i = 2; i < args.length; ++i) {
@@ -2780,7 +2780,6 @@ function SchemeJS(schemeOpts = {}) {
     function bind(obj, name) {
       let boundSym = bound.get(obj);
       if (boundSym) return boundSym;
-      if (obj === NIL) return 'NIL';
       if (typeof obj === 'symbol') name = newTemp(obj.description);
       else if (typeof obj == 'function') name = newTemp(obj.name);
       else name = newTemp(name);
@@ -2845,10 +2844,11 @@ function SchemeJS(schemeOpts = {}) {
             ({ result, code } = transpileApply(form, scope, bind, newTemp, indent));
           }
         } else {
-          let { result: func, code: code2 } = transpileEval(fn, scope, bind, newTemp, indent);
-          code += code2;
-          ({ result, code: code2 } = transpileApply(func, args, scope, bind, newTemp, indent));
-          code += code2;
+          let { result: evalResult, code: evalCode } = transpileEval(fn, scope, bind, newTemp, indent);
+          code += evalCode;
+          let { result: applyResult, code: applyCode } = transpileApply(evalResult, args, scope, bind, newTemp, indent);
+          code += applyCode;
+          result = applyResult;
         }
       }
     } else {
