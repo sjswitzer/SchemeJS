@@ -2755,7 +2755,7 @@ function SchemeJS(schemeOpts = {}) {
     let nameStr = newTemp(name.description);
     let { result: lambdaResult, code: lambdaCode } = transpileLambda(name, form, scope, bind, newTemp, "");
     for (let bindingName of Object.keys(bound))
-      code += `  let ${bindingName} = bound[${bindingName}];\n`
+      code += `  let ${bindingName} = bound["${bindingName}"];\n`
     code += lambdaCode;
     code += ` return ${nameStr};\n`
     console.log("COMPILED", code);
@@ -2966,7 +2966,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     result = newTemp(name);
     let delim = '';
-    code += indent += `function ${result}(`;
+    code += indent + `function ${result}(`;
     for (let param of paramv) {
       code += delim + param;
       delim = ', ';
@@ -2974,7 +2974,7 @@ function SchemeJS(schemeOpts = {}) {
     code += `) {\n`;
     let res = NIL;
     while (isCons(forms)) {
-      let { result: evalResult,code: evalCode } = transpileEval(forms[CAR], scope, bind, newTemp, indent + " ");
+      let { result: evalResult, code: evalCode } = transpileEval(forms[CAR], scope, bind, newTemp, indent + " ");
       code += evalCode;
       forms = forms[CDR];
     }
