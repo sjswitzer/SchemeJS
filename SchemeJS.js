@@ -2924,7 +2924,7 @@ function SchemeJS(schemeOpts = {}) {
     if (typeof form === 'function') {
       let hook = form[COMPILE_HOOK];
       if (hook) {
-        result = hook(args, scope, tools, newTemp, indent);
+        result = hook(argv, scope, tools, newTemp, indent);
       } else if (value ) {
         if (body)
           tools.emit(indent + body); 
