@@ -660,7 +660,7 @@ function SchemeJS(schemeOpts = {}) {
       for (let i = 2; i < args.length; ++i) {
         tools.emit(indent + `  if (!${result}) break ${result};\n`);
         tools.emit(indent + `  ${a} = ${b};\n`);
-        let evalResult = transpileEval(args[i], scope, tools, newtemp, indent);
+        let evalResult = transpileEval(args[i], scope, tools, newtemp, indent + "  ");
         tools.emit(indent + `  $(b) = ${evalResult};\n`);
         tools.emit(indent + `  ${result} = ${a} <= ${b};\n`);
       }
@@ -2754,17 +2754,16 @@ function SchemeJS(schemeOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     let bindings = {}, bound = new Map(), tempNames = {}, varNum = 0, emitted = [];
-
-    // Add some utility functions and values to "bind" so that we don't have to pass
-    // a zillion parameters.
     let tools = { bind, boundVal, emit, compileScope: this };
-
     let scope = new Scope();
     let nameStr = newTemp(name.description);
     let lambdaResult = transpileLambda(nameStr, form, scope, tools, newTemp, "");
+    emit(`return ${nameStr};\n`);
+    let saveEmitted = emitted;
+    emitted = [];
     for (let bindingName of Object.keys(bindings))
       emit(`let ${bindingName} = bound[${_string(bindingName)}];\n`);
-    emit(`return ${nameStr};\n`);
+    emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     console.log("COMPILED", code);
     /*
