@@ -178,6 +178,7 @@ function SchemeJS(schemeOpts = {}) {
   const FUNCTION_DESCRIPTOR_SYMBOL = Symbol("*schemeJS-function-descriptor*");
   const COMPILE_HOOK = Symbol("*schemeJS-compile-hook*");
   const MAX_INTEGER = 2**31-1;  // Presumably allows JIT to do small-int optimizations
+  const analyzedFunctions = new Map();
 
   exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
   function defineGlobalSymbol(name, value, ...aliases) {
@@ -2583,6 +2584,9 @@ function SchemeJS(schemeOpts = {}) {
     // Super janky passer. It only has to recoginze things that fn.toSting() can return.
     // But it's conservative in that it doesn't recognize any functions that
     // don't end in a particular sequence of tokens or that use "return" more than once.
+    let analyzed = analyzedFunctions.get(fn);
+    if (analyzed)
+      return analyzed;
     let str = fn.toString(), pos = 0, token = "";
     let name = fn.name, params = [], restParam, value, body, native = false, printBody;
     parse: {
@@ -2624,7 +2628,9 @@ function SchemeJS(schemeOpts = {}) {
           value = possibleValue;
       }
     }
-    return { name, params, restParam, value, body, printBody, native };
+    let res = { name, params, restParam, value, body, printBody, native };
+    analyzedFunctions.set(fn, res);
+    return res;
 
     function parseBody() {
       if ( token === '{') {
@@ -2763,12 +2769,12 @@ function SchemeJS(schemeOpts = {}) {
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     let bindings = {}, bound = new Map(), tempNames = {}, varNum = 0, emitted = [];
 
-    let tools = { bind, boundVal, emit, newTemp, compileScope: this, indent: '' };
+    let tools = { bind, boundVal, emit, newTemp, compileScope: this, indent: '', evalLimit: 100 };
     const wellKnownNames = { NIL: true, cons: true, car: true, cdr: true,
-        EvalError: true, _string: true };
+        EvalError: true, string: true };
     let scope = new Scope();
-    let nameStr = bind(COMPILE_HOOK, name.description); // used as a token for the function itself
-    let stringStr = bind(_string, "_string");
+    let nameStr = bind(name, undefined, COMPILE_HOOK); // used as a token for the function itself
+    let stringStr = bind(_string, "string");
     let evalErrorStr = bind(EvalError, "EvalError");
     emit(`function outsideScope(x) {`);
     emit(`  let val = scope[x];`);
@@ -2791,7 +2797,7 @@ function SchemeJS(schemeOpts = {}) {
     */
     return name;
 
-    function bind(obj, name) {
+    function bind(obj, name, overrideValue) {
       if (obj === undefined) return "undefined";
       if (obj === null) return "null";
       let boundSym = bound.get(obj);
@@ -2807,6 +2813,7 @@ function SchemeJS(schemeOpts = {}) {
         else
           name = newTemp();
       }
+      if (overrideValue) obj = overrideValue;
       bindings[name] = obj;
       bound.set(obj, name);
       return name;
@@ -2837,6 +2844,8 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   function transpileEval(form, scope, tools) {
+    if (--tools.evalLimit < 0)
+      throw new CompileError(`Too comlpex ${_string(form)}`);
     let result;
     if (form === undefined) {
       result = "undefined";
@@ -2885,6 +2894,11 @@ function SchemeJS(schemeOpts = {}) {
     let name, params, value, body;
     let boundVal = tools.boundVal(form);
     if (boundVal) form = boundVal;
+    if (form === COMPILE_HOOK) {
+      // This flags that we've hit upon the function we're compiling.
+      // We still have to compile it somehow.
+      throw "todo";
+    }
     if (typeof form === 'function') { // form equals function :)
       ({ name, params, value, body } = analyzeJSFunction(form));
       let functionDescriptor = form[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
@@ -2899,13 +2913,15 @@ function SchemeJS(schemeOpts = {}) {
         evalCount = 0;
       }
       // Compile closures?
+      params = [];
       if (!isCons(form[CDR])) throw new EvalError(`Bad lambda ${_string(form)}`);
       if (typeof form[CDR] === 'symbol') {
-        paramCount = 1;
+        params.push(form[CDR])
       } else {
         for (let params = form[CDR[CAR]]; isCons(params); params = params[CDR])
-          paramCount += 1;
+          params.push(params[CAR]);
       }
+      paramCount = params.length;
     }
     // Materialize the arguments in an array
     let lift = evalCount > paramCount ? evalCount : paramCount;
@@ -2918,16 +2934,15 @@ function SchemeJS(schemeOpts = {}) {
         let evalResult = transpileEval(args[CAR], scope, tools);
         argv.push(evalResult);
       } else {
-        argv.push(tools.bind(args[CAR]));
+        argv.push(args[CAR]);
       }
       args = args[CDR];
     }
     let i = 0;
     for (; i < lift; ++i) {
-      if (i < args.length) {
-        tools.emit(`let ${params[i]} = ${args[i]};`);
-      }
-      else {
+      if (i < argv.length) {
+        tools.emit(`let ${params[i]} = ${argv[i]};`);
+      } else {
         if (i < paramCount) {
           if (i < 1) {
             tools.emit(`let ${params[i]} = undefined;`);
@@ -2941,7 +2956,7 @@ function SchemeJS(schemeOpts = {}) {
     if (evalCount !== MAX_INTEGER && i < params.length) {
       tools.emit(`let ${params[i]} = NIL;`);
       for (let j = args.length; j > i; --j)
-      tools.emit(`${params[i]} = cons(${args[j]}, ${params[i]};`);
+      tools.emit(`${params[i]} = cons(${argv[j]}, ${params[i]};`);
     }
     if (typeof form === 'function') {
       let hook = form[COMPILE_HOOK];
@@ -2953,8 +2968,8 @@ function SchemeJS(schemeOpts = {}) {
           tools.emit(`${result} = ${value};`);
       } else {
         // No template: going to have to call it after all.
-        let bound = tools.bind(fn, name), paramStr = '';
-        for (param of params)
+        let bound = tools.bind(form, name), paramStr = '';
+        for (let param of params)
           paramStr += `, ${param}`;
         tools.emit(`${result} = ${bound}.call(this${paramStr});`);
       }
