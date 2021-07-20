@@ -645,26 +645,29 @@ function SchemeJS(schemeOpts = {}) {
     }
     return true;
   }
-  function le_hook(args, scope, tools, newTemp, indent) {
+  function le_hook(args, scope, tools) {
     let result;
     if (args.length < 2) {
       result = 'true';
     } else if (args.length == 2) {
       result = `(${args[0]} <= ${args[1]})`;
     } else {
-      let a = newTemp('a'), b = newTemp('b'), forms = args[2];
-      result = newTemp('le');
-      tools.emit(indent + `let ${result}; ${result}: {\n`);
-      tools.emit(indent + `  let ${a} ${args[0]}, ${b} = ${args[1]};\n`);
-      tools.emit(indent + `  ${result} = ${a} <= ${b};\n`);
+      let a = tools.newTemp('a'), b = tools.newTemp('b'), forms = args[2];
+      result = tools.newTemp('le');
+      tools.emit(`let ${result}; ${result}: {`);
+      tools.emit(`let ${a} ${args[0]}, ${b} = ${args[1]};`);
+      let saveIndent = tools.indent;
+      tools.indent = saveIndent + "  ";
+      tools.emit(`${result} = ${a} <= ${b};`);
       for (let i = 2; i < args.length; ++i) {
-        tools.emit(indent + `  if (!${result}) break ${result};\n`);
-        tools.emit(indent + `  ${a} = ${b};\n`);
-        let evalResult = transpileEval(args[i], scope, tools, newtemp, indent + "  ");
-        tools.emit(indent + `  $(b) = ${evalResult};\n`);
-        tools.emit(indent + `  ${result} = ${a} <= ${b};\n`);
+        tools.emit(`if (!${result}) break ${result};`);
+        tools.emit(`${a} = ${b};`);
+        let evalResult = transpileEval(args[i], scope, tools, tools.newTemp);
+        tools.emit(`$(b) = ${evalResult};`);
+        tools.emit(`${result} = ${a} <= ${b};`);
       }
-      tools.emit(indent + `}\n`);
+      tools.indent = saveIndent;
+      tools.emit(`}`);
     }
     return result;
   }
@@ -842,22 +845,27 @@ function SchemeJS(schemeOpts = {}) {
   // XXX TODO: What happens if more that 3 args?
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
   function ifelse(p, t, f, rest) { return _bool(p) ? _eval(t, this): _eval(f, this) }
-  function ifelse_hook(args, scope, tools, newTemp, indent) {
+  function ifelse_hook(args, scope, tools) {
     let p = args[0], t = args[1], f = args[2];
     let result;
     if (args.length < 3) {
       result = 'undefined';
     } else {
       let p = args[0], t = args[1], f = args[2];
-      result = newTemp("if");
-      tools.emit(indent + `let ${result};\n`);
-      tools.emit(indent + `if (_bool($p)) {\n`);
-      let tResult = transpileEval(t, scope, tools, newTemp, indent + "  ");
-      tools.emit(indent + `  ${result} = ${tResult};\n`);
-      tools.emit(indent + `} else {\n`);
-      let fResult = transpileEval(f, scope, tools, newTemp, indent + "  ");
-      tools.emit(indent + `  ${result} = ${fResult};\n`);
-      tools.emit(indent + `}\n`);
+      result = tools.newTemp("if");
+      tools.emit(`let ${result};`);
+      tools.emit(`if (_bool($p)) {`);
+      let saveIndent = tools.indent;
+      tools.indent = saveIndent + "  ";
+      let tResult = transpileEval(t, scope, tools);
+      tools.emit(`${result} = ${tResult};`);
+      tools.indent = saveIndent;
+      tools.emit(`} else {`);
+      tools.indent = saveIndent + "  ";
+      let fResult = transpileEval(f, scope, tools);
+      tools.emit(`${result} = ${fResult};`);
+      tools.indent = saveIndent;
+      tools.emit(`}`);
     }
     return result;
   }
@@ -2199,7 +2207,7 @@ function SchemeJS(schemeOpts = {}) {
       if (line.length > 0 && line.length + str.length > stringWrap) {
         line += sep;
         lines.push(line);
-        line = indent + prefix + str;
+        line = prefix + str;
       } else {
         line += sep + prefix + str;
       }
@@ -2754,44 +2762,55 @@ function SchemeJS(schemeOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     let bindings = {}, bound = new Map(), tempNames = {}, varNum = 0, emitted = [];
-    let tools = { bind, boundVal, emit, compileScope: this };
+
+    let tools = { bind, boundVal, emit, newTemp, compileScope: this, indent: '' };
+    const wellKnownNames = { NIL: true, EvalError: true, cons: true, car: true, cdr: true };
     let scope = new Scope();
-    let nameStr = newTemp(name.description);
-    let lambdaResult = transpileLambda(nameStr, form, scope, tools, newTemp, "");
-    emit(`return ${nameStr};\n`);
+    let nameStr = bind(COMPILE_HOOK, name.description); // used as a token for the function itself
+    let stringStr = bind(_string);
+    let evalErrorStr = bind(EvalError);
+    emit(`function outsideScope(x) {`);
+    emit(`  let val = scope[x];`);
+    emit(`  if (x === undefined) throw new ${evalErrorStr}("undefined: : + ${stringStr}(x));`);
+    emit(`  return x;`);
+    emit(`}`);
+    let lambdaResult = transpileLambda(nameStr, form, scope, tools);
+    emit(`return ${nameStr};`);
     let saveEmitted = emitted;
     emitted = [];
     for (let bindingName of Object.keys(bindings))
-      emit(`let ${bindingName} = bound[${_string(bindingName)}];\n`);
+      emit(`let ${bindingName} = bound[${_string(bindingName)}];`);
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     console.log("COMPILED", code);
     /*
-    let bindery = new Function('bound', code);
-    let compiled = bindery(bound);
+    let bindery = new Function('scope', 'bound', code);
+    let compiled = bindery(scope, bound);
     GlobalScope[name] = compiled;
     */
     return name;
 
     function bind(obj, name) {
+      if (obj === undefined) return "undefined";
+      if (obj === null) return "null";
       let boundSym = bound.get(obj);
       if (boundSym) return boundSym;
-      if (typeof obj === 'symbol') name = newTemp(obj.description);
-      else if (typeof obj == 'function') name = newTemp(obj.name);
-      else name = newTemp(name);
+      if (typeof obj === 'symbol')
+        name = newTemp(obj.description);
+      else if (typeof obj == 'function')
+        name = newTemp(obj.name);
+      else if (!wellKnownNames[name])
+        name = newTemp(name);
       bindings[name] = obj;
       bound.set(obj, name);
       return name;
     }
-
     function emit(str) {
-      emitted.push(str);
+      emitted.push(tools.indent + str + '\n');
     }
-
     function boundVal(name) {
       return typeof name === 'string' && bindings[name];
     }
-
     function newTemp(name) {
       if (!name || name === '') name = 't';
       else {
@@ -2812,7 +2831,7 @@ function SchemeJS(schemeOpts = {}) {
     return name;
   }
 
-  function transpileEval(form, scope, tools, newTemp, indent) {
+  function transpileEval(form, scope, tools) {
     let result;
     if (form === undefined) {
       result = "undefined";
@@ -2831,10 +2850,7 @@ function SchemeJS(schemeOpts = {}) {
           result = tools.bind(scopedVal, sym);
         } else {
           let bound = tools.bind(sym);
-          result = newTemp(sym);
-          tools.emit(indent + `let ${result} = this[${bound}];\n`);
-          let err = tools.bind(EvalError);
-          tools.emit(indent + `if (${result} === undefined) throw new ${err}('Undefined symbol ${sym.description}')\n`);
+          result = `outsideScope(${bound})`;
         }
       }
     } else if (isCons(form)) {
@@ -2845,11 +2861,11 @@ function SchemeJS(schemeOpts = {}) {
         if (isCons(fn)) {
           let fnCar = fn[CAR];
           if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
-            ({ result, code } = transpileApply(form, scope, tools, newTemp, indent));
+            ({ result, code } = transpileApply(form, scope, tools));
           }
         } else {
-          let evalResult = transpileEval(fn, scope, tools, newTemp, indent);
-          result = transpileApply(evalResult, args, scope, tools, newTemp, indent);
+          let evalResult = transpileEval(fn, scope, tools);
+          result = transpileApply(evalResult, args, scope, tools);
         }
       }
     } else {
@@ -2859,7 +2875,7 @@ function SchemeJS(schemeOpts = {}) {
     return result;
   }
   
-  function transpileApply(form, args, scope, tools, newTemp, indent) {
+  function transpileApply(form, args, scope, tools) {
     let paramCount = 0, evalCount = MAX_INTEGER;
     let name, params, value, body;
     let boundVal = tools.boundVal(form);
@@ -2888,12 +2904,13 @@ function SchemeJS(schemeOpts = {}) {
     }
     // Materialize the arguments in an array
     let lift = evalCount > paramCount ? evalCount : paramCount;
-    let result = newTemp(`${name}_result`);
-    tools.emit(indent + `let ${result}; {\n`);
+    let result = tools.newTemp(`${name}_result`), saveIndent = tools.indent;
+    tools.indent = saveIndent + "  ";
+    tools.emit(`let ${result}; {`);
     let argv = [];
     for (let i = 0; isCons(args); ++i) {
       if (i < evalCount) {
-        let evalResult = transpileEval(args[CAR], scope, tools, newTemp, indent);
+        let evalResult = transpileEval(args[CAR], scope, tools);
         argv.push(evalResult);
       } else {
         argv.push(tools.bind(args[CAR]));
@@ -2903,12 +2920,12 @@ function SchemeJS(schemeOpts = {}) {
     let i = 0;
     for (; i < lift; ++i) {
       if (i < args.length) {
-        tools.emit(indent + `  let ${params[i]} = ${args[i]};\n`);
+        tools.emit(`let ${params[i]} = ${args[i]};`);
       }
       else {
         if (i < paramCount) {
           if (i < 1) {
-            tools.emit(indent + `let ${params[i]} = undefined;\n`);
+            tools.emit(`let ${params[i]} = undefined;`);
             break;
           }
         }
@@ -2917,27 +2934,27 @@ function SchemeJS(schemeOpts = {}) {
       break;
     }
     if (evalCount !== MAX_INTEGER && i < params.length) {
-      tools.emit(indent + `  let ${params[i]} = NIL;\n`);
+      tools.emit(`let ${params[i]} = NIL;`);
       for (let j = args.length; j > i; --j)
-      tools.emit(indent + `  ${params[i]} = cons(${args[j]}, ${params[i]};\n`);
+      tools.emit(`${params[i]} = cons(${args[j]}, ${params[i]};`);
     }
     if (typeof form === 'function') {
       let hook = form[COMPILE_HOOK];
       if (hook) {
-        result = hook(argv, scope, tools, newTemp, indent);
-      } else if (value ) {
+        result = hook(argv, scope, tools);
+      } else if (value) {
         if (body)
-          tools.emit(indent + body); 
-          tools.emit(indent + `${result} = ${value};\n`);
+          tools.emit(body); 
+          tools.emit(`${result} = ${value};`);
       } else {
         // No template: going to have to call it after all.
-        let bound = tools.bind(fn, name);
-        tools.emit(indent + `${result} = ${bound}.call(this`);
+        let bound = tools.bind(fn, name), paramStr = '';
         for (param of params)
-          tools.emit(`, ${param}`);
-          tools.emit(`);\n`);
+          paramStr += `, ${param}`;
+        tools.emit(`${result} = ${bound}.call(this${paramStr});`);
       }
-      tools.emit(indent + `}\n`);
+      tools.indent = saveIndent;
+      tools.emit(`}`);
       return result;
     } else if (isCons(form)) {
       let opSym = form[CAR];
@@ -2945,17 +2962,17 @@ function SchemeJS(schemeOpts = {}) {
       if (!isCons(body)) throw new EvalError(`Bad form ${_string(form)}`);
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
         // I don't expect to compile closures but maybe there's a reason to do so?
-        let lambda = transpileLambda('', form, scope, tools, newTemp, indent);
-        tools.emit(indent + `${result} = ${lambda}.call(this`);
+        let lambda = transpileLambda('', form, scope, tools);
+        tools.emit(`${result} = ${lambda}.call(this`);
         for (param of params)
         tools.emit(`, ${param}`);
-        tools.emit(`);\n`);
+        tools.emit(`);`);
       }
     }
     return result;
   }
 
-  function transpileLambda(name, form, scope, tools, newTemp, indent) {
+  function transpileLambda(name, form, scope, tools) {
     if (!isCons(form)) throw new EvalError(`Bad lambda ${_string(form)}`);
     let body = form[CDR];
     if (!isCons(body)) throw new EvalError(`Bad lambda ${_string(form)}`);
@@ -2965,7 +2982,7 @@ function SchemeJS(schemeOpts = {}) {
     let result;
     scope = newScope(scope, "lambda-scope");
     if (typeof params === 'symbol') { // Curry notation :)
-      let paramVar = newTemp(params);
+      let paramVar = tools.newTemp(params);
       paramv.push(paramVar);
       scope[params] = paramVar;
       forms = cons(forms, NIL);
@@ -2974,38 +2991,39 @@ function SchemeJS(schemeOpts = {}) {
     while (isCons(params)) {
       let param = params[CAR];
       if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
-      let paramVar = newTemp(param);
+      let paramVar = tools.newTemp(param);
       paramv.push(paramVar);
       scope[param] = paramVar;
       params = params[CDR];
     }
     if (typeof params === 'symbol') {
       // Hmmm... 'rest' params? This is probably not quite right.
-      let paramVar = newTemp(params);
+      let paramVar = tools.newTemp(params);
       paramv.push(paramVar);
       scope[params] = paramVar;
     }
     else if (params !== NIL) {
       throw new EvalError(`Bad parameter list ${_string(origFormalParams)}`);
     }
-    result = newTemp(name);
-    let delim = '';
-    tools.emit(indent + `function ${result}(`);
+    result = tools.newTemp(name);
+    let delim = '', paramStr = '', saveIndent = tools.indent;
     for (let param of paramv) {
-      tools.emit(delim + param);
+      paramStr += delim + param;
       delim = ', ';
     }
-    tools.emit(`) {\n`);
+    tools.emit(`function ${result}(${paramStr}) {`);
+    tools.indent = saveIndent + "  ";
     let res = NIL;
     while (isCons(forms)) {
-      result = transpileEval(forms[CAR], scope, tools, newTemp, indent + "  ");
+      result = transpileEval(forms[CAR], scope, tools);
       forms = forms[CDR];
     }
     if (result)
-    tools.emit(indent + `  return ${result};\n`);
+      tools.emit(`return ${result};`);
     else
-    tools.emit(indent + `  return ${tools.bind(NIL)};\n`);
-    tools.emit(indent + `}\n`);
+      tools.emit(`return ${tools.bind(NIL)};`);
+    tools.indent = saveIndent;
+    tools.emit(`}`);
     return result;
   }
   
