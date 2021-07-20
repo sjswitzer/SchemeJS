@@ -2752,25 +2752,26 @@ function SchemeJS(schemeOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     let bindings = {}, bound = new Map(), tempNames = {}, varNum = 0;
-    bind(NIL, "NIL");
+
+    // Add some utility functions and values to "bind" so that we don't have to pass
+    // a zillion parameters.
     bind.bound = name => typeof name === 'string' && bindings[name];
     bind.compileScope = this;
+
     let code = '\n', scope = new Scope();
     let nameStr = newTemp(name.description);
-    let { result: lambdaResult, code: lambdaCode } = transpileLambda(name, form, scope, bind, newTemp, "");
+    let { result: lambdaResult, code: lambdaCode } = transpileLambda(nameStr, form, scope, bind, newTemp, "");
     for (let bindingName of Object.keys(bindings))
       code += `let ${bindingName} = bound["${bindingName}"];\n`
     code += lambdaCode;
     code += `return ${nameStr};\n`
     console.log("COMPILED", code);
-    /**/
-    return code;
-    /*/
+    /*
     let bindery = new Function('bound', code);
     let compiled = bindery(bound);
     GlobalScope[name] = compiled;
+    */
     return name;
-    /**/
 
     function bind(obj, name) {
       let boundSym = bound.get(obj);
@@ -2801,6 +2802,7 @@ function SchemeJS(schemeOpts = {}) {
       tempNames[name] = true;
       return name;
     }
+    return name;
   }
 
   function transpileEval(form, scope, bind, newTemp, indent) {
@@ -2890,7 +2892,7 @@ function SchemeJS(schemeOpts = {}) {
         code += evalCode;
         argv.push(evalResult);
       } else {
-        argv.push(bind(argv[CAR]));
+        argv.push(bind(args[CAR]));
       }
       args = args[CDR];
     }
