@@ -1845,7 +1845,7 @@ function SchemeJS(schemeOpts = {}) {
     if (form === NIL) return form;
     if (typeof form === 'symbol') {
       let val = scope[form];
-      if (val === undefined) throw new EvalError(`Undefined symbol ${form.description}`);
+      if (val === undefined) throw new EvalError(`Undefined symbol ${string(form)}`);
       return val;
     }
     if (isCons(form)) {
@@ -2807,7 +2807,7 @@ function SchemeJS(schemeOpts = {}) {
     bind(cdr, "cdr");
     emit(`function outsideScope(this_, x) {`);
     emit(`  let val = this_[x];`);
-    emit(`  if (val === undefined) throw new ${evalErrorStr}("undefined: " + ${stringStr}(x));`);
+    emit(`  if (val === undefined) throw new ${evalErrorStr}("Undefined symbol " + ${stringStr}(x));`);
     emit(`  return val;`);
     emit(`}`);
     compileLambda(nameStr, form, compileScope, tools);
