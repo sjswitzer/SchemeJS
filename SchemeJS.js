@@ -2795,18 +2795,16 @@ function SchemeJS(schemeOpts = {}) {
     let bindSymToObj = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
     let tools = { bind, boundVal, emit, newTemp, transpiling: form,
       scope, indent: '', evalLimit: 100 };
-    const wellKnownNames = { NIL: true, cons: true, car: true, cdr: true,
-        EvalError: true, string: true, cons: true, car: true, cdr: true, bool: true };
     let transpileScope = new Scope();
     let nameStr = newTemp(name);
     tools.functionName = nameStr;
     let stringStr = bind(string, "string");
     let evalErrorStr = bind(EvalError, "EvalError");
-    bind(NIL);
-    bind(bool);
-    bind(cons);
-    bind(car);
-    bind(cdr);
+    bind(NIL, "NIL");
+    bind(bool, "bool");
+    bind(cons, "cons");
+    bind(car, "car");
+    bind(cdr, "cdr");
     emit(`function outsideScope(this_, x) {`);
     emit(`  let val = this_[x];`);
     emit(`  if (val === undefined) throw new ${evalErrorStr}("undefined: " + ${stringStr}(x));`);
@@ -2834,7 +2832,7 @@ function SchemeJS(schemeOpts = {}) {
       if (name) {
         if (typeof name === 'symbol')
           name = newTemp(name.description);
-        else if (!wellKnownNames[name])
+        if (bindSymToObj[name])  // collision
           name = newTemp(name);
       } else {
         if (typeof obj === 'symbol')
