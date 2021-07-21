@@ -734,7 +734,7 @@ function SchemeJS(schemeOpts = {}) {
     return compare_hooks(args, compileScope, tools, '<=', 'le');
   }
 
-  defineGlobalSymbol(">", gt, { evalArgs: 2 }, "gt");
+  defineGlobalSymbol(">", gt, { evalArgs: 2, compileHook: gt_hook }, "gt");
   function gt(a, b, forms) {
     if (forms === undefined) return a > b;
     if (!(a > b)) return false;
@@ -747,8 +747,11 @@ function SchemeJS(schemeOpts = {}) {
     }
     return true;
   }
+  function gt_hook(args, compileScope, tools) {
+    return compare_hooks(args, compileScope, tools, '>', 'gt');
+  }
 
-  defineGlobalSymbol(">=", ge, { evalArgs: 2 }, "ge");
+  defineGlobalSymbol(">=", ge, { evalArgs: 2, compileHook: ge_hook }, "ge");
   function ge(a, b, forms) {
     if (forms === undefined) return a >= b;
     if (!(a >= b)) return false;
@@ -761,8 +764,11 @@ function SchemeJS(schemeOpts = {}) {
     }
     return true;
   }
+  function ge_hook(args, compileScope, tools) {
+    return compare_hooks(args, compileScope, tools, '>=', 'ge');
+  }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 2 }, "eq?");
+  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook }, "eq?");
   function eq(a, b, forms) {
     if (forms === undefined) return a == b;
     if (!(a == b)) return false;
@@ -774,6 +780,9 @@ function SchemeJS(schemeOpts = {}) {
     }
     return true;
   }
+  function eq_hook(args, compileScope, tools) {
+    return compare_hooks(args, compileScope, tools, '==', 'eq');
+  }
 
   // XXX define === and !==
 
@@ -781,9 +790,13 @@ function SchemeJS(schemeOpts = {}) {
   const equalp = (a, b) =>  deep_eq(a, b);
   defineGlobalSymbol("equal?", equalp, "equal?");
 
-  defineGlobalSymbol("!=", ne, { evalArgs: 2 }, "ne");
+  defineGlobalSymbol("!=", ne, { evalArgs: 2, compileHook: ne_hook }, "ne");
   function ne(a, b, forms) {
     return !eq.call(this, a, b, forms);
+  }
+  function ne_hook(args, compileScope, tools) {
+    let eq = compare_hooks(args, compileScope, tools, '==', 'eq');
+    return `(!${eq})`;
   }
 
   queueTests(function(){
@@ -2819,7 +2832,8 @@ function SchemeJS(schemeOpts = {}) {
 
   const COMPILE_SENTINEL = Symbol("SENTINEL");
 
-  // (compile (fn args) forms)
+  // (compile (fn args) forms) -- defines a compiled function
+  // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { evalArgs: 0 });
   function compile(nameAndParams, forms, _) {
     if (!isCons(nameAndParams)) new EvalError(`first parameter must be a list`);
@@ -2828,6 +2842,13 @@ function SchemeJS(schemeOpts = {}) {
     if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)    
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     let form = list(LAMBDA_ATOM, args, forms);
+    let compiled = compileLambda(form);
+    GlobalScope[name] = compiled;
+    return name;
+
+  }
+  
+  function compileLambda(form) {
     let scope = newScope(this);
     // If you're compiling a dunction that's already been defined, this prevents
     // the symbol from resolving to the old definition. It also serves as a
@@ -2862,10 +2883,8 @@ function SchemeJS(schemeOpts = {}) {
     let code = emitted.join('');
     console.log("COMPILED", code);
     let bindery = new Function('bound', code);
-    let compiled = bindery(bindSymToObj);
-    GlobalScope[name] = compiled;
-    return name;
-
+    return bindery(bindSymToObj)
+  
     function bind(obj, name) {
       if (obj === undefined) return "undefined";
       if (obj === null) return "null";
@@ -3047,7 +3066,7 @@ function SchemeJS(schemeOpts = {}) {
       } else if (typeof form === 'function') {
         if (body)
           tools.emit(body); 
-        tools.emit(`${result} = ${value};`);
+        tools.emit(`${result} = (${value});`);
         tools.indent = saveIndent;
         tools.emit(`}`);
         return result;
