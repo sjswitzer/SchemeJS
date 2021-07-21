@@ -246,16 +246,6 @@ function SchemeJS(schemeOpts = {}) {
   const LogicError = Error;
   defineGlobalSymbol("LogicError", LogicError);
 
-  // Define some of the JS Error classes here so users can "catch" them
-  defineGlobalSymbol("Error", Error);
-  defineGlobalSymbol("RangeError", RangeError);
-  defineGlobalSymbol("ReferenceError", ReferenceError);
-  defineGlobalSymbol("TypeError", TypeError);
-  defineGlobalSymbol("URIError", URIError);
-  defineGlobalSymbol("SyntaxError", SyntaxError);
-  defineGlobalSymbol("TypeError", TypeError);
-  defineGlobalSymbol("EvalError", EvalError);
-
   class IteratorList {
     _carVal; _cdrVal; _iterator; _haveCar = false;
     constructor(iterator) {
@@ -400,6 +390,33 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("isNaN", isNaN, "NaN?", "nan?");
   defineGlobalSymbol("Infinity", Infinity);
   defineGlobalSymbol("isFinite", isFinite, "finite?");
+  defineGlobalSymbol("globalThis", globalThis);
+  defineGlobalSymbol("Math", Math);
+  defineGlobalSymbol("Atomics", Atomics);
+  defineGlobalSymbol("JSON", JSON);
+  defineGlobalSymbol("Reflect", Reflect);
+  defineGlobalSymbol("Intl", Intl);
+  for (let fn of [
+      Object, Boolean, Symbol, Number, String, BigInt, Array,
+      encodeURI, encodeURIComponent, decodeURI, decodeURIComponent,
+      Error, EvalError, RangeError, ReferenceError,
+      SyntaxError, TypeError, URIError,
+      Date, RegExp, parseFloat, parseInt,
+      Map, Set, WeakMap, WeakSet,
+      Int8Array, Uint8Array, Uint8ClampedArray,
+      Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array,
+      Float64Array, BigInt64Array, BigUint64Array,
+      ArrayBuffer, SharedArrayBuffer, DataView,
+      Function, Promise, Proxy
+    ]) {
+    defineGlobalSymbol(fn.name, fn);
+  }
+  defineGlobalSymbol("Number", Number);
+  defineGlobalSymbol("String", String);
+  defineGlobalSymbol("String", String);
+  defineGlobalSymbol("String", String);
+
+
   // Stuff the whole Math class in there!
   for (let [name, {value}] of Object.entries(Object.getOwnPropertyDescriptors(Math))) {
     // SIOD defines *pi* so I'll just define them all like that
@@ -2841,22 +2858,23 @@ function SchemeJS(schemeOpts = {}) {
     let args = nameAndParams[CDR];
     if (typeof name !== 'symbol') new EvalError(`Function name must be an atom or string`)    
     let form = list(LAMBDA_ATOM, args, forms);
-    let compiledFunction = compile_form.call(this, name, form);
+    let compiledFunction = compile_lambda.call(this, name, form);
     GlobalScope[name] = compiledFunction;
     return name;
   }
 
-  defineGlobalSymbol("compile-form", compile_form);
-  function compile_form(name, form) {
-    let compiled = compiler.call(this, name, form);
+  defineGlobalSymbol("compile-lambda", compile_lambda);
+  function compile_lambda(name, lambda) {
+    let compiled = lambda_compiler.call(this, name, lambda);
     let code = car(compiled), bindSymToObj = cdr(compiled);
     let binder = new Function("bound", code);
     let compiledFunction = binder(bindSymToObj);
     return compiledFunction;
   }
 
-  defineGlobalSymbol("compiler", compiler);  // name?
-  function compiler(name, form) {
+  defineGlobalSymbol("lambda-compiler", lambda_compiler);
+  function lambda_compiler(name, lambda) {
+    name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
 
@@ -2867,7 +2885,7 @@ function SchemeJS(schemeOpts = {}) {
     scope[name] = COMPILE_SENTINEL;
 
     let bindSymToObj = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
-    let tools = { bind, boundVal, emit, newTemp, scope, transpiling: form, indent: '', evalLimit: 100 };
+    let tools = { bind, boundVal, emit, newTemp, scope, indent: '', evalLimit: 100 };
 
     let compileScope = new Scope();
     let nameStr = newTemp(name);
@@ -2884,7 +2902,7 @@ function SchemeJS(schemeOpts = {}) {
     emit(`  if (val === undefined) throw new ${evalErrorStr}("Undefined symbol " + ${stringStr}(x));`);
     emit(`  return val;`);
     emit(`}`);
-    compileLambda(nameStr, form, compileScope, tools);
+    compileLambda(nameStr, lambda, compileScope, tools);
     emit(`return ${nameStr};`);
     let saveEmitted = emitted;
     emitted = [];
