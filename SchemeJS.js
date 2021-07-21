@@ -1373,8 +1373,9 @@ function SchemeJS(schemeOpts = {}) {
       }
       scope = Object.getPrototypeOf(scope);
     }
-    GlobalScope.sort(matches, (a,b) => a.description < b.description ? -1 : a.description > b.description ? 1 : 0);
-    return to_list(matches);
+    return this.sort(matches,
+      (a,b) => a.description.toLowerCase() < b.description.toLowerCase() ? -1 :
+               b.description.toLowerCase() < a.description.toLowerCase() ? 1 : 0);
   }
 
   // (mapcar fn list1 list2 ...)
@@ -1513,7 +1514,8 @@ function SchemeJS(schemeOpts = {}) {
     // or descending sequences. The upshot is that it executes in O(n log m) where "m"
     // is the number of runs. Lists that are mostly or partly ordered sort MUCH faster
     // and already-sorted or even reverse-sorted lists sort in linear time because
-    // there's only one run.
+    // there's only one run. Sorting a few new items into an already sorted list
+    // is particularly fast.
     //
     // This combines run-accumulation from TimSort with the well-known (bottom-up) mergesort.
     // A run will always be at least two elements long (as long as there are two elements
@@ -1530,46 +1532,54 @@ function SchemeJS(schemeOpts = {}) {
         let headKey = accessFn ? accessFn.call(this, run[CAR]) : run[CAR];
         let tailKey = headKey;
         while (is_cons(list)) {
-          let nextList = list[CDR];
+          let item = list, listNext = list[CDR];
           runTail[CDR] = NIL;
-          // "item" is the head of the list
-          let itemKey = accessFn ? accessFn.call(this, list[CAR]) : list[CAR];
+          let itemKey = accessFn ? accessFn.call(this, item[CAR]) : item[CAR];
           let itemLess = predicateFn ? predicateFn.call(this, itemKey, tailKey) < 0 : itemKey < tailKey;
           if (!itemLess) {
-            runTail[CDR] = list;
-            runTail = list;
+            runTail[CDR] = item;
+            runTail = item;
             tailKey = itemKey;
           } else {
             let itemLess = predicateFn ? predicateFn.call(this, itemKey, headKey) < 0 : itemKey < headKey;
             if (itemLess) {
-              list[CDR] = run;
-              run = list;
+              item[CDR] = run;
+              run = item;
               headKey = itemKey;
             } else {
-              break;ß
+              break;
             }
           }
-          list = nextList;
+          list = listNext;
         }
         // The number of runs at stack[i] is either zero or 2^i and the stack size is bounded by 1+log2(nruns).
         // There's a passing similarity to Timsort here, though Timsort maintains its stack using
         // something like a Fibonacci sequence where this uses powers of two.
+        //
+        // It's helpful put a breakpoint right here and "watch" these expressions:
+        //     string(list)
+        //     string(run)
+        //     string(stack[0])
+        //     string(stack[1])
+        //     etc.
         let i = 0;
         for ( ; i < stack.length; ++i) {
-          if (stack[i] === NIL) break;
+          if (stack[i] === NIL) {
+            stack[i] = run;
+            run = NIL;
+            break;
+          };
           run = merge(stack[i], run);
           stack[i] = NIL;
         }
-        if (i < stack.length)
-          stack[i] = run; // It will have been NIL
-        else
+        if (run !== NIL)
           stack.push(run);
       }
       // Merge all remaining stack elements
-      let result = NIL;
+      let run = NIL;
       for (let i = 0; i < stack.length; ++i)
-        result = merge(stack[i], result);
-      return result;
+        run = merge(stack[i], run);
+      return run;
     }
 
     function merge(left, right) {
