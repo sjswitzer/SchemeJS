@@ -3146,9 +3146,9 @@ function SchemeJS(schemeOpts = {}) {
   }
   
   const JS_IDENT_REPLACEMENTS  = {
-    '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
-    '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$dash', '=': '$eq', '<': '$lt',
-    '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
+    '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct',
+    '^': '$hat', '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$dash',
+    '=': '$eq', '<': '$lt', '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
   };
 
   function toJSname(name) {
