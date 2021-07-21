@@ -2836,29 +2836,30 @@ function SchemeJS(schemeOpts = {}) {
   // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { evalArgs: 0 });
   function compile(nameAndParams, forms, _) {
-    if (!isCons(nameAndParams)) new EvalError(`first parameter must be a list`);
+    if (!isCons(nameAndParams)) new EvalError(`First parameter must be a list`);
     let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
-    if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)    
+    if (typeof name !== 'symbol') new EvalError(`Function name must be an atom or string`)    
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
-    let form = list(LAMBDA_ATOM, args, forms);
-    let compiled = compiler(form, this);
-    /*
-    return list(code, bindery, bindSymToObj);
-        return cons(code, bindSymToObj);
+    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
 
-    let bindery = new Function('bound', code);
-    let compiled = bindery(bindSymToObj);
-    GlobalScope[name] = compiled;
-    */
-    let code = car(compiled), bindSymToObj = cdr(compiled);
-    let binder = new Function("bound", code);
-    let compiledFunction = binder(bindSymToObj);
-    GlobalScope[name] = compiled;
+    let form = list(LAMBDA_ATOM, args, forms);
+    let compiledFunction = compile_form(form, this);
+    GlobalScope[name] = compiledFunction;
     return name;
   }
 
-  defineGlobalSymbol("compiler", compiler);
+  defineGlobalSymbol("compile-form", compile_form);
+  function compile_form(form, scope) {
+    if (!bool(scope))
+      scope = this;
+    let compiled = compiler(form, scope);
+    let code = car(compiled), bindSymToObj = cdr(compiled);
+    let binder = new Function("bound", code);
+    let compiledFunction = binder(bindSymToObj);
+  }
+
+  defineGlobalSymbol("compiler", compiler);  // name?
   function compiler(form, scope) {
     if (!bool(scope))
       scope = this;
@@ -2896,10 +2897,6 @@ function SchemeJS(schemeOpts = {}) {
     let code = emitted.join('');
     console.log("COMPILED", code);
     return cons(code, bindSymToObj);
-    let bindery = new Function('bound', code);
-    let compiled = bindery(bindSymToObj);
-    GlobalScope[name] = compiled;
-    return name;
 
     function bind(obj, name) {
       if (obj === undefined) return "undefined";
@@ -2946,7 +2943,6 @@ function SchemeJS(schemeOpts = {}) {
       return name;
     }
   }
-
   function compileEval(form, compileScope, tools) {
     if (--tools.evalLimit < 0)
       throw new CompileError(`Too comlpex ${string(form)}`);
