@@ -2842,13 +2842,6 @@ function SchemeJS(schemeOpts = {}) {
     if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)    
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     let form = list(LAMBDA_ATOM, args, forms);
-    let compiled = compileLambda(form);
-    GlobalScope[name] = compiled;
-    return name;
-
-  }
-  
-  function compileLambda(form) {
     let scope = newScope(this);
     // If you're compiling a dunction that's already been defined, this prevents
     // the symbol from resolving to the old definition. It also serves as a
@@ -2883,8 +2876,10 @@ function SchemeJS(schemeOpts = {}) {
     let code = emitted.join('');
     console.log("COMPILED", code);
     let bindery = new Function('bound', code);
-    return bindery(bindSymToObj)
-  
+    let compiled = bindery(bindSymToObj);
+    GlobalScope[name] = compiled;
+    return name;
+
     function bind(obj, name) {
       if (obj === undefined) return "undefined";
       if (obj === null) return "null";
@@ -3146,9 +3141,9 @@ function SchemeJS(schemeOpts = {}) {
   }
   
   const JS_IDENT_REPLACEMENTS  = {
-    '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct',
-    '^': '$hat', '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$dash',
-    '=': '$eq', '<': '$lt', '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
+    '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
+    '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$dash', '=': '$eq', '<': '$lt',
+    '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
   };
 
   function toJSname(name) {
