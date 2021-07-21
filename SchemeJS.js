@@ -2842,7 +2842,27 @@ function SchemeJS(schemeOpts = {}) {
     if (typeof name !== 'symbol') new EvalError(`function name must be an atom or string`)    
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     let form = list(LAMBDA_ATOM, args, forms);
-    let scope = newScope(this);
+    let compiled = compiler(form, this);
+    /*
+    return list(code, bindery, bindSymToObj);
+        return cons(code, bindSymToObj);
+
+    let bindery = new Function('bound', code);
+    let compiled = bindery(bindSymToObj);
+    GlobalScope[name] = compiled;
+    */
+    let code = car(compiled), bindSymToObj = cdr(compiled);
+    let binder = new Function("bound", code);
+    let compiledFunction = binder(bindSymToObj);
+    GlobalScope[name] = compiled;
+    return name;
+  }
+
+  defineGlobalSymbol("compiler", compiler);
+  function compiler(form, scope) {
+    if (!bool(scope))
+      scope = this;
+    scope = newScope(scope);
     // If you're compiling a dunction that's already been defined, this prevents
     // the symbol from resolving to the old definition. It also serves as a
     // sentinel to compileApply that it's gotten back around to where it started.
@@ -2875,6 +2895,7 @@ function SchemeJS(schemeOpts = {}) {
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     console.log("COMPILED", code);
+    return cons(code, bindSymToObj);
     let bindery = new Function('bound', code);
     let compiled = bindery(bindSymToObj);
     GlobalScope[name] = compiled;
