@@ -310,8 +310,8 @@ function SchemeJS(schemeOpts = {}) {
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
   // In SchemeJS, NIL, null, undefined, and false are false and everything else is true.
   //
-  exportDefinition("toBool", _bool);
-  function  _bool(val) {
+  exportDefinition("toBool", bool);
+  function  bool(val) {
     // Give priority to actual true and false values
     if (typeof val === 'boolean') return val;
     if (val === NIL || val == null) // The val == null is _intended_ as a nullish test
@@ -470,7 +470,7 @@ function SchemeJS(schemeOpts = {}) {
   });
 
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !_bool(a), "not");
+  defineGlobalSymbol("!", a => !bool(a), "not");
   defineGlobalSymbol("~", a => ~a, "bit-not");
   defineGlobalSymbol("**", (a,b) => a ** b, "exp");
   defineGlobalSymbol("%", (a,b) => a % b, "rem");
@@ -549,7 +549,6 @@ function SchemeJS(schemeOpts = {}) {
     str += `)`;
     return str;
   }
-
 
   defineGlobalSymbol("*", mul, { compileHook: mul_hook}, "mul");
   function mul(a, b, ...rest) {
@@ -847,7 +846,7 @@ function SchemeJS(schemeOpts = {}) {
 
   defineGlobalSymbol("&&", and, { evalArgs: 1 }, "and");
   function and(val, forms) {
-    while (_bool(val) && isCons(forms)) {
+    while (bool(val) && isCons(forms)) {
       val = _eval(forms[CAR], this);
       forms = forms[CDR];
     }
@@ -856,7 +855,7 @@ function SchemeJS(schemeOpts = {}) {
 
   defineGlobalSymbol("||", or, { evalArgs: 1 }, "or");
   function or(val, forms) {
-    while (!_bool(val) && isCons(forms)) {
+    while (!bool(val) && isCons(forms)) {
       val = _eval(forms[CAR], this);
       forms = forms[CDR];
     }
@@ -864,7 +863,7 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
-  function ifelse(p, t, f, _) { return _bool(p) ? _eval(t, this): _eval(f, this) }
+  function ifelse(p, t, f, _) { return bool(p) ? _eval(t, this): _eval(f, this) }
   function ifelse_hook(args, transpileScope, tools) {
     let p = args[0], t = args[1], f = args[2];
     let result;
@@ -874,7 +873,7 @@ function SchemeJS(schemeOpts = {}) {
       let p = args[0], t = args[1], f = args[2];
       result = tools.newTemp("if");
       tools.emit(`let ${result};`);
-      tools.emit(`if (_bool(${p})) {`);
+      tools.emit(`if (bool(${p})) {`);
       let saveIndent = tools.indent;
       tools.indent = saveIndent + "  ";
       let tResult = transpileEval(t, transpileScope, tools);
@@ -965,7 +964,7 @@ function SchemeJS(schemeOpts = {}) {
         throw new EvalError(`Bad clause in "cond" ${string(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
-      if (_bool(evaled)) {
+      if (bool(evaled)) {
         let res = NIL;
         while (isCons(forms)) {
           res = _eval(forms[CAR], this);
@@ -993,7 +992,7 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("require", require_);
   function require_(path) {
     let sym = Atom(`*${path}-loaded*`);
-    if (!_bool(GlobalScope[sym])) {
+    if (!bool(GlobalScope[sym])) {
       load.call(this, path);
       GlobalScope[sym] = true;
       return sym;
@@ -1006,7 +1005,7 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("load", load);
   function load(path, ...rest) {
     let scope = this, result = NIL, last;
-    let noEval = rest.length > 0 &&_bool(rest[0]);
+    let noEval = rest.length > 0 &&bool(rest[0]);
     let fileContent;
     try {
       if (!readFile) throw new EvalError("No file reader defined");
@@ -1527,7 +1526,7 @@ function SchemeJS(schemeOpts = {}) {
   });
 
   function deep_eq(a, b, maxDepth, report) {
-    if (!_bool(maxDepth)) maxDepth = 10000; // Protection from circular lists
+    if (!bool(maxDepth)) maxDepth = 10000; // Protection from circular lists
     return deep_eq(a, b, maxDepth);
     function deep_eq(a, b, maxDepth) {
       if (a === b)
@@ -2238,7 +2237,7 @@ function SchemeJS(schemeOpts = {}) {
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
   defineGlobalSymbol("toList", toList);
   function toList(obj, depth) {
-    if (!_bool(depth)) depth = 1;
+    if (!bool(depth)) depth = 1;
     if (depth <= 0) return obj;
     if (obj === NIL || isCons(obj)) return obj;
     if (typeof obj === 'object') {
@@ -2260,7 +2259,7 @@ function SchemeJS(schemeOpts = {}) {
   // Turns iterable objects like lists into arrays, recursively to "depth" (default 1) deep.
   defineGlobalSymbol("toArray", toArray);
   function toArray(obj, depth) {
-    if (!_bool(depth)) depth = 1;
+    if (!bool(depth)) depth = 1;
     if (depth <= 0) return obj;
     res = [];
     for (let item of obj) {
@@ -2797,15 +2796,19 @@ function SchemeJS(schemeOpts = {}) {
     let tools = { bind, boundVal, emit, newTemp, transpiling: form,
       scope, indent: '', evalLimit: 100 };
     const wellKnownNames = { NIL: true, cons: true, car: true, cdr: true,
-        EvalError: true, string: true };
+        EvalError: true, string: true, cons: true, car: true, cdr: true, bool: true };
     let transpileScope = new Scope();
-    let nameStr = bind(name); // used as a token for the function itself
+    let nameStr = newTemp(name);
     tools.functionName = nameStr;
     let stringStr = bind(string, "string");
     let evalErrorStr = bind(EvalError, "EvalError");
-    bind(NIL, "NIL");
-    emit(`function outsideScope(x) {`);
-    emit(`  let val = scope[x];`);
+    bind(NIL);
+    bind(bool);
+    bind(cons);
+    bind(car);
+    bind(cdr);
+    emit(`function outsideScope(this_, x) {`);
+    emit(`  let val = this_[x];`);
     emit(`  if (val === undefined) throw new ${evalErrorStr}("undefined: " + ${stringStr}(x));`);
     emit(`  return val;`);
     emit(`}`);
@@ -2818,11 +2821,9 @@ function SchemeJS(schemeOpts = {}) {
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     console.log("COMPILED", code);
-    /*
-    let bindery = new Function('scope', 'bound', code);
-    let compiled = bindery(scope, bound);
+    let bindery = new Function('bound', code);
+    let compiled = bindery(bindSymToObj);
     GlobalScope[name] = compiled;
-    */
     return name;
 
     function bind(obj, name) {
@@ -2894,7 +2895,7 @@ function SchemeJS(schemeOpts = {}) {
           result = tools.bind(scopedVal, sym);
         } else {
           let bound = tools.bind(sym);
-          result = `outsideScope(${bound})`;
+          result = `outsideScope(this, ${bound})`;
         }
       }
     } else if (isCons(form)) {
@@ -3060,7 +3061,10 @@ function SchemeJS(schemeOpts = {}) {
     else if (params !== NIL) {
       throw new EvalError(`Bad parameter list ${string(origFormalParams)}`);
     }
-    result = tools.newTemp(name);
+    if (name && name !== '')
+      result = name;
+    else
+      result = tools.newTemp();
     let delim = '', paramStr = '', saveIndent = tools.indent;
     for (let param of paramv) {
       paramStr += delim + param;
