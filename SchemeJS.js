@@ -1481,6 +1481,12 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("sort", mergesort, "qsort");
   function mergesort(list, ...rest) {
     let predicateFn = rest[0], accessFn = rest[1];
+    if (!bool(predicateFn))
+      predicateFn = function(a, b) {
+        if (typeof a === 'symbol') a = a.description;
+        if (typeof b === 'symbol') b = b.description;
+        return a < b ? -1 : b < a ? 1 : 0;
+      }
     if (!list || list === NIL)
       return NIL;
     if (list === NIL || is_cons(list)) {
@@ -1535,13 +1541,13 @@ function SchemeJS(schemeOpts = {}) {
           let item = list, listNext = list[CDR];
           runTail[CDR] = NIL;
           let itemKey = accessFn ? accessFn.call(this, item[CAR]) : item[CAR];
-          let itemLess = predicateFn ? predicateFn.call(this, itemKey, tailKey) < 0 : itemKey < tailKey;
+          let itemLess = predicateFn.call(this, itemKey, tailKey);
           if (!itemLess) {
             runTail[CDR] = item;
             runTail = item;
             tailKey = itemKey;
           } else {
-            let itemLess = predicateFn ? predicateFn.call(this, itemKey, headKey) < 0 : itemKey < headKey;
+            let itemLess = predicateFn.call(this, itemKey, headKey);
             if (itemLess) {
               item[CDR] = run;
               run = item;
