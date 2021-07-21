@@ -2840,38 +2840,35 @@ function SchemeJS(schemeOpts = {}) {
     let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
     if (typeof name !== 'symbol') new EvalError(`Function name must be an atom or string`)    
-    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
-    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
-
     let form = list(LAMBDA_ATOM, args, forms);
-    let compiledFunction = compile_form(form, this);
+    let compiledFunction = compile_form.call(this, name, form);
     GlobalScope[name] = compiledFunction;
     return name;
   }
 
   defineGlobalSymbol("compile-form", compile_form);
-  function compile_form(form, scope) {
-    if (!bool(scope))
-      scope = this;
-    let compiled = compiler(form, scope);
+  function compile_form(name, form) {
+    let compiled = compiler.call(this, name, form);
     let code = car(compiled), bindSymToObj = cdr(compiled);
     let binder = new Function("bound", code);
     let compiledFunction = binder(bindSymToObj);
+    return compiledFunction;
   }
 
   defineGlobalSymbol("compiler", compiler);  // name?
-  function compiler(form, scope) {
-    if (!bool(scope))
-      scope = this;
-    scope = newScope(scope);
+  function compiler(name, form) {
+    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
+    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
+
+    let scope = newScope(this);
     // If you're compiling a dunction that's already been defined, this prevents
     // the symbol from resolving to the old definition. It also serves as a
     // sentinel to compileApply that it's gotten back around to where it started.
     scope[name] = COMPILE_SENTINEL;
-    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
+
     let bindSymToObj = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
-    let tools = { bind, boundVal, emit, newTemp, transpiling: form,
-      scope, indent: '', evalLimit: 100 };
+    let tools = { bind, boundVal, emit, newTemp, scope, transpiling: form, indent: '', evalLimit: 100 };
+
     let compileScope = new Scope();
     let nameStr = newTemp(name);
     tools.functionName = nameStr;
