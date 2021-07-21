@@ -2224,7 +2224,7 @@ function SchemeJS(schemeOpts = {}) {
                   toString(params, maxDepth);  // actually the atom
                   sep = ""; put(".");
                   toString(scopeCons[CDR][CDR], maxDepth);  // the form
-                  sep = ""; put(")");
+                  sep = ""; put(")", true);
                   indent = saveIndent;
                   return
                 }
@@ -2239,7 +2239,7 @@ function SchemeJS(schemeOpts = {}) {
               indent += indentMore;
               toString(forms, maxDepth);
               sep = "";
-              put(")");
+              put(")", true);
               indent = saveIndent;
               return;
             }
@@ -2258,7 +2258,7 @@ function SchemeJS(schemeOpts = {}) {
             toString(obj, maxDepth)
           }
           sep = "";
-          put(")");
+          put(")", true);
           indent = saveIndent;
           return;
         }
@@ -2271,7 +2271,7 @@ function SchemeJS(schemeOpts = {}) {
             sep = ", ";
           }
           sep = "";
-          put("]");
+          put("]", true);
           indent = saveIndent;
           return;
         }
@@ -2287,7 +2287,7 @@ function SchemeJS(schemeOpts = {}) {
             sep = ", ";
           }
           sep = "";
-          put("}");
+          put("}", true);
           indent = saveIndent;
           return;
         }
@@ -2320,8 +2320,8 @@ function SchemeJS(schemeOpts = {}) {
       }
       return put(String(obj));
     }
-    function put(str) {
-      if (line.length > 0 && line.length + str.length > stringWrap) {
+    function put(str, nobreak) {
+      if (!nobreak && line.length > 0 && line.length + str.length > stringWrap) {
         line += sep;
         lines.push(line);
         line = prefix + str;
