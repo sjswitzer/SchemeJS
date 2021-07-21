@@ -8,10 +8,12 @@
 
 "use strict";
 
+const { emit } = require('process');
+
 // TODO: make this a JS module
 
 //
-// Creates a Scheme instance, independent of any others.
+// Creates a SchemeJS instance, independent of any others.
 // Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design. People should be able
 // to poke things into class definitions to experiment with different ideas
@@ -525,12 +527,19 @@ function SchemeJS(schemeOpts = {}) {
   //
   // Variable args definitions
   //
-  defineGlobalSymbol("+", add, "add");
+  defineGlobalSymbol("+", add, { compileHook: add_hook }, "add");
   function add(a, b, ...rest) {
     a += b;
     for (b of rest)
       a += b;
     return a;
+  }
+  function add_hook(args, compileScope, tools) {
+    let str = `(${args[0]}`;
+    for (let i = 1; i < args.length; ++i)
+      str += ` + ${args[i]}`;
+    str += `)`;
+    return str;
   }
 
   defineGlobalSymbol("-", sub, { compileHook: sub_hook}, "sub");
@@ -565,12 +574,21 @@ function SchemeJS(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol('/', div, "div");
+  defineGlobalSymbol('/', div, { compileHook: div_hook }, "div");
   function div(a, ...rest) {
     if (rest.length === 0) return 1/a;
     for (let b of rest)
       a /= b;
     return a;
+  }
+  function div_hook(args, compileScope, tools) {
+    if (args.length == 1)
+      return `(1 / ${args[0]})`;
+    let str = `(${args[0]}`;
+    for (let i = 1; i < args.length; ++i)
+      str += ` / ${args[i]}`;
+    str += `)`;
+    return str;
   }
 
   queueTests(function() {
@@ -599,28 +617,49 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(' (/ 100000 10 10 10) ', 100);
  });
 
-  defineGlobalSymbol("&", bit_and, "bit-and");
+  defineGlobalSymbol("&", bit_and, { compileHook: bit_and_hook }, "bit-and");
   function bit_and(a, b, ...rest) {
     a &= b;
     for (b of rest)
       a &= b;
     return a;
   }
+  function bit_and_hook(args, compileScope, tools) {
+    let str = `(${args[0]}`;
+    for (let i = 1; i < args.length; ++i)
+      str += ` & ${args[i]}`;
+    str += `)`;
+    return str;
+  }
 
-  defineGlobalSymbol("|", bit_or, "bit-or");
+  defineGlobalSymbol("|", bit_or, { compileHook: bit_or_hook }, "bit-or");
   function bit_or(a, b, ...rest) {
     a |= b;
     for (let b of rest)
       a |= b;
     return a;
   }
+  function bit_or_hook(args, compileScope, tools) {
+    let str = `(${args[0]}`;
+    for (let i = 1; i < args.length; ++i)
+      str += ` | ${args[i]}`;
+    str += `)`;
+    return str;
+  }
 
-  defineGlobalSymbol("^", bit_xor, "bit-xor");
+  defineGlobalSymbol("^", bit_xor, { compileHook: bit_xor_hook}, "bit-xor");
   function bit_xor(a, b, ...rest) {
     a ^= b;
     for (let b of rest)
       a ^= b;
     return a;
+  }
+  function bit_xor_hook(args, compileScope, tools) {
+    let str = `(${args[0]}`;
+    for (let i = 1; i < args.length; ++i)
+      str += ` ^ ${args[i]}`;
+    str += `)`;
+    return str;
   }
 
   queueTests(function() {
@@ -638,7 +677,7 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
   });
 
-  defineGlobalSymbol("<", lt, { evalArgs: 2 }, "lt");
+  defineGlobalSymbol("<", lt, { evalArgs: 2, compileHook: lt_hook }, "lt");
   function lt(a, b, forms) {
     if (forms === undefined) return a < b;
     if (!(a < b)) return false;
@@ -650,6 +689,32 @@ function SchemeJS(schemeOpts = {}) {
       forms = forms[CDR];
     }
     return true;
+  }
+  function lt_hook(args, compileScope, tools) {
+    return compare_hooks(args, compileScope, tools, '<', 'lt');
+  }
+
+  function compare_hooks(args, compileScope, tools, op, name) {
+    if (args.length < 2)
+      return 'false';
+    if (args.length == 2)
+      return `(${args[0]} ${op} ${args[1]})`;
+    let result = tools.newTemp(name);
+    tools.emit(`let ${result} = false; ${result}: {`);
+    let saveIndent = tools.indent;
+    tools.indent = saveIndent + "  ";
+    tools.emit(`let a = ${args[0]}, b = ${args[1]};`);
+    tools.emit(`if (!(a ${op} b)) break ${result};`);
+    for (let i = 2; i < args.length; ++i) {
+      emit(`a = b;`);
+      let b = compileEval(args[i], compileScope, tools, tools.newTemp);
+      emit(`b = ${b};`);
+      tools.emit(`if (!(a ${op} b)) break ${result};`);
+    }
+    tools.emit(`${result} = true;`);
+    tools.indent = saveIndent;
+    tools.emit(`}`);
+    return result;
   }
 
   defineGlobalSymbol("<=", le, { evalArgs: 2, compileHook: le_hook }, "le");
@@ -666,30 +731,7 @@ function SchemeJS(schemeOpts = {}) {
     return true;
   }
   function le_hook(args, compileScope, tools) {
-    let result;
-    if (args.length < 2) {
-      result = 'true';
-    } else if (args.length == 2) {
-      result = `(${args[0]} <= ${args[1]})`;
-    } else {
-      let a = tools.newTemp('a'), b = tools.newTemp('b'), forms = args[2];
-      result = tools.newTemp('le');
-      tools.emit(`let ${result}; ${result}: {`);
-      let saveIndent = tools.indent;
-      tools.indent = saveIndent + "  ";
-      tools.emit(`let ${a} = ${args[0]}, ${b} = ${args[1]};`);
-      tools.emit(`${result} = ${a} <= ${b};`);
-      for (let i = 2; i < args.length; ++i) {
-        tools.emit(`if (!${result}) break ${result};`);
-        let evalResult = compileEval(args[i], compileScope, tools, tools.newTemp);
-        tools.emit(`${a} = ${b};`);
-        tools.emit(`$(b) = ${evalResult};`);
-        tools.emit(`${result} = ${a} <= ${b};`);
-      }
-      tools.indent = saveIndent;
-      tools.emit(`}`);
-    }
-    return result;
+    return compare_hooks(args, compileScope, tools, '<=', 'le');
   }
 
   defineGlobalSymbol(">", gt, { evalArgs: 2 }, "gt");
