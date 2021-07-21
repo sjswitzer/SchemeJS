@@ -342,7 +342,7 @@ function SchemeJS(schemeOpts = {}) {
   const quote = quoted => quoted[CAR];
   const QUOTE_ATOM = defineGlobalSymbol("quote", quote, { evalArgs: 0 }, "'");
   defineGlobalSymbol("scope", function() { return this });
-  
+
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
@@ -425,11 +425,12 @@ function SchemeJS(schemeOpts = {}) {
     ]) {
     defineGlobalSymbol(fn.name, fn);
   }
-  defineGlobalSymbol("Number", Number);
-  defineGlobalSymbol("String", String);
-  defineGlobalSymbol("String", String);
-  defineGlobalSymbol("String", String);
-
+  if (typeof XMLHttpRequest !== 'undefined')
+    defineGlobalSymbol("XMLHttpRequest", XMLHttpRequest);
+  if (typeof navigator !== 'undefined')
+    defineGlobalSymbol("navigator", navigator);
+  if (typeof window !== 'undefined')
+    defineGlobalSymbol("window", window);
 
   // Stuff the whole Math class in there!
   for (let [name, {value}] of Object.entries(Object.getOwnPropertyDescriptors(Math))) {
@@ -441,6 +442,7 @@ function SchemeJS(schemeOpts = {}) {
       defineGlobalSymbol(name, value);
   }
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
+
   queueTests(function() {
     EXPECT(` (sqrt 2) `, Math.sqrt(2));
     EXPECT(` NaN `, NaN);
