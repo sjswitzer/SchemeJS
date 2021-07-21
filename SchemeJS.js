@@ -6,12 +6,10 @@
 //   4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
 //
 
-"use strict";
-
-const { emit } = require('process');
-
 // TODO: make this a JS module
 
+"use strict";
+const VERSION = "1.1";
 //
 // Creates a SchemeJS instance, independent of any others.
 // Instances are distinct to the bones; they do not even recognize each other's
@@ -51,7 +49,7 @@ function SchemeJS(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR");
 
   // Trust the JIT to inline this
-  const isCons = obj => obj != null && obj[PAIR] === true;
+  const is_cons = obj => obj != null && obj[PAIR] === true;
 
   class Cons {
     [CAR]; [CDR];
@@ -66,7 +64,7 @@ function SchemeJS(schemeOpts = {}) {
       let current = this;
       return {
         next() {
-          if (!isCons(current)) return { done: true };
+          if (!is_cons(current)) return { done: true };
           let value = current[CAR];
           current = current[CDR];
           return { done: false, value };
@@ -103,6 +101,7 @@ function SchemeJS(schemeOpts = {}) {
   Scope.prototype[SCOPE_IS_SYMBOL] = "global-scope";
 
   let GlobalScope = new Scope();
+
   function newScope(enclosingScope, scope_is) {
     let scope = Object.create(enclosingScope);
     scope[SCOPE_IS_SYMBOL] = scope_is;
@@ -110,28 +109,21 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   //
-  // Atoms are Symbols
+  // Atoms are Symbols that are in the ATOMS object
   //
   const ATOMS = {};
 
-  exportDefinition("Atom", Atom);  
+  const is_atom = obj => typeof obj === 'symbol' && ATOMS[obj.description] === obj;
+
   function Atom(name) {
-    if (typeof name === 'symbol') {
-      // If they pass in an atom, just return it
-      if (ATOMS[name.description] === name)
-        return name;
-    }
+    // If they pass in an atom, just return it
+    if (is_atom(name)) return name;
     if (typeof name !== 'string') throw new EvalError(`Not a string ${name}`);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
     ATOMS[name] = atom;
     return atom;
-  }
-
-  function isAtom(obj) {
-    if (typeof obj !== 'symbol') return false;
-    return ATOMS[obj.description] === obj;
   }
 
   const LAMBDA_ATOM = Atom("lambda"), LAMBDA_CHAR = "\u03BB";
@@ -162,7 +154,7 @@ function SchemeJS(schemeOpts = {}) {
 
   //
   // Everything is encapsulated in a function scope because JITs
-  // can resolve lexically-scoped references most easily.
+  // should be able to resolve lexically-scoped references most easily.
   // Since "this" is used as the current scope, a SchemeJS instance
   // is the global scope itself!
   //
@@ -206,18 +198,38 @@ function SchemeJS(schemeOpts = {}) {
       // XXX TODO: make sure that every defn with evalCount !== MAX_INTEGER has a compile hook.
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
     }
-    let atom = typeof name === 'symbol' ? name : Atom(name);
+    let atom;
+    ({ atom, name } = normalize(name));
     GlobalScope[name] = value;
     GlobalScope[atom] = value;
     for (let alias of aliases) {
-      let aliasAtom = typeof alias === 'symbol' ? alias : Atom(alias);
-      GlobalScope[alias] = value;
-      GlobalScope[aliasAtom] = value;
+      ({ atom, name } = normalize(alias));
+      GlobalScope[atom] = value;
+      GlobalScope[name] = value;
     }
     return atom;
+
+    function normalize(name) {
+      let atom = name;
+      if (typeof atom === 'symbol')
+        name = name.description;
+      if (typeof name !== 'string')
+        name = String(name);
+      atom = Atom(name);
+      if (!is_atom(atom))
+        throw new LogicError();
+      name = name.replace("->", "2")
+      name = name.replace("-", "_");
+      name = name.replace("@", "At")
+      name = name.replace("*", "Star")
+      name = name.replace("?", "P");
+      return { atom, name };
+    }
   }
 
-  let testQueue = [];
+  defineGlobalSymbol("is-atom", is_atom, "atom?"); 
+  defineGlobalSymbol("Atom", Atom);  
+ let testQueue = [];
 
   class SchemeJSError extends Error {};
   SchemeJSError.prototype.name = "SchemeJSError";
@@ -302,7 +314,7 @@ function SchemeJS(schemeOpts = {}) {
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
   // In SchemeJS, NIL, null, undefined, and false are false and everything else is true.
   //
-  exportDefinition("toBool", bool);
+  exportDefinition("bool", bool);
   function  bool(val) {
     // Give priority to actual true and false values
     if (typeof val === 'boolean') return val;
@@ -329,11 +341,13 @@ function SchemeJS(schemeOpts = {}) {
 
   const quote = quoted => quoted[CAR];
   const QUOTE_ATOM = defineGlobalSymbol("quote", quote, { evalArgs: 0 }, "'");
+  defineGlobalSymbol("scope", function() { return this });
+  
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
   defineGlobalSymbol("false", false);
-  defineGlobalSymbol("isCons", isCons, "pair?");
+  defineGlobalSymbol("is-cons", is_cons, "pair?");
   defineGlobalSymbol("cons", cons);
   defineGlobalSymbol("car", car, "first");
   defineGlobalSymbol("cdr", cdr, "rest");
@@ -610,7 +624,7 @@ function SchemeJS(schemeOpts = {}) {
 
   queueTests(function() {
     EXPECT(` (+) `, NaN);
-    EXPECT(` (+ 1) `, isClosure);
+    EXPECT(` (+ 1) `, is_closure);
     EXPECT(` (+ 1 2) `, 3);
     EXPECT(` (+ 1 2 3) `, 6);
     EXPECT(` (+ 1n 2n) `, 3n);
@@ -620,7 +634,7 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(` (- 3n) `, -3n);
     EXPECT(` (- 100 2 5 10) `, 83);
     EXPECT(` (*) `, NaN);
-    EXPECT(` (* 1) `, isClosure);
+    EXPECT(` (* 1) `, is_closure);
     EXPECT(` (* 1 2) `, 2);
     EXPECT(` (* 1 2 3) `, 6);
     EXPECT(` (* 1 2 3 4) `, 24);
@@ -681,15 +695,15 @@ function SchemeJS(schemeOpts = {}) {
 
   queueTests(function() {
     EXPECT(` (&) `, 0);
-    EXPECT(` (& 76134) `, isClosure);
+    EXPECT(` (& 76134) `, is_closure);
     EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
     EXPECT(` (& 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 & 0b1110101011 & 0b11110111101111);
     EXPECT(` (|) `, 0);
-    EXPECT(` (| 76134) `, isClosure);
+    EXPECT(` (| 76134) `, is_closure);
     EXPECT(` (| 0b1001101011 0b1110101011) `, 0b1001101011 | 0b1110101011);
     EXPECT(` (| 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 | 0b1110101011 | 0b11110111101111);
     EXPECT(` (^) `, 0);
-    EXPECT(` (^ 76134) `, isClosure);
+    EXPECT(` (^ 76134) `, is_closure);
     EXPECT(` (^ 0b1001101011 0b1110101011) `, 0b1001101011 ^ 0b1110101011);
     EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
   });
@@ -699,7 +713,7 @@ function SchemeJS(schemeOpts = {}) {
     if (forms === undefined) return a < b;
     if (!(a < b)) return false;
     a = b;
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a < b)) return false;
       a = b;
@@ -739,7 +753,7 @@ function SchemeJS(schemeOpts = {}) {
     if (forms === undefined) return a <= b;
     if (!(a <= b)) return false;
     a = b;
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a <= b)) return false;
       a = b;
@@ -756,7 +770,7 @@ function SchemeJS(schemeOpts = {}) {
     if (forms === undefined) return a > b;
     if (!(a > b)) return false;
     a = b;
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a > b)) return false;
       a = b;
@@ -773,7 +787,7 @@ function SchemeJS(schemeOpts = {}) {
     if (forms === undefined) return a >= b;
     if (!(a >= b)) return false;
     a = b;
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a >= b)) return false;
       a = b;
@@ -790,7 +804,7 @@ function SchemeJS(schemeOpts = {}) {
     if (forms === undefined) return a == b;
     if (!(a == b)) return false;
     a = b;
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
       let b = _eval(forms[CAR], this);
       if (!(a === b)) return false;
       forms = forms[CDR];
@@ -818,7 +832,7 @@ function SchemeJS(schemeOpts = {}) {
 
   queueTests(function(){
     EXPECT(` (<) `, false);
-    EXPECT(` (< 5) `, isClosure);
+    EXPECT(` (< 5) `, is_closure);
     EXPECT(` (< 5 3) `, false);
     EXPECT(` (< 3 5) `, true);
     EXPECT(` (< 3 3) `, false);
@@ -829,7 +843,7 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(` (< 1 2 3 4 4 5 6 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false);
     EXPECT(` (<=) `, false);
-    EXPECT(` (<= 5) `, isClosure)
+    EXPECT(` (<= 5) `, is_closure)
     EXPECT(` (<= 5 3) `, false);
     EXPECT(` (<= 3 5) `, true);
     EXPECT(` (<= 3 3) `, true);
@@ -840,7 +854,7 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT_ERROR(` (<= 1 2 3 4 4 5 6 (oops!)) `, EvalError);
     EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (>) `, false);
-    EXPECT(` (> 5) `, isClosure);
+    EXPECT(` (> 5) `, is_closure);
     EXPECT(` (> 5 3) `, true);
     EXPECT(` (> 3 5) `, false);
     EXPECT(` (> 3 3) `, false);
@@ -851,7 +865,7 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false);
     EXPECT(` (>=) `, false);
-    EXPECT(` (>= 5) `, isClosure);
+    EXPECT(` (>= 5) `, is_closure);
     EXPECT(` (>= 5 3) `, true);
     EXPECT(` (>= 3 5) `, false);
     EXPECT(` (>= 3 3) `, true);
@@ -862,7 +876,7 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, EvalError);
     EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (==) `, true);   // nothing is equal to itself
-    EXPECT(` (== 5) `, isClosure);
+    EXPECT(` (== 5) `, is_closure);
     EXPECT(` (== 5 3) `, false);
     EXPECT(` (== 3 5) `, false);
     EXPECT(` (== 3 3) `, true);
@@ -871,7 +885,7 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
     EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
     EXPECT(` (!=) `, false);  // nothing isn't equal to itself
-    EXPECT(` (!= 5) `, isClosure);
+    EXPECT(` (!= 5) `, is_closure);
     EXPECT(` (!= 5 3) `, true);
     EXPECT(` (!= 3 5) `, true);
     EXPECT(` (!= 3 3) `, false);
@@ -907,10 +921,10 @@ function SchemeJS(schemeOpts = {}) {
 
   queueTests(function() {
     EXPECT(` (max) `, undefined);
-    EXPECT(` (max 5) `, isClosure);
+    EXPECT(` (max 5) `, is_closure);
     EXPECT(` (max 3 7 9 2 4) `, 9);
     EXPECT(` (min) `, undefined);
-    EXPECT(` (min 5) `, isClosure);
+    EXPECT(` (min 5) `, is_closure);
     EXPECT(` (min 3 7 9 2 4) `, 2);
   });
 
@@ -918,7 +932,7 @@ function SchemeJS(schemeOpts = {}) {
 
   defineGlobalSymbol("&&", and, { evalArgs: 1 }, "and");
   function and(val, forms) {
-    while (bool(val) && isCons(forms)) {
+    while (bool(val) && is_cons(forms)) {
       val = _eval(forms[CAR], this);
       forms = forms[CDR];
     }
@@ -927,7 +941,7 @@ function SchemeJS(schemeOpts = {}) {
 
   defineGlobalSymbol("||", or, { evalArgs: 1 }, "or");
   function or(val, forms) {
-    while (!bool(val) && isCons(forms)) {
+    while (!bool(val) && is_cons(forms)) {
       val = _eval(forms[CAR], this);
       forms = forms[CDR];
     }
@@ -979,10 +993,10 @@ function SchemeJS(schemeOpts = {}) {
     EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
     EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
     EXPECT(` (?) `, undefined); // Why not?
-    EXPECT(` (? true) `, isClosure);
-    EXPECT(` (? false) `, isClosure);
-    EXPECT(` (? true 1) `, isClosure);
-    EXPECT(` (? false 2) `, isClosure);
+    EXPECT(` (? true) `, is_closure);
+    EXPECT(` (? false) `, is_closure);
+    EXPECT(` (? true 1) `, is_closure);
+    EXPECT(` (? false 2) `, is_closure);
     EXPECT(` (? true 1 2) `, 1);
     EXPECT(` (? false 1 2) `, 2);
     EXPECT(` (? true 1 2 (oops!)) `, 1);
@@ -999,7 +1013,7 @@ function SchemeJS(schemeOpts = {}) {
   // (begin form1 form2 ...)
   defineGlobalSymbol("begin", begin, { evalArgs: 1 });
   function begin(res, forms) {
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
       res = _eval(forms[CAR], this);
       forms = forms[CDR];
     }
@@ -1009,7 +1023,7 @@ function SchemeJS(schemeOpts = {}) {
   // (prog1 form1 form2 form3 ...)
   defineGlobalSymbol("prog1", prog1, { evalArgs: 1 });
   function prog1(val, forms) {
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
        _eval(forms[CAR], this);
       forms = forms[CDR];
     }
@@ -1030,15 +1044,15 @@ function SchemeJS(schemeOpts = {}) {
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
   defineGlobalSymbol("cond", cond, { evalArgs: 0 });
   function cond(clauses) {
-    while (isCons(clauses)) {
+    while (is_cons(clauses)) {
       let clause = clauses[CAR];
-      if (!isCons(clause))
+      if (!is_cons(clause))
         throw new EvalError(`Bad clause in "cond" ${string(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
       if (bool(evaled)) {
         let res = NIL;
-        while (isCons(forms)) {
+        while (is_cons(forms)) {
           res = _eval(forms[CAR], this);
           forms = forms[CDR];
         }
@@ -1114,9 +1128,9 @@ function SchemeJS(schemeOpts = {}) {
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
-      if (list === NIL || isCons(list)) {
+      if (list === NIL || is_cons(list)) {
         // Could handle as iterable, but faster not to
-        while (isCons(list)) {
+        while (is_cons(list)) {
           if (last) last = last[CDR] = cons(list[CAR], NIL);
           else res = last = cons(list[CAR], NIL);
           list = list[CDR];
@@ -1133,8 +1147,8 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("last", last);
   function last(list) {
     let res = NIL;
-    if (list === NIL || isCons(list)) {
-      while (isCons(list)) {
+    if (list === NIL || is_cons(list)) {
+      while (is_cons(list)) {
         res = list[CAR];
         list = list[CDR];
       }
@@ -1156,8 +1170,8 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("butlast", butlast);
   function butlast(list) {
     let res = NIL, last;
-    if (list === NIL || isCons(list)) {
-      while (isCons(list) && isCons(list[CDR])) {
+    if (list === NIL || is_cons(list)) {
+      while (is_cons(list) && is_cons(list[CDR])) {
         if (last) last = last[CDR] = cons(list[CAR], NIL);
         else res = last = cons(list[CAR], NIL);
         list = list[CDR];
@@ -1178,8 +1192,8 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("length", length);
   function length(list) {
     let n = 0;
-    if (list === NIL || isCons(list)) {
-      while (isCons(list)) {
+    if (list === NIL || is_cons(list)) {
+      while (is_cons(list)) {
         n += 1;
         list = list[CDR];
       }
@@ -1244,7 +1258,7 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("reverse", reverse);
   function reverse(list) {
     let res = NIL;
-    while (isCons(list)) {
+    while (is_cons(list)) {
       res = cons(list[CAR], res)
       list = list[CDR];
     }
@@ -1268,7 +1282,7 @@ function SchemeJS(schemeOpts = {}) {
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
   defineGlobalSymbol("member", member);
   function member(key, list) {
-    while (isCons(list)) {
+    while (is_cons(list)) {
       if (key == list[CAR])
         return list;
       list = list[CDR];
@@ -1280,7 +1294,7 @@ function SchemeJS(schemeOpts = {}) {
   //     Returns the portion of the list where the car is eq to the key, or () if none found.
   defineGlobalSymbol("memq", memq);
   function memq(key, list) {
-    while (isCons(list)) {
+    while (is_cons(list)) {
       if (key === list[CAR])
         return list;
       list = list[CDR];
@@ -1295,12 +1309,12 @@ function SchemeJS(schemeOpts = {}) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
       throw new EvalError(`Not an integer ${string(index)}`);
     if (index < 0) return NIL;
-    if (list === NIL || isCons(list)) {
-      while (index > 0 && isCons(list)) {
+    if (list === NIL || is_cons(list)) {
+      while (index > 0 && is_cons(list)) {
         index -= 1;
         list = list[CDR];
       }
-      if (isCons(list))
+      if (is_cons(list))
         return list[CAR];
   ``} else if (Array.isArray(list)) {
       if (index < list.length)
@@ -1317,12 +1331,12 @@ function SchemeJS(schemeOpts = {}) {
 
   queueTests(function(){
     EXPECT(` (memq) `, NIL);
-    EXPECT(` (memq 'a) `, isClosure);
+    EXPECT(` (memq 'a) `, is_closure);
     EXPECT(` (memq 'a 1) `, NIL);
     EXPECT(` (memq 'c '(a b c d e f g)) `, ` '(c d e f g) `);
     EXPECT(` (memq 'z '(a b c d e f g)) `, NIL);
     EXPECT_ERROR(` (nth) `, EvalError);
-    EXPECT(` (nth 'a) `, isClosure);
+    EXPECT(` (nth 'a) `, is_closure);
     EXPECT(` (nth 4 '(a b c d e f g)) `, ` 'e `);
     EXPECT_ERROR(` (nth 4.5 '(a b c d e f g)) `, EvalError);
     EXPECT(` (nth 4 '[a b c d e f g]) `, ` 'e `);
@@ -1350,7 +1364,7 @@ function SchemeJS(schemeOpts = {}) {
     while (scope && scope !== Object) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
-        if (!isAtom(symbol)) continue;
+        if (!is_atom(symbol)) continue;
         let name = string(symbol);
         if (name.toLowerCase().includes(substring))
           matches = cons(symbol, matches);
@@ -1358,7 +1372,7 @@ function SchemeJS(schemeOpts = {}) {
       scope = Object.getPrototypeOf(scope);
     }
     GlobalScope.sort(matches, (a,b) => a.description < b.description ? -1 : a.description > b.description ? 1 : 0);
-    return toList(matches);
+    return to_list(matches);
   }
 
   // (mapcar fn list1 list2 ...)
@@ -1368,10 +1382,10 @@ function SchemeJS(schemeOpts = {}) {
     // Actually, this will work for any iterables and lists are iterable.
     let res = NIL, last;
     for (let list of lists) {
-      if (list === NIL || isCons(list)) {
+      if (list === NIL || is_cons(list)) {
         // Could just let the list iterator handle it but might as well just follow the Cons chain
         // and not have to manufacture an iterator.
-        while (isCons(list)) {
+        while (is_cons(list)) {
           let item = list[CAR];
           item = _apply(fn, cons(item, NIL), this);
           if (last) last = last[CDR] = cons(item, NIL);
@@ -1403,7 +1417,7 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   queueTests(function(){
-    EXPECT(` (apropos "c") `, isCons);  // weak test but gets coverage
+    EXPECT(` (apropos "c") `, is_cons);  // weak test but gets coverage
     EXPECT(` (mapcar) `, NIL);
     EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
     EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
@@ -1425,19 +1439,19 @@ function SchemeJS(schemeOpts = {}) {
   // still benefiting from Scopes internally.
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0 }, "let", "let*");
   function letrec(forms) {
-    if (!isCons(forms)) throw new EvalError(`No bindings`);
+    if (!is_cons(forms)) throw new EvalError(`No bindings`);
     let bindings = forms[CAR];
     forms = forms[CDR];
     let scope = newScope(this, "letrec-scope");
-    while (isCons(bindings)) {
+    while (is_cons(bindings)) {
       let binding = bindings[CAR];
-      if (!isCons(binding))
+      if (!is_cons(binding))
         throw new EvalError(`Bad binding ${string(binding)}`);
       let boundVar = binding[CAR], bindingForms = binding[CDR];
       if (typeof boundVar !== 'symbol')
         throw new EvalError(`Bad binding ${string(binding)}`);
       let val = NIL;
-      while (isCons(bindingForms)) {
+      while (is_cons(bindingForms)) {
         val = _eval(bindingForms[CAR], scope);
         bindingForms = bindingForms[CDR];
       }
@@ -1445,7 +1459,7 @@ function SchemeJS(schemeOpts = {}) {
       bindings = bindings[CDR];
     }
     let res = NIL;
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
       res = _eval(forms[CAR], scope);
       forms = forms[CDR];
     }
@@ -1466,11 +1480,11 @@ function SchemeJS(schemeOpts = {}) {
     let predicateFn = rest[0], accessFn = rest[1];
     if (!list || list === NIL)
       return NIL;
-    if (list === NIL || isCons(list)) {
+    if (list === NIL || is_cons(list)) {
       // llsort is in-place, so first copy the list.
       // There are no new Cons cells after this, so it's a bargain.
       let copied = NIL, tail;
-      while (isCons(list)) {
+      while (is_cons(list)) {
         let next = list[CDR];
         if (tail) tail = tail[CDR] = list;
         else copied = tail = list;
@@ -1507,13 +1521,13 @@ function SchemeJS(schemeOpts = {}) {
     //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
     function llsort(list) {
       let stack = [];
-      while (isCons(list)) {
+      while (is_cons(list)) {
         // Accumulate a run that's already sorted.
         let run = list, runTail = list;
         list = list[CDR];
         let headKey = accessFn ? accessFn.call(this, run[CAR]) : run[CAR];
         let tailKey = headKey;
-        while (isCons(list)) {
+        while (is_cons(list)) {
           let nextList = list[CDR];
           runTail[CDR] = NIL;
           // "item" is the head of the list
@@ -1559,7 +1573,7 @@ function SchemeJS(schemeOpts = {}) {
     function merge(left, right) {
       // When equal, left goes before right
       let merged = NIL, last;
-      while (isCons(left) && isCons(right)) {
+      while (is_cons(left) && is_cons(right)) {
         let leftKey = accessFn ? accessFn.call(this, left[CAR]) : left[CAR];
         let rightKey = accessFn ? accessFn.call(this, right[CAR]) : right[CAR];
         let rightLess = !!predicateFn ? predicateFn.call(this, rightKey, leftKey) < 0 : rightKey < leftKey;
@@ -1579,10 +1593,10 @@ function SchemeJS(schemeOpts = {}) {
         last[CDR] = NIL;
       }
       // Can't both be Cons cells; the loop above ensures it
-      if (isCons(left)) {
+      if (is_cons(left)) {
         if (last) last[CDR] = left;
         else merged = left;
-      } else if (isCons(right)) {
+      } else if (is_cons(right)) {
         if (last) last[CDR] = right;
         else merged = right;
       }
@@ -1621,14 +1635,14 @@ function SchemeJS(schemeOpts = {}) {
       }
       maxDepth -= 1;
 
-      if (isCons(a)) {
-        if (!isCons(b)) {
+      if (is_cons(a)) {
+        if (!is_cons(b)) {
           if (report) report.a = a, report.b = b;
           return false;
         }
         return deep_eq(a[CAR], b[CAR]) && deep_eq(a[CDR], b[CDR], maxDepth);
       }
-      if (isCons(b)) {
+      if (is_cons(b)) {
         if (report) report.a = a, report.b = b;
         return false;
       }
@@ -1784,9 +1798,9 @@ function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
   function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(0, cons(this, body))) }
 
-  defineGlobalSymbol("closure?", isClosure);
-  function isClosure(form) {
-    return isCons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
+  defineGlobalSymbol("closure?", is_closure);
+  function is_closure(form) {
+    return is_cons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
   }
 
   //
@@ -1814,7 +1828,7 @@ function SchemeJS(schemeOpts = {}) {
   function schemeCatch(tag, forms) {  // XXX order of args?
     let val = NIL;
     try {
-      while (isCons(forms)) {
+      while (is_cons(forms)) {
         val = _eval(forms[CAR], this);
         forms = forms[CDR];
       }
@@ -1833,21 +1847,21 @@ function SchemeJS(schemeOpts = {}) {
   // (catch (var [type] forms) forms) -- Java/JavaScript style
   defineGlobalSymbol("catch", jsCatch, { evalArgs: 0 });
   function jsCatch(catchClause, forms) {
-    if (!isCons(catchClause))
+    if (!is_cons(catchClause))
       throw new EvalError(`Bad catch clause ${string(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
-    if (!isCons(catchForms))
+    if (!is_cons(catchForms))
       throw new EvalError(`Bad catch clause ${string(catchClause)}`);
     var typeMatch;
     if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
       typeMatch = catchForms[CAR];
       catchForms = catchForms[CDR];
     }
-    if (!isCons(catchForms))
+    if (!is_cons(catchForms))
       throw new EvalError(`Bad catch clause ${string(catchClause)}`);
     let val = NIL;
     try {
-      while (isCons(forms)) {
+      while (is_cons(forms)) {
         val = _eval(forms[CAR], this);
         forms = forms[CDR];
       }
@@ -1856,7 +1870,7 @@ function SchemeJS(schemeOpts = {}) {
           || e instanceof typeMatch) {
         let scope = newScope(this, "catch-scope");
         scope[catchVar] = e;
-        while (isCons(catchForms)) {
+        while (is_cons(catchForms)) {
           val = _eval(catchForms[CAR], scope);
           catchForms = catchForms[CDR];
         }
@@ -1871,11 +1885,11 @@ function SchemeJS(schemeOpts = {}) {
   // (define (fn args) forms)
   defineGlobalSymbol("define", define, { evalArgs: 0 });
   function define(forms) {
-    if (!(isCons(forms) && isCons(forms[CDR])))
+    if (!(is_cons(forms) && is_cons(forms[CDR])))
       throw new EvalError(`Define requires two parameters`);
     let defined = forms[CAR], value = forms[CDR][CAR];
     let scope = this, name = defined;
-    if (isCons(defined)) {
+    if (is_cons(defined)) {
       name = defined[CAR];
       let args = defined[CDR];
       value = list(LAMBDA_ATOM, args, value);
@@ -1920,11 +1934,11 @@ function SchemeJS(schemeOpts = {}) {
       if (val === undefined) throw new EvalError(`Undefined symbol ${string(form)}`);
       return val;
     }
-    if (isCons(form)) {
+    if (is_cons(form)) {
       let fn = form[CAR], args = form[CDR];
       if (fn === QUOTE_ATOM) // QUOTE is a function that will do this, but catch it here anyway.
         return form[CDR][CAR];
-      if (isCons(fn)) {
+      if (is_cons(fn)) {
         let fnCar = fn[CAR];
         if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
           fn = _eval(fn, scope);
@@ -1978,12 +1992,12 @@ function SchemeJS(schemeOpts = {}) {
     // By default apply doesn't evaluate its args, but if evaluateArguments is set
     // (as it is by eval) it does.
     let paramCount = 0, evalCount = MAX_INTEGER;
-    if (isCons(form)) {
+    if (is_cons(form)) {
       let opSym = form[CAR];
       if (opSym === SLAMBDA_ATOM) {
         evalCount = 0;
       } else if (opSym === SCLOSURE_ATOM) {
-        if (!isCons(form[CDR])) throw new EvalError(`Bad form ${string(form)}`);
+        if (!is_cons(form[CDR])) throw new EvalError(`Bad form ${string(form)}`);
         evalCount = form[CDR][CAR];
       }
     } else if (typeof form === 'function') {
@@ -1998,7 +2012,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     if (evaluateArguments) {
       let evalledArgs = NIL, last = undefined;
-      for (let i = 0; i < evalCount && isCons(args); ++i) {
+      for (let i = 0; i < evalCount && is_cons(args); ++i) {
         let evalledArgCons = cons(_eval(args[CAR], scope), evalledArgs);
         if (last) last = last[CDR] = evalledArgCons;
         else evalledArgs = last = evalledArgCons;
@@ -2013,7 +2027,7 @@ function SchemeJS(schemeOpts = {}) {
     if (typeof form === 'function') {
       let jsArgs = [];
       for (let i = 0; i < lift; ++i) {
-        if (isCons(args)) {
+        if (is_cons(args)) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
         } else { 
@@ -2045,24 +2059,24 @@ function SchemeJS(schemeOpts = {}) {
         jsArgs.push(args);
       return form.apply(scope, jsArgs);
     }
-    if (isCons(form)) {
+    if (is_cons(form)) {
       let opSym = form[CAR];
       let body = form[CDR];
-      if (!isCons(body)) throw new EvalError(`Bad form ${string(form)}`);
+      if (!is_cons(body)) throw new EvalError(`Bad form ${string(form)}`);
       if (opSym === CLOSURE_ATOM) {
-        if (!isCons(body)) throw new EvalError(`Bad closure ${string(form)}`);
+        if (!is_cons(body)) throw new EvalError(`Bad closure ${string(form)}`);
         scope = body[CAR];
         body = body[CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === SCLOSURE_ATOM) {
-        if (!isCons(body)) throw new EvalError(`Bad closure ${string(form)}`);
+        if (!is_cons(body)) throw new EvalError(`Bad closure ${string(form)}`);
         scope = body[CDR][CAR];
         body = body[CDR][CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        if (!isCons(body)) throw new EvalError(`Bad lambda ${string(form)}`);
+        if (!is_cons(body)) throw new EvalError(`Bad lambda ${string(form)}`);
         let params = body[CAR];
         let forms = body[CDR];
         if (typeof params === 'symbol') { // Curry notation :)
@@ -2071,12 +2085,12 @@ function SchemeJS(schemeOpts = {}) {
         }
         scope = newScope(scope, "lambda-scope");
         let origFormalParams = params;
-        while (isCons(params)) {
+        while (is_cons(params)) {
           let param = params[CAR];
           if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
           if (args !== NIL) {
             scope[param] = args[CAR];
-            if (isCons(args)) args = args[CDR];
+            if (is_cons(args)) args = args[CDR];
           } else {
             // Curry up now! (partial application)
             if (opSym === LAMBDA_ATOM)
@@ -2091,7 +2105,7 @@ function SchemeJS(schemeOpts = {}) {
         else if (params !== NIL)
           throw new EvalError(`Bad parameter list ${string(origFormalParams)}`);
         let res = NIL;
-        while (isCons(forms)) {
+        while (is_cons(forms)) {
           res = _eval(forms[CAR], scope);
           forms = forms[CDR];
         }
@@ -2158,7 +2172,7 @@ function SchemeJS(schemeOpts = {}) {
           let symStrs = "";
           if (obj !== GlobalScope) {
             for (let sym of Object.getOwnPropertySymbols(obj)) {
-              if (!isAtom(sym)) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
+              if (!is_atom(sym)) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
               let desc = sym.description;
               if (symStrs.length + desc.length > 20) {
                 symStrs += "...";
@@ -2173,10 +2187,10 @@ function SchemeJS(schemeOpts = {}) {
           let objCar = obj[CAR];
           if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
                objCar == CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
-                && isCons(obj[CDR])) {
+                && is_cons(obj[CDR])) {
             // Specal treatment of lambdas and closures with curry notation
             if (objCar == CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
-              if (isCons(obj[CDR][CDR])) {
+              if (is_cons(obj[CDR][CDR])) {
                 let evalCount, scopeCons = obj[CDR];
                 if (objCar === SCLOSURE_ATOM) {
                   evalCount = obj[CDR][CAR];
@@ -2221,7 +2235,7 @@ function SchemeJS(schemeOpts = {}) {
           put("(");
           indent += indentMore;
           sep = "";
-          while (isCons(obj)) {
+          while (is_cons(obj)) {
             toString(obj[CAR], maxDepth);
             sep = " ";
             obj = obj[CDR];
@@ -2307,18 +2321,18 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
-  defineGlobalSymbol("toList", toList);
-  function toList(obj, depth) {
+  defineGlobalSymbol("to-list", to_list);
+  function to_list(obj, depth) {
     if (!bool(depth)) depth = 1;
     if (depth <= 0) return obj;
-    if (obj === NIL || isCons(obj)) return obj;
+    if (obj === NIL || is_cons(obj)) return obj;
     if (typeof obj === 'object') {
       if (obj[PAIR]) return obj;  // Careful; Cons is iterable itself
       if (isIterable(obj)) {
         let list = NIL, last;
         for (let value of obj) {
           if (depth > 1 && value[Symbol.iterator])
-            value = toList.call(this, value, depth-1);
+            value = to_list.call(this, value, depth-1);
           if (last) last = last[CDR] = cons(value, NIL);
           else list = last = cons(value, NIL);
         }
@@ -2329,14 +2343,14 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   // Turns iterable objects like lists into arrays, recursively to "depth" (default 1) deep.
-  defineGlobalSymbol("toArray", toArray);
-  function toArray(obj, depth) {
+  defineGlobalSymbol("to-array", to_array);
+  function to_array(obj, depth) {
     if (!bool(depth)) depth = 1;
     if (depth <= 0) return obj;
     res = [];
     for (let item of obj) {
       if (depth > 1 && isIterable(obj))
-        value = toArray.call(this, item, depth-1);
+        value = to_array.call(this, item, depth-1);
       res.push(item);
     }
     return res;
@@ -2853,7 +2867,7 @@ function SchemeJS(schemeOpts = {}) {
   // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { evalArgs: 0 });
   function compile(nameAndParams, forms, _) {
-    if (!isCons(nameAndParams)) new EvalError(`First parameter must be a list`);
+    if (!is_cons(nameAndParams)) new EvalError(`First parameter must be a list`);
     let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
     if (typeof name !== 'symbol') new EvalError(`Function name must be an atom or string`)    
@@ -2984,12 +2998,12 @@ function SchemeJS(schemeOpts = {}) {
           result = `outsideScope(this, ${bound})`;
         }
       }
-    } else if (isCons(form)) {
+    } else if (is_cons(form)) {
       let fn = form[CAR], args = form[CDR];
       if (fn === QUOTE_ATOM) {
         result = tools.bind(form[CDR][CAR]);
       } {
-        if (isCons(fn)) {
+        if (is_cons(fn)) {
           let fnCar = fn[CAR];
           if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
             ({ result, code } = compileApply(form, compileScope, tools));
@@ -3023,18 +3037,18 @@ function SchemeJS(schemeOpts = {}) {
       if (evalCount !== MAX_INTEGER)
         paramCount -= 1;
       if (name === '') name = undefined;
-    } else if (isCons(form)) {
+    } else if (is_cons(form)) {
       let opSym = form[CAR];
       if (opSym === SLAMBDA_ATOM) {
         evalCount = 0;
       }
       // Compile closures?
       params = [];
-      if (!isCons(form[CDR])) throw new EvalError(`Bad lambda ${string(form)}`);
+      if (!is_cons(form[CDR])) throw new EvalError(`Bad lambda ${string(form)}`);
       if (typeof form[CDR] === 'symbol') {
         params.push(form[CDR])
       } else {
-        for (let params = form[CDR[CAR]]; isCons(params); params = params[CDR])
+        for (let params = form[CDR[CAR]]; is_cons(params); params = params[CDR])
           params.push(params[CAR]);
       }
       paramCount = params.length;
@@ -3043,7 +3057,7 @@ function SchemeJS(schemeOpts = {}) {
     let lift = evalCount > paramCount ? evalCount : paramCount;
     let result = tools.newTemp(name);
     let argv = [];
-    for (let i = 0; isCons(args); ++i) {
+    for (let i = 0; is_cons(args); ++i) {
       if (i < evalCount) {
         let evalResult = compileEval(args[CAR], compileScope, tools);
         argv.push(evalResult);
@@ -3097,10 +3111,10 @@ function SchemeJS(schemeOpts = {}) {
         tools.indent = saveIndent;
         tools.emit(`}`);
         return result;
-      } else if (isCons(form)) {
+      } else if (is_cons(form)) {
         let opSym = form[CAR];
         let body = form[CDR];
-        if (!isCons(body)) throw new EvalError(`Bad form ${string(form)}`);
+        if (!is_cons(body)) throw new EvalError(`Bad form ${string(form)}`);
         if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
           // I don't expect to compile closures but maybe there's a reason to do so?
           let lambda = compileLambda('', form, compileScope, tools);
@@ -3115,9 +3129,9 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   function compileLambda(name, form, compileScope, tools) {
-    if (!isCons(form)) throw new EvalError(`Bad lambda ${string(form)}`);
+    if (!is_cons(form)) throw new EvalError(`Bad lambda ${string(form)}`);
     let body = form[CDR];
-    if (!isCons(body)) throw new EvalError(`Bad lambda ${string(form)}`);
+    if (!is_cons(body)) throw new EvalError(`Bad lambda ${string(form)}`);
     let params = body[CAR];
     let forms = body[CDR];
     let paramv = [];
@@ -3130,7 +3144,7 @@ function SchemeJS(schemeOpts = {}) {
       forms = cons(forms, NIL);
     }
     let origFormalParams = params;
-    while (isCons(params)) {
+    while (is_cons(params)) {
       let param = params[CAR];
       if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
       let paramVar = tools.newTemp(param);
@@ -3159,7 +3173,7 @@ function SchemeJS(schemeOpts = {}) {
     tools.emit(`function ${result}(${paramStr}) {`);
     tools.indent = saveIndent + "  ";
     let res = NIL;
-    while (isCons(forms)) {
+    while (is_cons(forms)) {
       result = compileEval(forms[CAR], compileScope, tools);
       forms = forms[CDR];
     }
