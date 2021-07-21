@@ -533,20 +533,37 @@ function SchemeJS(schemeOpts = {}) {
     return a;
   }
 
-  defineGlobalSymbol("-", sub, "sub");
+  defineGlobalSymbol("-", sub, { compileHook: sub_hook}, "sub");
   function sub(a, ...rest) {
     if (rest.length === 0) return -a;
     for (let b of rest)
       a -= b;
     return a;
   }
+  function sub_hook(args, transpileScope, tools) {
+    if (args.length == 1)
+      return `(-${args[0]})`;
+    let str = `(${args[0]}`;
+    for (let i = 1; i < args.length; ++i)
+      str += ` - ${args[i]}`;
+    str += `)`;
+    return str;
+  }
 
-  defineGlobalSymbol("*", mul, "mul");
+
+  defineGlobalSymbol("*", mul, { compileHook: mul_hook}, "mul");
   function mul(a, b, ...rest) {
     a *= b;
     for (let b of rest)
       a *= b;
     return a;
+  }
+  function mul_hook(args, transpileScope, tools) {
+    let str = `(${args[0]}`;
+    for (let i = 1; i < args.length; ++i)
+      str += ` * ${args[i]}`;
+    str += `)`;
+    return str;
   }
 
   defineGlobalSymbol('/', div, "div");
@@ -649,7 +666,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     return true;
   }
-  function le_hook(args, transpileHook, tools) {
+  function le_hook(args, transpileScope, tools) {
     let result;
     if (args.length < 2) {
       result = 'true';
@@ -659,14 +676,14 @@ function SchemeJS(schemeOpts = {}) {
       let a = tools.newTemp('a'), b = tools.newTemp('b'), forms = args[2];
       result = tools.newTemp('le');
       tools.emit(`let ${result}; ${result}: {`);
-      tools.emit(`let ${a} ${args[0]}, ${b} = ${args[1]};`);
       let saveIndent = tools.indent;
       tools.indent = saveIndent + "  ";
+      tools.emit(`let ${a} = ${args[0]}, ${b} = ${args[1]};`);
       tools.emit(`${result} = ${a} <= ${b};`);
       for (let i = 2; i < args.length; ++i) {
         tools.emit(`if (!${result}) break ${result};`);
+        let evalResult = transpileEval(args[i], transpileScope, tools, tools.newTemp);
         tools.emit(`${a} = ${b};`);
-        let evalResult = transpileEval(args[i], transpileHook, tools, tools.newTemp);
         tools.emit(`$(b) = ${evalResult};`);
         tools.emit(`${result} = ${a} <= ${b};`);
       }
@@ -2874,7 +2891,7 @@ function SchemeJS(schemeOpts = {}) {
         if (scopedVal === COMPILE_SENTINEL) {
           result = scopedVal;
         } else if (scopedVal) {
-          result = tools.bind(scopedVal);
+          result = tools.bind(scopedVal, sym);
         } else {
           let bound = tools.bind(sym);
           result = `outsideScope(${bound})`;
@@ -2904,13 +2921,15 @@ function SchemeJS(schemeOpts = {}) {
   
   function transpileApply(form, args, transpileScope, tools) {
     let paramCount = 0, evalCount = MAX_INTEGER;
-    let name, params, value, body, hook;
+    let name, params, restParam, value, body, hook;
     let saveIndent = tools.indent
     let boundVal = tools.boundVal(form);
     if (boundVal) form = boundVal;
     if (typeof form === 'function') { // form equals function :)
       hook = form[COMPILE_HOOK];
-      ({ name, params, value, body } = analyzeJSFunction(form));
+      ({ name, params, restParam, value, body } = analyzeJSFunction(form));
+      if (restParam)  // rest-param functions need a hook
+        value = body = undefined;
       let functionDescriptor = form[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
       evalCount = ~functionDescriptor >> 7 >>> 1;
       paramCount = params.length;
@@ -2935,7 +2954,7 @@ function SchemeJS(schemeOpts = {}) {
     }
     // Materialize the arguments in an array
     let lift = evalCount > paramCount ? evalCount : paramCount;
-    let result = tools.newTemp(name ? `${name}_result` : undefined);
+    let result = tools.newTemp(name);
     let argv = [];
     for (let i = 0; isCons(args); ++i) {
       if (i < evalCount) {
