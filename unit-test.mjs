@@ -372,8 +372,13 @@ EXPECT(` (let ((x 10)
 EXPECT(` (sort) `, NIL);
 EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
 EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
+EXPECT(` (sort '(6 4 5 7 6 8 3) >) `, ` '(8 7 6 6 5 4 3) `);
+EXPECT(` (sort '[6 4 5 7 6 8 3] >) `, ` '[8 7 6 6 5 4 3] `);
+EXPECT(` (qsort '((3 a) (2 b)) < car)	`, ` '((2 b) (3 a)) `);
 EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `,
-  result => globalScope.apply(globalScope.le, result));
+    result => globalScope.apply(globalScope.le, result));
+EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3) >)`,
+    result => globalScope.apply(globalScope.ge, result));
           
 {
   const toJSname = globalScope.toJSname;

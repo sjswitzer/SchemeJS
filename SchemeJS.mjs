@@ -1063,15 +1063,37 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("sort", mergesort, "qsort");
   function mergesort(list, ...rest) {
     let predicateFn = rest[0], accessFn = rest[1];
-    if (!bool(predicateFn))
-      predicateFn = function(a, b) {
-        if (typeof a === 'symbol') a = a.description;
-        if (typeof b === 'symbol') b = b.description;
-        return a < b ? -1 : b < a ? 1 : 0;
+    let before = predicateFn;
+    if (bool(predicateFn)) {
+      if (bool(accessFn)) {
+        before = function(a, b) {
+          return predicateFn.call(this, accessFn.call(this, a), accessFn.call(this, b));
+        }
+      } else if (typeof predicateFn !== 'function') {
+        // Make sure it's a JS function, not a Scheme function
+        before = function(a, b) {
+          return predicateFn.call(this, predicateFn);
+        }
       }
-    if (!list || list === NIL)
-      return NIL;
-    if (list === NIL || is_cons(list)) {
+    } else {
+      if (bool(accessFn)) {
+        before = function(a, b) {
+          a = accessFn.call(this, a);
+          b = accessFn.call(this, b);
+          if (typeof a === 'symbol') a = a.description;
+          if (typeof b === 'symbol') b = b.description;
+          return a < b;
+        }
+      } else {
+        before = function(a, b) {
+          if (typeof a === 'symbol') a = a.description;
+          if (typeof b === 'symbol') b = b.description;
+          return a < b;
+        }
+      }
+    }
+    if (!bool(list)) return NIL;  // includes NIL
+    if (is_cons(list)) {
       // llsort is in-place, so first copy the list.
       // There are no new Cons cells after this, so it's a bargain.
       let copied = NIL, tail;
@@ -1090,9 +1112,7 @@ export function createInstance(schemeOpts = {}) {
       // this is very bad for numbers.
       // That's not what we did for lists, so we override that.
       let array = [ ...list ];
-      if (!predicateFn)
-        predicateFn = (a, b) => a < b ? -1 : a > b ? 1 : 0;
-      array.sort((a,b) => predicateFn.call(this, a, b));
+      array.sort((a,b) => before.call(this, a, b) ? -1 : 1);
       return array;
     }
     throw new EvalError(`Not a list or iterable ${string(list)}`);
@@ -1117,29 +1137,23 @@ export function createInstance(schemeOpts = {}) {
         // Accumulate a run that's already sorted.
         let run = list, runTail = list;
         list = list[CDR];
-        let headKey = accessFn ? accessFn.call(this, run[CAR]) : run[CAR];
-        let tailKey = headKey;
         while (is_cons(list)) {
-          let item = list, listNext = list[CDR];
+          let listNext = list[CDR];
           runTail[CDR] = NIL;
-          let itemKey = accessFn ? accessFn.call(this, item[CAR]) : item[CAR];
-          let itemLess = predicateFn.call(this, itemKey, tailKey) < 0;
-          if (!itemLess) {
-            runTail[CDR] = item;
-            runTail = item;
-            tailKey = itemKey;
+          if (before.call(this, list[CAR], run[CAR])) {
+            list[CDR] = run;
+            run = list;
           } else {
-            let itemLess = predicateFn.call(this, itemKey, headKey) < 0;
-            if (itemLess) {
-              item[CDR] = run;
-              run = item;
-              headKey = itemKey;
+            if (!before.call(this, list[CAR], runTail[CAR])) {
+              runTail[CDR] = list;
+              runTail = list;
             } else {
               break;
             }
           }
           list = listNext;
         }
+
         // The number of runs at stack[i] is either zero or 2^i and the stack size is bounded by 1+log2(nruns).
         // There's a passing similarity to Timsort here, though Timsort maintains its stack using
         // something like a Fibonacci sequence where this uses powers of two.
@@ -1174,10 +1188,7 @@ export function createInstance(schemeOpts = {}) {
       // When equal, left goes before right
       let merged = NIL, last;
       while (is_cons(left) && is_cons(right)) {
-        let leftKey = accessFn ? accessFn.call(this, left[CAR]) : left[CAR];
-        let rightKey = accessFn ? accessFn.call(this, right[CAR]) : right[CAR];
-        let rightLess = predicateFn.call(this, rightKey, leftKey) < 0;
-        if (rightLess) {
+        if (before.call(this, right[CAR], left[CAR])) {
           let next = right[CDR];
           if (last) last[CDR] = right;
           else merged = right;
