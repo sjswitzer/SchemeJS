@@ -16,7 +16,7 @@ const VERSION = "1.1";
 // Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design. People should be able
 // to poke things into class definitions to experiment with different ideas
-// but that should only affect that SchemeJS instance; others should
+// but that should only affect that specific SchemeJS instance; others should
 // be unaffected.
 //
 function SchemeJS(schemeOpts = {}) {
