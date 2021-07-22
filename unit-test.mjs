@@ -10,13 +10,16 @@ import * as SchemeJS from './SchemeJS.mjs';
 
 let succeeded = 0, failed = 0, throwOnError = true;;
 
-let globalScope = SchemeJS.createInstance({ unitTest: true }); // XXX get rid of unitTest option
+let globalScope = SchemeJS.createInstance();
 let setGlobalScope = globalScope._setGlobalScope_test_hook_;
 let testScope = globalScope;
+let NIL = globalScope.NIL;
 let string = globalScope.string;
 let newScope = globalScope.newScope;
 let deep_eq = globalScope.deep_eq;
+let is_cons = globalScope.is_cons;
 let is_closure = globalScope.is_closure;
+let EvalError = globalScope.EvalError;
 
 EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
 EXPECT(` (car '(1 . 2)) `, ` 1 `);
@@ -142,65 +145,6 @@ EXPECT(' (/ 100000 10 10 10) ', 100);
   endTestScope(savedScope);
   // Factoral should be undefined now
   EXPECT_ERROR(` (factoral 10) `, EvalError);
-}
-
-{
-  const analyzeJSFunction = globalScope.analyzeJSFunction;
-  const testAnalyze = (fn) => () => analyzeJSFunction(fn);
-  EXPECT(testAnalyze(x => x * x),
-    { name: '', params: ['x'], restParam: undefined, value: 'x * x',
-      body: undefined, printBody: undefined, native: false });
-  EXPECT(testAnalyze((x) => x * x),
-    { name: '', params: ['x'], restParam: undefined, value: 'x * x',
-      body: undefined, printBody: undefined, native: false });
-  EXPECT(testAnalyze((x, y) => x * y),
-    { name: '', params: ['x', 'y'], restParam: undefined, value: 'x * y',
-      body: undefined, printBody: undefined, native: false });
-  EXPECT(testAnalyze((x, ...y) => x * y),
-    { name: '', params: ['x'], restParam: 'y', value: 'x * y',
-      body: undefined, printBody: undefined, native: false });
-  EXPECT(testAnalyze((x, y, ...z) => x * y),
-    { name: '', params: ['x','y'], restParam: 'z', value: 'x * y',
-      body: undefined, printBody: undefined, native: false });
-  EXPECT(testAnalyze((...x) => x * x),
-    { name: '', params: [], restParam: 'x', value: 'x * x',
-      body: undefined, printBody: undefined, native: false });
-  EXPECT(testAnalyze((...x) => { let res = x * x; return res }),
-    { name: '', params: [], restParam: 'x', value: 'res',
-      body: 'let res = x * x;', printBody: undefined, native: false });
-  EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
-    { name: '', params: ['a'], restParam: undefined, value: 'a',
-      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
-  EXPECT(testAnalyze(function (a, b, c) { a = 2 * a; return a; }),
-    { name: '', params: ['a','b','c'], restParam: undefined, value: 'a',
-      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
-  EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
-    { name: 'fn', params: ['a'], restParam: undefined, value: 'a',
-      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
-  EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * a; return a; }),
-    { name: 'fn', params: ['a','b','c'], restParam: undefined, value: 'a',
-      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
-  EXPECT(testAnalyze(function (a, ...rest) { return a; }),
-    { name: '', params: ['a'], restParam: 'rest', value: 'a',
-      body: '', printBody: ' { return a; }', native: false });
-  EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
-    { name: '', params: ['a','b','c'], restParam: 'rest', value: 'a',
-      body: '', printBody: ' { return a; }', native: false });
-  EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
-    { name: 'foo', params: ['a'], restParam: 'rest', value: 'a',
-      body: '', printBody: ' { return a; }', native: false });
-  EXPECT(testAnalyze(function bar(a, b, c, ...rest) { return a; }),
-    { name: 'bar', params: ['a','b','c'], restParam: 'rest', value: 'a'
-    , body: '', printBody: ' { return a; }', native: false });
-  EXPECT(testAnalyze(function baz(...rest) { return a; }),
-    { name: 'baz', params: [], restParam: 'rest', value: 'a',
-      body: '', printBody: ' { return a; }', native: false });
-  EXPECT(testAnalyze(function (...rest) { return a; }),
-    { name: '', params: [], restParam: 'rest', value: 'a',
-      body: '', printBody: ' { return a; }', native: false });
-  EXPECT(testAnalyze([].sort),
-    { name: 'sort', params: [], restParam: undefined, value: undefined,
-      body: undefined, printBody: ' { [native code] }', native: true });
 }
 
 EXPECT(` (&) `, 0);
@@ -333,6 +277,174 @@ EXPECT(` (prog1 1) `, 1);
 EXPECT(` (prog1 1 2 3) `, 1);
 EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
 
+EXPECT(` (cond) `, NIL);
+EXPECT_ERROR(` (cond a) `, EvalError);
+EXPECT_ERROR(` (cond 1) `, EvalError);
+EXPECT_ERROR(` (cond ()) `, EvalError);
+EXPECT(` (cond (true) 1) `, NIL);
+EXPECT(` (cond ((< 4 5) (+ 5 6))) `, 11);
+EXPECT(` (cond ((< 4 5) (+ 5 6) (* 5 6))) `, 30);
+EXPECT(` (cond ((> 4 5) (+ 5 6) (* 5 6))
+                ((< 4 5) (+ 2 9) (* 5 3))) `, 15);
+
+EXPECT(` (append) `, NIL);
+EXPECT(` (append '(a b c)) ` , ` '(a b c) `);
+EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
+EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
+EXPECT(` (append '(a b c) '(d e f) '(g h i)) ` , ` '(a b c d e f g h i) `);
+EXPECT(` (append '[a b c]) ` , ` '(a b c) `);
+EXPECT(` (append '[a b c] '[d e f]) ` , ` '(a b c d e f) `);
+EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
+EXPECT(` (append '(a b c) '[d e f] "ghi") ` , ` '(a b c d e f "g" "h" "i") `);
+EXPECT(` (last) `, NIL);
+EXPECT(` (last 'a) `, NIL);  // arg is not a list?
+EXPECT(` (last ()) `, NIL);
+EXPECT(` (last '(a)) `, ` 'a `);
+EXPECT(` (last '(a b)) `, ` 'b `);
+EXPECT(` (last '(a b c)) `, ` 'c `);
+EXPECT(` (last '[]) `, NIL);
+EXPECT(` (last '[a]) `, ` 'a `);
+EXPECT(` (last '[a b]) `, ` 'b `);
+EXPECT(` (last '[a b c]) `, ` 'c `);
+EXPECT(` (last "abc") `, ` "c" `);
+EXPECT(` (butlast) `, NIL);
+EXPECT(` (butlast 'a) `, NIL);  // arg is not a list?
+EXPECT(` (butlast ()) `, NIL);
+EXPECT(` (butlast '(a)) `, NIL );
+EXPECT(` (butlast '(a b)) `, ` '(a) `);
+EXPECT(` (butlast '(a b c)) `, ` '(a b) `);
+EXPECT(` (length) `, 0);
+EXPECT(` (length 'a) `, 0);  // Not a list or iterable
+EXPECT(` (length 1) `, 0);  // Not a list or iterable
+EXPECT(` (length '()) `, 0);
+EXPECT(` (length '(a)) `, 1);
+EXPECT(` (length '(a b)) `, 2);
+EXPECT(` (length '(a b c d)) `, 4);
+EXPECT(` (length '[a b c d]) `, 4);
+EXPECT(` (length "abcd") `, 4);
+
+EXPECT(` (list) `, NIL);
+EXPECT(` (list 'a) `, ` '(a) `);
+EXPECT(` (list 'a 'b) `, ` '(a b) `);
+EXPECT(` (list 'a 'b 'c) `, ` '(a b c) `);
+EXPECT(` (list 'a '(b c) 'd) `, ` '(a (b c) d) `);
+EXPECT(` (reverse) `, NIL);
+EXPECT(` (reverse 'a) `, NIL); // not a list. XXX maybe should be exception?
+EXPECT(` (reverse '(a)) `, ` '(a) `);
+EXPECT(` (reverse '(a b)) `, ` '(b a) `);
+EXPECT(` (reverse '(a b c)) `, ` '(c b a) `);
+
+EXPECT(` (memq) `, NIL);
+EXPECT(` (memq 'a) `, is_closure);
+EXPECT(` (memq 'a 1) `, NIL);
+EXPECT(` (memq 'c '(a b c d e f g)) `, ` '(c d e f g) `);
+EXPECT(` (memq 'z '(a b c d e f g)) `, NIL);
+EXPECT_ERROR(` (nth) `, EvalError);
+EXPECT(` (nth 'a) `, is_closure);
+EXPECT(` (nth 4 '(a b c d e f g)) `, ` 'e `);
+EXPECT_ERROR(` (nth 4.5 '(a b c d e f g)) `, EvalError);
+EXPECT(` (nth 4 '[a b c d e f g]) `, ` 'e `);
+EXPECT(` (nth 4 "abcde") `, ` "e" `);
+EXPECT(` (nth 0 '(a b c d e f g)) `, ` 'a `);
+EXPECT(` (nth 0 '[a b c d e f g]) `, ` 'a `);
+EXPECT(` (nth 0 "abcde") `, ` "a" `);
+EXPECT(` (nth 6 '(a b c d e f g)) `, ` 'g `);
+EXPECT(` (nth 6 '[a b c d e f g]) `, ` 'g `);
+EXPECT(` (nth 6 "abcdefg") `, ` "g" `);
+EXPECT(` (nth -1 '(a b c d e f g)) `, NIL);
+EXPECT(` (nth -1 '[a b c d e f g]) `, NIL);
+EXPECT(` (nth -1 "abcdefg") `, NIL);
+EXPECT(` (nth 7 '(a b c d e f g)) `, NIL);
+EXPECT(` (nth 7 '[a b c d e f g]) `, NIL);
+EXPECT(` (nth 7 "abcdefg") `, NIL);
+
+EXPECT(` (apropos "c") `, is_cons);  // weak test but gets coverage
+EXPECT(` (mapcar) `, NIL);
+EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
+EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
+EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
+EXPECT(` (map->array (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
+
+EXPECT(` (let ((x 10)
+                (y 20))
+            (+ x y)) `, 30);
+
+EXPECT(` (sort) `, NIL);
+EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
+EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
+EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `,
+  result => globalScope.apply(globalScope.le, result));
+          
+{
+  const toJSname = globalScope.toJSname;
+  const testToJSname = name => () => toJSname(name);
+  EXPECT(testToJSname("aNormal_name0234"), expectString("_aNormal_name0234"));
+  EXPECT(testToJSname("aname%with&/specialChars?"), expectString("_aname$pct_with$and$stroke_specialChars$q"));
+  EXPECT(testToJSname("_begins_with_underscore"), expectString("__begins_with_underscore"));
+  EXPECT(testToJSname("number?"), expectString("_number$q"));
+  EXPECT(testToJSname("&&"), expectString("$and$and"));
+  EXPECT(testToJSname("$"), expectString("$cash"));
+  EXPECT(testToJSname("?"), expectString("$q"));
+}
+
+{
+  const analyzeJSFunction = globalScope.analyzeJSFunction;
+  const testAnalyze = (fn) => () => analyzeJSFunction(fn);
+  EXPECT(testAnalyze(x => x * x),
+    { name: '', params: ['x'], restParam: undefined, value: 'x * x',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((x) => x * x),
+    { name: '', params: ['x'], restParam: undefined, value: 'x * x',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((x, y) => x * y),
+    { name: '', params: ['x', 'y'], restParam: undefined, value: 'x * y',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((x, ...y) => x * y),
+    { name: '', params: ['x'], restParam: 'y', value: 'x * y',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((x, y, ...z) => x * y),
+    { name: '', params: ['x','y'], restParam: 'z', value: 'x * y',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((...x) => x * x),
+    { name: '', params: [], restParam: 'x', value: 'x * x',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((...x) => { let res = x * x; return res }),
+    { name: '', params: [], restParam: 'x', value: 'res',
+      body: 'let res = x * x;', printBody: undefined, native: false });
+  EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
+    { name: '', params: ['a'], restParam: undefined, value: 'a',
+      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
+  EXPECT(testAnalyze(function (a, b, c) { a = 2 * a; return a; }),
+    { name: '', params: ['a','b','c'], restParam: undefined, value: 'a',
+      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
+  EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
+    { name: 'fn', params: ['a'], restParam: undefined, value: 'a',
+      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
+  EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * a; return a; }),
+    { name: 'fn', params: ['a','b','c'], restParam: undefined, value: 'a',
+      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
+  EXPECT(testAnalyze(function (a, ...rest) { return a; }),
+    { name: '', params: ['a'], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
+    { name: '', params: ['a','b','c'], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
+    { name: 'foo', params: ['a'], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function bar(a, b, c, ...rest) { return a; }),
+    { name: 'bar', params: ['a','b','c'], restParam: 'rest', value: 'a'
+    , body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function baz(...rest) { return a; }),
+    { name: 'baz', params: [], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function (...rest) { return a; }),
+    { name: '', params: [], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze([].sort),
+    { name: 'sort', params: [], restParam: undefined, value: undefined,
+      body: undefined, printBody: ' { [native code] }', native: true });
+}
 
 //
 // A specialized tiny unit test framework that evaluates SchemeJS expressions
@@ -440,6 +552,11 @@ function beginTestScope() {
 function endTestScope(scope) {
   testScope = scope;
   setGlobalScope(scope);
+}
+
+// A string is typically evaluated, so this function lets you expect a string result.
+function expectString(expected) {
+  return result => result === expected;
 }
 
 class TestFailureError extends SchemeJSError {
