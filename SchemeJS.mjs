@@ -101,6 +101,7 @@ export function createInstance(schemeOpts = {}) {
 
   let globalScope = new Scope();
 
+  exportAPI("newScope", newScope);
   function newScope(enclosingScope, scope_is) {
     let scope = Object.create(enclosingScope);
     scope[SCOPE_IS_SYMBOL] = scope_is;
@@ -289,6 +290,7 @@ export function createInstance(schemeOpts = {}) {
   const QUOTE_ATOM = defineGlobalSymbol("quote", quote, { evalArgs: 0 }, "'");
   defineGlobalSymbol("scope", function() { return this });
 
+  exportAPI("NIL", NIL);
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true);
@@ -366,38 +368,10 @@ export function createInstance(schemeOpts = {}) {
   }
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
 
-  queueTests(function() {
-    EXPECT(` (sqrt 2) `, Math.sqrt(2));
-    EXPECT(` NaN `, NaN);
-    EXPECT(` (NaN? 1) `, false);
-    EXPECT(` (nan? NaN) `, true);
-    EXPECT(` Infinity `, Infinity);
-    EXPECT(` (- Infinity) `, -Infinity);
-    EXPECT(` (finite? NaN) `, false);
-    EXPECT(` (finite? (/ 3 4)) `, true);
-    EXPECT(` (finite? (/ 3 0)) `, false);
-    EXPECT(` (finite? Infinity) `, false);
-    EXPECT(` (finite? NaN) `, false);
-    EXPECT(` (finite? "string") `, false);
-    EXPECT(` (abs 3) `, 3);
-    EXPECT(` (abs -3) `, 3);
-    EXPECT(` (abs 3n) `, 3n);
-    EXPECT(` (abs -3n) `, 3n);
-  });
-
   defineGlobalSymbol("intern", a => Atom(a));
   defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
   defineGlobalSymbol("Number", a => Number(a));
   defineGlobalSymbol("BigInt", a => BigInt(a));
-  queueTests(function() {
-    EXPECT(` (intern "abc") `, ` 'abc `);
-    EXPECT(` (Symbol  "a") `, x => typeof x === 'symbol' && x.description === "a");
-    EXPECT(` (Number "10") `, 10);
-    EXPECT(` (Number "foo") `, NaN);
-    EXPECT(` (BigInt "10") `, 10n);
-    EXPECT(` (BigInt 10) `, 10n);
-    EXPECT_ERROR(` (BigInt "foo") `, SyntaxError);  // This is a weird JavaScript thing
-  });
 
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
@@ -423,10 +397,6 @@ export function createInstance(schemeOpts = {}) {
     return _apply(fn, args, scope);
   }
 
-  queueTests(function() {
-    EXPECT(` (apply + '(1 2)) `, 3);
-  });
-
   // Pokemon gotta catch 'em' all!
   defineGlobalSymbol("!", a => !bool(a), "not");
   defineGlobalSymbol("~", a => ~a, "bit-not");
@@ -442,43 +412,6 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("@", (a, b) => b[a]);  // indexing and member access
   defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
   defineGlobalSymbol("void", _ => undefined);
-  queueTests(function() {
-    EXPECT(` (! true) `, false);
-    EXPECT(` (! false) `, true);
-    EXPECT(` (! nil) `, true);
-    EXPECT(` (! 'a) `, false);
-    EXPECT(` (! '(a)) `, false);
-    EXPECT(` (! nil) `, true);
-    EXPECT(` (! 0) `, false); // different from JS
-    EXPECT(` (! 0n) `, false); // different from JS
-    EXPECT(` (! "") `, false); // different from JS
-    EXPECT(` (! 1) `, false);
-    EXPECT(` (! 1n) `, false);
-    EXPECT(` (! null) `, true);
-    EXPECT(` (! {}) `, false);
-    EXPECT(` (! []) `, false);
-    EXPECT(` (~ 3) `, ~3);
-    EXPECT(` (** 5 7) `, 5**7);
-    EXPECT(` (% 1235 37) `, 1235%37);
-    EXPECT(` (<< 234 4) `, 234 << 4);
-    EXPECT(` (>> 345 3) `, 345 >> 3);
-    EXPECT(` (>> -345 3) `, -345 >> 3);
-    EXPECT(` (>>> -1 4) `, -1 >>> 4);
-    EXPECT(` (>>> 1 4) `, 1 >>> 4);
-    EXPECT(` (in "a" {a: 1}) `, true);
-    EXPECT(` (in "b" {a: 1}) `, false);
-    EXPECT(` (new RangeError) `, res => res instanceof RangeError);
-    EXPECT(` (@ 3 '[a b c d e]) `, ` 'd `);
-    EXPECT(` (?@ 3 '[a b c d e]) `, ` 'd `);
-    EXPECT_ERROR(` (@ 3 (void)) `, TypeError);
-    EXPECT(` (?@ 3 (void)) `, undefined);
-    EXPECT(` (void) `, undefined);
-    EXPECT(` (undefined? (void)) `, true);
-    EXPECT(` (void 1 2 3) `, undefined);
-     // Args are evaled, but undefined is returned;
-     // this is one way to deliberately materialize an "undefined" value
-    EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError);
-  });
 
   //
   // Variable args definitions
@@ -547,32 +480,6 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  queueTests(function() {
-    EXPECT(` (+) `, NaN);
-    EXPECT(` (+ 1) `, is_closure);
-    EXPECT(` (+ 1 2) `, 3);
-    EXPECT(` (+ 1 2 3) `, 6);
-    EXPECT(` (+ 1n 2n) `, 3n);
-    EXPECT_ERROR(` (+ 1 2n) `, TypeError);
-    EXPECT(` (-) `, NaN);  // Sure. Why not?
-    EXPECT(` (- 3) `, -3);
-    EXPECT(` (- 3n) `, -3n);
-    EXPECT(` (- 100 2 5 10) `, 83);
-    EXPECT(` (*) `, NaN);
-    EXPECT(` (* 1) `, is_closure);
-    EXPECT(` (* 1 2) `, 2);
-    EXPECT(` (* 1 2 3) `, 6);
-    EXPECT(` (* 1 2 3 4) `, 24);
-    EXPECT(` (* 300n 200n) `, 60000n);
-    EXPECT(` (/) `, NaN);
-    EXPECT(` (/ 5) `, 1/5);
-    EXPECT(` (/5) `, 1/5);  // tokenizer won't combine prefix of symbols with a number
-    EXPECT(` (/ 0) `, Infinity);
-    EXPECT(` (/ -1 0) `, -Infinity);
-    EXPECT(' (/ 3 7) ', 3/7);
-    EXPECT(' (/ 100000 10 10 10) ', 100);
- });
-
   defineGlobalSymbol("&", bit_and, { compileHook: bit_and_hook }, "bit-and");
   function bit_and(a, b, ...rest) {
     a &= b;
@@ -617,21 +524,6 @@ export function createInstance(schemeOpts = {}) {
     str += `)`;
     return str;
   }
-
-  queueTests(function() {
-    EXPECT(` (&) `, 0);
-    EXPECT(` (& 76134) `, is_closure);
-    EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
-    EXPECT(` (& 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 & 0b1110101011 & 0b11110111101111);
-    EXPECT(` (|) `, 0);
-    EXPECT(` (| 76134) `, is_closure);
-    EXPECT(` (| 0b1001101011 0b1110101011) `, 0b1001101011 | 0b1110101011);
-    EXPECT(` (| 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 | 0b1110101011 | 0b11110111101111);
-    EXPECT(` (^) `, 0);
-    EXPECT(` (^ 76134) `, is_closure);
-    EXPECT(` (^ 0b1001101011 0b1110101011) `, 0b1001101011 ^ 0b1110101011);
-    EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
-  });
 
   defineGlobalSymbol("<", lt, { evalArgs: 2, compileHook: lt_hook }, "lt");
   function lt(a, b, forms) {
@@ -755,76 +647,6 @@ export function createInstance(schemeOpts = {}) {
     return `(!${eq})`;
   }
 
-  queueTests(function(){
-    EXPECT(` (<) `, false);
-    EXPECT(` (< 5) `, is_closure);
-    EXPECT(` (< 5 3) `, false);
-    EXPECT(` (< 3 5) `, true);
-    EXPECT(` (< 3 3) `, false);
-    EXPECT(` (< 1 2 3 4 5 6) `, true);  // each less than the previous
-    EXPECT(` (< 1 2 3 4 4 5 6) `, false);
-    EXPECT(` (< 1 2 3 10 4 5 6) `, false);
-    EXPECT_ERROR(` (< 1 2 3 4 5 6 (oops!)) `, EvalError);
-    EXPECT(` (< 1 2 3 4 4 5 6 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false);
-    EXPECT(` (<=) `, false);
-    EXPECT(` (<= 5) `, is_closure)
-    EXPECT(` (<= 5 3) `, false);
-    EXPECT(` (<= 3 5) `, true);
-    EXPECT(` (<= 3 3) `, true);
-    EXPECT(` (<= 1 2 3 4 5 6) `, true);  // each less or equal to than the previous
-    EXPECT(` (<= 1 2 3 4 4 5 6) `, true);
-    EXPECT(` (<= 1 2 3 10 4 5 6) `, false);
-    EXPECT_ERROR(` (<= 1 2 3 4 5 6 (oops!)) `, EvalError);
-    EXPECT_ERROR(` (<= 1 2 3 4 4 5 6 (oops!)) `, EvalError);
-    EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (>) `, false);
-    EXPECT(` (> 5) `, is_closure);
-    EXPECT(` (> 5 3) `, true);
-    EXPECT(` (> 3 5) `, false);
-    EXPECT(` (> 3 3) `, false);
-    EXPECT(` (> 6 5 4 3 2 1) `, true);  // each greater than the previous
-    EXPECT(` (> 6 5 4 4 3 2 1) `, false);
-    EXPECT(` (> 6 5 4 10 3 2 1) `, false);
-    EXPECT_ERROR(` (> 6 5 4 3 2 1 (oops!)) `, EvalError);
-    EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false);
-    EXPECT(` (>=) `, false);
-    EXPECT(` (>= 5) `, is_closure);
-    EXPECT(` (>= 5 3) `, true);
-    EXPECT(` (>= 3 5) `, false);
-    EXPECT(` (>= 3 3) `, true);
-    EXPECT(` (>= 6 5 4 3 2 1) `, true);  // each greater than or equal to the previous
-    EXPECT(` (>= 6 5 4 4 3 2 1) `, true);
-    EXPECT(` (>= 6 5 4 10 3 2 1) `, false);
-    EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, EvalError);
-    EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, EvalError);
-    EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (==) `, true);   // nothing is equal to itself
-    EXPECT(` (== 5) `, is_closure);
-    EXPECT(` (== 5 3) `, false);
-    EXPECT(` (== 3 5) `, false);
-    EXPECT(` (== 3 3) `, true);
-    EXPECT(` (== 3 3 3 3 3 3) `, true);  // all equal
-    EXPECT(` (== 3 3 3 3 4 3) `, false); // not all equal
-    EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
-    EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (!=) `, false);  // nothing isn't equal to itself
-    EXPECT(` (!= 5) `, is_closure);
-    EXPECT(` (!= 5 3) `, true);
-    EXPECT(` (!= 3 5) `, true);
-    EXPECT(` (!= 3 3) `, false);
-    EXPECT(` (!= 3 3 3 3 3 3) `, false);  // all equal
-    EXPECT(` (!= 3 3 3 3 4 3) `, true);   // not all equal
-    EXPECT_ERROR(` (!= 3 3 3 3 3 3 (oops!)) `, EvalError);
-    EXPECT(` (!= 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
-    let list1 = `(a b (c d) 2 3)`, list2 = `(1 2 (7 3) x)`;
-    EXPECT(` (== == eq?) `, true);
-    EXPECT(` (eq? '${list1} '${list1}) `, false);
-    EXPECT(` (equal? '${list1} '${list1}) `, true);
-    EXPECT(` (eq? '${list1} '${list2}) `, false);
-    EXPECT(` (equal? '${list1} '${list2}) `, false);
-  });
 
   defineGlobalSymbol("max", max);
   function max(a, b, ...rest) {
@@ -843,15 +665,6 @@ export function createInstance(schemeOpts = {}) {
       if (val > b) val = b;
     return val;
   }
-
-  queueTests(function() {
-    EXPECT(` (max) `, undefined);
-    EXPECT(` (max 5) `, is_closure);
-    EXPECT(` (max 3 7 9 2 4) `, 9);
-    EXPECT(` (min) `, undefined);
-    EXPECT(` (min 5) `, is_closure);
-    EXPECT(` (min 3 7 9 2 4) `, 2);
-  });
 
  // logical & conditional
 
@@ -901,40 +714,6 @@ export function createInstance(schemeOpts = {}) {
   }
 
 
-  queueTests(function() {
-    EXPECT(` (&&) `, undefined);
-    EXPECT(` (&& 1) `, 1);
-    EXPECT(` (&& 1 2) `, 2);
-    EXPECT(` (&& 1 false 2) `, false);
-    EXPECT(` (&& 1 false (oops!)) `, false);  // short-circuits
-    EXPECT_ERROR(` (&& 1 true (oops!)) `, EvalError);
-    EXPECT(` (||) `, undefined);
-    EXPECT(` (|| 1) `, 1);
-    EXPECT(` (|| 1 2) `, 1);
-    EXPECT(` (|| nil null (void) false 2 3) `, 2); 
-    // Only false, nil, null, and undefined are false; specifically, 0 and "" are NOT false
-    EXPECT(` (|| nil null (void) false 0 2 3) `, 0);
-    EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
-    EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
-    EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
-    EXPECT(` (?) `, undefined); // Why not?
-    EXPECT(` (? true) `, is_closure);
-    EXPECT(` (? false) `, is_closure);
-    EXPECT(` (? true 1) `, is_closure);
-    EXPECT(` (? false 2) `, is_closure);
-    EXPECT(` (? true 1 2) `, 1);
-    EXPECT(` (? false 1 2) `, 2);
-    EXPECT(` (? true 1 2 (oops!)) `, 1);
-    EXPECT(` (? false 1 2 (oops!)) `, 2);
-    EXPECT(` (? true 1 (oops!)) `, 1);
-    EXPECT_ERROR(` (? false 1 (oops!)) `, EvalError);
-    EXPECT_ERROR(` (? true (oops!) 2) `, EvalError);
-    EXPECT(` (? false (oops!) 2) `, 2);
-    EXPECT_ERROR(` (? (oops!) 1 2) `, EvalError);
-    EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
-    EXPECT(` (? (> 3 5) (+ 3 4) (* 3 4)) `, 12);
-  });
-
   // (begin form1 form2 ...)
   defineGlobalSymbol("begin", begin, { evalArgs: 1 });
   function begin(res, forms) {
@@ -954,17 +733,6 @@ export function createInstance(schemeOpts = {}) {
     }
     return val;
   }
-
-  queueTests(function(){
-    EXPECT(` (begin) `, undefined);
-    EXPECT(` (begin 1) `, 1);
-    EXPECT(` (begin 1 2 3) `, 3);
-    EXPECT(` (begin (+ 3 4) (* 3 4)) `, 12);
-    EXPECT(` (prog1) `, undefined);
-    EXPECT(` (prog1 1) `, 1);
-    EXPECT(` (prog1 1 2 3) `, 1);
-    EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
-  });
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
   defineGlobalSymbol("cond", cond, { evalArgs: 0 });
@@ -987,18 +755,6 @@ export function createInstance(schemeOpts = {}) {
     }
     return NIL;
   }
-
-  queueTests(function(){
-    EXPECT(` (cond) `, NIL);
-    EXPECT_ERROR(` (cond a) `, EvalError);
-    EXPECT_ERROR(` (cond 1) `, EvalError);
-    EXPECT_ERROR(` (cond ()) `, EvalError);
-    EXPECT(` (cond (true) 1) `, NIL);
-    EXPECT(` (cond ((< 4 5) (+ 5 6))) `, 11);
-    EXPECT(` (cond ((< 4 5) (+ 5 6) (* 5 6))) `, 30);
-    EXPECT(` (cond ((> 4 5) (+ 5 6) (* 5 6))
-                   ((< 4 5) (+ 2 9) (* 5 3))) `, 15);
-  });
 
   defineGlobalSymbol("require", require_);
   function require_(path) {
@@ -1134,44 +890,6 @@ export function createInstance(schemeOpts = {}) {
     return n;
   }
 
-  queueTests(function(){
-    EXPECT(` (append) `, NIL);
-    EXPECT(` (append '(a b c)) ` , ` '(a b c) `);
-    EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
-    EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
-    EXPECT(` (append '(a b c) '(d e f) '(g h i)) ` , ` '(a b c d e f g h i) `);
-    EXPECT(` (append '[a b c]) ` , ` '(a b c) `);
-    EXPECT(` (append '[a b c] '[d e f]) ` , ` '(a b c d e f) `);
-    EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
-    EXPECT(` (append '(a b c) '[d e f] "ghi") ` , ` '(a b c d e f "g" "h" "i") `);
-    EXPECT(` (last) `, NIL);
-    EXPECT(` (last 'a) `, NIL);  // arg is not a list?
-    EXPECT(` (last ()) `, NIL);
-    EXPECT(` (last '(a)) `, ` 'a `);
-    EXPECT(` (last '(a b)) `, ` 'b `);
-    EXPECT(` (last '(a b c)) `, ` 'c `);
-    EXPECT(` (last '[]) `, NIL);
-    EXPECT(` (last '[a]) `, ` 'a `);
-    EXPECT(` (last '[a b]) `, ` 'b `);
-    EXPECT(` (last '[a b c]) `, ` 'c `);
-    EXPECT(` (last "abc") `, ` "c" `);
-    EXPECT(` (butlast) `, NIL);
-    EXPECT(` (butlast 'a) `, NIL);  // arg is not a list?
-    EXPECT(` (butlast ()) `, NIL);
-    EXPECT(` (butlast '(a)) `, NIL );
-    EXPECT(` (butlast '(a b)) `, ` '(a) `);
-    EXPECT(` (butlast '(a b c)) `, ` '(a b) `);
-    EXPECT(` (length) `, 0);
-    EXPECT(` (length 'a) `, 0);  // Not a list or iterable
-    EXPECT(` (length 1) `, 0);  // Not a list or iterable
-    EXPECT(` (length '()) `, 0);
-    EXPECT(` (length '(a)) `, 1);
-    EXPECT(` (length '(a b)) `, 2);
-    EXPECT(` (length '(a b c d)) `, 4);
-    EXPECT(` (length '[a b c d]) `, 4);
-    EXPECT(` (length "abcd") `, 4);
-  });
-
   defineGlobalSymbol("list", list);
   function list(...elements) {  // easy list builder
     let val = NIL;
@@ -1189,19 +907,6 @@ export function createInstance(schemeOpts = {}) {
     }
     return res;
   }
-
-  queueTests(function(){
-    EXPECT(` (list) `, NIL);
-    EXPECT(` (list 'a) `, ` '(a) `);
-    EXPECT(` (list 'a 'b) `, ` '(a b) `);
-    EXPECT(` (list 'a 'b 'c) `, ` '(a b c) `);
-    EXPECT(` (list 'a '(b c) 'd) `, ` '(a (b c) d) `);
-    EXPECT(` (reverse) `, NIL);
-    EXPECT(` (reverse 'a) `, NIL); // not a list. XXX maybe should be exception?
-    EXPECT(` (reverse '(a)) `, ` '(a) `);
-    EXPECT(` (reverse '(a b)) `, ` '(b a) `);
-    EXPECT(` (reverse '(a b c)) `, ` '(c b a) `);
-  });
 
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
@@ -1253,32 +958,6 @@ export function createInstance(schemeOpts = {}) {
     }
     return NIL;
   }
-
-  queueTests(function(){
-    EXPECT(` (memq) `, NIL);
-    EXPECT(` (memq 'a) `, is_closure);
-    EXPECT(` (memq 'a 1) `, NIL);
-    EXPECT(` (memq 'c '(a b c d e f g)) `, ` '(c d e f g) `);
-    EXPECT(` (memq 'z '(a b c d e f g)) `, NIL);
-    EXPECT_ERROR(` (nth) `, EvalError);
-    EXPECT(` (nth 'a) `, is_closure);
-    EXPECT(` (nth 4 '(a b c d e f g)) `, ` 'e `);
-    EXPECT_ERROR(` (nth 4.5 '(a b c d e f g)) `, EvalError);
-    EXPECT(` (nth 4 '[a b c d e f g]) `, ` 'e `);
-    EXPECT(` (nth 4 "abcde") `, ` "e" `);
-    EXPECT(` (nth 0 '(a b c d e f g)) `, ` 'a `);
-    EXPECT(` (nth 0 '[a b c d e f g]) `, ` 'a `);
-    EXPECT(` (nth 0 "abcde") `, ` "a" `);
-    EXPECT(` (nth 6 '(a b c d e f g)) `, ` 'g `);
-    EXPECT(` (nth 6 '[a b c d e f g]) `, ` 'g `);
-    EXPECT(` (nth 6 "abcdefg") `, ` "g" `);
-    EXPECT(` (nth -1 '(a b c d e f g)) `, NIL);
-    EXPECT(` (nth -1 '[a b c d e f g]) `, NIL);
-    EXPECT(` (nth -1 "abcdefg") `, NIL);
-    EXPECT(` (nth 7 '(a b c d e f g)) `, NIL);
-    EXPECT(` (nth 7 '[a b c d e f g]) `, NIL);
-    EXPECT(` (nth 7 "abcdefg") `, NIL);
-  });
 
   // (apropos substring) -- Returns a list of all symbols containing the given substring
   defineGlobalSymbol("apropos", apropos);
@@ -1342,15 +1021,6 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  queueTests(function(){
-    EXPECT(` (apropos "c") `, is_cons);  // weak test but gets coverage
-    EXPECT(` (mapcar) `, NIL);
-    EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
-    EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
-    EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
-    EXPECT(` (map->array (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
-  });
-
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
   //           (y 20))
@@ -1391,12 +1061,6 @@ export function createInstance(schemeOpts = {}) {
     }
     return res;
   }
-
-  queueTests(function(){
-    EXPECT(` (let ((x 10)
-                   (y 20))
-                (+ x y)) `, 30);
-  });
 
   // (qsort list predicate-fcn access-fcn)
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
@@ -1545,13 +1209,7 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  queueTests(function(){
-    EXPECT(` (sort) `, NIL);
-    EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
-    EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
-    EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `, result => globalScope.apply(le, result));
-  });
-
+  exportAPI("deep_eq", deep_eq);
   function deep_eq(a, b, maxDepth, report) {
     if (!bool(maxDepth)) maxDepth = 10000; // Protection from circular lists
     return deep_eq(a, b, maxDepth);
@@ -1726,9 +1384,8 @@ export function createInstance(schemeOpts = {}) {
   // (while pred-form form1 form2 ...)
   //    If pred-form evaluates true it will evaluate all the other forms and then loop.
 
-  // maybe some relation between of generators and Lazy eval? <<< YES!
-  // maybe a non-recursive evaluator with explicit stack?
-  // Promises
+  // Maybe a non-recursive evaluator with explicit stack?
+  // Promises and async functions?
 
   // (\ (params) (body1) (body2) ...)
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0 });
@@ -1739,6 +1396,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
   function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(0, cons(this, body))) }
 
+  exportAPI("is_closure", is_closure)
   defineGlobalSymbol("closure?", is_closure);
   function is_closure(form) {
     return is_cons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
@@ -1845,24 +1503,6 @@ export function createInstance(schemeOpts = {}) {
     globalScope[name] = value;
     return name;
   }
-
-  queueTests(function() {
-    SAVESCOPE();
-    EXPECT(`
-      (define (factoral x)
-        (? (<= x 1) 
-          (? (bigint? x) 1n 1)
-          (* x (factoral (- x (? (bigint? x) 1n 1))))
-      ))`,
-      ` 'factoral `);
-    EXPECT(` (factoral 10) `, 3628800);
-    EXPECT(` (factoral 10n) `, 3628800n);
-    EXPECT(` (factoral 171) `, Infinity);
-    EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
-    RESTORESCOPE();
-    // Factoral should be undefined now
-    EXPECT_ERROR(` (factoral 10) `, EvalError);
-  });
 
   //
   // This is where the magic happens
@@ -2686,6 +2326,7 @@ export function createInstance(schemeOpts = {}) {
     throw new ParseExtraTokens(unparsed);
   }
 
+  exportAPI("analyzeJSFunction", analyzeJSFunction);
   function analyzeJSFunction(fn) {
     // The idea here is to use the intrinsic functions themselves as code generation
     // templates. That works as long as the functions don't call _eval. In that case
@@ -2808,64 +2449,6 @@ export function createInstance(schemeOpts = {}) {
       return token = str[pos++] ?? '';
     }
   }
-
-  queueTests(function(){
-    const testAnalyze = (fn) => () => analyzeJSFunction(fn);
-    EXPECT(testAnalyze(x => x * x),
-      { name: '', params: ['x'], restParam: undefined, value: 'x * x',
-        body: undefined, printBody: undefined, native: false });
-    EXPECT(testAnalyze((x) => x * x),
-      { name: '', params: ['x'], restParam: undefined, value: 'x * x',
-        body: undefined, printBody: undefined, native: false });
-    EXPECT(testAnalyze((x, y) => x * y),
-      { name: '', params: ['x', 'y'], restParam: undefined, value: 'x * y',
-        body: undefined, printBody: undefined, native: false });
-    EXPECT(testAnalyze((x, ...y) => x * y),
-      { name: '', params: ['x'], restParam: 'y', value: 'x * y',
-        body: undefined, printBody: undefined, native: false });
-    EXPECT(testAnalyze((x, y, ...z) => x * y),
-      { name: '', params: ['x','y'], restParam: 'z', value: 'x * y',
-        body: undefined, printBody: undefined, native: false });
-    EXPECT(testAnalyze((...x) => x * x),
-      { name: '', params: [], restParam: 'x', value: 'x * x',
-        body: undefined, printBody: undefined, native: false });
-    EXPECT(testAnalyze((...x) => { let res = x * x; return res }),
-      { name: '', params: [], restParam: 'x', value: 'res',
-        body: 'let res = x * x;', printBody: undefined, native: false });
-    EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
-      { name: '', params: ['a'], restParam: undefined, value: 'a',
-        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
-    EXPECT(testAnalyze(function (a, b, c) { a = 2 * a; return a; }),
-      { name: '', params: ['a','b','c'], restParam: undefined, value: 'a',
-        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
-    EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
-      { name: 'fn', params: ['a'], restParam: undefined, value: 'a',
-        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
-    EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * a; return a; }),
-      { name: 'fn', params: ['a','b','c'], restParam: undefined, value: 'a',
-        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
-    EXPECT(testAnalyze(function (a, ...rest) { return a; }),
-      { name: '', params: ['a'], restParam: 'rest', value: 'a',
-        body: '', printBody: ' { return a; }', native: false });
-    EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
-      { name: '', params: ['a','b','c'], restParam: 'rest', value: 'a',
-        body: '', printBody: ' { return a; }', native: false });
-    EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
-      { name: 'foo', params: ['a'], restParam: 'rest', value: 'a',
-        body: '', printBody: ' { return a; }', native: false });
-    EXPECT(testAnalyze(function bar(a, b, c, ...rest) { return a; }),
-      { name: 'bar', params: ['a','b','c'], restParam: 'rest', value: 'a'
-      , body: '', printBody: ' { return a; }', native: false });
-    EXPECT(testAnalyze(function baz(...rest) { return a; }),
-      { name: 'baz', params: [], restParam: 'rest', value: 'a',
-        body: '', printBody: ' { return a; }', native: false });
-    EXPECT(testAnalyze(function (...rest) { return a; }),
-      { name: '', params: [], restParam: 'rest', value: 'a',
-        body: '', printBody: ' { return a; }', native: false });
-    EXPECT(testAnalyze([].sort),
-      { name: 'sort', params: [], restParam: undefined, value: undefined,
-        body: undefined, printBody: ' { [native code] }', native: true });
-  });
 
   const COMPILE_SENTINEL = Symbol("SENTINEL");
 
@@ -3273,6 +2856,7 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
+  exportAPI("_setGlobalScope_test_hook_", _setGlobalScope_test_hook_)
   function _setGlobalScope_test_hook_(scope) {
     let previousGlobalScope = globalScope;
     globalScope = scope;
