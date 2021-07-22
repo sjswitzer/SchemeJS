@@ -2158,9 +2158,6 @@ export function createInstance(schemeOpts = {}) {
   function parseSExpr(tokenGenerator, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let replHints = opts.replHints ?? {};
-    let prompt = opts.prompt ?? "SchemeJS > ";
-    let promptMore = opts.promptMore = "  ";
-    let quotePromptMore = opts.quotePromptMore ?? promptMore;
     if (typeof tokenGenerator === 'string')
       tokenGenerator = schemeTokenGenerator(tokenGenerator);
     if (!(typeof tokenGenerator.next === 'function')) {
@@ -2171,7 +2168,7 @@ export function createInstance(schemeOpts = {}) {
         tokenGenerator = generator;
       }
     }
-    replHints.currentPrompt = prompt;
+    replHints.parseDepth = 0;
 
     let _toks = [], _done = false;
     function token(n = 0) {
@@ -2223,7 +2220,7 @@ export function createInstance(schemeOpts = {}) {
       }
     }
 
-    function parseExpr(promptStr) {
+    function parseExpr(parseDepth) {
       if (token().type === 'string' || token().type === 'number') {
         let thisToken = consumeToken();
         return thisToken.value;
@@ -2235,18 +2232,17 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (token().type === '(') {
-        let newPrompt = promptStr + promptMore;
-        replHints.currentPrompt = newPrompt;
+        replHints.parseDepth = parseDepth + 1;
         consumeToken();
         return parseListBody();
         function parseListBody() {
           if (token().type === ')') {
-            replHints.currentPrompt = promptStr;
+            replHints.parseDepth = parseDepth;
             consumeToken();
             return NIL;
           } else if (token().type === '.') {
             consumeToken();
-            let val = parseExpr(newPrompt);
+            let val = parseExpr(parseDepth + 1);
             if (token().type !== ')')
               throw new ParseExtraTokens(unParesedInput());
             consumeToken();
@@ -2254,7 +2250,7 @@ export function createInstance(schemeOpts = {}) {
           }
           if (token().type === 'end') throw new ParseIncomplete();
           if (token().type === 'garbage') throw new ParseExtraTokens(unParesedInput());
-          let first = parseExpr(newPrompt);
+          let first = parseExpr(parseDepth + 1);
           let rest = parseListBody();
           return cons(first, rest);
         }
@@ -2262,15 +2258,14 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === '[') {  // JavaScript Array, oddly enough!
         let res = [];
-        let newPrompt = promptStr + promptMore;
-        replHints.currentPrompt = newPrompt;
+        replHints.parseDepth = parseDepth + 1;
         consumeToken();
         for (;;) {
           if (token().type === ']') {
             consumeToken();
             return res;
           }
-          let item = parseExpr(newPrompt);
+          let item = parseExpr(parseDepth + 1);
           res.push(item);
           if (token().type === ',')  // Comma might as well be optional for now
             consumeToken();
@@ -2280,8 +2275,7 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === '{') {  // JavaScript Object literal too!
         let res = {};
-        let newPrompt = promptStr + promptMore;
-        replHints.currentPrompt = newPrompt;
+        replHints.parseDepth = parseDepth + 1;
         consumeToken();
         for (;;) {
           if (token().type === '}') {
@@ -2298,7 +2292,7 @@ export function createInstance(schemeOpts = {}) {
             consumeToken();
             if (token().type === ':') {
               consumeToken();
-              let val = parseExpr(newPrompt);
+              let val = parseExpr(parseDepth + 1);
               res[sym] = val;
               gotIt = true;
               if (token().type === ',')  // might as well be optional for now
@@ -2313,11 +2307,10 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (token().type === "'") {
-        let newPrompt = promptStr + quotePromptMore;
         consumeToken();
-        replHints.currentPrompt = newPrompt;
-        let quoted = parseExpr(newPrompt);
-        replHints.currentPrompt = promptStr;
+        replHints.parseDepth = parseDepth + 1;
+        let quoted = parseExpr(parseDepth + 1);
+        replHints.parseDepth = parseDepth;
         return cons(QUOTE_ATOM, cons(quoted, NIL));
       }
 
@@ -2325,7 +2318,7 @@ export function createInstance(schemeOpts = {}) {
         return null;
       throw new ParseExtraTokens(unParesedInput());
     }
-    let expr = parseExpr(prompt);
+    let expr = parseExpr(0);
     let unparsed = unParesedInput();
     if (!unparsed)
       return expr;
@@ -2808,24 +2801,27 @@ export function createInstance(schemeOpts = {}) {
     return newName;
   }
 
+  let quitRepl = false;
+  const quit = _ => quitRepl = true;
+  defineGlobalSymbol("quit", quit);
+
   defineGlobalSymbol("REPL", REPL);
   function REPL(readline, opts = {}) {
     let scope = this;
     opts = { ...schemeOpts, ...opts };
-    // readline(prompt) => str | nullish
+    // readline(parseDepth) => str | nullish
     let name = opts.name ?? "SchemeJS";
-    let prompt = opts.prompt ?? name + " > ";
     let print = opts.print ?? (x => console.log(string(x)));
     let reportSchemeError = opts.reportSchemeError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
-    let replHints = { prompt };
-    let endTest = opts.endTest ?? (line => line === ".");  // end on a "."
-    let done = false;
+    let replHints = { };
+    let endTest = opts.endTest ?? (_ => false);
+    quitRepl = false;
     function* charStreamPromptInput() {
       for(;;) {
-        let line = readline(replHints.currentPrompt);
-        if (line === null || line === undefined || endTest(line)) {
-          done = true;
+        let line = readline(replHints.parseDepth);
+        if (line == null || endTest(line)) {
+          quitRepl = true;
           return;
         }
         // Feed the charachers
@@ -2837,7 +2833,7 @@ export function createInstance(schemeOpts = {}) {
     }
     let charStream = charStreamPromptInput();
     let tokenGenerator = schemeTokenGenerator(charStream);
-    while (!done) {
+    while (!quitRepl) {
       try {
         let expr = parseSExpr(tokenGenerator, { ...opts, replHints });
         if (!expr) continue;

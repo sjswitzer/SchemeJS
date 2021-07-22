@@ -26,26 +26,34 @@ try {
   }
   if (inputFd !== undefined) {
     console.log(`SchemeJS ${SchemeJS.VERSION} REPL. Type "." to exit.`);
-    let buffer = Buffer.alloc(2000);
+
     // For the REPL
-    function getLine(prompt) {
-      process.stdout.write(prompt);
+    let buffer = Buffer.alloc(2000);
+    function getLine(parseDepth) {
+      process.stdout.write("SchemeJS > " + "  ".repeat(parseDepth));
       let read = fs.readSync(inputFd, buffer);
       let line = buffer.slice(0, read).toString();
       while (line.endsWith('\n') || line.endsWith('\r'))
       line = line.substr(0, line.length-1);
       return line;
     }
-    // for "load" and "require"
+
+    // For "load" and "require"
     function readFile(path) {
       let fileContent = fs.readFileSync(path);
       fileContent = fileContent.toString();
       return fileContent;
     }
-    // It isn't really a "constructor" but can be invoked with or without "new"
-    let globalScope = new SchemeJS.createInstance({ readFile });
+
+    let endTest = (line => line === ".");  // end on a "."
+
+    let globalScope = SchemeJS.createInstance({ readFile, endTest });
+
     // getLine("Attach debugger and hit return!");  // Uncomment to do what it says
+
+    // A function to run the test file
     globalScope.evalString('(define (test) (load "test.scm"))');
+
     globalScope.REPL(getLine);
   }
 } finally {
