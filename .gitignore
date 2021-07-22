@@ -38,8 +38,8 @@ bower_components
 .settings/
 *.sublime-workspace
 
-# IDE - VSCode
-.vscode
+### # IDE - VSCode
+### .vscode
 
 # misc
 .sass-cache
