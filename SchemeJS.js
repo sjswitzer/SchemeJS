@@ -9,10 +9,8 @@
 // TODO: make this a JS module
 
 "use strict";
-
-const { threadId } = require('worker_threads');
-
 const VERSION = "1.1";
+
 //
 // Creates a SchemeJS instance, independent of any others.
 // Instances are distinct to the bones; they do not even recognize each other's
@@ -231,9 +229,11 @@ function SchemeJS(schemeOpts = {}) {
     }
   }
 
+  defineGlobalSymbol("SchemeJS-version", VERSION);
   defineGlobalSymbol("is-atom", is_atom, "atom?"); 
-  defineGlobalSymbol("Atom", Atom);  
- let testQueue = [];
+  defineGlobalSymbol("Atom", Atom);
+
+  let testQueue = [];
 
   class SchemeJSError extends Error {};
   SchemeJSError.prototype.name = "SchemeJSError";
