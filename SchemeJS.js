@@ -9,6 +9,9 @@
 // TODO: make this a JS module
 
 "use strict";
+
+const { threadId } = require('worker_threads');
+
 const VERSION = "1.1";
 //
 // Creates a SchemeJS instance, independent of any others.
@@ -46,7 +49,7 @@ function SchemeJS(schemeOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR");
+  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR"), LAZY = Symbol("LAZY");
 
   // Trust the JIT to inline this
   const is_cons = obj => obj != null && obj[PAIR] === true;
@@ -71,11 +74,12 @@ function SchemeJS(schemeOpts = {}) {
         }
       }
     }
+    // static [PAIR] = true;  // Hmm; Shouldn't this work?
   }
   Cons.prototype[PAIR] = true;
   
-  // Hide the nil class because there's never any reason to
-  // reference it or instantiate it it more than once. Having it visible
+  // Hide the NIL class because there's never any reason to
+  // reference it or to instantiate it it more than once. Leaving it visible
   // just invites errors. But it's good to have a distinct class for NIL
   // for various reasons including that it looks better in a JS debugger
   // and provides a way to trap attempts to get or set [CAR] and [CDR].
@@ -133,7 +137,7 @@ function SchemeJS(schemeOpts = {}) {
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%%closure");
 
-  const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
+  const is_iterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
 
   // Character clases for parsing
   const TOKS = {}, DIGITS = {}, IDENT1 = {}, IDENT2 = {},
@@ -257,58 +261,6 @@ function SchemeJS(schemeOpts = {}) {
 
   const LogicError = Error;
   defineGlobalSymbol("LogicError", LogicError);
-
-  class IteratorList {
-    _carVal; _cdrVal; _iterator; _haveCar = false;
-    constructor(iterator) {
-      if (isIterable(iterator)) {
-        iterator = iterator[Symbol.iterator]();
-      }
-      this._iterator = iterator;
-    }
-    toString() {
-      return `(${string(this[CAR])} ...)`;
-    }
-    get [CAR]() { 
-      if (!this._haveCar) {
-        if (this._iterator) {
-          let { done, value } = this._iterator.next();
-          if (!done) {
-            this._cdrVal = new IteratorList(this._iterator);
-            this._iterator = undefined;
-            this._haveCar = true;
-            return this._carVal = value;
-          }
-        }
-        throw new EvalError("car of nil");
-      }
-      return this._carVal;
-    }
-    set [CAR](val) {
-      this._iterator = undefined;
-      this._carVal = val;
-      this._haveCar = true;
-    }
-    get [CDR]() {
-      if (this._iterator) {
-        let { done, value } = this._iterator.next();
-        this._iterator = undefined;
-        if (done) {
-          return this._cdrVal = NIL;
-        }
-        this._carVal = value;
-        this._haveCar = true;
-        this._cdrVal = new IteratorList(this._iterator);
-        return this._cdrVal;
-      }
-      return this._cdrVal;
-    }
-    set [CDR](val) {
-      this._iterator = undefined;
-      this._cdrVal = val;
-    }
-  }
-  IteratorList.prototype[PAIR] = true;
 
   //
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
@@ -1137,7 +1089,7 @@ function SchemeJS(schemeOpts = {}) {
           else res = last = cons(list[CAR], NIL);
           list = list[CDR];
         }
-      } else if (isIterable(list)) {  // other iterables
+      } else if (is_iterable(list)) {  // other iterables
         for (let element of list)
           if (last) last = last[CDR] = cons(element, NIL);
           else res = last = cons(element, NIL);
@@ -1161,7 +1113,7 @@ function SchemeJS(schemeOpts = {}) {
           return list[list.length-1];
         return NIL;
       }
-      if (isIterable(list)) {
+      if (is_iterable(list)) {
         for (let item of list)
           res = item;
       }
@@ -1178,7 +1130,7 @@ function SchemeJS(schemeOpts = {}) {
         else res = last = cons(list[CAR], NIL);
         list = list[CDR];
       }
-    } else if (isIterable(list)) {
+    } else if (is_iterable(list)) {
       let prev, first = true;
       for (item of list) {
         if (!first)
@@ -1203,7 +1155,7 @@ function SchemeJS(schemeOpts = {}) {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
       if (Array.isArray(list) && list.length > 0)
         return list.length;
-      if (isIterable(list)) {
+      if (is_iterable(list)) {
         for (let item of list)
           n += 1;
       }
@@ -1321,7 +1273,7 @@ function SchemeJS(schemeOpts = {}) {
   ``} else if (Array.isArray(list)) {
       if (index < list.length)
         return list[index];
-    } else if (isIterable(list)) {
+    } else if (is_iterable(list)) {
       for (let item of list) {
         if (index <= 0)
           return item;
@@ -1379,7 +1331,7 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   // (mapcar fn list1 list2 ...)
-  defineGlobalSymbol("mapcar", mapcar);
+  defineGlobalSymbol("mapcar", mapcar), "map";
   function mapcar(fn, ...lists) {
     if (!fn) return NIL;
     // Actually, this will work for any iterables and lists are iterable.
@@ -1395,7 +1347,7 @@ function SchemeJS(schemeOpts = {}) {
           else res = last = cons(item, NIL);
             list = list[CDR];
         }
-      } else if (isIterable(list)) {
+      } else if (is_iterable(list)) {
         for (let item of list) {
           item = _apply(fn, cons(item, NIL), this);
           if (last) last = last[CDR] = cons(item, NIL);
@@ -1501,7 +1453,7 @@ function SchemeJS(schemeOpts = {}) {
       }
       return llsort(copied);
     }
-    if (!accessFn && isIterable(list)) { // Bail out to JavaScript sort
+    if (!accessFn && is_iterable(list)) { // Bail out to JavaScript sort
       // This expands iterables into an array. It also copies arrays,
       // which is good because JavaScript sort is in-place.
       // The JavaScript sort algorithm sorts as if keys were were strings;
@@ -1541,13 +1493,13 @@ function SchemeJS(schemeOpts = {}) {
           let item = list, listNext = list[CDR];
           runTail[CDR] = NIL;
           let itemKey = accessFn ? accessFn.call(this, item[CAR]) : item[CAR];
-          let itemLess = predicateFn.call(this, itemKey, tailKey);
+          let itemLess = predicateFn.call(this, itemKey, tailKey) < 0;
           if (!itemLess) {
             runTail[CDR] = item;
             runTail = item;
             tailKey = itemKey;
           } else {
-            let itemLess = predicateFn.call(this, itemKey, headKey);
+            let itemLess = predicateFn.call(this, itemKey, headKey) < 0;
             if (itemLess) {
               item[CDR] = run;
               run = item;
@@ -1594,7 +1546,7 @@ function SchemeJS(schemeOpts = {}) {
       while (is_cons(left) && is_cons(right)) {
         let leftKey = accessFn ? accessFn.call(this, left[CAR]) : left[CAR];
         let rightKey = accessFn ? accessFn.call(this, right[CAR]) : right[CAR];
-        let rightLess = !!predicateFn ? predicateFn.call(this, rightKey, leftKey) < 0 : rightKey < leftKey;
+        let rightLess = predicateFn.call(this, rightKey, leftKey) < 0;
         if (rightLess) {
           let next = right[CDR];
           if (last) last[CDR] = right;
@@ -2201,7 +2153,9 @@ function SchemeJS(schemeOpts = {}) {
           }
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
-        if (obj[PAIR]) {
+        if (is_cons(obj)) {
+          if (obj[LAZY])
+            return put(`(${string(obj[CAR])} ...)`);
           let objCar = obj[CAR];
           if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
                objCar == CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
@@ -2253,7 +2207,7 @@ function SchemeJS(schemeOpts = {}) {
           put("(");
           indent += indentMore;
           sep = "";
-          while (is_cons(obj)) {
+          while (is_cons(obj) && !obj[LAZY]) {
             toString(obj[CAR], maxDepth);
             sep = " ";
             obj = obj[CDR];
@@ -2345,8 +2299,8 @@ function SchemeJS(schemeOpts = {}) {
     if (depth <= 0) return obj;
     if (obj === NIL || is_cons(obj)) return obj;
     if (typeof obj === 'object') {
-      if (obj[PAIR]) return obj;  // Careful; Cons is iterable itself
-      if (isIterable(obj)) {
+      if (is_cons(obj)) return obj;  // Careful; Cons is iterable itself
+      if (is_iterable(obj)) {
         let list = NIL, last;
         for (let value of obj) {
           if (depth > 1 && value[Symbol.iterator])
@@ -2360,14 +2314,58 @@ function SchemeJS(schemeOpts = {}) {
     return NIL;
   }
 
+  class IteratorList {
+    [CAR]; [LAZY]; _cdrVal;
+    constructor(car, iterator) {
+      this[CAR] = car;
+      this[LAZY] = iterator;
+    }
+    toString() { return string(this) }
+    get [CDR]() {
+      let iterator = this[LAZY];
+      if (!iterator)
+        return this._cdrVal;
+      let { done, value } = iterator.next();
+      if (done) {
+        this[LAZY] = undefined;
+        return this._cdrVal = NIL;
+      }
+      let cdr = new IteratorList(value, iterator);
+      this[LAZY] = undefined;
+      return this._cdrVal = cdr;
+    }
+    set [CDR](val) {
+      this._iterator = undefined;
+      this._cdrVal = val;
+    }
+  }
+  IteratorList.prototype[PAIR] = true;
+
+  defineGlobalSymbol("lazy-list", lazy_list);
+  function lazy_list(obj) {
+    let iterator = obj;
+    if (is_iterable(obj))
+      iterator = obj[Symbol.iterator]();
+    if (iterator == null || typeof iterator.next !== 'function')
+      throw new EvalError(`Not an iterable or iterator ${obj}`);
+    let { done, value } = iterator.next();
+    if (done) return NIL;
+    return new IteratorList(value,iterator);
+  }
+
   // Turns iterable objects like lists into arrays, recursively to "depth" (default 1) deep.
   defineGlobalSymbol("to-array", to_array);
-  function to_array(obj, depth) {
-    if (!bool(depth)) depth = 1;
+  function to_array(obj, ...rest) {
+    let depth = 1;
+    if (rest.length > 0 ) {
+      let maybeDepth = rest[0];
+      if (typeof maybeDepth === 'number')
+        depth = maybeDepth;
+    }
     if (depth <= 0) return obj;
     res = [];
     for (let item of obj) {
-      if (depth > 1 && isIterable(obj))
+      if (depth > 1 && is_iterable(obj))
         value = to_array.call(this, item, depth-1);
       res.push(item);
     }
@@ -2380,7 +2378,7 @@ function SchemeJS(schemeOpts = {}) {
 
   function* schemeTokenGenerator(characterGenerator) {
     if (!(typeof characterGenerator.next === 'function')) {
-      if (isIterable(characterGenerator)) {
+      if (is_iterable(characterGenerator)) {
         let generator = characterGenerator[Symbol.iterator]();
         if (!(typeof generator.next === 'function'))
           throw new LogicError(`Not an iterator or iterable ${characterGenerator}`);
@@ -2530,7 +2528,7 @@ function SchemeJS(schemeOpts = {}) {
     if (typeof tokenGenerator === 'string')
       tokenGenerator = schemeTokenGenerator(tokenGenerator);
     if (!(typeof tokenGenerator.next === 'function')) {
-      if (isIterable(tokenGenerator)) {
+      if (is_iterable(tokenGenerator)) {
         let generator = tokenGenerator[Symbol.iterator]();
         if (!(typeof generator.next === 'function'))
           throw new LogicError(`Not an iterator or iterable ${tokenGenerator}`);
