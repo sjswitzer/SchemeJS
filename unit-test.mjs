@@ -11,11 +11,12 @@ import * as SchemeJS from './SchemeJS.mjs';
 let succeeded = 0, failed = 0, throwOnError = true;;
 
 let globalScope = SchemeJS.createInstance({ unitTest: true }); // XXX get rid of unitTest option
+let setGlobalScope = globalScope._setGlobalScope_test_hook_;
 let testScope = globalScope;
 let string = globalScope.string;
 let newScope = globalScope.newScope;
 let deep_eq = globalScope.deep_eq;
-let setGlobalScope = globalScope._setGlobalScope_test_hook_;
+let is_closure = globalScope.is_closure;
 
 EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
 EXPECT(` (car '(1 . 2)) `, ` 1 `);
@@ -97,15 +98,247 @@ EXPECT(` (?@ 3 (void)) `, undefined);
 EXPECT(` (void) `, undefined);
 EXPECT(` (undefined? (void)) `, true);
 EXPECT(` (void 1 2 3) `, undefined);
-  // Args are evaled, but undefined is returned;
-  // this is one way to deliberately materialize an "undefined" value
+  // Args are evaled, but undefined is returned; just like in JavaScript.
+  // This is one way to deliberately materialize an "undefined" value.
 EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError);
 
+EXPECT(` (+) `, NaN);
+EXPECT(` (+ 1) `, is_closure);
+EXPECT(` (+ 1 2) `, 3);
+EXPECT(` (+ 1 2 3) `, 6);
+EXPECT(` (+ 1n 2n) `, 3n);
+EXPECT_ERROR(` (+ 1 2n) `, TypeError);
+EXPECT(` (-) `, NaN);  // Sure. Why not?
+EXPECT(` (- 3) `, -3);
+EXPECT(` (- 3n) `, -3n);
+EXPECT(` (- 100 2 5 10) `, 83);
+EXPECT(` (*) `, NaN);
+EXPECT(` (* 1) `, is_closure);
+EXPECT(` (* 1 2) `, 2);
+EXPECT(` (* 1 2 3) `, 6);
+EXPECT(` (* 1 2 3 4) `, 24);
+EXPECT(` (* 300n 200n) `, 60000n);
+EXPECT(` (/) `, NaN);
+EXPECT(` (/ 5) `, 1/5);
+EXPECT(` (/5) `, 1/5);  // tokenizer won't combine prefix of symbols with a number
+EXPECT(` (/ 0) `, Infinity);
+EXPECT(` (/ -1 0) `, -Infinity);
+EXPECT(' (/ 3 7) ', 3/7);
+EXPECT(' (/ 100000 10 10 10) ', 100);
+
+{
+  let savedScope = beginTestScope();
+  EXPECT(`
+    (define (factoral x)
+      (? (<= x 1) 
+        (? (bigint? x) 1n 1)
+        (* x (factoral (- x (? (bigint? x) 1n 1))))
+    ))`,
+    ` 'factoral `);
+  EXPECT(` (factoral 10) `, 3628800);
+  EXPECT(` (factoral 10n) `, 3628800n);
+  EXPECT(` (factoral 171) `, Infinity);
+  EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
+  endTestScope(savedScope);
+  // Factoral should be undefined now
+  EXPECT_ERROR(` (factoral 10) `, EvalError);
+}
+
+{
+  const analyzeJSFunction = globalScope.analyzeJSFunction;
+  const testAnalyze = (fn) => () => analyzeJSFunction(fn);
+  EXPECT(testAnalyze(x => x * x),
+    { name: '', params: ['x'], restParam: undefined, value: 'x * x',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((x) => x * x),
+    { name: '', params: ['x'], restParam: undefined, value: 'x * x',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((x, y) => x * y),
+    { name: '', params: ['x', 'y'], restParam: undefined, value: 'x * y',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((x, ...y) => x * y),
+    { name: '', params: ['x'], restParam: 'y', value: 'x * y',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((x, y, ...z) => x * y),
+    { name: '', params: ['x','y'], restParam: 'z', value: 'x * y',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((...x) => x * x),
+    { name: '', params: [], restParam: 'x', value: 'x * x',
+      body: undefined, printBody: undefined, native: false });
+  EXPECT(testAnalyze((...x) => { let res = x * x; return res }),
+    { name: '', params: [], restParam: 'x', value: 'res',
+      body: 'let res = x * x;', printBody: undefined, native: false });
+  EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
+    { name: '', params: ['a'], restParam: undefined, value: 'a',
+      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
+  EXPECT(testAnalyze(function (a, b, c) { a = 2 * a; return a; }),
+    { name: '', params: ['a','b','c'], restParam: undefined, value: 'a',
+      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
+  EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
+    { name: 'fn', params: ['a'], restParam: undefined, value: 'a',
+      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
+  EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * a; return a; }),
+    { name: 'fn', params: ['a','b','c'], restParam: undefined, value: 'a',
+      body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false });
+  EXPECT(testAnalyze(function (a, ...rest) { return a; }),
+    { name: '', params: ['a'], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
+    { name: '', params: ['a','b','c'], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
+    { name: 'foo', params: ['a'], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function bar(a, b, c, ...rest) { return a; }),
+    { name: 'bar', params: ['a','b','c'], restParam: 'rest', value: 'a'
+    , body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function baz(...rest) { return a; }),
+    { name: 'baz', params: [], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze(function (...rest) { return a; }),
+    { name: '', params: [], restParam: 'rest', value: 'a',
+      body: '', printBody: ' { return a; }', native: false });
+  EXPECT(testAnalyze([].sort),
+    { name: 'sort', params: [], restParam: undefined, value: undefined,
+      body: undefined, printBody: ' { [native code] }', native: true });
+}
+
+EXPECT(` (&) `, 0);
+EXPECT(` (& 76134) `, is_closure);
+EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
+EXPECT(` (& 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 & 0b1110101011 & 0b11110111101111);
+EXPECT(` (|) `, 0);
+EXPECT(` (| 76134) `, is_closure);
+EXPECT(` (| 0b1001101011 0b1110101011) `, 0b1001101011 | 0b1110101011);
+EXPECT(` (| 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 | 0b1110101011 | 0b11110111101111);
+EXPECT(` (^) `, 0);
+EXPECT(` (^ 76134) `, is_closure);
+EXPECT(` (^ 0b1001101011 0b1110101011) `, 0b1001101011 ^ 0b1110101011);
+EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
+
+EXPECT(` (<) `, false);
+EXPECT(` (< 5) `, is_closure);
+EXPECT(` (< 5 3) `, false);
+EXPECT(` (< 3 5) `, true);
+EXPECT(` (< 3 3) `, false);
+EXPECT(` (< 1 2 3 4 5 6) `, true);  // each less than the previous
+EXPECT(` (< 1 2 3 4 4 5 6) `, false);
+EXPECT(` (< 1 2 3 10 4 5 6) `, false);
+EXPECT_ERROR(` (< 1 2 3 4 5 6 (oops!)) `, EvalError);
+EXPECT(` (< 1 2 3 4 4 5 6 (oops!)) `, false); // Short-circuits on false
+EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false);
+EXPECT(` (<=) `, false);
+EXPECT(` (<= 5) `, is_closure)
+EXPECT(` (<= 5 3) `, false);
+EXPECT(` (<= 3 5) `, true);
+EXPECT(` (<= 3 3) `, true);
+EXPECT(` (<= 1 2 3 4 5 6) `, true);  // each less or equal to than the previous
+EXPECT(` (<= 1 2 3 4 4 5 6) `, true);
+EXPECT(` (<= 1 2 3 10 4 5 6) `, false);
+EXPECT_ERROR(` (<= 1 2 3 4 5 6 (oops!)) `, EvalError);
+EXPECT_ERROR(` (<= 1 2 3 4 4 5 6 (oops!)) `, EvalError);
+EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false); // Short-circuits on false
+EXPECT(` (>) `, false);
+EXPECT(` (> 5) `, is_closure);
+EXPECT(` (> 5 3) `, true);
+EXPECT(` (> 3 5) `, false);
+EXPECT(` (> 3 3) `, false);
+EXPECT(` (> 6 5 4 3 2 1) `, true);  // each greater than the previous
+EXPECT(` (> 6 5 4 4 3 2 1) `, false);
+EXPECT(` (> 6 5 4 10 3 2 1) `, false);
+EXPECT_ERROR(` (> 6 5 4 3 2 1 (oops!)) `, EvalError);
+EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
+EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false);
+EXPECT(` (>=) `, false);
+EXPECT(` (>= 5) `, is_closure);
+EXPECT(` (>= 5 3) `, true);
+EXPECT(` (>= 3 5) `, false);
+EXPECT(` (>= 3 3) `, true);
+EXPECT(` (>= 6 5 4 3 2 1) `, true);  // each greater than or equal to the previous
+EXPECT(` (>= 6 5 4 4 3 2 1) `, true);
+EXPECT(` (>= 6 5 4 10 3 2 1) `, false);
+EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, EvalError);
+EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, EvalError);
+EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
+EXPECT(` (==) `, true);   // nothing is equal to itself
+EXPECT(` (== 5) `, is_closure);
+EXPECT(` (== 5 3) `, false);
+EXPECT(` (== 3 5) `, false);
+EXPECT(` (== 3 3) `, true);
+EXPECT(` (== 3 3 3 3 3 3) `, true);  // all equal
+EXPECT(` (== 3 3 3 3 4 3) `, false); // not all equal
+EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
+EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
+EXPECT(` (!=) `, false);  // nothing isn't equal to itself
+EXPECT(` (!= 5) `, is_closure);
+EXPECT(` (!= 5 3) `, true);
+EXPECT(` (!= 3 5) `, true);
+EXPECT(` (!= 3 3) `, false);
+EXPECT(` (!= 3 3 3 3 3 3) `, false);  // all equal
+EXPECT(` (!= 3 3 3 3 4 3) `, true);   // not all equal
+EXPECT_ERROR(` (!= 3 3 3 3 3 3 (oops!)) `, EvalError);
+EXPECT(` (!= 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
+let list1 = `(a b (c d) 2 3)`, list2 = `(1 2 (7 3) x)`;
+EXPECT(` (== == eq?) `, true);
+EXPECT(` (eq? '${list1} '${list1}) `, false);
+EXPECT(` (equal? '${list1} '${list1}) `, true);
+EXPECT(` (eq? '${list1} '${list2}) `, false);
+EXPECT(` (equal? '${list1} '${list2}) `, false);
+
+EXPECT(` (max) `, undefined);
+EXPECT(` (max 5) `, is_closure);
+EXPECT(` (max 3 7 9 2 4) `, 9);
+EXPECT(` (min) `, undefined);
+EXPECT(` (min 5) `, is_closure);
+EXPECT(` (min 3 7 9 2 4) `, 2);
+
+EXPECT(` (&&) `, undefined);
+EXPECT(` (&& 1) `, 1);
+EXPECT(` (&& 1 2) `, 2);
+EXPECT(` (&& 1 false 2) `, false);
+EXPECT(` (&& 1 false (oops!)) `, false);  // short-circuits
+EXPECT_ERROR(` (&& 1 true (oops!)) `, EvalError);
+EXPECT(` (||) `, undefined);
+EXPECT(` (|| 1) `, 1);
+EXPECT(` (|| 1 2) `, 1);
+EXPECT(` (|| nil null (void) false 2 3) `, 2); 
+// Only false, nil, null, and undefined are false; specifically, 0 and "" are NOT false
+EXPECT(` (|| nil null (void) false 0 2 3) `, 0);
+EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
+EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
+EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
+EXPECT(` (?) `, undefined); // Why not?
+EXPECT(` (? true) `, is_closure);
+EXPECT(` (? false) `, is_closure);
+EXPECT(` (? true 1) `, is_closure);
+EXPECT(` (? false 2) `, is_closure);
+EXPECT(` (? true 1 2) `, 1);
+EXPECT(` (? false 1 2) `, 2);
+EXPECT(` (? true 1 2 (oops!)) `, 1);
+EXPECT(` (? false 1 2 (oops!)) `, 2);
+EXPECT(` (? true 1 (oops!)) `, 1);
+EXPECT_ERROR(` (? false 1 (oops!)) `, EvalError);
+EXPECT_ERROR(` (? true (oops!) 2) `, EvalError);
+EXPECT(` (? false (oops!) 2) `, 2);
+EXPECT_ERROR(` (? (oops!) 1 2) `, EvalError);
+EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
+EXPECT(` (? (> 3 5) (+ 3 4) (* 3 4)) `, 12);
+
+EXPECT(` (begin) `, undefined);
+EXPECT(` (begin 1) `, 1);
+EXPECT(` (begin 1 2 3) `, 3);
+EXPECT(` (begin (+ 3 4) (* 3 4)) `, 12);
+EXPECT(` (prog1) `, undefined);
+EXPECT(` (prog1 1) `, 1);
+EXPECT(` (prog1 1 2 3) `, 1);
+EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
 
 
 //
 // A specialized tiny unit test framework that evaluates SchemeJS expressions
 //
+
+if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
 
 console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
 
