@@ -22,9 +22,6 @@ export function createInstance(schemeOpts = {}) {
   let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   let reportSystemError = schemeOpts.reportError ?? _reportError;
   let reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
-  let unitTest = schemeOpts.unitTest;
-  let reportTestFailed = schemeOpts.reportTestFailure ?? testFailed;
-  let reportTestSucceeded = schemeOpts.reportTestSuccess ?? testSucceeded;
   let lambdaStr = schemeOpts.lambdaStr ?? "\\";
   let slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
 
@@ -227,8 +224,6 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("SchemeJS-version", VERSION);
   defineGlobalSymbol("is-atom", is_atom, "atom?"); 
   defineGlobalSymbol("Atom", Atom);
-
-  let testQueue = [];
 
   class SchemeJSError extends Error {};
   SchemeJSError.prototype.name = "SchemeJSError";
@@ -2781,6 +2776,7 @@ export function createInstance(schemeOpts = {}) {
     '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
   };
 
+  exportAPI("toJSname", toJSname);
   function toJSname(name) {
     if (typeof name === 'symbol')
       name = name.description;
@@ -2800,17 +2796,6 @@ export function createInstance(schemeOpts = {}) {
     newName += fragment;
     return newName;
   }
-
-  queueTests(function(){
-    const testToJSname = name => () => toJSname(name);
-    EXPECT(testToJSname("aNormal_name0234"), "_aNormal_name0234");
-    EXPECT(testToJSname("aname%with&/specialChars?"), "_aname$pct_with$and$stroke_specialChars$q");
-    EXPECT(testToJSname("_begins_with_underscore"), "__begins_with_underscore");
-    EXPECT(testToJSname("number?"), "_number$q");
-    EXPECT(testToJSname("&&"), "$and$and");
-    EXPECT(testToJSname("$"), "$cash");
-    EXPECT(testToJSname("?"), "$q");
-  });
 
   defineGlobalSymbol("REPL", REPL);
   function REPL(readline, opts = {}) {
@@ -2961,18 +2946,6 @@ export function createInstance(schemeOpts = {}) {
       if (pushed) RESTORESCOPE();
     }
     reportTestFailed("expected exception", test, result, expected);
-  }
-
-  function queueTests(tests) {
-    if (unitTest) testQueue.push(tests);
-  }
-
-  if (unitTest) {
-    for (let tests of testQueue) {
-      tests.call(globalScope);
-      if (globalScope !== originalGlobalScope || testScopeStack.length !== 0)
-        throw new LogicError("Test scope push and pop not paired");
-    }
   }
 
   return globalScope;
