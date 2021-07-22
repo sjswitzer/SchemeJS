@@ -1333,7 +1333,7 @@ function SchemeJS(schemeOpts = {}) {
   // (mapcar fn list1 list2 ...)
   defineGlobalSymbol("mapcar", mapcar), "map";
   function mapcar(fn, ...lists) {
-    if (!fn) return NIL;
+    if (!bool(fn)) return NIL;
     // Actually, this will work for any iterables and lists are iterable.
     let res = NIL, last;
     for (let list of lists) {
@@ -1910,7 +1910,7 @@ function SchemeJS(schemeOpts = {}) {
         return form[CDR][CAR];
       if (is_cons(fn)) {
         let fnCar = fn[CAR];
-        if (!f(nCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
+        if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
           fn = _eval(fn, scope);
       } else {
         fn = _eval(fn, scope);
@@ -2315,10 +2315,11 @@ function SchemeJS(schemeOpts = {}) {
   }
 
   class IteratorList {
-    [CAR]; [LAZY]; _cdrVal;
-    constructor(car, iterator) {
+    [CAR]; [LAZY]; _cdrVal; _mapper;
+    constructor(car, iterator, mapper) {
       this[CAR] = car;
       this[LAZY] = iterator;
+      this._mapper = mapper;
     }
     toString() { return string(this) }
     get [CDR]() {
@@ -2330,7 +2331,10 @@ function SchemeJS(schemeOpts = {}) {
         this[LAZY] = undefined;
         return this._cdrVal = NIL;
       }
-      let cdr = new IteratorList(value, iterator);
+      let mapper = this._mapper;
+      if (mapper)
+        value = mapper(value);
+      let cdr = new IteratorList(value, iterator, mapper);
       this[LAZY] = undefined;
       return this._cdrVal = cdr;
     }
@@ -2350,7 +2354,22 @@ function SchemeJS(schemeOpts = {}) {
       throw new EvalError(`Not an iterable or iterator ${obj}`);
     let { done, value } = iterator.next();
     if (done) return NIL;
-    return new IteratorList(value,iterator);
+    return new IteratorList(value, iterator);
+  }
+
+  defineGlobalSymbol("lazy-map", lazy_map);
+  function lazy_map(fn, obj) {
+    if (!bool(fn)) return NIL; // XXX probably should throw; also mapcar
+    let iterator = obj;
+    if (is_iterable(obj))
+      iterator = obj[Symbol.iterator]();
+    if (iterator == null || typeof iterator.next !== 'function')
+      throw new EvalError(`Not an iterable or iterator ${obj}`);
+    let { done, value } = iterator.next();
+    if (done) return NIL;
+    let mapper = value => _apply(fn, cons(value, NIL), this);
+    value = mapper(value);
+    return new IteratorList(value, iterator, mapper);
   }
 
   // Turns iterable objects like lists into arrays, recursively to "depth" (default 1) deep.
