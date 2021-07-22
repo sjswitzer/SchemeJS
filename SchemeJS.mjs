@@ -2168,59 +2168,15 @@ export function createInstance(schemeOpts = {}) {
         tokenGenerator = generator;
       }
     }
-    replHints.parseDepth = 0;
-
     let _toks = [], _done = false;
-    function token(n = 0) {
-      // Two main ideas here, mostly in support of the REPL:
-      // (1) Don't read anything until absolutely necessary.
-      // (2) Foil attempts to peek for tokens across a line boundary by leaving
-      //     'newline' tokens in the peek buffer. But to simplify the parser,
-      //      token(0) skips past any newline tokens.
-      for (;;) {
-        for (let get = n - _toks.length; get >= 0 && !_done; --get) {
-          let next = tokenGenerator.next();
-          if (next.done)
-            _done = true;
-          else
-            _toks.push(next.value);
-        }
-        if (n >= _toks.length)
-          return { type: 'end'};
-        let res = _toks[n];
-        if (n > 0 || res.type !== 'newline')
-          return res;
-        // token(0) never returns a newline token
-        while (_toks.length > 0 && _toks[0].type === 'newline')
-          _toks.shift();
-      }
-    }
-
-    function consumeToken() {
-      return _toks.shift();
-    }
-
-    function unParesedInput() {
-      let str = "", sep = "";
-      while (_toks.length > 0) {
-        let tok = _toks.shift();
-        if (tok.type === 'newline' || tok.type === 'end')
-          return str === '' ? null : str;
-        str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
-        sep = " ";
-      }
-      for (;;) {
-        let { done, value: tok } = tokenGenerator.next();
-        if (done) return str;
-        if (tok.type === 'newline' || tok.type === 'end')
-          return str;
-        let val = tok.value;
-        str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
-        sep = " ";
-      }
-    }
+    let expr = parseExpr(0);
+    let unparsed = unParesedInput();
+    if (!unparsed)
+      return expr;
+    throw new ParseExtraTokens(unparsed);
 
     function parseExpr(parseDepth) {
+      replHints.parseDepth = 0;
       if (token().type === 'string' || token().type === 'number') {
         let thisToken = consumeToken();
         return thisToken.value;
@@ -2318,11 +2274,55 @@ export function createInstance(schemeOpts = {}) {
         return null;
       throw new ParseExtraTokens(unParesedInput());
     }
-    let expr = parseExpr(0);
-    let unparsed = unParesedInput();
-    if (!unparsed)
-      return expr;
-    throw new ParseExtraTokens(unparsed);
+    
+    function token(n = 0) {
+      // Two main ideas here, mostly in support of the REPL:
+      // (1) Don't read anything until absolutely necessary.
+      // (2) Foil attempts to peek for tokens across a line boundary by leaving
+      //     'newline' tokens in the peek buffer. But to simplify the parser,
+      //      token(0) skips past any newline tokens.
+      for (;;) {
+        for (let get = n - _toks.length; get >= 0 && !_done; --get) {
+          let next = tokenGenerator.next();
+          if (next.done)
+            _done = true;
+          else
+            _toks.push(next.value);
+        }
+        if (n >= _toks.length)
+          return { type: 'end'};
+        let res = _toks[n];
+        if (n > 0 || res.type !== 'newline')
+          return res;
+        // token(0) never returns a newline token
+        while (_toks.length > 0 && _toks[0].type === 'newline')
+          _toks.shift();
+      }
+    }
+
+    function consumeToken() {
+      return _toks.shift();
+    }
+
+    function unParesedInput() {
+      let str = "", sep = "";
+      while (_toks.length > 0) {
+        let tok = _toks.shift();
+        if (tok.type === 'newline' || tok.type === 'end')
+          return str === '' ? null : str;
+        str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
+        sep = " ";
+      }
+      for (;;) {
+        let { done, value: tok } = tokenGenerator.next();
+        if (done) return str;
+        if (tok.type === 'newline' || tok.type === 'end')
+          return str;
+        let val = tok.value;
+        str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
+        sep = " ";
+      }
+    }
   }
 
   exportAPI("analyzeJSFunction", analyzeJSFunction);
