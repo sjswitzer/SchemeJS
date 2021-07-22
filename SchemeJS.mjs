@@ -16,7 +16,7 @@ export const VERSION = "1.1";
 // but that should only affect that specific SchemeJS instance; others should
 // be unaffected.
 //
-export function SchemeJS(schemeOpts = {}) {
+export function createInstance(schemeOpts = {}) {
   let readFile = schemeOpts.readFile;
   let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
@@ -99,7 +99,7 @@ export function SchemeJS(schemeOpts = {}) {
   };
   Scope.prototype[SCOPE_IS_SYMBOL] = "global-scope";
 
-  let GlobalScope = new Scope();
+  let globalScope = new Scope();
 
   function newScope(enclosingScope, scope_is) {
     let scope = Object.create(enclosingScope);
@@ -157,14 +157,14 @@ export function SchemeJS(schemeOpts = {}) {
   // Since "this" is used as the current scope, a SchemeJS instance
   // is the global scope itself!
   //
-  function exportDefinition(name, value, ...aliases) {
-    GlobalScope[name] = value;
+  function exportAPI(name, value, ...aliases) {
+    globalScope[name] = value;
     for (let alias in aliases)
-      GlobalScope[alias] = value;
+      globalScope[alias] = value;
   }
 
   //
-  // Unlike exportDefinition, which exports an API to clients, defineGlobalSymbol
+  // Unlike exportAPI, which exports an API to clients, defineGlobalSymbol
   // defines a symbol for the SchemeJS environment AND exports it as an API.
   // Be careful which one you use!
   //
@@ -176,7 +176,7 @@ export function SchemeJS(schemeOpts = {}) {
   const MAX_INTEGER = 2**31-1;  // Presumably allows JIT to do small-int optimizations
   const analyzedFunctions = new Map();
 
-  exportDefinition("defineGlobalSymbol", defineGlobalSymbol);
+  exportAPI("defineGlobalSymbol", defineGlobalSymbol);
   function defineGlobalSymbol(name, value, ...aliases) {
     let opts = {};
     if (typeof aliases[0] === 'object')
@@ -199,28 +199,25 @@ export function SchemeJS(schemeOpts = {}) {
     }
     let atom;
     ({ atom, name } = normalize(name));
-    GlobalScope[name] = value;
-    GlobalScope[atom] = value;
+    globalScope[atom] = value;
+    if (!opts.schemeOnly)
+      globalScope[name] = value;
     for (let alias of aliases) {
       ({ atom, name } = normalize(alias));
-      GlobalScope[atom] = value;
-      GlobalScope[name] = value;
+        globalScope[atom] = value;
+      if (!opts.schemeOnly)
+        globalScope[name] = value;
     }
     return atom;
 
     function normalize(name) {
-      let atom = name;
-      if (typeof atom === 'symbol')
+      if (typeof name === 'symbol')
         name = name.description;
-      if (typeof name !== 'string')
-        name = String(name);
-      atom = Atom(name);
-      if (!is_atom(atom))
-        throw new LogicError();
-      name = name.replace("->", "2")
+      let atom = Atom(name);
+      name = name.replace("->", "_to_");
       name = name.replace("-", "_");
-      name = name.replace("@", "At")
-      name = name.replace("*", "Star")
+      name = name.replace("@", "_at_");
+      name = name.replace("*", "_star_");
       name = name.replace("?", "P");
       return { atom, name };
     }
@@ -263,8 +260,8 @@ export function SchemeJS(schemeOpts = {}) {
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
   // In SchemeJS, NIL, null, undefined, and false are false and everything else is true.
   //
-  exportDefinition("bool", bool);
-  function  bool(val) {
+  exportAPI("bool", bool);
+  function bool(val) {
     // Give priority to actual true and false values
     if (typeof val === 'boolean') return val;
     if (val === NIL || val == null) // The val == null is _intended_ as a nullish test
@@ -312,29 +309,6 @@ export function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("cddar", cddar);
   defineGlobalSymbol("cdddr", cdddr);
   defineGlobalSymbol("cddr", cddr);
-  queueTests(function() {
-    EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
-    EXPECT(` (car '(1 . 2)) `, ` 1 `);
-    EXPECT(` (cdr '(1 . 2)) `, 2);
-    EXPECT(` (car '(1 2 3)) `, ` '1 `);
-    EXPECT(` (cdr '(1 2 3)) `, ` '(2 3) `);
-    EXPECT_ERROR( ` (car nil) `, EvalError );
-    EXPECT_ERROR( ` (cdr nil) `, EvalError );
-    const testList = `'(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd)))`;
-    EXPECT(` (caaar ${testList}) `, ` 'aaa `);
-    EXPECT(` (cdaar ${testList}) `, ` 'daa `);
-    EXPECT(` (cadar ${testList}) `, ` 'ada `);
-    EXPECT(` (cddar ${testList}) `, ` 'dda `);
-    EXPECT(` (caadr ${testList}) `, ` 'aad `);
-    EXPECT(` (cdadr ${testList}) `, ` 'dad `);
-    EXPECT(` (caddr ${testList}) `, ` 'add `);
-    EXPECT(` (cdddr ${testList}) `, ` 'ddd `);
-    EXPECT(` (caar ${testList}) `, ` '(aaa.daa) `);
-    EXPECT(` (cdar ${testList}) `, ` '(ada.dda) `);
-    EXPECT(` (cadr ${testList}) `, ` '(aad.dad) `);
-    EXPECT(` (cddr ${testList}) `, ` '(add.ddd) `);
-  });
-
   defineGlobalSymbol("typeof", a => typeof a);
   defineGlobalSymbol("undefined?", a => a === undefined);
   defineGlobalSymbol("null?", a => a === NIL);  // SIOD clained it first. Maybe rethink the naming here.
@@ -349,16 +323,16 @@ export function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("function?", a => typeof a === 'function');
   defineGlobalSymbol("object?", a => typeof a === 'object');
   defineGlobalSymbol("array?", a => Array.isArray(a));
-  defineGlobalSymbol("NaN", NaN);
-  defineGlobalSymbol("isNaN", isNaN, "NaN?", "nan?");
-  defineGlobalSymbol("Infinity", Infinity);
-  defineGlobalSymbol("isFinite", isFinite, "finite?");
+  defineGlobalSymbol("NaN", NaN, { schemeOnly: true });
+  defineGlobalSymbol("isNaN", isNaN, { schemeOnly: true } , "NaN?", "nan?");
+  defineGlobalSymbol("Infinity", Infinity, { schemeOnly: true });
+  defineGlobalSymbol("is_finite", isFinite, { schemeOnly: true } , "finite?");
   defineGlobalSymbol("globalThis", globalThis);
-  defineGlobalSymbol("Math", Math);
-  defineGlobalSymbol("Atomics", Atomics);
-  defineGlobalSymbol("JSON", JSON);
-  defineGlobalSymbol("Reflect", Reflect);
-  defineGlobalSymbol("Intl", Intl);
+  defineGlobalSymbol("Math", Math, { schemeOnly: true });
+  defineGlobalSymbol("Atomics", Atomics, { schemeOnly: true });
+  defineGlobalSymbol("JSON", JSON, { schemeOnly: true });
+  defineGlobalSymbol("Reflect", Reflect, { schemeOnly: true } );
+  defineGlobalSymbol("Intl", Intl, { schemeOnly: true } );
   for (let fn of [
       Object, Boolean, Symbol, Number, String, BigInt, Array,
       encodeURI, encodeURIComponent, decodeURI, decodeURIComponent,
@@ -372,14 +346,14 @@ export function SchemeJS(schemeOpts = {}) {
       ArrayBuffer, SharedArrayBuffer, DataView,
       Function, Promise, Proxy
     ]) {
-    defineGlobalSymbol(fn.name, fn);
+    defineGlobalSymbol(fn.name, fn, { schemeOnly: true });
   }
   if (typeof XMLHttpRequest !== 'undefined')
-    defineGlobalSymbol("XMLHttpRequest", XMLHttpRequest);
+    defineGlobalSymbol("XMLHttpRequest", XMLHttpRequest, { schemeOnly: true });
   if (typeof navigator !== 'undefined')
-    defineGlobalSymbol("navigator", navigator);
+    defineGlobalSymbol("navigator", navigator, { schemeOnly: true });
   if (typeof window !== 'undefined')
-    defineGlobalSymbol("window", window);
+    defineGlobalSymbol("window", window, { schemeOnly: true });
 
   // Stuff the whole Math class in there!
   for (let [name, {value}] of Object.entries(Object.getOwnPropertyDescriptors(Math))) {
@@ -388,7 +362,7 @@ export function SchemeJS(schemeOpts = {}) {
       name = `*${name.toLowerCase()}*`;
     // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
     if (typeof value === 'function')
-      defineGlobalSymbol(name, value);
+      defineGlobalSymbol(name, value, { schemeOnly: true });
   }
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
 
@@ -428,7 +402,7 @@ export function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
     if (scope == null) scope = this;  // Default is the current scope
-    else if (scope === NIL) scope = GlobalScope; // NIL, specifically, means use the global scope
+    else if (scope === NIL) scope = globalScope; // NIL, specifically, means use the global scope
     return _eval(expr, scope);
   }
 
@@ -438,7 +412,7 @@ export function SchemeJS(schemeOpts = {}) {
     return eval_.call(this, expr, scope);
   }
 
-  defineGlobalSymbol("GlobalScope", GlobalScope);
+  defineGlobalSymbol("globalScope", globalScope);
 
   defineGlobalSymbol("apply", apply);
   function apply(fn, args, ...rest) {
@@ -1029,9 +1003,9 @@ export function SchemeJS(schemeOpts = {}) {
   defineGlobalSymbol("require", require_);
   function require_(path) {
     let sym = Atom(`*${path}-loaded*`);
-    if (!bool(GlobalScope[sym])) {
+    if (!bool(globalScope[sym])) {
       load.call(this, path);
-      GlobalScope[sym] = true;
+      globalScope[sym] = true;
       return sym;
     }
     return NIL;
@@ -1575,7 +1549,7 @@ export function SchemeJS(schemeOpts = {}) {
     EXPECT(` (sort) `, NIL);
     EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
     EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
-    EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `, result => GlobalScope.apply(le, result));
+    EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `, result => globalScope.apply(le, result));
   });
 
   function deep_eq(a, b, maxDepth, report) {
@@ -1868,7 +1842,7 @@ export function SchemeJS(schemeOpts = {}) {
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
       throw new EvalError(`must define symbol or string ${string(defined)}`);
-    GlobalScope[name] = value;
+    globalScope[name] = value;
     return name;
   }
 
@@ -2137,7 +2111,7 @@ export function SchemeJS(schemeOpts = {}) {
       if (objType === 'object') {
         if (obj instanceof Scope) {
           let symStrs = "";
-          if (obj !== GlobalScope) {
+          if (obj !== globalScope) {
             for (let sym of Object.getOwnPropertySymbols(obj)) {
               if (!is_atom(sym)) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
               let desc = sym.description;
@@ -2905,7 +2879,7 @@ export function SchemeJS(schemeOpts = {}) {
     if (typeof name !== 'symbol') new EvalError(`Function name must be an atom or string`)    
     let form = list(LAMBDA_ATOM, args, forms);
     let compiledFunction = compile_lambda.call(this, name, form);
-    GlobalScope[name] = compiledFunction;
+    globalScope[name] = compiledFunction;
     return name;
   }
 
@@ -3299,6 +3273,12 @@ export function SchemeJS(schemeOpts = {}) {
     }
   }
 
+  function _setGlobalScope_test_hook_(scope) {
+    let previousGlobalScope = globalScope;
+    globalScope = scope;
+    return previousGlobalScope;
+  }
+
   // Tiny unit test system.
   // I need something special here because the internal functions are not accessible
   // externally. I also just like the idea of the tests being with the code itself.
@@ -3323,25 +3303,25 @@ export function SchemeJS(schemeOpts = {}) {
     console.info("SUCCEEDED", test, result, expected);
   }
 
-  let testScopeStack = [], originalGlobalScope = GlobalScope;
+  let testScopeStack = [], originalGlobalScope = globalScope;
   
   function SAVESCOPE() {
     // The idea here is to let the following series of steps to share a scope
     // Otherwise, each test gets a fresh scope.
-    testScopeStack.push(GlobalScope);
-    GlobalScope = newScope(GlobalScope, "test-global-scope");
-    GlobalScope.GlobalScope = GlobalScope;  // A damn lie
+    testScopeStack.push(globalScope);
+    globalScope = newScope(globalScope, "test-global-scope");
+    globalScope.GlobalScope = globalScope;  // A damn lie
   }
 
   function RESTORESCOPE() {
     let scope = testScopeStack.pop();
     if (!scope) throw new LogicError("Test scope push and pop not paired");
-    GlobalScope = scope;
+    globalScope = scope;
   }
 
   function EXPECT(test, expected) {
     let pushed = false;
-    if (GlobalScope === originalGlobalScope) {
+    if (globalScope === originalGlobalScope) {
       SAVESCOPE();
       pushed = true;
     }
@@ -3349,18 +3329,18 @@ export function SchemeJS(schemeOpts = {}) {
       let result, ok, report = {};
       try {
         if (typeof test === 'string') {
-        result = GlobalScope.evalString(test);
+        result = globalScope.evalString(test);
           if (typeof expected === 'string')
-            expected = GlobalScope.evalString(expected);
+            expected = globalScope.evalString(expected);
         } else {
-          result = test.call(GlobalScope);
+          result = test.call(globalScope);
         }
       } catch (error) {
         reportTestFailed("exception", test, error, expected);
         return;
       }
       if (typeof expected === 'function')
-        ok = expected.call(GlobalScope, result);
+        ok = expected.call(globalScope, result);
       else
         ok = deep_eq(result, expected, 100, report);
       if (!ok)
@@ -3374,19 +3354,19 @@ export function SchemeJS(schemeOpts = {}) {
 
   function EXPECT_ERROR(test, expected) {
     let result, pushed = false;
-    if (GlobalScope === originalGlobalScope) {
+    if (globalScope === originalGlobalScope) {
       SAVESCOPE();
       pushed = true;
     }
     try {
       if (typeof test === 'string') {
-        result = GlobalScope.evalString(test);
+        result = globalScope.evalString(test);
       } else {
-        result = test.call(GlobalScope);
+        result = test.call(globalScope);
       }
     } catch (error) {
       if (typeof test === 'string' && typeof expected === 'string')
-        expected = GlobalScope.evalString(expected);
+        expected = globalScope.evalString(expected);
       if (error === expected || (error instanceof expected)) {
         reportTestSucceeded(test, error, expected);
       } else {
@@ -3405,11 +3385,11 @@ export function SchemeJS(schemeOpts = {}) {
 
   if (unitTest) {
     for (let tests of testQueue) {
-      tests.call(GlobalScope);
-      if (GlobalScope !== originalGlobalScope || testScopeStack.length !== 0)
+      tests.call(globalScope);
+      if (globalScope !== originalGlobalScope || testScopeStack.length !== 0)
         throw new LogicError("Test scope push and pop not paired");
     }
   }
 
-  return GlobalScope;
+  return globalScope;
 } // Whew!

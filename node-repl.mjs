@@ -6,7 +6,7 @@
 //   4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
 //
 
-import { SchemeJS, VERSION } from './SchemeJS.mjs';
+import * as SchemeJS from './SchemeJS.mjs';
 import * as fs from 'fs';
 
 let inputFd, closeFd, oldRawMode;
@@ -25,7 +25,7 @@ try {
     }
   }
   if (inputFd !== undefined) {
-    console.log(`SchemeJS ${VERSION} REPL. Type "." to exit.`);
+    console.log(`SchemeJS ${SchemeJS.VERSION} REPL. Type "." to exit.`);
     let buffer = Buffer.alloc(2000);
     // For the REPL
     function getLine(prompt) {
@@ -43,10 +43,10 @@ try {
       return fileContent;
     }
     // It isn't really a "constructor" but can be invoked with or without "new"
-    let schemeJS = new SchemeJS({ readFile });
+    let globalScope = new SchemeJS.createInstance({ readFile });
     // getLine("Attach debugger and hit return!");  // Uncomment to do what it says
-    schemeJS.evalString('(define (test) (load "test.scm"))');
-    schemeJS.REPL(getLine);
+    globalScope.evalString('(define (test) (load "test.scm"))');
+    globalScope.REPL(getLine);
   }
 } finally {
   if (oldRawMode !== undefined)
