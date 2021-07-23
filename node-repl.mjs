@@ -55,7 +55,7 @@ try {
     globalScope.evalString('(define (test) (load "test.scm"))');
 
     let assignSyntax = true;
-    globalScope.REPL(getLine, { assignSyntax});
+    globalScope.REPL(getLine, { assignSyntax });
   }
 } finally {
   if (oldRawMode !== undefined)
