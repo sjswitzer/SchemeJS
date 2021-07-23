@@ -116,8 +116,8 @@ EXPECT(` (@? (void) 3) `, undefined);
 EXPECT(` (void) `, undefined);
 EXPECT(` (undefined? (void)) `, true);
 EXPECT(` (void 1 2 3) `, undefined);
-  // Args are evaled, but undefined is returned; just like in JavaScript.
-  // This is one way to deliberately materialize an "undefined" value.
+// Args are evaled, but undefined is returned; just like in JavaScript.
+// This is one way to deliberately materialize an "undefined" value.
 EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError);
 
 EXPECT(` (+) `, NaN);

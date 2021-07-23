@@ -1878,8 +1878,15 @@ export function createInstance(schemeOpts = {}) {
           sep = "";
           for (let name of [ ...Object.getOwnPropertyNames(obj), ...Object.getOwnPropertySymbols(obj) ]) {
             let item = obj[name];
-            prefix = `${string(name)}: `;
-            toString(item, maxDepth);
+            if (item instanceof EvaluateKeyValue) {
+              prefix = "[";
+              toString(item.key);
+              prefix = "]: ";
+              toString(item.value);
+            } else {
+              prefix = `${string(name)}: `;
+              toString(item, maxDepth);
+            }
             sep = ", ";
           }
           sep = "";
@@ -2234,7 +2241,7 @@ export function createInstance(schemeOpts = {}) {
         }
       }
 
-      if (token().type === '[') {  // JavaScript Array, oddly enough!
+      if (token().type === '[') {  // JavaScript Array
         let res = [];
         replHints.parseDepth = parseDepth + 1;
         consumeToken();
@@ -2251,7 +2258,7 @@ export function createInstance(schemeOpts = {}) {
         }
       }
 
-      if (token().type === '{') {  // JavaScript Object literal too!
+      if (token().type === '{') {  // JavaScript Object
         let res = {}, evalCount = 0;
         replHints.parseDepth = parseDepth + 1;
         consumeToken();
@@ -2268,6 +2275,7 @@ export function createInstance(schemeOpts = {}) {
               consumeToken();
               sym = parseExpr(parseDepth + 1);
               if (token().type !== ']') break;
+              evaluatedKey = true;
               consumeToken();
             } else {
               sym = token().value;
@@ -2280,7 +2288,7 @@ export function createInstance(schemeOpts = {}) {
               consumeToken();
               let val = parseExpr(parseDepth + 1);
               if (evaluatedKey)
-                res[gensym] = new EvaluateKeyValue(key, val);
+                res[gensym] = new EvaluateKeyValue(sym, val);
               else
                 res[sym] = val;
             }
