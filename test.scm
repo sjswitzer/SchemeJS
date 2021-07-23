@@ -47,11 +47,11 @@ increment-by-3
 
 ;; Special Object and Array literals
 (define a 2)
-  [ 1 2 3 4 5 6 7 a 3 4]
-    '[ 1 2 3 4 5 6 7 a 3 4]
-  { foo: 1, bar: a }
-  '{ foo: 1, bar: a }
-  (@ 2 ['a 'b 'c 'd])
+[ 1 2 3 4 5 6 7 a 3 4]
+'[ 1 2 3 4 5 6 7 a 3 4]
+{ foo: 1, bar: a }
+'{ foo: 1, bar: a }
+(@ ['a 'b 'c 'd] 2)
 
 (let ((a 1 2 3)  ;; assigns last value
      (b (+ a 5)))
