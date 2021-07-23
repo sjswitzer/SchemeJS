@@ -1569,7 +1569,7 @@ export function createInstance(schemeOpts = {}) {
           let value = form[key];
           if (value instanceof EvaluateKeyValue) {
             key = value.key;
-            value = value.val;
+            value = value.value;
             key = _eval(key, scope);
           }
           value = _eval(value, scope);
