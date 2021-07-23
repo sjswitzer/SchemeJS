@@ -10,17 +10,18 @@ import * as SchemeJS from './SchemeJS.mjs';
 
 let succeeded = 0, failed = 0, throwOnError = true;;
 
-let globalScope = SchemeJS.createInstance();
-let setGlobalScope = globalScope._setGlobalScope_test_hook_;
+const globalScope = SchemeJS.createInstance();
 let testScope = globalScope;
-let NIL = globalScope.NIL;
-let string = globalScope.string;
-let newScope = globalScope.newScope;
-let deep_eq = globalScope.deep_eq;
-let is_cons = globalScope.is_cons;
-let is_closure = globalScope.is_closure;
-let EvalError = globalScope.EvalError;
+const setGlobalScope = globalScope._setGlobalScope_test_hook_ || required();
+const NIL = globalScope.NIL || required();
+const string = globalScope.string || required();
+const newScope = globalScope.newScope || required();
+const deep_eq = globalScope.deep_eq || required();
+const is_cons = globalScope.is_cons || required();
+const is_closure = globalScope.is_closure || required();
+const EvalError = globalScope.EvalError || required();
 
+function required() { throw "required" }
 class TestFailureError extends Error {
   constructor(message, test, result, expected, report) {
     super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
@@ -338,9 +339,9 @@ EXPECT(` (append '[a b c]) ` , ` '(a b c) `);
 EXPECT(` (append '[a b c] '[d e f]) ` , ` '(a b c d e f) `);
 EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
 EXPECT(` (append '(a b c) '[d e f] "ghi") ` , ` '(a b c d e f "g" "h" "i") `);
-EXPECT(` (last) `, NIL);
-EXPECT(` (last 'a) `, NIL);  // arg is not a list?
-EXPECT(` (last ()) `, NIL);
+EXPECT(` (last) `, TypeError);
+EXPECT_ERROR(` (last 'a) `, TypeError);
+EXPECT(` (last ()) `, NIL);  // XXX whay should this really do?
 EXPECT(` (last '(a)) `, ` 'a `);
 EXPECT(` (last '(a b)) `, ` 'b `);
 EXPECT(` (last '(a b c)) `, ` 'c `);
@@ -349,15 +350,15 @@ EXPECT(` (last '[a]) `, ` 'a `);
 EXPECT(` (last '[a b]) `, ` 'b `);
 EXPECT(` (last '[a b c]) `, ` 'c `);
 EXPECT(` (last "abc") `, ` "c" `);
-EXPECT(` (butlast) `, NIL);
-EXPECT(` (butlast 'a) `, NIL);  // arg is not a list?
+EXPECT_ERROR(` (butlast) `, TypeError);
+EXPECT_ERROR(` (butlast 'a) `, TypeError);
 EXPECT(` (butlast ()) `, NIL);
 EXPECT(` (butlast '(a)) `, NIL );
 EXPECT(` (butlast '(a b)) `, ` '(a) `);
 EXPECT(` (butlast '(a b c)) `, ` '(a b) `);
-EXPECT(` (length) `, 0);
-EXPECT(` (length 'a) `, 0);  // Not a list or iterable
-EXPECT(` (length 1) `, 0);  // Not a list or iterable
+EXPECT_ERROR(` (length) `, TypeError);
+EXPECT_ERROR(` (length 'a) `, TypeError);  // Not a list or iterable
+EXPECT_ERROR(` (length 1) `, TypeError);  // Not a list or iterable
 EXPECT(` (length '()) `, 0);
 EXPECT(` (length '(a)) `, 1);
 EXPECT(` (length '(a b)) `, 2);
@@ -381,10 +382,10 @@ EXPECT(` (memq 'a) `, is_closure);
 EXPECT(` (memq 'a 1) `, NIL);
 EXPECT(` (memq 'c '(a b c d e f g)) `, ` '(c d e f g) `);
 EXPECT(` (memq 'z '(a b c d e f g)) `, NIL);
-EXPECT_ERROR(` (nth) `, EvalError);
+EXPECT_ERROR(` (nth) `, TypeError);
 EXPECT(` (nth 'a) `, is_closure);
 EXPECT(` (nth 4 '(a b c d e f g)) `, ` 'e `);
-EXPECT_ERROR(` (nth 4.5 '(a b c d e f g)) `, EvalError);
+EXPECT_ERROR(` (nth 4.5 '(a b c d e f g)) `, TypeError);
 EXPECT(` (nth 4 '[a b c d e f g]) `, ` 'e `);
 EXPECT(` (nth 4 "abcde") `, ` "e" `);
 EXPECT(` (nth 0 '(a b c d e f g)) `, ` 'a `);
@@ -393,12 +394,12 @@ EXPECT(` (nth 0 "abcde") `, ` "a" `);
 EXPECT(` (nth 6 '(a b c d e f g)) `, ` 'g `);
 EXPECT(` (nth 6 '[a b c d e f g]) `, ` 'g `);
 EXPECT(` (nth 6 "abcdefg") `, ` "g" `);
-EXPECT(` (nth -1 '(a b c d e f g)) `, NIL);
-EXPECT(` (nth -1 '[a b c d e f g]) `, NIL);
-EXPECT(` (nth -1 "abcdefg") `, NIL);
-EXPECT(` (nth 7 '(a b c d e f g)) `, NIL);
-EXPECT(` (nth 7 '[a b c d e f g]) `, NIL);
-EXPECT(` (nth 7 "abcdefg") `, NIL);
+EXPECT_ERROR(` (nth -1 '(a b c d e f g)) `, RangeError);
+EXPECT_ERROR(` (nth -1 '[a b c d e f g]) `, RangeError);
+EXPECT_ERROR(` (nth -1 "abcdefg") `, RangeError);
+EXPECT_ERROR(` (nth 7 '(a b c d e f g)) `, RangeError);
+EXPECT_ERROR(` (nth 7 '[a b c d e f g]) `, RangeError);
+EXPECT_ERROR(` (nth 7 "abcdefg") `, RangeError);
 
 EXPECT(` (apropos "c") `, is_cons);  // weak test but gets coverage
 EXPECT(` (mapcar) `, NIL);
@@ -411,7 +412,7 @@ EXPECT(` (let ((x 10)
                 (y 20))
             (+ x y)) `, 30);
 
-EXPECT(` (sort) `, NIL);
+EXPECT_ERROR(` (sort) `, TypeError);
 EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
 EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
 EXPECT(` (sort '(6 4 5 7 6 8 3) >) `, ` '(8 7 6 6 5 4 3) `);
