@@ -222,7 +222,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("SchemeJS-version", VERSION);
-  defineGlobalSymbol("is-atom", is_atom, "atom?"); 
+  defineGlobalSymbol("is-atom", is_atom, "atom?");
   defineGlobalSymbol("Atom", Atom);
 
   class SchemeJSError extends Error {};
@@ -1766,9 +1766,9 @@ export function createInstance(schemeOpts = {}) {
           params = `${params}...${fnDesc.restParam}`;
         }
         params = `(${params})`;
-        if (fnDesc.value && !fnDesc.body)
-          return put(`{${params} => ${fnDesc.value}}`);
         let printBody = fnDesc.printBody;
+        if (fnDesc.value && !fnDesc.body && !printBody)
+          return put(`{${params} => ${fnDesc.value}}`);
         if (printBody.length > 60 || printBody.includes('\n'))
           printBody = '';
         return put(`{function${name}${params}${printBody}}`);
@@ -2413,7 +2413,7 @@ export function createInstance(schemeOpts = {}) {
         while (WSNL[str[pos]]) ++pos;
         let possibleValue = str.substr(pos);
         if (nextToken() === '{')
-          parseBody()
+          parseBody();
         else
           value = possibleValue;
       }
