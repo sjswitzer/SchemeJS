@@ -252,6 +252,14 @@ export function createInstance(schemeOpts = {}) {
   const LogicError = Error;
   defineGlobalSymbol("LogicError", LogicError);
 
+  class EvaluateKeyValue {
+    key; value;
+    constructor(key, value) {
+      this.key = key;
+      this.value = value;
+    }
+  }
+
   //
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
   // In SchemeJS, NIL, null, undefined, and false are false and everything else is true.
@@ -398,14 +406,19 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("**", (a,b) => a ** b, "exp");
   defineGlobalSymbol("%", (a,b) => a % b, "rem");
   defineGlobalSymbol("<<", (a,b) => a << b, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, "ash");  // XXX name?
+  defineGlobalSymbol(">>", (a,b) => a >> b, "bit-shr");
   defineGlobalSymbol(">>>", (a,b) => a >>> b, "bit-ushr");
+  const ash = (a, b) => b < 0 ? a >>> -b : a << b;
+  defineGlobalSymbol("ash", ash);  // SIOD
   defineGlobalSymbol("in", (a,b) => a in b);
   defineGlobalSymbol("new", (cls, ...args) => new cls(...args));
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b);
-  //   XXX TODO: "delete", setting props and array elements
-  defineGlobalSymbol("@", (a, b) => b[a]);  // indexing and member access
-  defineGlobalSymbol("?@", (a, b) => b?.[a]);  // conditional indexing and member access
+  defineGlobalSymbol("@", (a, b) => a[b]);  // indexing and member access
+  defineGlobalSymbol("@?", (a, b) => a?.[b]);  // conditional indexing and member access
+  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params));
+  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), "@!?");
+  defineGlobalSymbol("@=", (a, b, c) => a[b] = c);
+  defineGlobalSymbol("delete", (a, b) => delete a[b]);
   defineGlobalSymbol("void", _ => undefined);
 
   //
@@ -1552,9 +1565,15 @@ export function createInstance(schemeOpts = {}) {
         return res;
       } else {
         let res = {};
-        for (let [key, value] of Object.entries(form)) {
-          let val = _eval(value, scope);
-          res[key] = val;
+        for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
+          let value = form[key];
+          if (value instanceof EvaluateKeyValue) {
+            key = value.key;
+            value = value.val;
+            key = _eval(key, scope);
+          }
+          value = _eval(value, scope);
+          res[key] = value;
         }
         return res;
       }
@@ -1857,9 +1876,9 @@ export function createInstance(schemeOpts = {}) {
           put("{");
           indent += indentMore;
           sep = "";
-          for (let name of Object.getOwnPropertyNames(obj)) {
+          for (let name of [ ...Object.getOwnPropertyNames(obj), ...Object.getOwnPropertySymbols(obj) ]) {
             let item = obj[name];
-            prefix = `${name}: `;
+            prefix = `${string(name)}: `;
             toString(item, maxDepth);
             sep = ", ";
           }
@@ -2142,17 +2161,20 @@ export function createInstance(schemeOpts = {}) {
           if (!OPERATORS[ch]) operatorPrefix = false;
           str += ch, nextc();
         }
-        yield { type: 'ident', value: str };
+        yield { type: 'ident', value: Atom(str) };
         continue;
       }
 
       if (!ch) break;
-
       yield { type: 'garbage', value: ch };
       nextc();
     }
     yield { type: 'end' };
   }
+
+  let gensym_count = 0;
+  const gensym = () => Symbol(`*gensym-${gensym_count++}*`);
+  defineGlobalSymbol("gensym", gensym);
 
   defineGlobalSymbol("parse", parseSExpr);
   function parseSExpr(tokenGenerator, opts = {}) {
@@ -2176,7 +2198,7 @@ export function createInstance(schemeOpts = {}) {
     throw new ParseExtraTokens(unparsed);
 
     function parseExpr(parseDepth) {
-      replHints.parseDepth = 0;
+      replHints.parseDepth = parseDepth;
       if (token().type === 'string' || token().type === 'number') {
         let thisToken = consumeToken();
         return thisToken.value;
@@ -2184,7 +2206,7 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === 'ident') {
         let thisToken = consumeToken();
-        return Atom(thisToken.value);
+        return thisToken.value;
       }
 
       if (token().type === '(') {
@@ -2230,7 +2252,7 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (token().type === '{') {  // JavaScript Object literal too!
-        let res = {};
+        let res = {}, evalCount = 0;
         replHints.parseDepth = parseDepth + 1;
         consumeToken();
         for (;;) {
@@ -2239,21 +2261,32 @@ export function createInstance(schemeOpts = {}) {
             break;
           }
           let gotIt = false;
-          if (token().type === 'ident' || token().type === 'string' || token().type === 'number') {
-            let sym = token().value;
-            if (typeof sym === 'symbol')
-              sym = sym.description;
-            if (typeof sym === 'number')
-              sym = String(sym);
-            consumeToken();
+          if (token().type === 'ident' || token().type === 'string'
+                || token().type === 'number' || token().type === '[') {
+            let evaluatedKey = false, sym;
+            if (token().type === '[') {
+              consumeToken();
+              sym = parseExpr(parseDepth + 1);
+              if (token().type !== ']') break;
+              consumeToken();
+            } else {
+              sym = token().value;
+              // Don't convert symbols to strings; symbols can be keys.
+              if (!(typeof sym === 'string' || typeof sym === 'symbol'))
+                sym = String(sym);
+              consumeToken();
+            }
             if (token().type === ':') {
               consumeToken();
               let val = parseExpr(parseDepth + 1);
-              res[sym] = val;
-              gotIt = true;
-              if (token().type === ',')  // might as well be optional for now
-                consumeToken();
+              if (evaluatedKey)
+                res[gensym] = new EvaluateKeyValue(key, val);
+              else
+                res[sym] = val;
             }
+            gotIt = true;
+            if (token().type === ',')  // Comma might as well be optional for now
+              consumeToken();
             if (token().type === 'end') throw new ParseIncomplete();
           }
           if (!gotIt)
@@ -2264,7 +2297,6 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === "'") {
         consumeToken();
-        replHints.parseDepth = parseDepth + 1;
         let quoted = parseExpr(parseDepth + 1);
         replHints.parseDepth = parseDepth;
         return cons(QUOTE_ATOM, cons(quoted, NIL));
@@ -2274,7 +2306,7 @@ export function createInstance(schemeOpts = {}) {
         return null;
       throw new ParseExtraTokens(unParesedInput());
     }
-    
+
     function token(n = 0) {
       // Two main ideas here, mostly in support of the REPL:
       // (1) Don't read anything until absolutely necessary.

@@ -21,6 +21,17 @@ let is_cons = globalScope.is_cons;
 let is_closure = globalScope.is_closure;
 let EvalError = globalScope.EvalError;
 
+class TestFailureError extends Error {
+  constructor(message, test, result, expected, report) {
+    super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
+    this.test = test;
+    this.result = result;
+    this.expected = expected;
+    this.report = report;
+  }
+}
+TestFailureError.prototype.name = "TestFailureError";
+
 EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
 EXPECT(` (car '(1 . 2)) `, ` 1 `);
 EXPECT(` (cdr '(1 . 2)) `, 2);
@@ -91,13 +102,17 @@ EXPECT(` (>> 345 3) `, 345 >> 3);
 EXPECT(` (>> -345 3) `, -345 >> 3);
 EXPECT(` (>>> -1 4) `, -1 >>> 4);
 EXPECT(` (>>> 1 4) `, 1 >>> 4);
-EXPECT(` (in "a" {a: 1}) `, true);
-EXPECT(` (in "b" {a: 1}) `, false);
+EXPECT(` (in "a" '{"a": 1}) `, true);
+EXPECT(` (in "b" '{"a": 1}) `, false);
+EXPECT(` (in 'a '{a: 1}) `, true);
+EXPECT(` (in 'b '{a: 1}) `, false);
+EXPECT(` (in "a" '{a: 1}) `, false);
+EXPECT(` (in 'a '{"a": 1}) `, false);
 EXPECT(` (new RangeError) `, res => res instanceof RangeError);
-EXPECT(` (@ 3 '[a b c d e]) `, ` 'd `);
-EXPECT(` (?@ 3 '[a b c d e]) `, ` 'd `);
-EXPECT_ERROR(` (@ 3 (void)) `, TypeError);
-EXPECT(` (?@ 3 (void)) `, undefined);
+EXPECT(` (@ '[a b c d e] 3) `, ` 'd `);
+EXPECT(` (@? '[a b c d e] 3) `, ` 'd `);
+EXPECT_ERROR(` (@ (void) 3) `, TypeError);
+EXPECT(` (@? (void) 3) `, undefined);
 EXPECT(` (void) `, undefined);
 EXPECT(` (undefined? (void)) `, true);
 EXPECT(` (void 1 2 3) `, undefined);
@@ -582,15 +597,3 @@ function endTestScope(scope) {
 function expectString(expected) {
   return result => result === expected;
 }
-
-class TestFailureError extends SchemeJSError {
-  constructor(message, test, result, expected, report) {
-    super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
-    this.test = test;
-    this.result = result;
-    this.expected = expected;
-    this.report = report;
-  }
-}
-TestFailureError.prototype.name = "TestFailureError";
-
