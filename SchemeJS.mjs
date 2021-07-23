@@ -2222,7 +2222,7 @@ export function createInstance(schemeOpts = {}) {
       //    a = expr
       // is the same as
       //    (define a expr)
-      // It might or not be a good idea. It isn't worse than "evalquote", if anyone
+      // It might or might not be a good idea. It isn't worse than "evalquote", if anyone
       // else remembers that. In any case it's opt-in.
       let sym = token().value;
       consumeToken();
