@@ -120,6 +120,13 @@ EXPECT(` (void 1 2 3) `, undefined);
 // This is one way to deliberately materialize an "undefined" value.
 EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError);
 
+{
+  let savedScope = beginTestScope();
+  EXPECT(` (define a 2) `, ` 'a `);
+  EXPECT(` { [a]: 3 } `, ` '{"2": 3} `)
+  endTestScope(savedScope);
+}
+
 EXPECT(` (+) `, NaN);
 EXPECT(` (+ 1) `, is_closure);
 EXPECT(` (+ 1 2) `, 3);
