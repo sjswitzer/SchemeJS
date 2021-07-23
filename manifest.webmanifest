@@ -1,0 +1,15 @@
+{
+    "background_color": "white",
+    "description": "SchemeJS",
+    "display": "fullscreen",
+    "icons": [
+      {
+        "src": "icon128.png",
+        "sizes": "128x128",
+        "type": "image/png"
+      }
+    ],
+    "name": "SchemeJS",
+    "short_name": "SchemeJS",
+    "start_url": "index.html"
+}

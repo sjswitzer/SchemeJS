@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<!--
+  SchemeJS: Scheme in JavaScript
+
+  Copyright 2021 Stan Switzer
+    This work is licensed under a Creative Commons Attribution-ShareAlike
+    4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
+-->
+<html>
+  <head>
+    <title>Units CalculatorSchemeJS</title>
+    <meta charset="utf-8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="viewport" content="width=device-width">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1">
+    <meta name="format-detection" content="telephone=no">
+    <link rel="apple-touch-icon" href="icon128.png">
+    <link rel="manifest" href="manifest.webmanifest">
+    <base target="_blank"> <!-- all links open in a new tab/page -->
+    <style type="text/css">
+      html {
+        -webkit-text-size-adjust: none
+      }
+
+      * { /* input elements lay out bizarrely without this since their borders aren't part of their size */
+        box-sizing: border-box;
+      }
+
+      body {
+        padding: .2em .5em;
+        margin: 0em 0em;
+        background-color: #f8f8f8;
+        text-size-adjust: none;   /* keep mobile browsers from getting sneaky with sizing */
+        /* Without fixed or absolute placement, the user variables won't scroll */
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+      }
+      html, table  {
+        font: 110% caption, sans-serif;
+      }
+      @media all and (orientation:landscape) {
+        /* iPhone crowds the screen in portrait but has lots of padding in landscape
+           because they don't give you the slot or curved corner areas. So kill the padding there. */
+        body[data-device="mobile"] {
+          padding: 0px 0px;
+        }
+      }
+
+      /*
+       * A trick to let the app switch to mobile mode on the fly.
+       * Javascript flips the --device property into the
+       * body element's data-device attribute, but the app
+       * can change it later.
+       */
+      @media (hover: none) {
+        body {--device: mobile;}
+      }
+      body:not([data-device="mobile"]) .mobile-only {
+        display: none;
+      }
+      body[data-device="mobile"] .desktop-only {
+        display: none;
+      }
+      body:not([data-protocol="file:"]) .local-only {
+        display: none;
+      }
+      body[data-protocol="file:"] .remote-only {
+        display: none;
+      }
+
+      /* Spiff up input fields */
+      input[type="text"] {
+        font-size: 120%;
+        border: .15em solid;
+        border-radius: .3em;
+        padding: .1em .4em;
+      }
+
+      /*
+       * Layout containers
+       */
+      div.layout-column {
+        display: flex;
+        flex-flow: column nowrap;
+      }
+      div.layout-column > div {
+        margin: .1em 0em;
+      }
+      div.layout-column {
+        height: 100%;
+      }
+      div.layout-row {
+        display: flex;
+        flex-flow: row nowrap;
+        flex: 0 0 auto;
+      }
+      div.expands {
+        /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
+        flex: 1 1 auto;
+        overflow: hidden;
+      }
+      div.shrink-wrap {
+        width: min-content;
+      }
+      div.force-width {
+        width: max-content;
+      }
+
+      /*
+       * Initially-hidden help content.
+       * Help contains a custom <close-button> and
+       * a <div> for help content which is made scrollable.
+       */
+      div.help {
+        padding: 0em 1em;
+        background-color: #e8e8e8;
+        position: absolute;
+        display: none;
+        top: 10%;
+        left: 35%;
+        right: .5em;
+        bottom: .5em;
+        border: .15em solid black;
+        border-radius: .4em;
+      }
+      body[data-device="mobile"] div.help {
+        padding: 0 .5em;  /* closer padding of help on mobile; every pixel counts */
+      }
+      div.help > close-button {
+        color: #0005;  /* rather transparent black */
+        font-size: 150%;
+        --close-button-x-thick: 35%;
+        position: absolute;
+        top: .3em;
+        right: .3em;
+        transition: .5s;
+      }
+      div.help > close-button:hover {
+        font-size: 170%;
+        color: black;
+      }
+      div.help > div {
+        overflow-y: auto;
+        height: 100%;
+      }
+      dl.definitions, dl.definitions dt, dl.definitions dd {
+        display: block;
+      }
+      dl.definitions dt {
+        float: left;
+        clear: right;
+        margin-inline-end: 2ch;
+      }
+      dl.definitions dd {
+        float: right;
+        margin-inline-start: unset;
+        --definition-margin: 15ch;
+        width: calc(100% - var(--definition-margin));
+      }
+      div.help ul {
+        padding-left: 1.25em;
+      }
+      div.help ul > li {
+        margin: .5em;
+      }
+      div.help code, div.help table.example td:first-child {
+        font-weight: bold;
+        font-family: caption, sans-serif;
+        color: #444;  /* subtle graying to offset the boldness */
+      }
+      div.help code.abstract {
+        font-style: italic;
+      }
+      /* Testing affordance; example text can be stuffed into the expr box */
+      div.help code:hover, div.help .stuff-text:hover,
+      div.help table.stuff.example td:first-child:hover {
+        cursor: pointer;
+        color: #00d;
+        text-decoration: underline;
+        --click-action: stuff-text;
+      }
+
+      /*
+       * Makes a <span> into a "button"
+       */
+      span.button {
+        display: inline-block;
+        cursor: pointer;
+        padding: .2em .6em;
+        background: #44f;
+        border-radius: .4em;
+        color: white;
+      }
+      span.button:hover {
+        background: #0000dd;
+      }
+      span.button:active {
+        background: #0000cc;
+      }
+      span.padded-button {
+        padding: .2em 1.5ch;
+      }
+
+      /* greasy way to make a text-delete button in the input box */
+      .clear-text-button {
+        position: relative;
+        width: 0;
+      }
+      .clear-text-button > close-button {
+        position: absolute;
+        bottom: .15em;
+        left: -2em;
+        color: white;
+        --close-button-box-color: #8e8d92;
+        --close-button-box-radius: 50%;
+        --close-button-x-thick: 25%;
+        --close-button-x-size: 55%;
+        padding: .05em .4em;
+      }
+
+      /* Looks like a link but is actually a "button" */
+      span.linklike {
+        color: #00d;
+        cursor: pointer;
+        text-decoration: underline;
+      }
+
+      /*
+       * Output area takes the remaining space and scrolls
+       */
+      div#output {
+        flex: 1 1 auto;
+        overflow: auto;
+        max-height:100%;
+      }
+
+      /* The input box */
+      div#input {
+        border: .15em solid;
+        margin: 1em 0em;
+        padding: 0em 1em;
+        border-radius: .3em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout-column shrink-wrap">
+      <div class="layout-row force-width header">
+      </div>
+      <div id="output">
+      </div>
+      <div id="input">
+      </div>
+    </div>
+    <div class="help" id="help-about">
+      <close-button onclick="showHelp(null)"></close-button>
+      <div>
+        <h2> SchemeJS: Scheme in JavaScript </h2>
+        <p> 
+      </div>
+    </div>
+    <div class="help" id="help-details">
+      <close-button onclick="showHelp()"></close-button>
+      <div>
+        <h2> Something </h2>
+        <p>
+        <p> A-B-C. A-Always. B-Be. C-Coding.
+        <p> Copyright &copy; 2021, Stan Switzer
+        <div style="width: 100%">
+          This work is licensed under a
+          <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+            Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+          <br> Find source on
+          <a href="https://github.com/sjswitzer/SchemeJS">GitHub</a>
+          <p></p>
+        </div>
+      </div>
+    </div>
+    <div class="help" id="help-builtin">
+      <close-button onclick="showHelp()"></close-button>
+      <div>
+        <h2> Built-In Functions and Constants </h2>
+        <table class="stuff example">
+          <dl class="definition-heading">
+            <dt> Symbol
+            <dd> Description
+          <div id="builtins">
+            <!-- definitions inserted here at onload event -->
+          </div>
+        </dl>
+      </div>
+    </div>
+    <script type="text/javascript">
+      "use strict";
+
+      const inputElement = document.getElementById('input');
+      const outputElement = document.getElementById('output');
+
+      function escapeHTML(str) {
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      let helpStack = [];
+
+      function showHelp(id) {
+        let elts = document.querySelectorAll('div.help');
+        for (let e of elts)
+          e.style.display = ''; // back to inherited 'none'
+        if (!id) {
+          helpStack.pop();
+          if (helpStack.length > 0)
+            helpStack[helpStack.length-1].style.display = 'block';
+          return;
+        }
+        id = id.split("#");
+        let frag = id[1];
+        id = id[0];
+        let helpElement = document.getElementById(id);
+        if (helpElement) {
+          helpStack.push(helpElement);
+          helpElement.style.display = 'block'; // inherits 'none' from "help" class
+          let contentElement = helpElement.querySelector('div');
+          if (contentElement) {
+            contentElement.scrollTop = 0;
+            if (frag) {
+              let elt = contentElement.querySelector(`#${frag}`);
+              if (elt)
+                elt.scrollIntoView(true);
+            }
+          }
+        }
+      }
+
+      const LOCAL_STORAGE_KEY = `SchemeJS-${location.pathname}`;
+
+      let appVersion = "0.0";  // filled in later
+      let persistedState = {};
+
+      function saveState() {
+        const localStorage = window.localStorage;
+        if (!localStorage)
+          return false;
+        persistedState.version = appVersion;
+        let json = JSON.stringify(wad);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, json);
+          return true;
+        }
+        catch (e) {
+        }
+        return false;
+      }
+
+      function loadState() {
+        const localStorage = window.localStorage;
+        if (!localStorage)
+          return false;
+        let json = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (!json)
+          return false;
+        let wad;
+        try {
+          wad = JSON.parse(json);
+        } catch (_) {
+          //  ¯\_(ツ)_/¯
+        }
+        if (typeof wad !== 'object')
+          return false;
+        let appVer = appVersion.split('.'), saveVer = wad.version.split('.');
+        if (!(Number(saveVer[0]) <= Number(appVer[0])))  // handles undefined implicitly
+          return false;
+        persistedState = wad;
+        return true;
+      }
+
+      addExampleStuffs();
+      function addExampleStuffs() {
+        document.documentElement.addEventListener('click', function(event) {
+          let element = event.target;
+          while (element) {
+            let styles = window.getComputedStyle(element);
+            let action = styles.getPropertyValue("--click-action");
+            if (action.trim() === "stuff-text") {
+              // TODO
+              return;
+            }
+            element = element.parentElement;
+          }
+        });
+      }
+
+      document.body.setAttribute('data-protocol', window.location.protocol);
+
+      function toggleDeviceMode(mode) {
+        const attr = 'data-device';
+        if (mode || !document.body.getAttribute(attr))
+          document.body.setAttribute(attr, mode || 'mobile');
+        else
+          document.body.removeAttribute(attr);
+      }
+
+      {
+        let styles = window.getComputedStyle(document.body);
+        let val = styles.getPropertyValue("--device").trim();
+        if (val !== '')
+          toggleDeviceMode(val);
+      }
+
+      document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape')
+          showHelp(null);
+      });
+
+      function enterKey(event) {
+        // TODO
+      }
+
+      // onchange event isn't suitable because if the value doesn't change, nothing is reported
+      inputElement.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter')
+          enterKey(event);
+      });
+      inputElement.addEventListener('blur', function(evt) {
+        // TODO
+      });
+
+      if ('serviceWorker' in navigator && window.location.protocol === 'https:')
+        navigator.serviceWorker.register('service-worker.js');
+
+      try { loadState(); } catch (e) {} // inconvenient to crash while loading
+   </script>
+  </body>
+</html>
