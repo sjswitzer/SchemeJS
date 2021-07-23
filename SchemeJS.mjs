@@ -2377,7 +2377,7 @@ export function createInstance(schemeOpts = {}) {
     let analyzed = analyzedFunctions.get(fn);
     if (analyzed)
       return analyzed;
-    let str = fn.toString(), pos = 0, token = "";
+    let str = fn.toString(), pos = 0, token = "", pushbackToken = "";
     let name = fn.name, params = [], restParam, value, body, native = false, printBody;
     parse: {
       if (nextToken() === 'function') {
@@ -2387,6 +2387,7 @@ export function createInstance(schemeOpts = {}) {
         }
         if (token !== '(') break parse;
         while (nextToken() && token !==')') {
+          scarfOptional();
           if (token === ",") nextToken();
           if (token === "...")
             restParam = nextToken();
@@ -2400,6 +2401,7 @@ export function createInstance(schemeOpts = {}) {
       } else { // Arrow functions
         if (token === '(') {
           while (nextToken() && token !==')') {
+            scarfOptional()
             if (token === ",") nextToken();
             if (token === "...")
               restParam = nextToken();
@@ -2422,8 +2424,20 @@ export function createInstance(schemeOpts = {}) {
     analyzedFunctions.set(fn, res);
     return res;
 
+    function scarfOptional() {
+      // TODO: this is in no way adequate.
+      if (token === "=") {
+        nextToken();
+        while (token) {
+          if (token === "," || token === ")") break;
+          nextToken();
+        }
+        pushbackToken = token;
+      }
+    }
+
     function parseBody() {
-      if ( token === '{') {
+      if (token === '{') {
         while (WSNL[str[pos]]) ++pos;
         let bodyPos = pos, returnPos = pos, nTok = 0;
         while (nextToken() && token !== 'return') {
@@ -2455,6 +2469,11 @@ export function createInstance(schemeOpts = {}) {
       // Super janky tokenizer.
       // Most of what it returns is garbage, but it returns anything we actually care about.
       // The assumption is that what JS returns is well-formed, so it takes a lot of liberties.
+      if (pushbackToken) {
+        let ret = pushbackToken;
+        pushbackToken = "";
+        return ret;
+      }
       if (pos >= str.length) return token = '';
       let ch = str[pos]; // ch is always str[pos]
       while (WSNL[ch]) ch = str[++pos];
