@@ -2199,6 +2199,17 @@ export function createInstance(schemeOpts = {}) {
     }
     let _toks = [], _done = false;
     let expr = parseExpr(0);
+
+    /*
+    if (is_atom(expr) && token().type === '=') {
+      // Greasy hack where, at the top level only,
+      //    a = expr
+      // is the same as
+      //    (define a expr) 
+      consumeToken();
+      let valExpr = parseExpr(1);
+      expr = list(Atom("define"), expr, valExpr);
+    } */
     let unparsed = unParesedInput();
     if (!unparsed)
       return expr;
