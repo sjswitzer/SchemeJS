@@ -10,12 +10,23 @@ export const VERSION = "1.1";
 
 //
 // Creates a SchemeJS instance, independent of any others.
+//
 // Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design. People should be able
 // to poke things into class definitions to experiment with different ideas
 // but that should only affect that specific SchemeJS instance; others should
 // be unaffected.
 //
+
+// A brief note about naming and string conventions:
+//
+//   Generally, variable, function and class names are camel case. An exception
+//   is when a function is also a Scheme function with dashes in its name. In that case
+//   the function uses an underscore where a dash occurs in the Scheme name.
+//
+//   Constants are all-caps. Strings are generally "str" if they are for humans; and 'str'
+//   if they're for internal purposes; `str` is used when convenient, as it quite often is.
+
 export function createInstance(schemeOpts = {}) {
   let readFile = schemeOpts.readFile;
   let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
@@ -26,7 +37,7 @@ export function createInstance(schemeOpts = {}) {
   let slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
 
   // Creating a Cons should be as cheap as possible, so no subclassing
-  // or calls to super. But I want people to be able to define their
+  // or calls to super. But people should be able to be able to define their
   // own specialized or tricky Cons cells.
   // This means that identifying the "class" of Cons
   // cells can't use "instanceof AbstractCons" or whatever.
@@ -220,6 +231,11 @@ export function createInstance(schemeOpts = {}) {
       return { atom, name };
     }
   }
+
+  exportAPI("PAIR_SYMBOL", PAIR);
+  exportAPI("CAR_SYMBOL", CAR);
+  exportAPI("CDR_SYMBOL", CDR);
+  exportAPI("LAZY_SYMBOL", LAZY);
 
   defineGlobalSymbol("SchemeJS-version", VERSION);
   defineGlobalSymbol("is-atom", is_atom, "atom?");
@@ -2037,7 +2053,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // S-epression parser
   //
-
+  
   function* schemeTokenGenerator(characterGenerator) {
     if (!(typeof characterGenerator.next === 'function')) {
       if (is_iterable(characterGenerator)) {
@@ -2047,15 +2063,15 @@ export function createInstance(schemeOpts = {}) {
         characterGenerator = generator;
       }
     }
-    let ch = "", _peek = [], _done = false;
+    let ch = '', _peek = [], _done = false;
     function nextc() {
       if (_peek.length > 0)
         return ch = _peek.shift();
-      if (_done) return ch = "";
+      if (_done) return ch = '';
       let next = characterGenerator.next();
       if (next.done) {
         _done = true;
-        return ch = "";
+        return ch = '';
       }
       return ch = next.value;
     }
@@ -2064,7 +2080,7 @@ export function createInstance(schemeOpts = {}) {
         let next = characterGenerator.next();
         if (next.done) {
           _done = true;
-          return "";
+          return '';
         }
         _peek.push(next.value);
       }
@@ -2090,7 +2106,7 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (ch === '"') {
-        let str = "";
+        let str = '';
         nextc();
         while (ch && ch != '"' && !NL[ch]) {
           if (ch === '\\') {
@@ -2116,7 +2132,7 @@ export function createInstance(schemeOpts = {}) {
         continue;
       }
 
-      if (ch === "." && !DIGITS[peekc()]) {
+      if (ch === '.' && !DIGITS[peekc()]) {
         yield { type: ch };
         nextc();
         continue;
@@ -2157,7 +2173,7 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (IDENT1[ch]) {
-        let str = "", operatorPrefix = OPERATORS[ch];
+        let str = '', operatorPrefix = OPERATORS[ch];
         while (ch && IDENT2[ch]) {
           // a prefix of operators breaks at a digit so we can write (*1 2)
           if (operatorPrefix && DIGITS[ch])
@@ -2202,10 +2218,12 @@ export function createInstance(schemeOpts = {}) {
     let expr;
     if (assignSyntax && token().type === 'atom' &&
         token(1).type === 'atom' && token(1).value === Atom('=')) {
-      // Greasy hack to allow the REPL to select a mode where, at the top-level only,
+      // Allows the REPL to select a mode where, at the top-level only,
       //    a = expr
       // is the same as
       //    (define a expr)
+      // It might or not be a good idea. It isn't worse than "evalquote", if anyone
+      // else remembers that. In any case it's opt-in.
       let sym = token().value;
       consumeToken();
       consumeToken();
@@ -2405,8 +2423,8 @@ export function createInstance(schemeOpts = {}) {
         if (token !== '(') break parse;
         while (nextToken() && token !==')') {
           scarfParamDefault();
-          if (token === ",") nextToken();
-          if (token === "...")
+          if (token === ',') nextToken();
+          if (token === '...')
             restParam = nextToken();
           else
             params.push(token);
@@ -2419,8 +2437,8 @@ export function createInstance(schemeOpts = {}) {
         if (token === '(') {
           while (nextToken() && token !==')') {
             scarfParamDefault()
-            if (token === ",") nextToken();
-            if (token === "...")
+            if (token === ',') nextToken();
+            if (token === '...')
               restParam = nextToken();
             else
               params.push(token);
@@ -2443,10 +2461,10 @@ export function createInstance(schemeOpts = {}) {
 
     function scarfParamDefault() {
       // TODO: this is in no way adequate.
-      if (token === "=") {
+      if (token === '=') {
         nextToken();
         while (token) {
-          if (token === "," || token === ")") break;
+          if (token === ',' || token === ')') break;
           nextToken();
         }
         pushbackToken = token;
@@ -2467,7 +2485,7 @@ export function createInstance(schemeOpts = {}) {
             }
           }
         }
-        if (token === "return") {
+        if (token === 'return') {
           // If there's a return, it has to be followed by a variable,
           // an optional semicolon, an "}", and NOTHING FURTHER.
           // We capture the name of the return variable and clip the body
@@ -2488,7 +2506,7 @@ export function createInstance(schemeOpts = {}) {
       // The assumption is that what JS returns is well-formed, so it takes a lot of liberties.
       if (pushbackToken) {
         let ret = pushbackToken;
-        pushbackToken = "";
+        pushbackToken = '';
         return ret;
       }
       if (pos >= str.length) return token = '';
