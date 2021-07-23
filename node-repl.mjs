@@ -29,8 +29,8 @@ try {
 
     // For the REPL
     let buffer = Buffer.alloc(2000);
-    function getLine(parseDepth) {
-      process.stdout.write("SchemeJS > " + "  ".repeat(parseDepth));
+    function getLine(prompt) {
+      process.stdout.write(prompt);
       let read = fs.readSync(inputFd, buffer);
       let line = buffer.slice(0, read).toString();
       while (line.endsWith('\n') || line.endsWith('\r'))

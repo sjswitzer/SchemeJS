@@ -2154,6 +2154,8 @@ export function createInstance(schemeOpts = {}) {
     opts = { ...schemeOpts, ...opts };
     let replHints = opts.replHints ?? {};
     let assignSyntax = opts.assignSyntax ?? false;
+    let pending = [];
+    replHints.pending = pending;
     let tokenGenerator;
     if (typeof tokenSource === 'string')
       tokenGenerator = schemeTokenGenerator(tokenSource);
@@ -2173,7 +2175,6 @@ export function createInstance(schemeOpts = {}) {
       consumeToken();
       consumeToken();
       let assigned = parseExpr(1);
-      replHints.parseDepth = 0;
       expr = list(Atom("define"), sym, assigned);
     } else {
       expr = parseExpr(0);
@@ -2184,8 +2185,7 @@ export function createInstance(schemeOpts = {}) {
       return expr;
     throw new ParseExtraTokens(unparsed);
 
-    function parseExpr(parseDepth) {
-      replHints.parseDepth = parseDepth;
+    function parseExpr() {
       if (token().type === 'string' || token().type === 'number') {
         let thisToken = consumeToken();
         return thisToken.value;
@@ -2197,17 +2197,17 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (token().type === '(') {
-        replHints.parseDepth = parseDepth + 1;
+        pending.push(token());
         consumeToken();
         return parseListBody();
         function parseListBody() {
           if (token().type === ')') {
-            replHints.parseDepth = parseDepth;
+            pending.pop();
             consumeToken();
             return NIL;
           } else if (token().type === '.') {
             consumeToken();
-            let val = parseExpr(parseDepth + 1);
+            let val = parseExpr();
             if (token().type !== ')')
               throw new ParseExtraTokens(unParesedInput());
             consumeToken();
@@ -2215,7 +2215,7 @@ export function createInstance(schemeOpts = {}) {
           }
           if (token().type === 'end') throw new ParseIncomplete();
           if (token().type === 'garbage') throw new ParseExtraTokens(unParesedInput());
-          let first = parseExpr(parseDepth + 1);
+          let first = parseExpr();
           let rest = parseListBody();
           return cons(first, rest);
         }
@@ -2223,16 +2223,17 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === '[') {  // JavaScript Array
         let res = [];
-        replHints.parseDepth = parseDepth + 1;
+        pending.push(token());
         consumeToken();
         for (;;) {
           if (token().type === ']') {
+            pending.pop();
             consumeToken();
             return res;
           }
-          let item = parseExpr(parseDepth + 1);
+          let item = parseExpr();
           res.push(item);
-          if (token().type === ',')  // Comma might as well be optional for now
+          if (token().type === ',')  // Comma is optional
             consumeToken();
           if (token().type === 'end') throw new ParseIncomplete();
         }
@@ -2240,10 +2241,11 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === '{') {  // JavaScript Object
         let res = {}, evalCount = 0;
-        replHints.parseDepth = parseDepth + 1;
+        pending.push(token());
         consumeToken();
         for (;;) {
           if (token().type === '}') {
+            pending.pop();
             consumeToken();
             break;
           }
@@ -2252,8 +2254,10 @@ export function createInstance(schemeOpts = {}) {
                 || token().type === 'number' || token().type === '[') {
             let evaluatedKey = false, sym;
             if (token().type === '[') {
+              pending.push(token());
               consumeToken();
-              sym = parseExpr(parseDepth + 1);
+              sym = parseExpr();
+              pending.pop();
               if (token().type !== ']') break;
               evaluatedKey = true;
               consumeToken();
@@ -2265,15 +2269,17 @@ export function createInstance(schemeOpts = {}) {
               consumeToken();
             }
             if (token().type === ':') {
+              pending.push(token());
               consumeToken();
-              let val = parseExpr(parseDepth + 1);
+              let val = parseExpr();
+              pending.pop();
               if (evaluatedKey)
                 res[gensym] = new EvaluateKeyValue(sym, val);
               else
                 res[sym] = val;
             }
             gotIt = true;
-            if (token().type === ',')  // Comma might as well be optional for now
+            if (token().type === ',')  // Comma is optional
               consumeToken();
             if (token().type === 'end') throw new ParseIncomplete();
           }
@@ -2285,8 +2291,8 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === "'") {
         consumeToken();
-        let quoted = parseExpr(parseDepth + 1);
-        replHints.parseDepth = parseDepth;
+        pending.push(token());
+        let quoted = parseExpr();
         return cons(QUOTE_ATOM, cons(quoted, NIL));
       }
 
@@ -2843,19 +2849,21 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("quit", quit);
 
   defineGlobalSymbol("REPL", REPL);
-  function REPL(readline, opts = {}) {  // readline(parseDepth) => str | nullish
+  function REPL(readline, opts = {}) {  // readline(prompt) => str | nullish
     let scope = this;
     opts = { ...schemeOpts, ...opts };
     let name = opts.name ?? "SchemeJS";
+    let prompt = opts.prompt ?? name + " > ";
     let print = opts.print ?? (x => console.log(string(x)));
     let reportSchemeError = opts.reportSchemeError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
     let replHints = { };
     let endTest = opts.endTest ?? (_ => false);
     quitRepl = false;
+    defineGlobalSymbol("readline", (...prompt) => readline(prompt[0] ?? "? "));
     function* charStreamPromptInput() {
       for(;;) {
-        let line = readline(replHints.parseDepth);
+        let line = readline(prompt + "  ".repeat(replHints.pending.length));
         if (line == null || endTest(line)) {
           quitRepl = true;
           return;
