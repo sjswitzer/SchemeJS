@@ -2168,7 +2168,7 @@ export function createInstance(schemeOpts = {}) {
           if (!OPERATORS[ch]) operatorPrefix = false;
           str += ch, nextc();
         }
-        yield { type: 'ident', value: Atom(str) };
+        yield { type: 'atom', value: Atom(str) };
         continue;
       }
 
@@ -2200,8 +2200,8 @@ export function createInstance(schemeOpts = {}) {
     }
     let _toks = [], _done = false;
     let expr;
-    if (assignSyntax && token().type === 'ident' &&
-        token(1).type === 'ident' && token(1).value === Atom('=')) {
+    if (assignSyntax && token().type === 'atom' &&
+        token(1).type === 'atom' && token(1).value === Atom('=')) {
       // Greasy hack to allow the REPL to select a mode where, at the top-level only,
       //    a = expr
       // is the same as
@@ -2228,7 +2228,7 @@ export function createInstance(schemeOpts = {}) {
         return thisToken.value;
       }
 
-      if (token().type === 'ident') {
+      if (token().type === 'atom') {
         let thisToken = consumeToken();
         return thisToken.value;
       }
@@ -2285,7 +2285,7 @@ export function createInstance(schemeOpts = {}) {
             break;
           }
           let gotIt = false;
-          if (token().type === 'ident' || token().type === 'string'
+          if (token().type === 'atom' || token().type === 'string'
                 || token().type === 'number' || token().type === '[') {
             let evaluatedKey = false, sym;
             if (token().type === '[') {
@@ -2404,7 +2404,7 @@ export function createInstance(schemeOpts = {}) {
         }
         if (token !== '(') break parse;
         while (nextToken() && token !==')') {
-          scarfOptional();
+          scarfParamDefault();
           if (token === ",") nextToken();
           if (token === "...")
             restParam = nextToken();
@@ -2418,7 +2418,7 @@ export function createInstance(schemeOpts = {}) {
       } else { // Arrow functions
         if (token === '(') {
           while (nextToken() && token !==')') {
-            scarfOptional()
+            scarfParamDefault()
             if (token === ",") nextToken();
             if (token === "...")
               restParam = nextToken();
@@ -2441,7 +2441,7 @@ export function createInstance(schemeOpts = {}) {
     analyzedFunctions.set(fn, res);
     return res;
 
-    function scarfOptional() {
+    function scarfParamDefault() {
       // TODO: this is in no way adequate.
       if (token === "=") {
         nextToken();
