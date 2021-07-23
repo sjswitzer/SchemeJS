@@ -54,7 +54,8 @@ try {
     // A function to run the test file
     globalScope.evalString('(define (test) (load "test.scm"))');
 
-    globalScope.REPL(getLine);
+    let assignSyntax = true;
+    globalScope.REPL(getLine, { assignSyntax});
   }
 } finally {
   if (oldRawMode !== undefined)

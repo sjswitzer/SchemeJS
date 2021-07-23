@@ -2187,6 +2187,7 @@ export function createInstance(schemeOpts = {}) {
   function parseSExpr(tokenGenerator, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let replHints = opts.replHints ?? {};
+    let assignSyntax = opts.assignSyntax ?? false;
     if (typeof tokenGenerator === 'string')
       tokenGenerator = schemeTokenGenerator(tokenGenerator);
     if (!(typeof tokenGenerator.next === 'function')) {
@@ -2198,18 +2199,23 @@ export function createInstance(schemeOpts = {}) {
       }
     }
     let _toks = [], _done = false;
-    let expr = parseExpr(0);
-
-    /*
-    if (is_atom(expr) && token().type === '=') {
-      // Greasy hack where, at the top level only,
+    let expr;
+    if (assignSyntax && token().type === 'ident' &&
+        token(1).type === 'ident' && token(1).value === Atom('=')) {
+      // Greasy hack to allow the REPL to select a mode where, at the top-level only,
       //    a = expr
       // is the same as
-      //    (define a expr) 
+      //    (define a expr)
+      let sym = token().value;
       consumeToken();
-      let valExpr = parseExpr(1);
-      expr = list(Atom("define"), expr, valExpr);
-    } */
+      consumeToken();
+      let assigned = parseExpr(1);
+      replHints.parseDepth = 0;
+      expr = list(Atom("define"), sym, assigned);
+    } else {
+      expr = parseExpr(0);
+    }
+
     let unparsed = unParesedInput();
     if (!unparsed)
       return expr;
