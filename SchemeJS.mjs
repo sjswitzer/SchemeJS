@@ -312,7 +312,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("NIL", NIL);
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
-  defineGlobalSymbol("true", true);
+  defineGlobalSymbol("true", true, "t");
   defineGlobalSymbol("false", false);
   defineGlobalSymbol("is-cons", is_cons, "pair?");
   defineGlobalSymbol("cons", cons);
@@ -429,7 +429,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("in", (a,b) => a in b);
   defineGlobalSymbol("new", (cls, ...args) => new cls(...args));
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b);
-  defineGlobalSymbol("@", (a, b) => a[b]);  // indexing and member access
+  defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access (SIOD: aref)
   defineGlobalSymbol("@?", (a, b) => a?.[b]);  // conditional indexing and member access
   defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params));
   defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), "@!?");
@@ -640,7 +640,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, compileScope, tools, '>=', 'ge');
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook }, "eq?");
+  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook });
   function eq(a, b, forms) {
     if (forms === undefined) return a == b;
     if (!(a == b)) return false;
@@ -656,7 +656,8 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, compileScope, tools, '==', 'eq');
   }
 
-  // XXX define === and !==
+  // XXX define === and !==;  "eq?" is ===
+  // is equal? really a deep compare? 
 
   // Sorry, "equal?"" does not get the variadic treatment at this time
   const equalp = (a, b) =>  deep_eq(a, b);
@@ -690,7 +691,7 @@ export function createInstance(schemeOpts = {}) {
     return val;
   }
 
- // logical & conditional
+  // Logical & Conditional
 
   defineGlobalSymbol("&&", and, { evalArgs: 1 }, "and");
   function and(val, forms) {
@@ -1329,96 +1330,6 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  // SIOD compatibility checklist:
-  //
-  // TODO benchmark fns -- http://people.delphiforums.com/gjc//siod.html#builtin
-  // (realtime)
-  //      Returns a double precision floating point value representation of the current realtime number of seconds. Usually precise to about a thousandth of a second.
-  // errobj, (error message object)
-  // (number->string x base width precision)
-  //     Formats the number according to the base, which may be 8, 10, 16 or the symbol e or f.
-  //     The width and precision are both optional.
-  // (parse-number str)
-  // (print object stream) -- Same as prin1 followed by output of a newline.
-  // (rand modulus) -- Computes a random number from 0 to modulus-1. Uses C library rand. (srand seed)
-  // (random modulus) -- Computes a random number from 0 to modulus-1. Uses C library random. (srandom seed)
-  // (runtime)
-  //     Returns a list of containing the current cpu usage in seconds and the subset amount of cpu time
-  //     that was spent performing garbage collection during the currently extant read-eval-print loop cycle.
-  // (save-forms filename forms how)
-  //    Prints the forms to the file, where how can be "w" (default) or "a" to append to the file.
-  // (sdatref spec data) -- Used as the %%closure-code by mkdatref.
-  // (set! variable value)
-  //    A special form that evaluates the value subform to get a value, and then assigns the variable
-  //    to the value.  ??? where ???
-  // (set-symbol-value! symbol value env)
-  //    Finds the location of the value cell for the specified symbol in the environment env and sets the value.
-  // (strbreakup string sep)
-  //    Return a list of the portions of string indicated by the separator.
-  // (unbreakupstr list sep) -- The reverse of strbreakup.
-  // (string-append str1 str2 str3 ...) -- same as +
-  // (string->number str radix)
-  // (string-downcase str) -- also string-downcase
-  //    Return a new string converting all the characters of str to lowercase.
-  // (string-length str)
-  //    Returns the active string length of str.
-  // (string-lessp str1 str2)
-  //    Return true if str1 is alphabetically less than str2.
-  // (string-search key str)
-  //    Locate the index of the key in the specified string. Returns () if not found.
-  // (string-trim str)
-  //    Return a new string made by trimming whitespace from the left and right of the specified string.
-  // (string-trim-left str)
-  //    Like string-trim but only the left hand side.
-  // (string-trim-right str)
-  //    Like string-trim but only the right hand side.
-  // (string-upcase str)
-  //    Returns a new string with all the lowercase characters converted to uppercase.
-  // (string? x)
-  //    Returns true if x is a string.
-  // (strspn str indicators)
-  //    Returns the location of the first character in str which is not found in the indicators set, returns the length of the str if none found. For example:
-  //    (define (string-trim-left x)
-  //       (substring x (strspn x " \t")))
-  // (subset pred-fcn list) -- aka filter?
-  //    Return the subset of the list such that the elements satisify the pred-fcn. For example:
-  //    (subset number? '(1 b 2 c)) => (1 2)
-  // (substring str start end)
-  //    Returns a new string made up of the part of str begining at start and terminating at end. In other words, the new string has a length of end - start.
-  // (substring-equal? str str2 start end)
-  //    An efficient way to determine if the substring of str2 specified by start and end is equal to str1.
-  // (symbol-bound? symbol env)
-  //    Returns true of the symbol is bound in the environment.
-  // (symbol-value symbol env)
-  //    Returns the value of the symbol in the environment.
-  // (symbol? x)
-  //    Returns true if x is a symbol.
-  // (symbolconc arg1 arg2 ...)
-  //    Slightly more efficient than calling intern on the result of using string-append on the arguments. This procedure actually predates the availability of the string data type in SIOD.
-  // t -- Please do not change the global value of this variable, bound to a true value.
-  // (tan x)
-  // (the-environment) -- A special form which returns the interpreter environment structure for the current lexical scope.
-  // (trunc x) -- Returns the integer portion of x.
-  // (typeof x) -- Returns a symbol describing the type of the object x, or the integer type code. Hmmm
-  // (unix-ctime x) -- Converts the integer time x into a string. U
-  // (unix-time) -- Returns the current number of seconds since 1-JAN-1970 GMT. U
-  // (unix-time->strtime x) Returns a string of the form "YYYYMMDDHHmmSSdd" which is useful in some contexts. This predates the availability of the strftime procedure.
-  // (url-decode str)
-  //    Performs the url decode operation on the str. See chtml.html for example usage.
-  // (url-encode str)
-  //    Locates characters in the str which should not appear in a url, and returns a new string where they have been converted to the %NN hex representation. Spaces are converted to "+" signs.
-  // (verbose arg)
-  //    Sets the verbosity level of SIOD to the specified level or returns the current level if not specified.
-  //    Verbose Level	Effect on System
-  //      0 No messages.
-  //      1 Error messages only.
-  //      2 Startup messages, prompts, and evaluation timing.
-  //      3 File loading and saving messages.
-  //      4 (default)	Garbage collection messages.
-  //      5 display of data loaded from files and fetched from databases.
-  // (while pred-form form1 form2 ...)
-  //    If pred-form evaluates true it will evaluate all the other forms and then loop.
-
   // Maybe a non-recursive evaluator with explicit stack?
   // Promises and async functions?
 
@@ -1432,7 +1343,7 @@ export function createInstance(schemeOpts = {}) {
   function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(0, cons(this, body))) }
 
   exportAPI("is_closure", is_closure)
-  defineGlobalSymbol("closure?", is_closure);
+  defineGlobalSymbol("closure?", is_closure);  // XXX TODO: works with compiled functions? Should it?
   function is_closure(form) {
     return is_cons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
   }
