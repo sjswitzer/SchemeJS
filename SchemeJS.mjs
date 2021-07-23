@@ -1695,7 +1695,6 @@ export function createInstance(schemeOpts = {}) {
   // Implements "toString()" for SchemeJS objects.
   // We can't just implement toString() because it needs to work for
   // non-Object types too, but Cons.toString() calls this.
-  defineGlobalSymbol("to-string", string);
   exportAPI("string", string);
   function string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
@@ -1929,19 +1928,18 @@ export function createInstance(schemeOpts = {}) {
     }
     toString() { return string(this) }
     get [CDR]() {
-      let iterator = this[LAZY];
+      let iterator = this[LAZY], cdr = NIL;
       if (!iterator)
         return this._cdrVal;
       let { done, value } = iterator.next();
-      if (done) {
-        this[LAZY] = undefined;
-        return this._cdrVal = NIL;
+      if (!done) {
+        let mapper = this._mapper;
+        if (mapper)
+          value = mapper(value);
+        cdr = new IteratorList(value, iterator, mapper);
       }
-      let mapper = this._mapper;
-      if (mapper)
-        value = mapper(value);
-      let cdr = new IteratorList(value, iterator, mapper);
-      this[LAZY] = undefined;
+      delete this[LAZY];
+      delete this._mapper;
       return this._cdrVal = cdr;
     }
     set [CDR](val) {
@@ -1963,8 +1961,8 @@ export function createInstance(schemeOpts = {}) {
   }
   IteratorList.prototype[PAIR] = true;
 
-  defineGlobalSymbol("lazy-list", lazy_list);
-  function lazy_list(obj) {
+  defineGlobalSymbol("list-view", list_view);
+  function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     let { done, value } = iterator.next();
     if (done) return NIL;
@@ -1981,6 +1979,11 @@ export function createInstance(schemeOpts = {}) {
     value = mapper(value);
     return new IteratorList(value, iterator, mapper);
   }
+
+  // Can't be "string" directly because that has an optional parameter and
+  // calling to-string with one parameter would result in a closure.
+  const to_string = obj => string(obj);
+  defineGlobalSymbol("to-string", to_string);
 
   // Turns iterable objects like lists into arrays, recursively to "depth" (default 1) deep.
   defineGlobalSymbol("to-array", to_array);
