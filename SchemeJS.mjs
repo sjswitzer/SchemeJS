@@ -2837,10 +2837,9 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("quit", quit);
 
   defineGlobalSymbol("REPL", REPL);
-  function REPL(readline, opts = {}) {
+  function REPL(readline, opts = {}) {  // readline(parseDepth) => str | nullish
     let scope = this;
     opts = { ...schemeOpts, ...opts };
-    // readline(parseDepth) => str | nullish
     let name = opts.name ?? "SchemeJS";
     let print = opts.print ?? (x => console.log(string(x)));
     let reportSchemeError = opts.reportSchemeError ?? (x => console.log(String(x)));;
