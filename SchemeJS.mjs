@@ -74,7 +74,8 @@ export function createInstance(schemeOpts = {}) {
           let value = current[CAR];
           current = current[CDR];
           return { done: false, value };
-        }
+        },
+        [Symbol.iterator]() { return this }  // so that the iterator itself is iterable
       }
     }
     // static [PAIR] = true;  // Hmm; Shouldn't this work?
@@ -142,6 +143,14 @@ export function createInstance(schemeOpts = {}) {
   const SCLOSURE_ATOM = Atom("%%%closure");
 
   const is_iterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
+
+  function iteratorFor(obj, throwException) {
+    if (obj != null) {
+      if (typeof obj[Symbol.iterator === 'function']) return obj[Symbol.iterator]();
+      if (typeof obj.next === 'function') return obj;
+    }
+    if (throwException) throw new throwException(`Not an iterable or list ${obj}`);
+  }
 
   // Character clases for parsing
   const TOKS = {}, DIGITS = {}, IDENT1 = {}, IDENT2 = {},
@@ -797,7 +806,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("load", load);
   function load(path, ...rest) {
     let scope = this, result = NIL, last;
-    let noEval = rest.length > 0 &&bool(rest[0]);
+    let noEval = rest.length > 0 && bool(rest[0]);
     let fileContent;
     try {
       if (!readFile) throw new EvalError("No file reader defined");
@@ -841,10 +850,13 @@ export function createInstance(schemeOpts = {}) {
           else res = last = cons(list[CAR], NIL);
           list = list[CDR];
         }
-      } else if (is_iterable(list)) {  // other iterables
-        for (let element of list)
-          if (last) last = last[CDR] = cons(element, NIL);
-          else res = last = cons(element, NIL);
+      } else {
+        if (!is_iterable(list)) throw new EvalError(`Not a list or iterable ${list}`);
+        for (let value of list) {
+          let item = cons(value, NIL);
+          if (last) last = last[CDR] = item;
+          else res = last = item;
+        }
       }
     }
     return res;
@@ -853,7 +865,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("last", last);
   function last(list) {
     let res = NIL;
-    if (list === NIL || is_cons(list)) {
+    if (!list || list === NIL) return NIL; // XXX check this
+    if (is_cons(list)) {
       while (is_cons(list)) {
         res = list[CAR];
         list = list[CDR];
@@ -865,10 +878,9 @@ export function createInstance(schemeOpts = {}) {
           return list[list.length-1];
         return NIL;
       }
-      if (is_iterable(list)) {
-        for (let item of list)
-          res = item;
-      }
+      if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      for (let value of list)
+        res = value;
     }
     return res;
   }
@@ -882,13 +894,13 @@ export function createInstance(schemeOpts = {}) {
         else res = last = cons(list[CAR], NIL);
         list = list[CDR];
       }
-    } else if (is_iterable(list)) {
-      let prev, first = true;
-      for (item of list) {
+    } else {
+      if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      for (let value of list) {
+        let item = cons(value, NIL);
         if (!first)
-          if (last) last = last[CDR] = cons(prev, NIL);
-          else res = last = cons(prev, NIL);
-        prev = item;
+          if (last) last = last[CDR] = item;
+          else res = last = item;
         first = false;
       }
     }
@@ -907,10 +919,9 @@ export function createInstance(schemeOpts = {}) {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
       if (Array.isArray(list) && list.length > 0)
         return list.length;
-      if (is_iterable(list)) {
-        for (let item of list)
-          n += 1;
-      }
+      if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      for (let _ of list)
+        n += 1;
     }
     return n;
   }
@@ -929,6 +940,18 @@ export function createInstance(schemeOpts = {}) {
     while (is_cons(list)) {
       res = cons(list[CAR], res)
       list = list[CDR];
+    }
+    return res;
+  }
+
+  defineGlobalSymbol("in-place-reverse", in_place_reverse);
+  function in_place_reverse(list) {
+    let res = NIL;
+    while (is_cons(list)) {
+      let next = list[CDR];
+      list[CDR] = res;
+      res = list;
+      list = next;
     }
     return res;
   }
@@ -962,8 +985,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("nth", nth);
   function nth(index, list) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
-      throw new EvalError(`Not an integer ${string(index)}`);
-    if (index < 0) return NIL;
+      throw new TypeError(`Not an integer ${string(index)}`);
+    if (index < 0) throw new RangeError(`nth`);
     if (list === NIL || is_cons(list)) {
       while (index > 0 && is_cons(list)) {
         index -= 1;
@@ -974,14 +997,15 @@ export function createInstance(schemeOpts = {}) {
   ``} else if (Array.isArray(list)) {
       if (index < list.length)
         return list[index];
-    } else if (is_iterable(list)) {
-      for (let item of list) {
+    } else {
+      if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      for (let value of list) {
         if (index <= 0)
-          return item;
+          return value;
         index -= 1;
       }
     }
-    return NIL;
+    throw new RangeError(`nth`);
   }
 
   // (apropos substring) -- Returns a list of all symbols containing the given substring
@@ -1001,8 +1025,7 @@ export function createInstance(schemeOpts = {}) {
       scope = Object.getPrototypeOf(scope);
     }
     return this.sort(matches,
-      (a,b) => a.description.toLowerCase() < b.description.toLowerCase() ? -1 :
-               b.description.toLowerCase() < a.description.toLowerCase() ? 1 : 0);
+      (a,b) => a.description.toLowerCase() < b.description.toLowerCase());
   }
 
   // (mapcar fn list1 list2 ...)
@@ -1022,11 +1045,13 @@ export function createInstance(schemeOpts = {}) {
           else res = last = cons(item, NIL);
             list = list[CDR];
         }
-      } else if (is_iterable(list)) {
+      } else {
+        if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
-          item = _apply(fn, cons(item, NIL), this);
-          if (last) last = last[CDR] = cons(item, NIL);
-          else res = last = cons(item, NIL);
+          item =  _apply(fn, cons(item, NIL), this);
+          item = cons(item, NIL);
+          if (last) last = last[CDR] = item;
+          else res = last = item;
         }
       }
     }
@@ -1092,24 +1117,49 @@ export function createInstance(schemeOpts = {}) {
   //   comparable performance and is excellent with partially-sorted lists.
   defineGlobalSymbol("sort", mergesort, "qsort");
   function mergesort(list, ...rest) {
+    if (list === NIL) return NIL;
+    // Sort Arrays as Arrays
+    if (Array.isArray(list))
+      return in_place_mergesort(list.slice(0), ...rest);
+    // Lists and other iterables are sorted as lists
+    if (is_cons(list)) {
+      let copied = NIL, last;
+      while (is_cons(list)) {
+        let item = cons(list[CAR], NIL);
+        if (last) last = last[CDR] = item;
+        else copied = last = item;
+        list = list[CDR];
+      }
+      return in_place_mergesort(copied, ...rest);
+    }
+    let copied = NIL, last;
+    if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+    for (let item of list) {
+      item = cons(item, NIL);
+      if (last) last = last[CDR] = item;
+      else copied = last = item;
+    }
+    return in_place_mergesort(copied, ...rest);
+  }
+
+  defineGlobalSymbol("in-place-sort", in_place_mergesort);
+  function in_place_mergesort(list, ...rest) {
+    if (list === NIL) return NIL;
     let predicateFn = rest[0], accessFn = rest[1];
-    let before = predicateFn;
+    // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
+    let before = predicateFn, scope = this;
     if (bool(predicateFn)) {
       if (bool(accessFn)) {
-        before = function(a, b) {
-          return predicateFn.call(this, accessFn.call(this, a), accessFn.call(this, b));
-        }
+        before = (a, b) => predicateFn.call(scope, accessFn.call(scope, a), accessFn.call(scope, b));
       } else if (typeof predicateFn !== 'function') {
         // Make sure it's a JS function, not a Scheme function
-        before = function(a, b) {
-          return predicateFn.call(this, predicateFn);
-        }
+        before = (a, b) => predicateFn.call(scope, predicateFn);
       }
     } else {
       if (bool(accessFn)) {
         before = function(a, b) {
-          a = accessFn.call(this, a);
-          b = accessFn.call(this, b);
+          a = accessFn.call(scope, a);
+          b = accessFn.call(scope, b);
           if (typeof a === 'symbol') a = a.description;
           if (typeof b === 'symbol') b = b.description;
           return a < b;
@@ -1122,97 +1172,83 @@ export function createInstance(schemeOpts = {}) {
         }
       }
     }
-    if (!bool(list)) return NIL;  // includes NIL
+    if (list === NIL) return NIL;
+    // Sort arrays as arrays
+    if (Array.isArray(list)) {
+      list.sort((a,b) => before.call(scope, a, b) ? -1 : 1);
+      return list;
+    }
     if (is_cons(list)) {
-      // llsort is in-place, so first copy the list.
-      // There are no new Cons cells after this, so it's a bargain.
-      let copied = NIL, tail;
-      while (is_cons(list)) {
-        let next = list[CDR];
-        if (tail) tail = tail[CDR] = list;
-        else copied = tail = list;
-        list = next;
-      }
-      return llsort(copied);
+      return llsort.call(this, list, before);
     }
-    if (!accessFn && is_iterable(list)) { // Bail out to JavaScript sort
-      // This expands iterables into an array. It also copies arrays,
-      // which is good because JavaScript sort is in-place.
-      // The JavaScript sort algorithm sorts as if keys were were strings;
-      // this is very bad for numbers.
-      // That's not what we did for lists, so we override that.
-      let array = [ ...list ];
-      array.sort((a,b) => before.call(this, a, b) ? -1 : 1);
-      return array;
-    }
-    throw new EvalError(`Not a list or iterable ${string(list)}`);
+    throw new TypeError(`Not a list or iterable ${string(list)}`);
+  }
   
-    // A bottom-up mergesort that coalesces runs of ascending or descending items.
-    // Runs are extended on either end, so runs include more than strictly ascending
-    // or descending sequences. The upshot is that it executes in O(n log m) where "m"
-    // is the number of runs. Lists that are mostly or partly ordered sort MUCH faster
-    // and already-sorted or even reverse-sorted lists sort in linear time because
-    // there's only one run. Sorting a few new items into an already sorted list
-    // is particularly fast.
-    //
-    // This combines run-accumulation from TimSort with the well-known (bottom-up) mergesort.
-    // A run will always be at least two elements long (as long as there are two elements
-    // remaining) but will often be much longer. As far as I know, this is novel.
-    //    https://en.wikipedia.org/wiki/Merge_sort#Bottom-up_implementation_using_lists
-    //    https://gist.github.com/sjswitzer/1dc76dc0b4dcf67a7fef
-    //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
-    function llsort(list) {
-      let stack = [];
+  // A bottom-up mergesort that coalesces runs of ascending or descending items.
+  // Runs are extended on either end, so runs include more than strictly ascending
+  // or descending sequences. The upshot is that it executes in O(n log m) where "m"
+  // is the number of runs. Lists that are mostly or partly ordered sort MUCH faster
+  // and already-sorted or even reverse-sorted lists sort in linear time because
+  // there's only one run. Sorting a few new items into an already sorted list
+  // is particularly fast.
+  //
+  // This combines run-accumulation from TimSort with the well-known (bottom-up) mergesort.
+  // A run will always be at least two elements long (as long as there are two elements
+  // remaining) but will often be much longer. As far as I know, this is novel.
+  //    https://en.wikipedia.org/wiki/Merge_sort#Bottom-up_implementation_using_lists
+  //    https://gist.github.com/sjswitzer/1dc76dc0b4dcf67a7fef
+  //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
+  function llsort(list, before) {
+    let stack = [];
+    while (is_cons(list)) {
+      // Accumulate a run that's already sorted.
+      let run = list, runTail = list;
+      list = list[CDR];
       while (is_cons(list)) {
-        // Accumulate a run that's already sorted.
-        let run = list, runTail = list;
-        list = list[CDR];
-        while (is_cons(list)) {
-          let listNext = list[CDR];
-          runTail[CDR] = NIL;
-          if (before.call(this, list[CAR], run[CAR])) {
-            list[CDR] = run;
-            run = list;
+        let listNext = list[CDR];
+        runTail[CDR] = NIL;
+        if (before.call(this, list[CAR], run[CAR])) {
+          list[CDR] = run;
+          run = list;
+        } else {
+          if (!before.call(this, list[CAR], runTail[CAR])) {
+            runTail[CDR] = list;
+            runTail = list;
           } else {
-            if (!before.call(this, list[CAR], runTail[CAR])) {
-              runTail[CDR] = list;
-              runTail = list;
-            } else {
-              break;
-            }
-          }
-          list = listNext;
-        }
-
-        // The number of runs at stack[i] is either zero or 2^i and the stack size is bounded by 1+log2(nruns).
-        // There's a passing similarity to Timsort here, though Timsort maintains its stack using
-        // something like a Fibonacci sequence where this uses powers of two.
-        //
-        // It's helpful put a breakpoint right here and "watch" these expressions:
-        //     string(list)
-        //     string(run)
-        //     string(stack[0])
-        //     string(stack[1])
-        //     etc.
-        let i = 0;
-        for ( ; i < stack.length; ++i) {
-          if (stack[i] === NIL) {
-            stack[i] = run;
-            run = NIL;
             break;
-          };
-          run = merge(stack[i], run);
-          stack[i] = NIL;
+          }
         }
-        if (run !== NIL)
-          stack.push(run);
+        list = listNext;
       }
-      // Merge all remaining stack elements
-      let run = NIL;
-      for (let i = 0; i < stack.length; ++i)
+
+      // The number of runs at stack[i] is either zero or 2^i and the stack size is bounded by 1+log2(nruns).
+      // There's a passing similarity to Timsort here, though Timsort maintains its stack using
+      // something like a Fibonacci sequence where this uses powers of two.
+      //
+      // It's helpful put a breakpoint right here and "watch" these expressions:
+      //     string(list)
+      //     string(run)
+      //     string(stack[0])
+      //     string(stack[1])
+      //     etc.
+      let i = 0;
+      for ( ; i < stack.length; ++i) {
+        if (stack[i] === NIL) {
+          stack[i] = run;
+          run = NIL;
+          break;
+        };
         run = merge(stack[i], run);
-      return run;
+        stack[i] = NIL;
+      }
+      if (run !== NIL)
+        stack.push(run);
     }
+    // Merge all remaining stack elements
+    let run = NIL;
+    for (let i = 0; i < stack.length; ++i)
+      run = merge(stack[i], run);
+    return run;
 
     function merge(left, right) {
       // When equal, left goes before right
@@ -1445,7 +1481,7 @@ export function createInstance(schemeOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
-      throw new EvalError(`must define symbol or string ${string(defined)}`);
+      throw new TypeError(`Must define symbol or string ${string(defined)}`);
     globalScope[name] = value;
     return name;
   }
@@ -1620,7 +1656,7 @@ export function createInstance(schemeOpts = {}) {
         let origFormalParams = params;
         while (is_cons(params)) {
           let param = params[CAR];
-          if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
+          if (typeof param !== 'symbol') throw new TypeError(`Param must be a symbol ${param}`);
           if (args !== NIL) {
             scope[param] = args[CAR];
             if (is_cons(args)) args = args[CDR];
@@ -1660,6 +1696,7 @@ export function createInstance(schemeOpts = {}) {
   // We can't just implement toString() because it needs to work for
   // non-Object types too, but Cons.toString() calls this.
   defineGlobalSymbol("to-string", string);
+  exportAPI("string", string);
   function string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 100;
@@ -1870,16 +1907,15 @@ export function createInstance(schemeOpts = {}) {
     if (obj === NIL || is_cons(obj)) return obj;
     if (typeof obj === 'object') {
       if (is_cons(obj)) return obj;  // Careful; Cons is iterable itself
-      if (is_iterable(obj)) {
-        let list = NIL, last;
-        for (let value of obj) {
-          if (depth > 1 && value[Symbol.iterator])
-            value = to_list.call(this, value, depth-1);
-          if (last) last = last[CDR] = cons(value, NIL);
-          else list = last = cons(value, NIL);
-        }
-        return list;
+      let list = NIL, last;
+      if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      for (let value of list) {
+        if (depth > 1 && is_iterable(value))
+          value = to_list.call(this, value, depth-1);
+        if (last) last = last[CDR] = cons(value, NIL);
+        else list = last = cons(value, NIL);
       }
+      return list;
     }
     return NIL;
   }
@@ -1912,16 +1948,24 @@ export function createInstance(schemeOpts = {}) {
       this._iterator = undefined;
       this._cdrVal = val;
     }
+    [Symbol.iterator]() {
+      let current = this;
+      return {
+        next() {
+          if (!is_cons(current)) return { done: true };
+          let value = current[CAR];
+          current = current[CDR];
+          return { done: false, value };
+        },
+        [Symbol.iterator]() { return this }  // so that the iterator itself is iterable
+      }
+    }
   }
   IteratorList.prototype[PAIR] = true;
 
   defineGlobalSymbol("lazy-list", lazy_list);
   function lazy_list(obj) {
-    let iterator = obj;
-    if (is_iterable(obj))
-      iterator = obj[Symbol.iterator]();
-    if (iterator == null || typeof iterator.next !== 'function')
-      throw new EvalError(`Not an iterable or iterator ${obj}`);
+    let iterator = iteratorFor(obj, TypeError);
     let { done, value } = iterator.next();
     if (done) return NIL;
     return new IteratorList(value, iterator);
@@ -1930,11 +1974,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("lazy-map", lazy_map);
   function lazy_map(fn, obj) {
     if (!bool(fn)) return NIL; // XXX probably should throw; also mapcar
-    let iterator = obj;
-    if (is_iterable(obj))
-      iterator = obj[Symbol.iterator]();
-    if (iterator == null || typeof iterator.next !== 'function')
-      throw new EvalError(`Not an iterable or iterator ${obj}`);
+    let iterator = iteratorFor(obj, TypeError);
     let { done, value } = iterator.next();
     if (done) return NIL;
     let mapper = value => _apply(fn, cons(value, NIL), this);
@@ -1954,7 +1994,7 @@ export function createInstance(schemeOpts = {}) {
     if (depth <= 0) return obj;
     res = [];
     for (let item of obj) {
-      if (depth > 1 && is_iterable(obj))
+      if (depth > 1 && is_iterable(item))
         value = to_array.call(this, item, depth-1);
       res.push(item);
     }
@@ -1965,15 +2005,8 @@ export function createInstance(schemeOpts = {}) {
   // S-epression parser
   //
   
-  function* schemeTokenGenerator(characterGenerator) {
-    if (!(typeof characterGenerator.next === 'function')) {
-      if (is_iterable(characterGenerator)) {
-        let generator = characterGenerator[Symbol.iterator]();
-        if (!(typeof generator.next === 'function'))
-          throw new LogicError(`Not an iterator or iterable ${characterGenerator}`);
-        characterGenerator = generator;
-      }
-    }
+  function* schemeTokenGenerator(characterSource) {
+    let characterGenerator = iteratorFor(characterSource, LogicError);
     let ch = '', _peek = [], _done = false;
     function nextc() {
       if (_peek.length > 0)
@@ -2111,20 +2144,15 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("gensym", gensym);
 
   defineGlobalSymbol("parse", parseSExpr);
-  function parseSExpr(tokenGenerator, opts = {}) {
+  function parseSExpr(tokenSource, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let replHints = opts.replHints ?? {};
     let assignSyntax = opts.assignSyntax ?? false;
-    if (typeof tokenGenerator === 'string')
-      tokenGenerator = schemeTokenGenerator(tokenGenerator);
-    if (!(typeof tokenGenerator.next === 'function')) {
-      if (is_iterable(tokenGenerator)) {
-        let generator = tokenGenerator[Symbol.iterator]();
-        if (!(typeof generator.next === 'function'))
-          throw new LogicError(`Not an iterator or iterable ${tokenGenerator}`);
-        tokenGenerator = generator;
-      }
-    }
+    let tokenGenerator;
+    if (typeof tokenSource === 'string')
+      tokenGenerator = schemeTokenGenerator(tokenSource);
+    else
+      tokenGenerator = iteratorFor(tokenSource, LogicError);
     let _toks = [], _done = false;
     let expr;
     if (assignSyntax && token().type === 'atom' &&
@@ -2460,10 +2488,10 @@ export function createInstance(schemeOpts = {}) {
   // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { evalArgs: 0 });
   function compile(nameAndParams, forms, _) {
-    if (!is_cons(nameAndParams)) new EvalError(`First parameter must be a list`);
+    if (!is_cons(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
-    if (typeof name !== 'symbol') new EvalError(`Function name must be an atom or string`)    
+    if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
     let form = list(LAMBDA_ATOM, args, forms);
     let compiledFunction = compile_lambda.call(this, name, form);
     globalScope[name] = compiledFunction;
@@ -2483,7 +2511,7 @@ export function createInstance(schemeOpts = {}) {
   function lambda_compiler(name, lambda) {
     name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
-    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
+    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote ${lambda}");
 
     let scope = newScope(this);
     // If you're compiling a dunction that's already been defined, this prevents
