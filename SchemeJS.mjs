@@ -2010,12 +2010,13 @@ export function createInstance(schemeOpts = {}) {
   
   function* schemeTokenGenerator(characterSource) {
     let characterGenerator = iteratorFor(characterSource, LogicError);
-    let ch = '', _peek = [], _done = false;
+    let ch = '', _peek = [], _done = false, position = 0, charCount = 0;
     function nextc() {
       if (_peek.length > 0)
         return ch = _peek.shift();
       if (_done) return ch = '';
       let next = characterGenerator.next();
+      charCount += 1;
       if (next.done) {
         _done = true;
         return ch = '';
@@ -2025,6 +2026,7 @@ export function createInstance(schemeOpts = {}) {
     function peekc(n = 0) {
       for (let get = n - _peek.length + 1; get > 0; --get) {
         let next = characterGenerator.next();
+        charCount += 1;
         if (next.done) {
           _done = true;
           return '';
@@ -2038,15 +2040,16 @@ export function createInstance(schemeOpts = {}) {
     while (ch) {
       while (WS[ch])
         nextc();
+      position = charCount;
 
       if (NL[ch]) {
-        yield { type: 'newline' };
+        yield { type: 'newline', position };
         nextc();
         continue;
       }
 
       if (ch === ';' && peekc() === ';') {  // ;; begins a comment
-        yield { type: 'newline' };
+        yield { type: 'newline', position };
         while (ch && !NL[ch])
           nextc();
         continue;
@@ -2064,23 +2067,23 @@ export function createInstance(schemeOpts = {}) {
           nextc();
         }
         if (ch === '"') {
-          yield { type: 'string', value: str };
+          yield { type: 'string', value: str, position };
           nextc();
         } else {
-          yield { type: 'garbage', value: '"'+str };
+          yield { type: 'garbage', value: '"'+str, position };
           // Don't consume the newline or the REPL will prompt for another line of input
         }
         continue;
       }
 
       if (TOKS[ch]) {
-        yield { type: ch };
+        yield { type: ch, position };
         nextc();
         continue;
       }
 
       if (ch === '.' && !DIGITS[peekc()]) {
-        yield { type: ch };
+        yield { type: ch, position };
         nextc();
         continue;
       }
@@ -2113,7 +2116,7 @@ export function createInstance(schemeOpts = {}) {
           if (value !== undefined) {
             // Consume all the characters that we peeked and succeed
             while (pos-- > 0) nextc();
-            yield { type: 'number', value};
+            yield { type: 'number', value, position };
             continue;
           }
         }
@@ -2131,15 +2134,15 @@ export function createInstance(schemeOpts = {}) {
           if (!OPERATORS[ch]) operatorPrefix = false;
           str += ch, nextc();
         }
-        yield { type: 'atom', value: Atom(str) };
+        yield { type: 'atom', value: Atom(str), position };
         continue;
       }
 
       if (!ch) break;
-      yield { type: 'garbage', value: ch };
+      yield { type: 'garbage', value: ch, position };
       nextc();
     }
-    yield { type: 'end' };
+    yield { type: 'end', position };
   }
 
   let gensym_count = 0;
