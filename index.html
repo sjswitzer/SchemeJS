@@ -501,6 +501,7 @@
 
       function enterKey(event) {
         let inputText = inputElement.textContent;
+        inputText = inputText.split('\u00a0'). join(' ');  // NBSP to space
 
         try {
           if (errorElement)
