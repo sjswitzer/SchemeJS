@@ -218,7 +218,7 @@
 
       #header {
         display: flex;
-        flex 0 1 auto;
+        flex: 0 10 auto;
         flex-flow: row nowrap;
         width: 100%;
       }
@@ -245,9 +245,11 @@
         display: flex;
         flex-flow: column nowrap;
         flex: 1 1 auto;
+        overflow: scroll;
         justify-content: flex-end;
+        min-height: 10em;
         margin-top: 0.1em;
-        padding: .25em .25em .25em .25em;
+        padding: .15em .15em .15em .15em;
         width: 100%;
         background-color: #ccc;
         border: .1em solid;
