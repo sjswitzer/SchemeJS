@@ -81,36 +81,6 @@
       }
 
       /*
-       * Layout containers
-       */
-      div.layout-column {
-        display: flex;
-        flex-flow: column nowrap;
-      }
-      div.layout-column > div {
-        margin: .1em 0em;
-      }
-      div.layout-column {
-        height: 100%;
-      }
-      div.layout-row {
-        display: flex;
-        flex-flow: row nowrap;
-        flex: 0 0 auto;
-      }
-      div.expands {
-        /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
-        flex: 1 1 auto;
-        overflow: hidden;
-      }
-      div.shrink-wrap {
-        width: min-content;
-      }
-      div.force-width {
-        width: max-content;
-      }
-
-      /*
        * Initially-hidden help content.
        * Help contains a custom <close-button> and
        * a <div> for help content which is made scrollable.
@@ -140,6 +110,18 @@
         transition: .5s;
       }
       div.help > close-button:hover {
+        font-size: 170%;
+        color: black;
+      }
+      div.help > span:first-child {
+        position: absolute;
+        top: .3em;
+        right: .3em;
+        color: #0005;  /* rather transparent black */
+        font-size: 150%;
+        transition: .5s;
+      }
+      div.help > span:first-child:hover {
         font-size: 170%;
         color: black;
       }
@@ -229,42 +211,124 @@
         text-decoration: underline;
       }
 
-      /*
-       * Output area takes the remaining space and scrolls
-       */
-      div#output {
+      #container {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        flex-flow: column nowrap;
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+      }
+
+      #header {
+        display: flex;
+        flex-flow: row nowrap;
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+        width: 100%;
+      }
+
+      #lambda {
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+        font-size: 300%;
+      }
+
+      #header #title {
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+        width: 100%;
+      }
+
+      #header #about {
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+      }
+
+      #output {
+        /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
         flex: 1 1 auto;
-        overflow: auto;
-        max-height:100%;
+        overflow: hidden;
+        flex-flow: column nowrap;
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+        width: 100%;
+        height: max-content;
+        background-color: #ccc;
+        border: .1em solid;
+        border-radius: .3em;
+      }
+
+      #output > div {
+        position: relative;
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+        min-height: 2em;
+        background-color: #eee;
+        border: .1em solid;
+        border-radius: .1em;
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+      }
+
+      #output > div > span:first-child {
+        position: absolute;
+        top: 0;
+        right: 0;
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+        color: black;  /* rather transparent black */
+        font-size: 90%;
+        border: .1em solid;
+        border-radius: .1em;
+        background-color: #bbb;
       }
 
       /* The input box */
       div#input {
-        border: .15em solid;
-        margin: 1em 0em;
-        padding: 0em 1em;
-        border-radius: .3em;
+        margin: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.1em 0.1em 0.1em;
+        width: 100%;
+        min-height: 4em;
+        border: .1em solid;
+        border-radius: .1em;
+        background-color: #eee;
       }
+
     </style>
   </head>
   <body>
-    <div class="layout-column shrink-wrap">
-      <div class="layout-row force-width header">
+    <div id="container"></div>
+      <div id="header">
+        <div id="lambda">&lambda;</div>
+        <div id="title"> SchemeJS: Scheme in JavaScript </div>
+        <div id="about">
+          <span class="button padded-button" onclick="showHelp('help-about')""> ? </span>
+        </div>
       </div>
       <div id="output">
+        <div><span>$(0)</span>
+          <div>(kjsdfjsf ksrks)</div>
+        </div>
+        <div><span>$(1)</span>
+          <div>(kjsdfjsf ksrks)</div>
+        </div>
       </div>
       <div id="input">
       </div>
     </div>
     <div class="help" id="help-about">
-      <close-button onclick="showHelp(null)"></close-button>
+      <span onclick="showHelp(null)"> &times; </span>
       <div>
         <h2> SchemeJS: Scheme in JavaScript </h2>
         <p> 
       </div>
     </div>
     <div class="help" id="help-details">
-      <close-button onclick="showHelp()"></close-button>
+      <span onclick="showHelp(null)"> &times; </span>
       <div>
         <h2> Something </h2>
         <p>
@@ -281,7 +345,7 @@
       </div>
     </div>
     <div class="help" id="help-builtin">
-      <close-button onclick="showHelp()"></close-button>
+      <span onclick="showHelp(null)"> &times; </span>
       <div>
         <h2> Built-In Functions and Constants </h2>
         <table class="stuff example">
