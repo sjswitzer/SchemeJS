@@ -244,9 +244,14 @@
         border-radius: .4em;
       }
 
-      #output > div {
-        position: relative;
+      #output p {
+        margin: 0;
+      }
+
+      #output > div.result {
+        position: relative;  /* so that the span can be positioned absolutely */
         margin-top: 0.1em;
+        margin-left: 1em;
         padding: .5em .5em .5em .5em;
         min-height: 2em;
         background-color: #eee;
@@ -256,8 +261,31 @@
         padding: .5em .5em .5em .5em;
       }
 
+      #output > div.input {
+        position: relative;  /* so that the span can be positioned absolutely */
+        margin-top: 0.1em;
+        padding: .5em .5em .5em .5em;
+        min-height: 2em;
+        background-color: #ddd;
+        border: .1em solid;
+        border-radius: .4em;
+        margin-top: 0.25em;
+        padding: .5em .5em .5em .5em;
+      }
+
+      #output > div.error {
+        margin-top: 0.1em;
+        padding: .5em .5em .5em .5em;
+        min-height: 2em;
+        background-color: #fbb;
+        border: .1em solid;
+        border-radius: .4em;
+        margin-top: 0.25em;
+        padding: .5em .5em .5em .5em;
+      }
+
       #output > div > span:first-child {
-        position: absolute;
+        position: absolute;  /* parent div must be position: relative */
         top: 0;
         right: 0;
         margin: 0.2em 0.3em 0 0;
@@ -340,12 +368,14 @@
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
 
-      inputElement.contentEditable = 'true';
+      let globalScope;
 
       onload = importSchemeAndRunREPL()
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
         console.log("MODULE", SchemeJS);
+        globalScope = SchemeJS.createInstance();
+        inputElement.contentEditable = 'true';
       }
 
       function escapeHTML(str) {
@@ -380,16 +410,15 @@
           if (contentElement) {
             contentElement.scrollTop = 0;
             if (frag) {
-              let elt = contentElement.querySelector(`#${frag}`);
-              if (elt)
-                elt.scrollIntoView(true);
+              let element = contentElement.querySelector(`#${frag}`);
+              if (element)
+                element.scrollIntoView(true);
             }
           }
         }
       }
 
       const LOCAL_STORAGE_KEY = `SchemeJS-${location.pathname}`;
-
       let appVersion = "0.0";  // filled in later
       let persistedState = {};
 
@@ -468,19 +497,62 @@
           showHelp(null);
       });
 
-      let varNo = 0;
+      let varNo = 0, errorElement;
 
       function enterKey(event) {
-        let txt = inputElement.textContent;
-        inputElement.textContent = "";
-        let div = document.createElement('div');
-        let span = document.createElement('span');
-        span.textContent = `@${varNo++}`;
-        div.appendChild(span);
-        let innerDiv = document.createElement('div');
-        innerDiv.textContent = txt;
-        div.appendChild(innerDiv);
-        outputElement.appendChild(div);
+        let inputText = inputElement.textContent;
+
+        try {
+          if (errorElement)
+            errorElement.remove();
+          let expr = globalScope.parseSExpr(inputText);
+          let evaluated = globalScope._eval(expr, globalScope);
+          let evaluatedString = globalScope.string(evaluated);
+
+          let div = document.createElement('div');
+          div.setAttribute('class', 'input');
+          let span = document.createElement('span');
+          let name = `e${varNo}`;
+          globalScope[globalScope.Atom(name)] = expr;
+          span.textContent = name;
+          div.appendChild(span);
+          let innerDiv = document.createElement('div');
+          for (let pgf of newlinesToPgf(inputText))
+            innerDiv.appendChild(pgf);
+          div.appendChild(innerDiv);
+          outputElement.appendChild(div);
+          
+          div = document.createElement('div');
+          div.setAttribute('class', 'result');
+          span = document.createElement('span');
+          name = `r${varNo}`;
+          globalScope[globalScope.Atom(name)] = evaluated;
+          span.textContent = name;
+          div.appendChild(span);
+          innerDiv = document.createElement('div');
+          for (let pgf of newlinesToPgf(evaluatedString))
+            innerDiv.appendChild(pgf);
+          div.appendChild(innerDiv);
+          outputElement.appendChild(div);
+
+          inputElement.textContent = "";
+          ++varNo;
+        } catch (error) {
+          errorElement = document.createElement('div');
+          errorElement.setAttribute('class', 'error');
+          errorElement.textContent = String(error)
+          outputElement.appendChild(errorElement)
+        }
+      }
+
+      function newlinesToPgf(text) {
+        let res = [], lines = text.split('\n');
+        for (let line of lines) {
+          let element = document.createElement('p');
+          element.textContent = line;
+          res.push(element);
+        }
+        return res;
       }
 
       // onchange event isn't suitable because if the value doesn't change, nothing is reported

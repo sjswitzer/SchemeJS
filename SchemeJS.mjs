@@ -373,13 +373,15 @@ export function createInstance(schemeOpts = {}) {
       Int8Array, Uint8Array, Uint8ClampedArray,
       Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array,
       Float64Array, BigInt64Array, BigUint64Array,
-      ArrayBuffer, SharedArrayBuffer, DataView,
+      ArrayBuffer, DataView,
       Function, Promise, Proxy
     ]) {
     defineGlobalSymbol(fn.name, fn, { schemeOnly: true });
   }
   if (typeof XMLHttpRequest !== 'undefined')
     defineGlobalSymbol("XMLHttpRequest", XMLHttpRequest, { schemeOnly: true });
+  if (typeof SharedArrayBuffer !== 'undefined')
+    defineGlobalSymbol("SharedArrayBuffer", SharedArrayBuffer, { schemeOnly: true });
   if (typeof navigator !== 'undefined')
     defineGlobalSymbol("navigator", navigator, { schemeOnly: true });
   if (typeof window !== 'undefined')
@@ -1490,6 +1492,7 @@ export function createInstance(schemeOpts = {}) {
   // This is where the magic happens
   //
 
+  exportAPI("_eval", _eval);
   function _eval(form, scope) {
     if (form === NIL) return form;
     if (typeof form === 'symbol') {
@@ -2150,6 +2153,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("gensym", gensym);
 
   defineGlobalSymbol("parse", parseSExpr);
+  exportAPI("parseSExpr", parseSExpr);
   function parseSExpr(tokenSource, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let replHints = opts.replHints ?? {};
