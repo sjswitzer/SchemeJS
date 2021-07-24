@@ -8,7 +8,7 @@
 -->
 <html>
   <head>
-    <title>Units CalculatorSchemeJS</title>
+    <title>SchemeJS: Scheme in JavaScript</title>
     <meta charset="utf-8">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -70,14 +70,6 @@
       }
       body[data-protocol="file:"] .remote-only {
         display: none;
-      }
-
-      /* Spiff up input fields */
-      input[type="text"] {
-        font-size: 120%;
-        border: .15em solid;
-        border-radius: .3em;
-        padding: .1em .4em;
       }
 
       /*
@@ -212,108 +204,107 @@
       }
 
       #container {
+        display: flex;
+        flex-flow: column nowrap;
+        overflow: hidden;
         position: absolute;
         top: 0;
         bottom: 0;
         left: 0;
         right: 0;
-        display: flex;
-        flex-flow: column nowrap;
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
+        margin: 0;
+        padding: .25em .25em .25em .25em;
       }
 
       #header {
         display: flex;
+        flex 0 1 auto;
         flex-flow: row nowrap;
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
         width: 100%;
       }
 
       #lambda {
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
+        flex: 0 0 auto;
+        align-self: flex-end;
         font-size: 300%;
       }
 
       #header #title {
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
-        width: 100%;
+        flex: 1 0 auto;
+        align-self: flex-end;
+        margin-bottom: .25em;
+        font-size: 150%;
       }
 
       #header #about {
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
+        flex: 0 0 auto;
       }
 
       #output {
         /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
-        flex: 1 1 auto;
-        overflow: hidden;
+        display: flex;
         flex-flow: column nowrap;
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
+        flex: 1 1 auto;
+        justify-content: flex-end;
+        margin-top: 0.1em;
+        padding: .25em .25em .25em .25em;
         width: 100%;
-        height: max-content;
         background-color: #ccc;
         border: .1em solid;
-        border-radius: .3em;
+        border-radius: .4em;
       }
 
       #output > div {
         position: relative;
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
+        margin-top: 0.1em;
+        padding: .5em .5em .5em .5em;
         min-height: 2em;
         background-color: #eee;
         border: .1em solid;
-        border-radius: .1em;
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
+        border-radius: .4em;
+        margin-top: 0.25em;
+        padding: .5em .5em .5em .5em;
       }
 
       #output > div > span:first-child {
         position: absolute;
         top: 0;
         right: 0;
-        margin: 0.1em 0.1em 0.1em 0.1em;
+        margin: 0.2em 0.3em 0 0;
         padding: 0.1em 0.1em 0.1em 0.1em;
-        color: black;  /* rather transparent black */
         font-size: 90%;
         border: .1em solid;
-        border-radius: .1em;
+        border-radius: .4em;
         background-color: #bbb;
       }
 
       /* The input box */
       div#input {
-        margin: 0.1em 0.1em 0.1em 0.1em;
-        padding: 0.1em 0.1em 0.1em 0.1em;
+        flex: 0 0 4em;
+        margin-top: 0.25em;
+        padding: .5em .5em .5em .5em;
         width: 100%;
-        min-height: 4em;
         border: .1em solid;
-        border-radius: .1em;
+        border-radius: .4em;
         background-color: #eee;
       }
-
     </style>
   </head>
   <body>
-    <div id="container"></div>
+    <div id="container">
       <div id="header">
         <div id="lambda">&lambda;</div>
+        <div style="width: 1em;"></div>
         <div id="title"> SchemeJS: Scheme in JavaScript </div>
         <div id="about">
-          <span class="button padded-button" onclick="showHelp('help-about')""> ? </span>
+          <span class="button" onclick="showHelp('help-about')""> ? </span>
         </div>
       </div>
       <div id="output">
-        <div><span>$(0)</span>
+        <div><span>@0</span>
           <div>(kjsdfjsf ksrks)</div>
         </div>
-        <div><span>$(1)</span>
+        <div><span>@1</span>
           <div>(kjsdfjsf ksrks)</div>
         </div>
       </div>
@@ -363,6 +354,8 @@
 
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
+
+      inputElement.contentEditable = 'true';
 
       function escapeHTML(str) {
         return str
