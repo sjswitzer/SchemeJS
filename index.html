@@ -105,18 +105,6 @@
         font-size: 170%;
         color: black;
       }
-      div.help > span:first-child {
-        position: absolute;
-        top: .3em;
-        right: .3em;
-        color: #0005;  /* rather transparent black */
-        font-size: 150%;
-        transition: .5s;
-      }
-      div.help > span:first-child:hover {
-        font-size: 170%;
-        color: black;
-      }
       div.help > div {
         overflow-y: auto;
         height: 100%;
@@ -308,14 +296,14 @@
       </div>
     </div>
     <div class="help" id="help-about">
-      <span onclick="showHelp(null)"> &times; </span>
+      <close-button onclick="showHelp(null)"></close-button>
       <div>
         <h2> SchemeJS: Scheme in JavaScript </h2>
         <p> 
       </div>
     </div>
     <div class="help" id="help-details">
-      <span onclick="showHelp(null)"> &times; </span>
+      <close-button onclick="showHelp(null)"></close-button>
       <div>
         <h2> Something </h2>
         <p>
@@ -332,7 +320,7 @@
       </div>
     </div>
     <div class="help" id="help-builtin">
-      <span onclick="showHelp(null)"> &times; </span>
+      <close-button onclick="showHelp(null)"></close-button>
       <div>
         <h2> Built-In Functions and Constants </h2>
         <table class="stuff example">
@@ -346,7 +334,6 @@
       </div>
     </div>
     <script type="module" src="./CloseButton.mjs"></script>
-    <script type="module" src="SchemeJS.mjs"></script>
     <script type="text/javascript">
       "use strict";
 
@@ -357,9 +344,8 @@
 
       onload = importSchemeAndRunREPL()
       async function importSchemeAndRunREPL() {
-        let schemeModule = await(import("./SchemeJS.mjs"));
-        // TODO
-        console.log("MODULE", schemeModule);
+        let SchemeJS = await(import("./SchemeJS.mjs"));
+        console.log("MODULE", SchemeJS);
       }
 
       function escapeHTML(str) {
