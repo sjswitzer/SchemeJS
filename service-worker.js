@@ -58,13 +58,11 @@ async function handleFetch(event) {
 }
 
 //
-// I don't have anything to prefetch since everything is referenced from index.html.
-// But if I did, it would go like this.
+// Prefetches
 //
 
 let prefetchURLs = [
-  // "foo.html",
-  // "bar.png",
+  "test.scm",
 ];
 
 onactivate = event => handleActivate(event);

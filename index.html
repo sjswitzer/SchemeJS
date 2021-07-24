@@ -303,12 +303,6 @@
         </div>
       </div>
       <div id="output">
-        <div><span>@0</span>
-          <div>(kjsdfjsf ksrks)</div>
-        </div>
-        <div><span>@1</span>
-          <div>(kjsdfjsf ksrks)</div>
-        </div>
       </div>
       <div id="input">
       </div>
@@ -351,6 +345,8 @@
         </dl>
       </div>
     </div>
+    <script type="module" src="./CloseButton.mjs"></script>
+    <script type="module" src="SchemeJS.mjs"></script>
     <script type="text/javascript">
       "use strict";
 
@@ -358,6 +354,13 @@
       const outputElement = document.getElementById('output');
 
       inputElement.contentEditable = 'true';
+
+      onload = importSchemeAndRunREPL()
+      async function importSchemeAndRunREPL() {
+        let schemeModule = await(import("./SchemeJS.mjs"));
+        // TODO
+        console.log("MODULE", schemeModule);
+      }
 
       function escapeHTML(str) {
         return str
@@ -479,8 +482,19 @@
           showHelp(null);
       });
 
+      let varNo = 0;
+
       function enterKey(event) {
-        // TODO
+        let txt = inputElement.textContent;
+        inputElement.textContent = "";
+        let div = document.createElement('div');
+        let span = document.createElement('span');
+        span.textContent = `@${varNo++}`;
+        div.appendChild(span);
+        let innerDiv = document.createElement('div');
+        innerDiv.textContent = txt;
+        div.appendChild(innerDiv);
+        outputElement.appendChild(div);
       }
 
       // onchange event isn't suitable because if the value doesn't change, nothing is reported
