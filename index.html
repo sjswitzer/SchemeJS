@@ -119,6 +119,7 @@
       dl.definitions dd {
         float: right;
         margin-inline-start: unset;
+        font-style: italic;
         width: 80%;
       }
       dl.definitions > div {
@@ -130,6 +131,10 @@
       }
       dl p {
         margin: .25em 0 .25em 0;
+        font-style: initial;
+      }
+      dl p.impl, dl p.value {
+        color: #777;
       }
 
       div.help ul {
@@ -370,7 +375,7 @@
         </dl>
       </div>
     </div>
-    <div style="display: hidden">
+    <div style="display: none">
       <dd id="defn-_star_catch"><div>
         (*catch "tag" form ...)
         <p> SIOD-style catch.
@@ -709,9 +714,11 @@
             key = '\x7f' + key;
           return key;
         }
-        function textElement(type, text) {
+        function textElement(type, text, cls) {
           let element = document.createElement(type);
           element.textContent = text;
+          if (cls)
+            element.setAttribute('class', cls);
           return element;
         }
         for (let { syms } of symtab) {
@@ -734,11 +741,11 @@
             let impl = value[IMPL_SYMBOL];
             if (!impl) impl = string(value);
             if (impl.length < 50)
-              group.appendChild(textElement('dd', `Impl: ${impl}`));
+              dd.appendChild(textElement('p', `Impl: ${impl}`, 'impl'));
           } else {
             let valStr = string(value);
             if (valStr.length < 50)
-              group.appendChild(textElement('dd', `Value: ${string(value)}`));
+              dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
           }
         }
       }
