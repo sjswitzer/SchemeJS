@@ -122,6 +122,9 @@
         font-style: italic;
         width: 80%;
       }
+      dl.definitions dd .example {
+        font-style: italic;
+      }
       dl.definitions > div {
         padding-top: .75em;
         clear: both;
@@ -131,7 +134,7 @@
       }
       dl p {
         margin: .25em 0 .25em 0;
-        font-style: initial;
+        font-style: normal;
       }
       dl p.impl, dl p.value {
         color: #777;
@@ -143,21 +146,12 @@
       div.help ul > li {
         margin: .5em;
       }
-      div.help code, div.help table.example td:first-child {
-        font-weight: bold;
+      code, pre {
+        font-style: italic;
         font-family: caption, sans-serif;
-        color: #444;  /* subtle graying to offset the boldness */
       }
       div.help code.abstract {
         font-style: italic;
-      }
-      /* Testing affordance; example text can be stuffed into the expr box */
-      div.help code:hover, div.help .stuff-text:hover,
-      div.help table.stuff.example td:first-child:hover {
-        cursor: pointer;
-        color: #00d;
-        text-decoration: underline;
-        --click-action: stuff-text;
       }
 
       /*
@@ -385,6 +379,28 @@
       <dd id="defn-_star_catch"><div>
         (*throw "tag" value)
         <p> SIOD-style throw.
+            Throws the value with the given tag.
+            An enclosing <code>(*catch "tag" form ...)</code> will
+            return "value" if the tags match; otherwise the exception propagates.
+      </div></dd>
+      <dd id="defn-catch"><div>
+        (catch catch-clause forms)
+        <p> where <i>catch-clause</i> is:</p>
+        (error forms)
+        <p> Java/JavaScript-style catch.
+            Evaluates the forms until one of them calls
+            <code>(throw obj)</code>.
+            The <i>catch-clasuse</i> forms are executed with the thrown object bound to "<code>error</code>".
+        <p> For example:
+        <p class="example">
+          (catch (e "string" (+ "thrown: " e))<br>
+          &nbsp;&nbsp; (+ 1 2)<br>
+          &nbsp;&nbsp;  (+ 3 (throw "ha ha!"))<br>
+          )
+      </div></dd>
+      <dd id="defn-_star_catch"><div>
+        (*throw "tag" value)
+        <p> Java/JavaScript-style-style throw.
             Throws the value with the given tag.
             An enclosing <code>(*catch "tag" form ...)</code> will
             return "value" if the tags match; otherwise the exception propagates.
