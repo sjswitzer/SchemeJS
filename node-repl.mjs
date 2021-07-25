@@ -9,6 +9,19 @@
 import * as SchemeJS from './SchemeJS.mjs';
 import * as fs from 'fs';
 
+let loadFiles = [];
+
+let argv = process.argv.slice(2);
+while (argv.length > 0) {
+  if (argv[0] === '--load') {
+    if (typeof argv[1] === 'string')
+      loadFiles.push(argv[1]);
+    argv = argv.slice(2);
+    continue;
+  }
+  break;
+}
+
 let inputFd, closeFd, oldRawMode;
 try {
   if (process.platform === 'win32') {
@@ -37,6 +50,7 @@ try {
       line = line.substr(0, line.length-1);
       return line;
     }
+    // getLine("Attach debugger and hit return! ");  // Uncomment to do what it says
 
     // For "load" and "require"
     function readFile(path) {
@@ -46,13 +60,10 @@ try {
     }
 
     let endTest = (line => line === ".");  // end on a "."
-
     let globalScope = SchemeJS.createInstance({ readFile, endTest });
-
-    // getLine("Attach debugger and hit return!");  // Uncomment to do what it says
-
-    // A function to run the test file
-    globalScope.evalString('(define (test) (load "test.scm"))');
+    globalScope[globalScope.Atom('*argv*')] = argv;  // probably should be a list
+    for (let file of loadFiles)
+      globalScope.load(file);
 
     let assignSyntax = true;
     globalScope.REPL(getLine, { assignSyntax });
