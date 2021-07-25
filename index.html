@@ -502,7 +502,7 @@
     </div></dd>
     <dd id="defn-imul"><div>
       (imul x y)
-      <p> Result of the multiplication of x and y considered as 32-bit intehers.
+      <p> Result of the multiplication of x and y considered as 32-bit integers.
     </div></dd>
     <dd id="defn-log"><div>
       (log x)
@@ -526,7 +526,7 @@
     </div></dd>
     <dd id="defn-add"><div>
       (+ value value ...)
-      <p> Adds the values</p>
+      <p> Adds the values.
     </div></dd>
     <dd id="defn-sub"><div>
       (- value ...)
@@ -571,13 +571,35 @@
         zero, NaN and "" are <i>not</i> falsey.
         Everything else is "truthy."
     </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
+    <dd id="defn-bit-and"><div>
+      (& value value ...)
+      <p> Bitwise "and" of the values considered as 32-bit integers.
     </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
+    <dd id="defn-bit-or"><div>
+      (| value value ...)
+      <p> Bitwise "or" of the values considered as 32-bit integers.
+    </div></dd>
+    <dd id="defn-bit-xor"><div>
+      (^ value value ...)
+      <p> Bitwise exclusive "or" of the values considered as 32-bit integers.
+    </div></dd>
+    <dd id="defn-bit-not"><div>
+      (~ value)
+      <p> Bitwise not of the value considered as a 32-bit integer.
+    </div></dd>
+    <dd id="defn-bit-shl"><div>
+      (&lt;&lt; value shift)
+      <p> Value left-shifted "shift" bits, bith considered as 32-bit integers.
+    </div></dd>
+    <dd id="defn-bit-shr"><div>
+      (&gt;&gt; value shift)
+      <p> Value arithmetcally right-shifted "shift" bits, bith considered as 32-bit integers.
+          The sign bit fills from the left.
+    </div></dd>
+    <dd id="defn-bit-ushr"><div>
+      (&gt;&gt;&gt; value shift)
+      <p> Value logically right-shifted "shift" bits, bith considered as 32-bit integers.
+        Zero bits fill from the left.
     </div></dd>
     <dd id="defn-xxx"><div>
       xxx
