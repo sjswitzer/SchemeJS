@@ -248,7 +248,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("CDR_SYMBOL", CDR);
   exportAPI("LAZY_SYMBOL", LAZY);
 
-  defineGlobalSymbol("SchemeJS-version", VERSION);
+  defineGlobalSymbol("VERSION", VERSION);
   defineGlobalSymbol("is-atom", is_atom, "atom?");
   defineGlobalSymbol("Atom", Atom);
 
@@ -435,7 +435,7 @@ export function createInstance(schemeOpts = {}) {
   // Pokemon gotta catch 'em' all!
   defineGlobalSymbol("not", a => !bool(a), "!");
   defineGlobalSymbol("bit-not", a => ~a, "~");
-  defineGlobalSymbol("exp", (a,b) => a ** b, "**");
+  defineGlobalSymbol("pow", (a,b) => a ** b, "**");  // overrides Math.pow
   defineGlobalSymbol("rem", (a,b) => a % b, "%");
   defineGlobalSymbol("bit-shl", (a,b) => a << b, "<<");
   defineGlobalSymbol("bit-shr", (a,b) => a >> b, ">>");
