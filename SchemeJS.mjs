@@ -410,16 +410,20 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("BigInt", a => BigInt(a));
 
   defineGlobalSymbol("eval", eval_);
-  function eval_(expr, scope) { // Javascript practically treats "eval" as a keyword
-    if (scope == null) scope = this;  // Default is the current scope
-    else if (scope === NIL) scope = globalScope; // NIL, specifically, means use the global scope
-    return _eval(expr, scope);
+  function eval_(expr, ...scope) { // Javascript practically treats "eval" as a keyword
+    let useScope = scope[0];
+    if (!(useScope != null && useScope instanceof Scope)) useScope = this;
+    if (useScope === NIL) scope = globalScope; // NIL, specifically, means use the global scope
+    return _eval(expr, useScope);
   }
 
-  defineGlobalSymbol("eval-string", eval_string,);
-  function eval_string(str, scope) {
+  defineGlobalSymbol("eval-string", eval_string);
+  function eval_string(str, ...scope) {
+    let useScope = scope[0];
+    if (!(useScope != null && useScope instanceof Scope)) useScope = this;
+    if (useScope === NIL) scope = globalScope; // NIL, specifically, means use the global scope
     let expr = parseSExpr(str);
-    return eval_.call(this, expr, scope);
+    return eval_.call(this, expr, useScope);
   }
 
   defineGlobalSymbol("globalScope", globalScope);
@@ -428,6 +432,7 @@ export function createInstance(schemeOpts = {}) {
   function apply(fn, args, ...scope) {
     let useScope = scope[0];
     if (!(useScope != null && useScope instanceof Scope)) useScope = this;
+    if (useScope === NIL) scope = globalScope; // NIL, specifically, means use the global scope
     return _apply(fn, args, useScope);
   }
 
@@ -962,7 +967,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("copy-list", copy_list);
+  defineGlobalSymbol("copy-list", copy_list);  // TODO: should take iterables too
   function copy_list(list) {
     let res = NIL, last;
     while (is_cons(list)) {

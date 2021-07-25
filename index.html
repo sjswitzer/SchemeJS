@@ -673,6 +673,10 @@
         (cadr list)
         <p> Shorthand for: <code>(car (cdr list))</code>.
       </div></dd>
+      <dd id="defn-cons"><div>
+        (cons first rest)
+        <p> Returns a new list object with <i>first</i> as the "car" and <i>rest</i> as the "cdr."
+      </div></dd>
       <dd id="defn-car"><div>
         (car list)
         <p> First element of <i>list</i>.
@@ -730,9 +734,9 @@
           &nbsp;&nbsp; ((< 3 4) "c") <br>
           &nbsp;&nbsp; ((< 2 4) "d"))
       </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
+      <dd id="defn-copy-list"><div>
+        (copy-list list)
+        <p> Returns a new list that is an element-wise shallow copy of <i>list</i>.
       </div></dd>
       <dd id="defn-xxx"><div>
         xxx
@@ -810,6 +814,10 @@
         (intern "str")
         <p> Returns a Scheme atom named "str".
       </div></dd>
+      <dd id="defn-Date"><div>
+        Date
+        <p> The standard JavaScript Date class.
+      </div></dd>
       <dd id="defn-Float32Array"><div>
         Float32Array
         <p> The standard JavaScript Float32Array class.
@@ -873,6 +881,25 @@
       <dd id="defn-encodeURIComponent"><div>
         encodeURIComponent
         <p> The standard JavaScript function encodeURIComponent.
+      </div></dd>
+      <dd id="defn-define"><div>
+        (define a form)
+        <p> Defines a global-scope variable <i>a</i> with the evaluated value of <i>form</i>.</p>
+        (define (fn param...) form ...)
+        <p> Defines a global-scope function <i>fn</i> with parameters <i>param...</i>
+            which evaluates the forms in the context of the bound parameters.
+      </div></dd>
+      <dd id="defn-delete"><div>
+        (delete a b)
+        <p> Deletes property or array element <i>b</i> from JavaScript object <i>a</i>.
+      </div></dd>
+      <dd id="defn-eval"><div>
+        (eval )
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
       </div></dd>
       <dd id="defn-xxx"><div>
         xxx
