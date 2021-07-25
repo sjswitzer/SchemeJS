@@ -119,14 +119,14 @@
       dl.definitions dd {
         float: right;
         margin-inline-start: unset;
-        width: 75%;
+        width: 85%;
+      }
+      dl.definitions > div {
+        padding-top: .5em;
+        clear: both;
       }
       dl .heading {
         font-weight: bold;
-      }
-      dl div.spacer {
-        margin-top: .5em;
-        clear: both;
       }
 
       div.help ul {
@@ -447,26 +447,25 @@
           return element;
         }
         for (let { syms } of symtab) {
-          let spacer = document.createElement('div');
-          spacer.setAttribute('class', 'spacer');
-          builtinsElement.appendChild(spacer);
+          let group = document.createElement('div');
+          builtinsElement.appendChild(group);
           for (let sym of syms)
-            builtinsElement.appendChild(textElement('dt', sym.description));
+            group.appendChild(textElement('dt', sym.description));
           let name = syms[0].description;
           let dd = document.getElementById(`dd-$name`);
           if (!dd)
             dd = textElement('dd', "TBD");
-          builtinsElement.appendChild(dd);
+          group.appendChild(dd);
           let value = globalScope[syms[0]];
           if (typeof value === 'function') {
             let impl = value[IMPL_SYMBOL];
             if (!impl) impl = string(value);
             if (impl.length < 50)
-              builtinsElement.appendChild(textElement('dd', `Impl: ${impl}`));
+              group.appendChild(textElement('dd', `Impl: ${impl}`));
           } else {
             let valStr = string(value);
             if (valStr.length < 50)
-              builtinsElement.appendChild(textElement('dd', `Value: ${string(value)}`));
+              group.appendChild(textElement('dd', `Value: ${string(value)}`));
           }
         }
       }
