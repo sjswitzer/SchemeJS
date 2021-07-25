@@ -9,7 +9,7 @@
 import * as SchemeJS from './SchemeJS.mjs';
 import * as fs from 'fs';
 
-let loadFiles = [];
+let loadFiles = [], runREPL = false;
 
 let argv = process.argv.slice(2);
 while (argv.length > 0) {
@@ -19,8 +19,17 @@ while (argv.length > 0) {
     argv = argv.slice(2);
     continue;
   }
+  if (argv[0] === '--repl') {
+    runREPL = true;
+    argv = argv.slice(1);
+    break;
+  }
   break;
 }
+
+// Run the REPL if no files specified or --repl arg is present
+if (loadFiles.length === 0)
+  runREPL = true;
 
 let inputFd, closeFd, oldRawMode;
 try {
@@ -61,12 +70,14 @@ try {
 
     let endTest = (line => line === ".");  // end on a "."
     let globalScope = SchemeJS.createInstance({ readFile, endTest });
-    globalScope[globalScope.Atom('*argv*')] = argv;  // probably should be a list
+    globalScope[globalScope.Atom('*argv*')] = globalScope.to_list(argv);
     for (let file of loadFiles)
       globalScope.load(file);
 
-    let assignSyntax = true;
-    globalScope.REPL(getLine, { assignSyntax });
+    if (runREPL) {
+      let assignSyntax = true;
+      globalScope.REPL(getLine, { assignSyntax });
+    }
   }
 } finally {
   if (oldRawMode !== undefined)
