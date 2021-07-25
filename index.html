@@ -291,7 +291,7 @@
         top: 0;
         right: 0;
         margin: 0.2em 0.3em 0 0;
-        padding: 0.1em 0.1em 0.1em 0.1em;
+        padding: 0.1em 0.25em 0.1em 0.25em;
         font-size: 90%;
         border: .1em solid;
         border-radius: .4em;
@@ -329,7 +329,15 @@
       <close-button onclick="showHelp(null)"></close-button>
       <div>
         <h2> SchemeJS: Scheme in JavaScript </h2>
-        <p> 
+        <p> JavaScript has dynamic typing, functions, closures, and a JIT with
+            a small army of crack programmers optimizing its performance.
+            It’s an ideal runtime for Lisp.
+            All it lacks is cons cells, an s-expression parser and printer,
+            eval/apply, a handful of Lisp primitives, and a Lisp compiler.
+        <p> SchemeJS fills that small gap.
+        <p> It’s hard to keep JavaScript objects from sneaking into the
+            Scheme world, so I decided to invite them in as first-class.
+            SchemeJS is fully Lisp <i>and</i> fully JavaScript.
       </div>
     </div>
     <div class="help" id="help-details">
@@ -515,7 +523,7 @@
           let div = document.createElement('div');
           div.setAttribute('class', 'input');
           let span = document.createElement('span');
-          let name = `e${varNo}`;
+          let name = `?${varNo}`;
           globalScope[globalScope.Atom(name)] = expr;
           span.textContent = name;
           div.appendChild(span);
@@ -528,7 +536,7 @@
           div = document.createElement('div');
           div.setAttribute('class', 'result');
           span = document.createElement('span');
-          name = `r${varNo}`;
+          name = `=${varNo}`;
           globalScope[globalScope.Atom(name)] = evaluated;
           span.textContent = name;
           div.appendChild(span);

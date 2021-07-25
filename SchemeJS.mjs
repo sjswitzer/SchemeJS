@@ -1435,7 +1435,7 @@ export function createInstance(schemeOpts = {}) {
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     if (!is_cons(catchForms))
       throw new EvalError(`Bad catch clause ${string(catchClause)}`);
-    var typeMatch;
+    let typeMatch;
     if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
       typeMatch = catchForms[CAR];
       catchForms = catchForms[CDR];
@@ -2126,15 +2126,11 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (IDENT1[ch]) {
-        let str = '', operatorPrefix = OPERATORS[ch];
+        let str = '';
         while (ch && IDENT2[ch]) {
-          // a prefix of operators breaks at a digit so we can write (*1 2)
-          if (operatorPrefix && DIGITS[ch])
-            break;
           // lambda symbols are special so we can parse \x as \ x
           if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && JSIDENT[ch])
             break;
-          if (!OPERATORS[ch]) operatorPrefix = false;
           str += ch, nextc();
         }
         yield { type: 'atom', value: Atom(str), position };
