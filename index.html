@@ -137,7 +137,7 @@
         font-style: normal;
       }
       dl p.impl, dl p.value {
-        color: #777;
+        color: #555;
       }
 
       div.help ul {
@@ -146,12 +146,9 @@
       div.help ul > li {
         margin: .5em;
       }
-      code, pre {
+      code {
         font-style: italic;
         font-family: caption, sans-serif;
-      }
-      div.help code.abstract {
-        font-style: italic;
       }
 
       /*
@@ -386,17 +383,21 @@
       <dd id="defn-catch"><div>
         (catch catch-clause forms)
         <p> where <i>catch-clause</i> is:</p>
-        (error forms)
+        (error type forms)
         <p> Java/JavaScript-style catch.
-            Evaluates the forms until one of them calls
-            <code>(throw obj)</code>.
-            The <i>catch-clasuse</i> forms are executed with the thrown object bound to "<code>error</code>".
+        <p> Evaluates the forms until one of them calls <code>(throw obj)</code>.
+            If the <code>type</code> matches the thrown object,
+            the <i>catch-clasuse</i> forms are evaluated with the thrown object bound
+            to "<code>error</code>".
+            If <code>type</code> is an object, the catch matches if the object is an instance
+            of that object; it <code>type</code> is a string, the catch matches if the JavaScript
+            "typeof" the thrown object is that string.
         <p> For example:
         <p class="example">
-          (catch (e "string" (+ "thrown: " e))<br>
-          &nbsp;&nbsp; (+ 1 2)<br>
-          &nbsp;&nbsp;  (+ 3 (throw "ha ha!"))<br>
-          )
+            (catch (e "string" (+ "thrown: " e))<br>
+            &nbsp;&nbsp; (+ 1 2)<br>
+            &nbsp;&nbsp;  (+ 3 (throw "ha ha!"))<br>
+            )
       </div></dd>
       <dd id="defn-_star_catch"><div>
         (*throw "tag" value)
@@ -617,6 +618,12 @@
         <p> Value logically right-shifted "shift" bits, bith considered as 32-bit integers.
           Zero bits fill from the left.
       </div></dd>
+      <dd id="defn-ash"><div>
+        (ash value shift)
+        <p> Shifts left if <code>shift</code> is positive.
+            Shifts arithmetcally right if <code>shift</code> is negative;
+            sign bits fill from the left.
+      </div></dd>
       <dd id="defn-append"><div>
         (append list ...)
         <p> Appends the specified lists or iterable JavaScript objects, forming a new list.
@@ -625,6 +632,86 @@
         (apply function args [scope])
         <p> Applies the function to the arguments in the given scope.
             "scope" is optional; the default is the current scope.
+      </div></dd>
+      <dd id="defn-begin"><div>
+        (begin form ...)
+        <p> Evaluates the forms sequentially, returning the value of the last form.
+      </div></dd>
+      <dd id="defn-bigintP"><div>
+        (bigint? obj)
+        <p> Returns <code>true</code> if <code>obj</code> is a JavaScript BigInt.
+      </div></dd>
+      <dd id="defn-booleanP"><div>
+        (boolean? obj)
+        <p> Returns <code>true</code> if <code>obj</code> is a boolean.
+      </div></dd>
+      <dd id="defn-butlast"><div>
+        (butlast list)
+        <p> A copy of <code>list</code> excepting the last element.
+      </div></dd>
+      <dd id="defn-caaar"><div>
+        (caaar list)
+        <p> Shorthand for: <code>(car (car (car list)))</code>.
+      </div></dd>
+      <dd id="defn-caadr"><div>
+        (caadr list)
+        <p> Shorthand for: <code>(car (car (cdr list)))</code>.
+      </div></dd>
+      <dd id="defn-caar"><div>
+        (caar list)
+        <p> Shorthand for: <code>(car (car list))</code>.
+      </div></dd>
+      <dd id="defn-cadar"><div>
+        (cadar list)
+        <p> Shorthand for: <code>(car (cdr (car list)))</code>.
+      </div></dd>
+      <dd id="defn-caddr"><div>
+        (caddr list)
+        <p> Shorthand for: <code>(car (cdr (cdr list)))</code>.
+      </div></dd>
+      <dd id="defn-cadr"><div>
+        (cadr list)
+        <p> Shorthand for: <code>(car (cdr list))</code>.
+      </div></dd>
+      <dd id="defn-car"><div>
+        (car list)
+        <p> First element of <code>list</code>.
+      </div></dd>
+      <dd id="defn-cdr"><div>
+        (cdr list)
+        <p> Second and subsequent elements of <code>list</code>.
+      </div></dd>
+      <dd id="defn-cdaar"><div>
+        (cdaar list)
+        <p> Shorthand for: <code>(cdr (car (car list)))</code>.
+      </div></dd>
+      <dd id="defn-cdddr"><div>
+        (cdddr list)
+        <p> Shorthand for: <code>(cdr (cdr (cdr list)))</code>.
+      </div></dd>
+      <dd id="defn-cxxxr"><div>
+        (xxx list)
+        <p> Shorthand for: <code>(xxx)</code>.
+      </div></dd>
+      <dd id="defn-cddr"><div>
+        (cddr list)
+        <p> Shorthand for: <code>(cdr (cdr list))</code>.
+      </div></dd>
+      <dd id="defn-closureP"><div>
+        (closure? obj)
+        <p> True if <code>obj</code> is a closure.
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
       </div></dd>
       <dd id="defn-xxx"><div>
         xxx
@@ -641,6 +728,46 @@
         <p> Indexes into the JavaScript array by the given index. </p>
         (@ "prop" obj)
         <p> The value of the property "prop" in the given object.
+      </div></dd>
+      <dd id="defn-arefP"><div>
+        (@? index array)
+        <p> The value of the property "prop" in the given object or undefined if the array is
+            undefined or null.</p>
+            (@ "prop" obj)
+            <p> The value of the property "prop" in the given object or undefined if the array is
+              undefined or null.
+          </div></dd>
+      <dd id="defn-arrayP"><div>
+        (array? obj)
+        <p> True if the object is a JavaScript Array.
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
       </div></dd>
       <dd id="defn-false"><div>
         false
@@ -671,7 +798,7 @@
         <p> The standard JavaScript class Float64Array.
       </div></dd>
       <dd id="defn-Function"><div>
-        xxx
+        Function
         <p> The standard JavaScript class Function.
       </div></dd>
       <dd id="defn-Array"><div>

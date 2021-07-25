@@ -1432,12 +1432,12 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (throw value) -- Java/JavaScript style
-  defineGlobalSymbol("throw", jsThrow);
-  function jsThrow(value) { throw value }
+  defineGlobalSymbol("throw", js_throw);
+  function js_throw(value) { throw value }
 
   // (catch (var [type] forms) forms) -- Java/JavaScript style
-  defineGlobalSymbol("catch", jsCatch, { evalArgs: 0 });
-  function jsCatch(catchClause, forms) {
+  defineGlobalSymbol("catch", js_catch, { evalArgs: 0 });
+  function js_catch(catchClause, forms) {
     if (!is_cons(catchClause))
       throw new EvalError(`Bad catch clause ${string(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
