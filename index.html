@@ -114,12 +114,12 @@
       dl.definitions dt {
         float: left;
         clear: right;
-        margin-inline-end: 2ch;
+        margin-inline-end: 1.5ch;
       }
       dl.definitions dd {
         float: right;
         margin-inline-start: unset;
-        width: 85%;
+        width: 80%;
       }
       dl.definitions > div {
         padding-top: .5em;
@@ -129,7 +129,7 @@
         font-weight: bold;
       }
       dl p {
-        margin: .35em 0 .35em 0;
+        margin: .5em 0 .5em 0;
       }
 
       div.help ul {
@@ -378,8 +378,226 @@
             <code>(*throw "tag" value)</code>.
             Returns "value" if the tags match; otherwise the exception propagates.
       </div></dd>
+      <dd id="defn-_star_catch"><div>
+        (*throw "tag" value)
+        <p> SIOD-style throw.
+            Throws the value with the given tag.
+            An enclosing <code>(*catch "tag" form ...)</code> will
+            return "value" if the tags match; otherwise the exception propagates.
+      </div></dd>
     </div>
-    <script type="module" src="./CloseButton.mjs"></script>
+    <dd id="defn-_star_e_star_"><div>
+      Euler's constant and the base of natural logarithms
+    </div></dd>
+    <dd id="defn-_star_ln10_star_"><div>
+      Natural logarithm of 10
+    </div></dd>
+    <dd id="defn-_star_log10e_star_"><div>
+      Base-10 logarithm of Euler's constant
+    </div></dd>
+    <dd id="defn-_star_log2e_star_"><div>
+      Base-2 logarithm of Euler's constant
+    </div></dd>
+    <dd id="defn-_star_pi_star_"><div>
+      Ratio of the a circle's circumference to its diameter (&pi;)
+    </div></dd>
+    <dd id="defn-_star_sqrt1_2_star_"><div>
+      Square root of 1/2
+    </div></dd>
+    <dd id="defn-_star_sqrt2_star_"><div>
+      Square root of 2
+    </div></dd>
+    <dd id="defn-_star_ln2_star_"><div>
+      Natural logarithm of 2
+    </div></dd>
+    <dd id="defn-abs"><div>
+      Absolute value
+    </div></dd>
+    <dd id="defn-acos"><div>
+      Arccosine
+    </div></dd>
+    <dd id="defn-acosh"><div>
+      Hyperbolic arccosine
+    </div></dd>
+    <dd id="defn-asin"><div>
+      Arcsine
+    </div></dd>
+    <dd id="defn-asinh"><div>
+      Hyperbolic arcsine
+    </div></dd>
+    <dd id="defn-atan"><div>
+      Arctangent
+    </div></dd>
+    <dd id="defn-atanh"><div>
+      hyperbolic arctangent
+    </div></dd>
+    <dd id="defn-atan2"><div>
+      (atan2 y x)
+      <p> Angle in radians from the positive x axis and the ray to the point (x, y).
+          Does not suffer from divide-by-zero issues as <code>tan</code> would.
+    </div></dd>
+    <dd id="defn-sqrt"><div>
+      Square root
+    </div></dd>
+    <dd id="defn-cbrt"><div>
+      Cube root
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+    </div></dd>
+    <dd id="defn-clz32"><div>
+      (clz32 x)
+      <p> Number of leading zeros in the binary representation of the value
+          considered as a 32-bit integer.
+    </div></dd>
+    <dd id="defn-cos"><div>
+      Cosine
+    </div></dd>
+    <dd id="defn-cosh"><div>
+      Hyperbolic cosine
+    </div></dd>
+    <dd id="defn-expm1"><div>
+      (expm1 x)
+      <p> The value <code>(- (exp x) 1)</code>, avoiding numerical anomalies
+    </div></dd>
+    <dd id="defn-exp"><div>
+      (exp x))
+      <p> Euler's number to the power x.
+    </div></dd>
+    <dd id="defn-floor"><div>
+      (floor x)
+      <p> The largest integer less than or equal to x
+    </div></dd>
+    <dd id="defn-ceil"><div>
+      (ceil x)
+      <p>The smallest integer greater than or equal to x
+    </div></dd>
+    <dd id="defn-fround"><div>
+      (fround x)
+      <p> The closest single precision floating point representation of x
+    </div></dd>
+    <dd id="defn-hypot"><div>
+      (hypot value ...)
+      <p> The square root of the sum of the squares of the arguments.
+    </div></dd>
+    <dd id="defn-imul"><div>
+      (imul x y)
+      <p> Result of the multiplication of x and y considered as 32-bit intehers
+    </div></dd>
+    <dd id="defn-log"><div>
+      (log x)
+      <p> The natural logarithm of x.
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-add"><div>
+      (+ value value ...)
+      <p> Adds the values</p>
+    </div></dd>
+    <dd id="defn-sub"><div>
+      (- value ...)
+      <p> Subtracts a series of values from the first value.
+          If there is only one argument, negates the value.
+    </div></dd>
+    <dd id="defn-mul"><div>
+      (* value value ...)
+      <p> Multiplies a series of values.
+    </div></dd>
+    <dd id="defn-div"><div>
+      (/ value ...)
+      <p> Divides a series of values from the first value.
+          If there is only one argument, returns the reciprocal.
+    </div></dd>
+    <dd id="defn-rem"><div>
+      (% value value)
+      <p> Remainder of the first value divided by the second.
+    </div></dd>
+    <dd id="defn-pow"><div>
+      (** value value)
+      <p> Exponentiates the first value by the second.
+    </div></dd>
+    <dd id="defn-and"><div>
+      (&& value value ...)
+      <p> Evaluates its arguments until one of them is false.
+          Results in the first "falsey" value; otherwise the last value.
+          Evaluation ends when a false value is found.
+          "Falsey" values are
+          <code>false</code>, <code>nil</code>, <code>undefined</code> and
+          <code>null</code>; unlike JavaScript,
+          zero, NaN and "" are <i>not</i> falsey.
+    </div></dd>
+    <dd id="defn-or"><div>
+      (|| value value ...)
+      <p> Evaluates its arguments until one of them is true.
+        Results in the first "truthy" value; otherwise the last value.
+        Evaluation ends when a true value is found.
+        "Falsey" values are
+        <code>false</code>, <code>nil</code>, <code>undefined</code> and
+        <code>null</code>; unlike JavaScript,
+        zero, NaN and "" are <i>not</i> falsey.
+        Everything else is "truthy."
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+    <dd id="defn-xxx"><div>
+      xxx
+      <p> xxx
+    </div></dd>
+  </div>
+  <script type="module" src="./CloseButton.mjs"></script>
     <script type="text/javascript">
       "use strict";
 
@@ -387,7 +605,7 @@
       const outputElement = document.getElementById('output');
       const builtinsElement = document.getElementById('builtins');
 
-      let globalScope;
+      let globalScope, SCHEME_VERSION;
 
       onload = importSchemeAndRunREPL()
       async function importSchemeAndRunREPL() {
@@ -395,6 +613,7 @@
         console.log("MODULE", SchemeJS);
         globalScope = SchemeJS.createInstance();
         inputElement.contentEditable = 'true';
+        SCHEME_VERSION = globalScope.VERSION;
         buildBuiltinHelp(globalScope);
       }
 
@@ -443,7 +662,17 @@
         let symtab = [];
         for (let item of symMap.values())
           symtab.push({ key: item.firstSym.description.toLowerCase(), syms: item.syms });
-        symtab.sort((a, b) => a.key < b.key ? -1 : 1);
+        function cmp(a, b) {
+          const beginsAlpha = str =>
+              ("abcdefghighlmnopqrstuvwxyz" +
+               "ABCDEFGHIGKLMNOPQRSTUVWXYZ").includes(str[0]);
+          a = a.key, b = b.key;
+          // force special characters to the end.
+          if (beginsAlpha(a)) a = '\x7f' + a;
+          if (beginsAlpha(b)) b = '\x7f' + b;
+          return a < b ? -1 : 1;
+        }
+        symtab.sort(cmp);
         function textElement(type, text) {
           let element = document.createElement(type);
           element.textContent = text;
@@ -479,7 +708,7 @@
       }
 
       const LOCAL_STORAGE_KEY = `SchemeJS-${location.pathname}`;
-      let appVersion = "0.0";  // filled in later
+      const appVersion = "1.1";
       let persistedState = {};
 
       function saveState() {
