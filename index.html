@@ -248,6 +248,8 @@
 
       #output > div.result {
         position: relative;  /* so that the span can be positioned absolutely */
+      }
+      #output > div.result > div {
         max-height: 10em;
         overflow: scroll;
         margin-top: 0.1em;
@@ -263,6 +265,8 @@
 
       #output > div.input {
         position: relative;  /* so that the span can be positioned absolutely */
+      }
+      #output > div.input > div {
         max-height: 10em;
         overflow: scroll;
         margin-top: 0.1em;
@@ -510,6 +514,7 @@
       let varNo = 0, errorElement;
 
       function enterKey(event) {
+        event.preventDefault();
         let inputText = inputElement.textContent;
         inputText = inputText.split('\u00a0'). join(' ');  // NBSP to space
 

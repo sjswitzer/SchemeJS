@@ -946,7 +946,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("in-place-reverse", in_place_reverse);
+  defineGlobalSymbol("neverse", in_place_reverse);  // Name from SIOD
   function in_place_reverse(list) {
     let res = NIL;
     while (is_cons(list)) {
@@ -1911,7 +1911,7 @@ export function createInstance(schemeOpts = {}) {
       if (is_cons(obj)) return obj;  // Careful; Cons is iterable itself
       let list = NIL, last;
       if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
-      for (let value of list) {
+      for (let value of obj) {
         if (depth > 1 && is_iterable(value))
           value = to_list.call(this, value, depth-1);
         if (last) last = last[CDR] = cons(value, NIL);
