@@ -645,6 +645,10 @@
         (boolean? obj)
         <p> Returns <code>true</code> if <i>obj</i> is a boolean.
       </div></dd>
+      <dd id="defn-function?"><div>
+        (boolean? obj)
+        <p> Returns <code>true</code> if <i>obj</i> is a JavaScript function.
+      </div></dd>
       <dd id="defn-butlast"><div>
         (butlast list)
         <p> A copy of <i>list</i> excepting the last element.
@@ -715,10 +719,13 @@
       </div></dd>
       <dd id="defn-closureP"><div>
         (closure? obj)
-        <p> True if <i>obj</i> is a closure.
+        <p> True if <i>obj</i> is a Scheme closure.
       </div></dd>
       <dd id="defn-CompileError"><div>
         <p> Thrown when the compiler finds an error.
+      </div></dd>
+      <dd id="defn-CompileError"><div>
+        <p> Thrown when the there is an error evaluating Scheme functions.
       </div></dd>
       <dd id="defn-cond"><div>
         (cond cond-clause ...)
@@ -894,8 +901,14 @@
         <p> Deletes property or array element <i>b</i> from JavaScript object <i>a</i>.
       </div></dd>
       <dd id="defn-eval"><div>
-        (eval )
-        <p> xxx
+        (eval form [scope])
+        <p> Evaluates <i>form</i> in the given <i>scope</i>.
+            Default is the scope of the caller.
+      </div></dd>
+      <dd id="defn-eval-string"><div>
+        (eval "str" [scope])
+        <p> Parses the evaluates <i>"str"</i> in the given <i>scope</i>.
+            Default is the scope of the caller.
       </div></dd>
       <dd id="defn-xxx"><div>
         xxx
