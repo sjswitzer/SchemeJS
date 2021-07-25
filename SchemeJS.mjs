@@ -66,21 +66,23 @@ export function createInstance(schemeOpts = {}) {
     toString() {
       return string(this, { maxDepth: 4 });
     }
-    [Symbol.iterator]() {
-      let current = this;
-      return {
-        next() {
-          if (!is_cons(current)) return { done: true };
-          let value = current[CAR];
-          current = current[CDR];
-          return { done: false, value };
-        },
-        [Symbol.iterator]() { return this }  // so that the iterator itself is iterable
-      }
-    }
+    [Symbol.iterator] = pairIterator;
     // static [PAIR] = true;  // Hmm; Shouldn't this work?
   }
   Cons.prototype[PAIR] = true;
+
+  function pairIterator() {
+  let current = this;
+  return {
+    next() {
+      if (!is_cons(current)) return { done: true };
+      let value = current[CAR];
+      current = current[CDR];
+      return { done: false, value };
+    },
+    [Symbol.iterator]() { return this }  // so that the iterator itself is iterable
+  }
+}
   
   // Hide the NIL class because there's never any reason to
   // reference it or to instantiate it it more than once. Leaving it visible
@@ -1934,6 +1936,10 @@ export function createInstance(schemeOpts = {}) {
       this._mapper = mapper;
     }
     toString() { return string(this) }
+    // TODO: make the mapping lazy; when [CAR] is first accessed.
+    // TODO: investigate whether the object can mutate to a normal CONS
+    // cell via setPrototype(). Usually not a good idea, byt it might
+    // be in this case.
     get [CDR]() {
       let iterator = this[LAZY], cdr = NIL;
       if (!iterator)
@@ -1953,18 +1959,7 @@ export function createInstance(schemeOpts = {}) {
       this._iterator = undefined;
       this._cdrVal = val;
     }
-    [Symbol.iterator]() {
-      let current = this;
-      return {
-        next() {
-          if (!is_cons(current)) return { done: true };
-          let value = current[CAR];
-          current = current[CDR];
-          return { done: false, value };
-        },
-        [Symbol.iterator]() { return this }  // so that the iterator itself is iterable
-      }
-    }
+    [Symbol.iterator] = pairIterator();
   }
   IteratorList.prototype[PAIR] = true;
 
