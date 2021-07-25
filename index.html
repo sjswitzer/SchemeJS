@@ -32,7 +32,6 @@
         margin: 0em 0em;
         background-color: #f8f8f8;
         text-size-adjust: none;   /* keep mobile browsers from getting sneaky with sizing */
-        /* Without fixed or absolute placement, the user variables won't scroll */
         position: fixed;
         top: 0;
         bottom: 0;
@@ -230,10 +229,9 @@
 
       #output {
         /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
-        flex: 1 1 auto;
+        flex: 1 1 10em;
         overflow: scroll;
         justify-content: flex-end;
-        min-height: 10em;
         margin-top: 0.1em;
         padding: .15em .15em .15em .15em;
         width: 100%;
@@ -246,48 +244,32 @@
         margin: 0;
       }
 
-      #output > div.result {
+      #output > div {
         position: relative;  /* so that the span can be positioned absolutely */
       }
+      #output > div > div {
+        overflow: scroll;
+        max-height: 10em;
+        margin-top: 0.1em;
+        padding: .5em .5em .5em .5em;
+        min-height: 2em;
+        border: .1em solid;
+        border-radius: .4em;
+        margin-top: 0.25em;
+        padding: .5em .5em .5em .5em;
+      }
+
       #output > div.result > div {
-        max-height: 10em;
-        overflow: scroll;
-        margin-top: 0.1em;
-        margin-left: 1em;
-        padding: .5em .5em .5em .5em;
-        min-height: 2em;
         background-color: #ddd;
-        border: .1em solid;
-        border-radius: .4em;
-        margin-top: 0.25em;
-        padding: .5em .5em .5em .5em;
+        margin-left: 1em;
       }
 
-      #output > div.input {
-        position: relative;  /* so that the span can be positioned absolutely */
-      }
       #output > div.input > div {
-        max-height: 10em;
-        overflow: scroll;
-        margin-top: 0.1em;
-        padding: .5em .5em .5em .5em;
-        min-height: 2em;
         background-color: #eee;
-        border: .1em solid;
-        border-radius: .4em;
-        margin-top: 0.25em;
-        padding: .5em .5em .5em .5em;
       }
 
-      #output > div.error {
-        margin-top: 0.1em;
-        padding: .5em .5em .5em .5em;
-        min-height: 2em;
+      #output > div.error > div {
         background-color: #fbb;
-        border: .1em solid;
-        border-radius: .4em;
-        margin-top: 0.25em;
-        padding: .5em .5em .5em .5em;
       }
 
       #output > div > span:first-child {
@@ -557,7 +539,9 @@
         } catch (error) {
           errorElement = document.createElement('div');
           errorElement.setAttribute('class', 'error');
-          errorElement.textContent = String(error)
+          let div = document.createElement('div');
+          div.textContent = String(error)
+          errorElement.appendChild(div);
           outputElement.appendChild(errorElement)
           errorElement.scrollIntoView();
         }
@@ -573,7 +557,6 @@
         return res;
       }
 
-      // onchange event isn't suitable because if the value doesn't change, nothing is reported
       inputElement.addEventListener('keydown', function(event) {
         if (event.key === 'Enter')
           enterKey(event);

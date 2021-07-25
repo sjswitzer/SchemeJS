@@ -146,7 +146,6 @@ EXPECT(` (* 1 2 3 4) `, 24);
 EXPECT(` (* 300n 200n) `, 60000n);
 EXPECT(` (/) `, NaN);
 EXPECT(` (/ 5) `, 1/5);
-EXPECT(` (/5) `, 1/5);  // tokenizer won't combine prefix of symbols with a number
 EXPECT(` (/ 0) `, Infinity);
 EXPECT(` (/ -1 0) `, -Infinity);
 EXPECT(' (/ 3 7) ', 3/7);
