@@ -119,8 +119,10 @@
       dl.definitions dd {
         float: right;
         margin-inline-start: unset;
-        --definition-margin: 15ch;
-        width: calc(100% - var(--definition-margin));
+        width: 75%;
+      }
+      dl .heading {
+        font-weight: bold;
       }
       div.help ul {
         padding-left: 1.25em;
@@ -303,7 +305,7 @@
         <div style="width: 1em;"></div>
         <div id="title"> SchemeJS: Scheme in JavaScript </div>
         <div id="about">
-          <span class="button" onclick="showHelp('help-about')""> ? </span>
+          <span class="button" onclick="showHelp('help-about')"> ? </span>
         </div>
       </div>
       <div id="output">
@@ -319,11 +321,16 @@
             a small army of crack programmers optimizing its performance.
             It’s an ideal runtime for Lisp.
             All it lacks is cons cells, an s-expression parser and printer,
-            eval/apply, a handful of Lisp primitives, and a Lisp compiler.
+            eval/apply, and a handful of Lisp primitives.
+        <p> Oh, and a compier that compiles Scheme down to perfectly normal
+            JavaScript functions that the JIT can work its magic on.
         <p> SchemeJS fills that small gap.
         <p> It’s hard to keep JavaScript objects from sneaking into the
             Scheme world, so I decided to invite them in as first-class.
             SchemeJS is fully Lisp <i>and</i> fully JavaScript.
+        <p> Learn about
+            <span class="button" onclick="showHelp('help-builtin')"">built-in Scheme definitions</span> and
+            <span class="button" onclick="showHelp('help-details')"">implementation details</span>.
       </div>
     </div>
     <div class="help" id="help-details">
@@ -348,9 +355,9 @@
       <div>
         <h2> Built-In Functions and Constants </h2>
         <table class="stuff example">
-          <dl class="definition-heading">
-            <dt> Symbol
-            <dd> Description
+          <dl class="definitions">
+            <dt class="heading"> Symbol
+            <dd class="heading"> Description
           <div id="builtins">
             <!-- definitions inserted here at onload event -->
           </div>
@@ -363,6 +370,7 @@
 
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
+      const builtinsElement = document.getElementById('builtins');
 
       let globalScope;
 
@@ -372,6 +380,7 @@
         console.log("MODULE", SchemeJS);
         globalScope = SchemeJS.createInstance();
         inputElement.contentEditable = 'true';
+        buildBuiltinHelp(globalScope);
       }
 
       function escapeHTML(str) {
@@ -411,6 +420,36 @@
                 element.scrollIntoView(true);
             }
           }
+        }
+      }
+
+      function buildBuiltinHelp(globalScope) {
+        let symMap = new Map;
+        for (let sym of Object.getOwnPropertySymbols(globalScope)) {
+          let val = globalScope[sym]
+          let item = symMap.get(val);
+          if (!item)
+            symMap.set(val, { firstSym: sym, syms: [ sym ] });
+          else
+            item.syms.push(sym);
+        }
+        let symtab = [];
+        for (let item of symMap.values())
+          symtab.push({ key: item.firstSym.description.toLowerCase(), syms: item.syms });
+        symtab.sort((a, b) => a.key < b.key ? -1 : 1);
+        for (let { syms } of symtab) {
+          for (let sym of syms) {
+            let dt = document.createElement('dt');
+            dt.textContent = sym.description;
+            builtinsElement.appendChild(dt);
+          }
+          let name = syms[0].description;
+          let dd = document.getElementById(`dd-$name`);
+          if (!dd) {
+            dd = document.createElement('dd');
+            dd.textContent = "TBD";
+          }
+          builtinsElement.appendChild(dd);
         }
       }
 
