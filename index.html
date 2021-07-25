@@ -230,8 +230,6 @@
 
       #output {
         /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
-        display: flex;
-        flex-flow: column nowrap;
         flex: 1 1 auto;
         overflow: scroll;
         justify-content: flex-end;
@@ -250,11 +248,13 @@
 
       #output > div.result {
         position: relative;  /* so that the span can be positioned absolutely */
+        max-height: 10em;
+        overflow: scroll;
         margin-top: 0.1em;
         margin-left: 1em;
         padding: .5em .5em .5em .5em;
         min-height: 2em;
-        background-color: #eee;
+        background-color: #ddd;
         border: .1em solid;
         border-radius: .4em;
         margin-top: 0.25em;
@@ -263,10 +263,12 @@
 
       #output > div.input {
         position: relative;  /* so that the span can be positioned absolutely */
+        max-height: 10em;
+        overflow: scroll;
         margin-top: 0.1em;
         padding: .5em .5em .5em .5em;
         min-height: 2em;
-        background-color: #ddd;
+        background-color: #eee;
         border: .1em solid;
         border-radius: .4em;
         margin-top: 0.25em;
@@ -535,6 +537,7 @@
             innerDiv.appendChild(pgf);
           div.appendChild(innerDiv);
           outputElement.appendChild(div);
+          div.scrollIntoView();
 
           ++varNo;
           inputElement.textContent = "";
@@ -543,6 +546,7 @@
           errorElement.setAttribute('class', 'error');
           errorElement.textContent = String(error)
           outputElement.appendChild(errorElement)
+          errorElement.scrollIntoView();
         }
       }
 
