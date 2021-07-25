@@ -250,7 +250,8 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("VERSION", VERSION);
   defineGlobalSymbol("is-atom", is_atom, "atom?");
-  defineGlobalSymbol("Atom", Atom);
+  defineGlobalSymbol("intern", Atom);
+  exportAPI("Atom", Atom);
 
   class SchemeJSError extends Error {};
   SchemeJSError.prototype.name = "SchemeJSError";

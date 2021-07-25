@@ -367,15 +367,14 @@
       <close-button onclick="showHelp(null)"></close-button>
       <div>
         <h2> Built-In Functions and Constants </h2>
-        <table class="stuff example">
           <dl id="builtins" class="definitions">
             <dt class="heading"> Symbol
             <dd class="heading"> Description
             <!-- definitions inserted here when SchemeJS module is loaded -->
-        </dl>
+         </dl>
       </div>
     </div>
-    <div style="display: none">
+    <div style="display: none !important">
       <dd id="defn-_star_catch"><div>
         (*catch "tag" form ...)
         <p> SIOD-style catch.
@@ -390,256 +389,340 @@
             An enclosing <code>(*catch "tag" form ...)</code> will
             return "value" if the tags match; otherwise the exception propagates.
       </div></dd>
-    </div>
-    <dd id="defn-_star_e_star_"><div>
-      Euler's constant and the base of natural logarithms
-    </div></dd>
-    <dd id="defn-_star_ln10_star_"><div>
-      Natural logarithm of 10
-    </div></dd>
-    <dd id="defn-_star_log10e_star_"><div>
-      Base-10 logarithm of Euler's constant
-    </div></dd>
-    <dd id="defn-_star_log2e_star_"><div>
-      Base-2 logarithm of Euler's constant
-    </div></dd>
-    <dd id="defn-_star_pi_star_"><div>
-      Ratio of the a circle's circumference to its diameter (&pi;)
-    </div></dd>
-    <dd id="defn-_star_sqrt1_2_star_"><div>
-      Square root of 1/2
-    </div></dd>
-    <dd id="defn-_star_sqrt2_star_"><div>
-      Square root of 2
-    </div></dd>
-    <dd id="defn-_star_ln2_star_"><div>
-      Natural logarithm of 2
-    </div></dd>
-    <dd id="defn-abs"><div>
-      (abs x)
-      <p> Absolute value of x.
-    </div></dd>
-    <dd id="defn-acos"><div>
-      (acos x)
-      <p> Arccosine of x in radians.
-    </div></dd>
-    <dd id="defn-acosh"><div>
-      (acosh x)
-      <p> Hyperbolic arccosine of x in radians.
-    </div></dd>
-    <dd id="defn-asin"><div>
-      (asin x)
-      <p> Arcsine of x in radians.
-    </div></dd>
-    <dd id="defn-asinh"><div>
-      (asinh x)
-      <p> Hyperbolic arcsine of x in radians.
-    </div></dd>
-    <dd id="defn-atan"><div>
-      (atan x)
-      <p> Arctangent of x in radians.
-    </div></dd>
-    <dd id="defn-atanh"><div>
-      (atanh x)
-      <p> Hyperbolic arctangent of x in radians.
-    </div></dd>
-    <dd id="defn-atan2"><div>
-      (atan2 y x)
-      <p> Angle in radians from the positive x axis and the ray to the point (x, y).
-          Does not suffer from divide-by-zero issues as <code>tan</code> would.
-    </div></dd>
-    <dd id="defn-sqrt"><div>
-      (sqrt x)
-      <p> Square root of x.
-    </div></dd>
-    <dd id="defn-cbrt"><div>
-      (cbrt x)
-      <p> Cube root of x.
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-    </div></dd>
-    <dd id="defn-clz32"><div>
-      (clz32 x)
-      <p> Number of leading zeros in the binary representation of x
-          considered as a 32-bit integer.
-    </div></dd>
-    <dd id="defn-cos"><div>
-      (cos x)
-      <p> Cosine of x in radians.
-    </div></dd>
-    <dd id="defn-cosh"><div>
-      (cosh x)
-      <p> Hyperbolic cosine of x in radians.
-    </div></dd>
-    <dd id="defn-expm1"><div>
-      (expm1 x)
-      <p> The value <code>(- (exp x) 1)</code>, avoiding numerical anomalies.
-    </div></dd>
-    <dd id="defn-exp"><div>
-      (exp x)
-      <p> Euler's number to the power x.
-    </div></dd>
-    <dd id="defn-floor"><div>
-      (floor x)
-      <p> The largest integer less than or equal to x.
-    </div></dd>
-    <dd id="defn-ceil"><div>
-      (ceil x)
-      <p>The smallest integer greater than or equal to x.
-    </div></dd>
-    <dd id="defn-fround"><div>
-      (fround x)
-      <p> The closest single precision floating point representation of x.
-    </div></dd>
-    <dd id="defn-hypot"><div>
-      (hypot value ...)
-      <p> The square root of the sum of the squares of the arguments.
-    </div></dd>
-    <dd id="defn-imul"><div>
-      (imul x y)
-      <p> Result of the multiplication of x and y considered as 32-bit integers.
-    </div></dd>
-    <dd id="defn-log"><div>
-      (log x)
-      <p> The natural logarithm of x.
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
-    </div></dd>
-    <dd id="defn-add"><div>
-      (+ value value ...)
-      <p> Adds the values.
-    </div></dd>
-    <dd id="defn-sub"><div>
-      (- value ...)
-      <p> Subtracts a series of values from the first value.
-          If there is only one argument, negates the value.
-    </div></dd>
-    <dd id="defn-mul"><div>
-      (* value value ...)
-      <p> Multiplies a series of values.
-    </div></dd>
-    <dd id="defn-div"><div>
-      (/ value ...)
-      <p> Divides a series of values from the first value.
-          If there is only one argument, returns the reciprocal.
-    </div></dd>
-    <dd id="defn-rem"><div>
-      (% value value)
-      <p> Remainder of the first value divided by the second.
-    </div></dd>
-    <dd id="defn-pow"><div>
-      (** value value)
-      <p> Exponentiates the first value by the second.
-    </div></dd>
-    <dd id="defn-and"><div>
-      (&& value value ...)
-      <p> Evaluates its arguments until one of them is false.
-          Results in the first "falsey" value; otherwise the last value.
-          Evaluation ends when a false value is found.
+      <dd id="defn-_star_e_star_"><div>
+        Euler's constant and the base of natural logarithms
+      </div></dd>
+      <dd id="defn-_star_ln10_star_"><div>
+        Natural logarithm of 10
+      </div></dd>
+      <dd id="defn-_star_log10e_star_"><div>
+        Base-10 logarithm of Euler's constant
+      </div></dd>
+      <dd id="defn-_star_log2e_star_"><div>
+        Base-2 logarithm of Euler's constant
+      </div></dd>
+      <dd id="defn-_star_pi_star_"><div>
+        Ratio of the a circle's circumference to its diameter (&pi;)
+      </div></dd>
+      <dd id="defn-_star_sqrt1_2_star_"><div>
+        Square root of 1/2
+      </div></dd>
+      <dd id="defn-_star_sqrt2_star_"><div>
+        Square root of 2
+      </div></dd>
+      <dd id="defn-_star_ln2_star_"><div>
+        Natural logarithm of 2
+      </div></dd>
+      <dd id="defn-abs"><div>
+        (abs x)
+        <p> Absolute value of x.
+      </div></dd>
+      <dd id="defn-acos"><div>
+        (acos x)
+        <p> Arccosine of x in radians.
+      </div></dd>
+      <dd id="defn-acosh"><div>
+        (acosh x)
+        <p> Hyperbolic arccosine of x in radians.
+      </div></dd>
+      <dd id="defn-asin"><div>
+        (asin x)
+        <p> Arcsine of x in radians.
+      </div></dd>
+      <dd id="defn-asinh"><div>
+        (asinh x)
+        <p> Hyperbolic arcsine of x in radians.
+      </div></dd>
+      <dd id="defn-atan"><div>
+        (atan x)
+        <p> Arctangent of x in radians.
+      </div></dd>
+      <dd id="defn-atanh"><div>
+        (atanh x)
+        <p> Hyperbolic arctangent of x in radians.
+      </div></dd>
+      <dd id="defn-atan2"><div>
+        (atan2 y x)
+        <p> Angle in radians from the positive x axis and the ray to the point (x, y).
+            Does not suffer from divide-by-zero issues as <code>tan</code> would.
+      </div></dd>
+      <dd id="defn-sqrt"><div>
+        (sqrt x)
+        <p> Square root of x.
+      </div></dd>
+      <dd id="defn-cbrt"><div>
+        (cbrt x)
+        <p> Cube root of x.
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+      </div></dd>
+      <dd id="defn-clz32"><div>
+        (clz32 x)
+        <p> Number of leading zeros in the binary representation of x
+            considered as a 32-bit integer.
+      </div></dd>
+      <dd id="defn-cos"><div>
+        (cos x)
+        <p> Cosine of x in radians.
+      </div></dd>
+      <dd id="defn-cosh"><div>
+        (cosh x)
+        <p> Hyperbolic cosine of x in radians.
+      </div></dd>
+      <dd id="defn-expm1"><div>
+        (expm1 x)
+        <p> The value <code>(- (exp x) 1)</code>, avoiding numerical anomalies.
+      </div></dd>
+      <dd id="defn-exp"><div>
+        (exp x)
+        <p> Euler's number to the power x.
+      </div></dd>
+      <dd id="defn-floor"><div>
+        (floor x)
+        <p> The largest integer less than or equal to x.
+      </div></dd>
+      <dd id="defn-ceil"><div>
+        (ceil x)
+        <p>The smallest integer greater than or equal to x.
+      </div></dd>
+      <dd id="defn-fround"><div>
+        (fround x)
+        <p> The closest single precision floating point representation of x.
+      </div></dd>
+      <dd id="defn-hypot"><div>
+        (hypot value ...)
+        <p> The square root of the sum of the squares of the arguments.
+      </div></dd>
+      <dd id="defn-imul"><div>
+        (imul x y)
+        <p> Result of the multiplication of x and y considered as 32-bit integers.
+      </div></dd>
+      <dd id="defn-log"><div>
+        (log x)
+        <p> The natural logarithm of x.
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-add"><div>
+        (+ value value ...)
+        <p> Adds the values.
+      </div></dd>
+      <dd id="defn-sub"><div>
+        (- value ...)
+        <p> Subtracts a series of values from the first value.
+            If there is only one argument, negates the value.
+      </div></dd>
+      <dd id="defn-mul"><div>
+        (* value value ...)
+        <p> Multiplies a series of values.
+      </div></dd>
+      <dd id="defn-div"><div>
+        (/ value ...)
+        <p> Divides a series of values from the first value.
+            If there is only one argument, returns the reciprocal.
+      </div></dd>
+      <dd id="defn-rem"><div>
+        (% value value)
+        <p> Remainder of the first value divided by the second.
+      </div></dd>
+      <dd id="defn-pow"><div>
+        (** value value)
+        <p> Exponentiates the first value by the second.
+      </div></dd>
+      <dd id="defn-and"><div>
+        (&& value value ...)
+        <p> Evaluates its arguments until one of them is false.
+            Results in the first "falsey" value; otherwise the last value.
+            Evaluation ends when a false value is found.
+            "Falsey" values are
+            <code>false</code>, <code>nil</code>, <code>undefined</code> and
+            <code>null</code>; unlike JavaScript,
+            zero, NaN and "" are <i>not</i> falsey.
+      </div></dd>
+      <dd id="defn-or"><div>
+        (|| value value ...)
+        <p> Evaluates its arguments until one of them is true.
+          Results in the first "truthy" value; otherwise the last value.
+          Evaluation ends when a true value is found.
           "Falsey" values are
           <code>false</code>, <code>nil</code>, <code>undefined</code> and
           <code>null</code>; unlike JavaScript,
           zero, NaN and "" are <i>not</i> falsey.
-    </div></dd>
-    <dd id="defn-or"><div>
-      (|| value value ...)
-      <p> Evaluates its arguments until one of them is true.
-        Results in the first "truthy" value; otherwise the last value.
-        Evaluation ends when a true value is found.
-        "Falsey" values are
-        <code>false</code>, <code>nil</code>, <code>undefined</code> and
-        <code>null</code>; unlike JavaScript,
-        zero, NaN and "" are <i>not</i> falsey.
-        Everything else is "truthy."
-    </div></dd>
-    <dd id="defn-bit-and"><div>
-      (& value value ...)
-      <p> Bitwise "and" of the values considered as 32-bit integers.
-    </div></dd>
-    <dd id="defn-bit-or"><div>
-      (| value value ...)
-      <p> Bitwise "or" of the values considered as 32-bit integers.
-    </div></dd>
-    <dd id="defn-bit-xor"><div>
-      (^ value value ...)
-      <p> Bitwise exclusive "or" of the values considered as 32-bit integers.
-    </div></dd>
-    <dd id="defn-bit-not"><div>
-      (~ value)
-      <p> Bitwise not of the value considered as a 32-bit integer.
-    </div></dd>
-    <dd id="defn-bit-shl"><div>
-      (&lt;&lt; value shift)
-      <p> Value left-shifted "shift" bits, bith considered as 32-bit integers.
-    </div></dd>
-    <dd id="defn-bit-shr"><div>
-      (&gt;&gt; value shift)
-      <p> Value arithmetcally right-shifted "shift" bits, bith considered as 32-bit integers.
-          The sign bit fills from the left.
-    </div></dd>
-    <dd id="defn-bit-ushr"><div>
-      (&gt;&gt;&gt; value shift)
-      <p> Value logically right-shifted "shift" bits, bith considered as 32-bit integers.
-        Zero bits fill from the left.
-    </div></dd>
-    <dd id="defn-append"><div>
-      (append list ...)
-      <p> Appends the specified lists or iterable JavaScript objects, forming a new list.
-    </div></dd>
-    <dd id="defn-apply"><div>
-      (apply function args [scope])
-      <p> Applies the function to the arguments in the given scope.
-          "scope" is optional; the default is the current scope.
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
-    </div></dd>
-    <dd id="defn-apropos"><div>
-      (apropos ["substring"])
-      <p> A list of globally-defined functions and values.
-          If an optional "substring" parameter is given, it returns only definitions
-          whose name contains that substring.
-    </div></dd>
-    <dd id="defn-aref"><div>
-      (@ index array)
-      <p> Indexes into the JavaScript array by the given index. </p>
-      (@ "prop" obj)
-      <p> The value of the property "prop" in the given object.
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
-    </div></dd>
-    <dd id="defn-xxx"><div>
-      xxx
-      <p> xxx
-    </div></dd>
+          Everything else is "truthy."
+      </div></dd>
+      <dd id="defn-bit-and"><div>
+        (& value value ...)
+        <p> Bitwise "and" of the values considered as 32-bit integers.
+      </div></dd>
+      <dd id="defn-bit-or"><div>
+        (| value value ...)
+        <p> Bitwise "or" of the values considered as 32-bit integers.
+      </div></dd>
+      <dd id="defn-bit-xor"><div>
+        (^ value value ...)
+        <p> Bitwise exclusive "or" of the values considered as 32-bit integers.
+      </div></dd>
+      <dd id="defn-bit-not"><div>
+        (~ value)
+        <p> Bitwise not of the value considered as a 32-bit integer.
+      </div></dd>
+      <dd id="defn-bit-shl"><div>
+        (&lt;&lt; value shift)
+        <p> Value left-shifted "shift" bits, bith considered as 32-bit integers.
+      </div></dd>
+      <dd id="defn-bit-shr"><div>
+        (&gt;&gt; value shift)
+        <p> Value arithmetcally right-shifted "shift" bits, bith considered as 32-bit integers.
+            The sign bit fills from the left.
+      </div></dd>
+      <dd id="defn-bit-ushr"><div>
+        (&gt;&gt;&gt; value shift)
+        <p> Value logically right-shifted "shift" bits, bith considered as 32-bit integers.
+          Zero bits fill from the left.
+      </div></dd>
+      <dd id="defn-append"><div>
+        (append list ...)
+        <p> Appends the specified lists or iterable JavaScript objects, forming a new list.
+      </div></dd>
+      <dd id="defn-apply"><div>
+        (apply function args [scope])
+        <p> Applies the function to the arguments in the given scope.
+            "scope" is optional; the default is the current scope.
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-apropos"><div>
+        (apropos ["substring"])
+        <p> A list of globally-defined functions and values.
+            If an optional "substring" parameter is given, it returns only definitions
+            whose name contains that substring.
+      </div></dd>
+      <dd id="defn-aref"><div>
+        (@ index array)
+        <p> Indexes into the JavaScript array by the given index. </p>
+        (@ "prop" obj)
+        <p> The value of the property "prop" in the given object.
+      </div></dd>
+      <dd id="defn-false"><div>
+        false
+        <p> The canonical "false" value.
+            Only <code>false</code>, <code>nil</code>, <code>undefined</code> and
+            <code>null</code> are considered false; unlike JavaScript,
+            zero, NaN and "" are <i>not</i> considered false.
+            Everything else is "true."
+      </div></dd>
+      <dd id="defn-true"><div>
+        true
+        <p> The canonical "true" value.
+            Only <code>false</code>, <code>nil</code>, <code>undefined</code> and
+            <code>null</code> are considered false; unlike JavaScript,
+            zero, NaN and "" are considered true.
+            Everything else is "true."
+      </div></dd>
+      <dd id="defn-intern"><div>
+        (intern "str")
+        <p> Returns a Scheme atom named "str".
+      </div></dd>
+      <dd id="defn-Float32Array"><div>
+        Float32Array
+        <p> The standard JavaScript class Float32Array.
+      </div></dd>
+      <dd id="defn-Float64Array"><div>
+        Float64Array
+        <p> The standard JavaScript class Float64Array.
+      </div></dd>
+      <dd id="defn-Function"><div>
+        xxx
+        <p> The standard JavaScript class Function.
+      </div></dd>
+      <dd id="defn-Array"><div>
+        Array
+        <p> The standard JavaScript class Array.
+      </div></dd>
+      <dd id="defn-ArrayBuffer"><div>
+        ArrayBuffer
+        <p> The standard JavaScript class ArrayBuffer.
+      </div></dd>
+      <dd id="defn-Atomics"><div>
+        Atomics
+        <p> The standard JavaScript object Atomics.
+      </div></dd>
+      <dd id="defn-Math"><div>
+        max-height
+        <p> The standard JavaScript class Math.
+      </div></dd>
+      <dd id="defn-BigInt"><div>
+        BigInt
+        <p> The standard JavaScript class BigInt.
+      </div></dd>
+      <dd id="defn-BigInt64Array"><div>
+        BigInt64Array
+        <p> The standard JavaScript class BigInt64Array.
+      </div></dd>
+      <dd id="defn-BigUint64Array"><div>
+        BigUint64Array
+        <p> The standard JavaScript class BigUint64Array.
+      </div></dd>
+      <dd id="defn-Boolean"><div>
+        Boolean
+        <p> The standard JavaScript class Boolean.
+      </div></dd>
+      <dd id="defn-DataView"><div>
+        DataView
+        <p> The standard JavaScript class DataView.
+      </div></dd>
+      <dd id="defn-decodeURI"><div>
+        decodeURI
+        <p> The standard JavaScript function decodeURI.
+      </div></dd>
+      <dd id="defn-decodeURIComponent"><div>
+        decodeURIComponent
+        <p> The standard JavaScript function decodeURIComponent.
+      </div></dd>
+      <dd id="defn-encodeURI"><div>
+        encodeURI
+        <p> The standard JavaScript function encodeURI.
+      </div></dd>
+      <dd id="defn-encodeURIComponent"><div>
+        encodeURIComponent
+        <p> The standard JavaScript function encodeURIComponent.
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+      <dd id="defn-xxx"><div>
+        xxx
+        <p> xxx
+      </div></dd>
+    </div>
   </div>
   <script type="module" src="./CloseButton.mjs"></script>
     <script type="text/javascript">
