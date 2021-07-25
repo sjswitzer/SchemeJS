@@ -82,7 +82,7 @@
         position: absolute;
         display: none;
         top: 10%;
-        left: 35%;
+        left: 45%;
         right: .5em;
         bottom: .5em;
         border: .15em solid black;
@@ -127,6 +127,9 @@
       }
       dl .heading {
         font-weight: bold;
+      }
+      dl p {
+        margin: .35em 0 .35em 0;
       }
 
       div.help ul {
@@ -367,6 +370,15 @@
         </dl>
       </div>
     </div>
+    <div style="display: hidden">
+      <dd id="defn-_star_catch"><div>
+        (*catch "tag" form ...)
+        <p> SIOD-style catch.
+            Evaluates the forms until one of them calls
+            <code>(*throw "tag" value)</code>.
+            Returns "value" if the tags match; otherwise the exception propagates.
+      </div></dd>
+    </div>
     <script type="module" src="./CloseButton.mjs"></script>
     <script type="text/javascript">
       "use strict";
@@ -384,15 +396,6 @@
         globalScope = SchemeJS.createInstance();
         inputElement.contentEditable = 'true';
         buildBuiltinHelp(globalScope);
-      }
-
-      function escapeHTML(str) {
-        return str
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#039;");
       }
 
       let helpStack = [];
@@ -451,8 +454,13 @@
           builtinsElement.appendChild(group);
           for (let sym of syms)
             group.appendChild(textElement('dt', sym.description));
-          let name = syms[0].description;
-          let dd = document.getElementById(`dd-$name`);
+          let name = syms[0].description, elementId = "defn-" + name;
+          for (;;) {
+            let prevElementId = elementId;
+            elementId = elementId.replace('*', '_star_').replace('?', 'P');
+            if (elementId === prevElementId) break;
+          }
+          let dd = document.getElementById(elementId);
           if (!dd)
             dd = textElement('dd', "TBD");
           group.appendChild(dd);
