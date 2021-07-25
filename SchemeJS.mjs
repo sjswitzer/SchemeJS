@@ -1742,8 +1742,11 @@ export function createInstance(schemeOpts = {}) {
         }
         params = `(${params})`;
         let printBody = fnDesc.printBody;
-        if (fnDesc.value && !fnDesc.body && !printBody)
+        if (fnDesc.value && !fnDesc.body && !printBody) {
+          if (fnDesc.params.length === 1 && !fnDesc.restParam)
+            params = fnDesc.params[0];
           return put(`{${params} => ${fnDesc.value}}`);
+        }
         if (printBody && (printBody.length > 60 || printBody.includes('\n')))
           printBody = '';
         return put(`{function${name}${params}${printBody}}`);

@@ -662,17 +662,14 @@
         let symtab = [];
         for (let item of symMap.values())
           symtab.push({ key: item.firstSym.description.toLowerCase(), syms: item.syms });
-        function cmp(a, b) {
-          const beginsAlpha = str =>
-              ("abcdefghighlmnopqrstuvwxyz" +
-               "ABCDEFGHIGKLMNOPQRSTUVWXYZ").includes(str[0]);
-          a = a.key, b = b.key;
-          // force special characters to the end.
-          if (beginsAlpha(a)) a = '\x7f' + a;
-          if (beginsAlpha(b)) b = '\x7f' + b;
-          return a < b ? -1 : 1;
+        symtab.sort((a, b) => keyFor(a) < keyFor(b) ? -1 : 1);
+        function keyFor(item) {
+          let key = item.key;
+          if (! ("abcdefghighlmnopqrstuvwxyz" + // shove special chars to the end
+                  "ABCDEFGHIGKLMNOPQRSTUVWXYZ").includes(key[0]))
+            key = '\x7f' + key;
+          return key;
         }
-        symtab.sort(cmp);
         function textElement(type, text) {
           let element = document.createElement(type);
           element.textContent = text;
