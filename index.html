@@ -124,6 +124,11 @@
       dl .heading {
         font-weight: bold;
       }
+      dl div.spacer {
+        margin-top: .5em;
+        clear: both;
+      }
+
       div.help ul {
         padding-left: 1.25em;
       }
@@ -324,7 +329,7 @@
             eval/apply, and a handful of Lisp primitives.
         <p> Oh, and a compier that compiles Scheme down to perfectly normal
             JavaScript functions that the JIT can work its magic on.
-        <p> SchemeJS fills that small gap.
+        <p> SchemeJS fills that gap.
         <p> It’s hard to keep JavaScript objects from sneaking into the
             Scheme world, so I decided to invite them in as first-class.
             SchemeJS is fully Lisp <i>and</i> fully JavaScript.
@@ -355,12 +360,10 @@
       <div>
         <h2> Built-In Functions and Constants </h2>
         <table class="stuff example">
-          <dl class="definitions">
+          <dl id="builtins" class="definitions">
             <dt class="heading"> Symbol
             <dd class="heading"> Description
-          <div id="builtins">
-            <!-- definitions inserted here at onload event -->
-          </div>
+            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
       </div>
     </div>
@@ -424,7 +427,8 @@
       }
 
       function buildBuiltinHelp(globalScope) {
-        let symMap = new Map;
+        const IMPL_SYMBOL = globalScope["IMPL_SYMBOL"], string = globalScope.string;
+        let symMap = new Map; 
         for (let sym of Object.getOwnPropertySymbols(globalScope)) {
           let val = globalScope[sym]
           let item = symMap.get(val);
@@ -437,19 +441,33 @@
         for (let item of symMap.values())
           symtab.push({ key: item.firstSym.description.toLowerCase(), syms: item.syms });
         symtab.sort((a, b) => a.key < b.key ? -1 : 1);
+        function textElement(type, text) {
+          let element = document.createElement(type);
+          element.textContent = text;
+          return element;
+        }
         for (let { syms } of symtab) {
-          for (let sym of syms) {
-            let dt = document.createElement('dt');
-            dt.textContent = sym.description;
-            builtinsElement.appendChild(dt);
-          }
+          let spacer = document.createElement('div');
+          spacer.setAttribute('class', 'spacer');
+          builtinsElement.appendChild(spacer);
+          for (let sym of syms)
+            builtinsElement.appendChild(textElement('dt', sym.description));
           let name = syms[0].description;
           let dd = document.getElementById(`dd-$name`);
-          if (!dd) {
-            dd = document.createElement('dd');
-            dd.textContent = "TBD";
-          }
+          if (!dd)
+            dd = textElement('dd', "TBD");
           builtinsElement.appendChild(dd);
+          let value = globalScope[syms[0]];
+          if (typeof value === 'function') {
+            let impl = value[IMPL_SYMBOL];
+            if (!impl) impl = string(value);
+            if (impl.length < 50)
+              builtinsElement.appendChild(textElement('dd', `Impl: ${impl}`));
+          } else {
+            let valStr = string(value);
+            if (valStr.length < 50)
+              builtinsElement.appendChild(textElement('dd', `Value: ${string(value)}`));
+          }
         }
       }
 

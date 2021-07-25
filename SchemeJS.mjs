@@ -390,13 +390,16 @@ export function createInstance(schemeOpts = {}) {
     defineGlobalSymbol("window", window, { schemeOnly: true });
 
   // Stuff the whole Math class in there!
+  const IMPL_SYMBOL = Symbol('*implementation*');
+  exportAPI("IMPL_SYMBOL", IMPL_SYMBOL);
   for (let [name, {value}] of Object.entries(Object.getOwnPropertyDescriptors(Math))) {
     // SIOD defines *pi* so I'll just define them all like that
     if (typeof value === 'number')
       name = `*${name.toLowerCase()}*`;
     // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
     if (typeof value === 'function')
-      defineGlobalSymbol(name, value, { schemeOnly: true });
+      value[IMPL_SYMBOL] = `(...) => Math.${name}(...)`;
+    defineGlobalSymbol(name, value, { schemeOnly: true });
   }
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
 
@@ -430,30 +433,30 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !bool(a), "not");
-  defineGlobalSymbol("~", a => ~a, "bit-not");
-  defineGlobalSymbol("**", (a,b) => a ** b, "exp");
-  defineGlobalSymbol("%", (a,b) => a % b, "rem");
-  defineGlobalSymbol("<<", (a,b) => a << b, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, "bit-shr");
-  defineGlobalSymbol(">>>", (a,b) => a >>> b, "bit-ushr");
+  defineGlobalSymbol("not", a => !bool(a), "!");
+  defineGlobalSymbol("bit-not", a => ~a, "~");
+  defineGlobalSymbol("exp", (a,b) => a ** b, "**");
+  defineGlobalSymbol("rem", (a,b) => a % b, "%");
+  defineGlobalSymbol("bit-shl", (a,b) => a << b, "<<");
+  defineGlobalSymbol("bit-shr", (a,b) => a >> b, ">>");
+  defineGlobalSymbol("bit-ushr", (a,b) => a >>> b, ">>>");
   const ash = (a, b) => b < 0 ? a >>> -b : a << b;
   defineGlobalSymbol("ash", ash);  // SIOD
   defineGlobalSymbol("in", (a,b) => a in b);
   defineGlobalSymbol("new", (cls, ...args) => new cls(...args));
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b);
-  defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access (SIOD: aref)
-  defineGlobalSymbol("@?", (a, b) => a?.[b]);  // conditional indexing and member access
-  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params));
-  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), "@!?");
-  defineGlobalSymbol("@=", (a, b, c) => a[b] = c);
+  defineGlobalSymbol("aref", (a, b) => a[b], "@");  // indexing and member access (SIOD: aref)
+  defineGlobalSymbol("aref?", (a, b) => a?.[b], "@?");  // conditional indexing and member access
+  defineGlobalSymbol("js-call", (a, b, ...params) => a[b](...params), "@!");
+  defineGlobalSymbol("js-call?", (a, b, ...params) => a?.[b](...params), "@!?", "@?!");
+  defineGlobalSymbol("js-assign", (a, b, c) => a[b] = c, "@=");
   defineGlobalSymbol("delete", (a, b) => delete a[b]);
   defineGlobalSymbol("void", _ => undefined);
 
   //
   // Variable args definitions
   //
-  defineGlobalSymbol("+", add, { compileHook: add_hook }, "add");
+  defineGlobalSymbol( "add", add, { compileHook: add_hook }, "+");
   function add(a, b, ...rest) {
     a += b;
     for (b of rest)
@@ -468,7 +471,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("-", sub, { compileHook: sub_hook}, "sub");
+  defineGlobalSymbol("sub", sub, { compileHook: sub_hook}, "-");
   function sub(a, ...rest) {
     if (rest.length === 0) return -a;
     for (let b of rest)
@@ -485,7 +488,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("*", mul, { compileHook: mul_hook}, "mul");
+  defineGlobalSymbol("mul", mul, { compileHook: mul_hook}, "*");
   function mul(a, b, ...rest) {
     a *= b;
     for (let b of rest)
@@ -500,7 +503,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol('/', div, { compileHook: div_hook }, "div");
+  defineGlobalSymbol("div", div, { compileHook: div_hook }, '/');
   function div(a, ...rest) {
     if (rest.length === 0) return 1/a;
     for (let b of rest)
@@ -517,7 +520,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("&", bit_and, { compileHook: bit_and_hook }, "bit-and");
+  defineGlobalSymbol("bit-and", bit_and, { compileHook: bit_and_hook }, "&");
   function bit_and(a, b, ...rest) {
     a &= b;
     for (b of rest)
@@ -532,7 +535,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("|", bit_or, { compileHook: bit_or_hook }, "bit-or");
+  defineGlobalSymbol("bit-or", bit_or, { compileHook: bit_or_hook }, "|");
   function bit_or(a, b, ...rest) {
     a |= b;
     for (let b of rest)
@@ -547,7 +550,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("^", bit_xor, { compileHook: bit_xor_hook}, "bit-xor");
+  defineGlobalSymbol("bit-xor", bit_xor, { compileHook: bit_xor_hook}, "^");
   function bit_xor(a, b, ...rest) {
     a ^= b;
     for (let b of rest)
@@ -562,7 +565,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("<", lt, { evalArgs: 2, compileHook: lt_hook }, "lt");
+  defineGlobalSymbol("lt", lt, { evalArgs: 2, compileHook: lt_hook }, "<");
   function lt(a, b, forms) {
     if (forms === undefined) return a < b;
     if (!(a < b)) return false;
@@ -602,7 +605,7 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("<=", le, { evalArgs: 2, compileHook: le_hook }, "le");
+  defineGlobalSymbol("le", le, { evalArgs: 2, compileHook: le_hook }, "<=");
   function le(a, b, forms) {
     if (forms === undefined) return a <= b;
     if (!(a <= b)) return false;
@@ -619,7 +622,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, compileScope, tools, '<=', 'le');
   }
 
-  defineGlobalSymbol(">", gt, { evalArgs: 2, compileHook: gt_hook }, "gt");
+  defineGlobalSymbol("gt", gt, { evalArgs: 2, compileHook: gt_hook }, ">");
   function gt(a, b, forms) {
     if (forms === undefined) return a > b;
     if (!(a > b)) return false;
@@ -636,7 +639,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, compileScope, tools, '>', 'gt');
   }
 
-  defineGlobalSymbol(">=", ge, { evalArgs: 2, compileHook: ge_hook }, "ge");
+  defineGlobalSymbol("ge", ge, { evalArgs: 2, compileHook: ge_hook }, ">=");
   function ge(a, b, forms) {
     if (forms === undefined) return a >= b;
     if (!(a >= b)) return false;
@@ -653,7 +656,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, compileScope, tools, '>=', 'ge');
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook });
+  defineGlobalSymbol("eqv", eq, { evalArgs: 2, compileHook: eq_hook }, "=="); // XXX name
   function eq(a, b, forms) {
     if (forms === undefined) return a == b;
     if (!(a == b)) return false;
@@ -676,7 +679,7 @@ export function createInstance(schemeOpts = {}) {
   const equalp = (a, b) =>  deep_eq(a, b);
   defineGlobalSymbol("equal?", equalp, "equal?");
 
-  defineGlobalSymbol("!=", ne, { evalArgs: 2, compileHook: ne_hook }, "ne");
+  defineGlobalSymbol("ne", ne, { evalArgs: 2, compileHook: ne_hook }, "!=");
   function ne(a, b, forms) {
     return !eq.call(this, a, b, forms);
   }
@@ -706,7 +709,7 @@ export function createInstance(schemeOpts = {}) {
 
   // Logical & Conditional
 
-  defineGlobalSymbol("&&", and, { evalArgs: 1 }, "and");
+  defineGlobalSymbol("and", and, { evalArgs: 1 }, "&&");
   function and(val, forms) {
     while (bool(val) && is_cons(forms)) {
       val = _eval(forms[CAR], this);
@@ -715,7 +718,7 @@ export function createInstance(schemeOpts = {}) {
     return val;
   }
 
-  defineGlobalSymbol("||", or, { evalArgs: 1 }, "or");
+  defineGlobalSymbol("or", or, { evalArgs: 1 }, "||");
   function or(val, forms) {
     while (!bool(val) && is_cons(forms)) {
       val = _eval(forms[CAR], this);
@@ -724,7 +727,7 @@ export function createInstance(schemeOpts = {}) {
     return val;
   }
 
-  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
+  defineGlobalSymbol("if", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "?");
   function ifelse(p, t, f, _) { return bool(p) ? _eval(t, this): _eval(f, this) }
   function ifelse_hook(args, compileScope, tools) {
     let p = args[0], t = args[1], f = args[2];
@@ -1741,7 +1744,7 @@ export function createInstance(schemeOpts = {}) {
         let printBody = fnDesc.printBody;
         if (fnDesc.value && !fnDesc.body && !printBody)
           return put(`{${params} => ${fnDesc.value}}`);
-        if (printBody.length > 60 || printBody.includes('\n'))
+        if (printBody && (printBody.length > 60 || printBody.includes('\n')))
           printBody = '';
         return put(`{function${name}${params}${printBody}}`);
       }
