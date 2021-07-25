@@ -424,12 +424,10 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("globalScope", globalScope);
 
   defineGlobalSymbol("apply", apply);
-  function apply(fn, args, ...rest) {
-    let scope = this;
-    if (rest.length > 0)
-      scope = rest[0];
-    if (!(scope instanceof Scope)) scope = this;
-    return _apply(fn, args, scope);
+  function apply(fn, args, ...scope) {
+    let useScope = scope[0];
+    if (!(useScope != null && useScope instanceof Scope)) useScope = this;
+    return _apply(fn, args, useScope);
   }
 
   // Pokemon gotta catch 'em' all!
