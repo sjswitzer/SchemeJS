@@ -946,7 +946,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("neverse", in_place_reverse);  // Name from SIOD
+  defineGlobalSymbol("nreverse", in_place_reverse);  // Name from SIOD
   function in_place_reverse(list) {
     let res = NIL;
     while (is_cons(list)) {
@@ -954,6 +954,18 @@ export function createInstance(schemeOpts = {}) {
       list[CDR] = res;
       res = list;
       list = next;
+    }
+    return res;
+  }
+
+  defineGlobalSymbol("copy-list", copy_list);
+  function copy_list(list) {
+    let res = NIL, last;
+    while (is_cons(list)) {
+      let item = cons(list[CAR], NIL);
+      if (last) last = last[CDR] = item;
+      else res = last = item;
+      list = list[CDR];
     }
     return res;
   }
@@ -1124,16 +1136,8 @@ export function createInstance(schemeOpts = {}) {
     if (Array.isArray(list))
       return in_place_mergesort(list.slice(0), ...rest);
     // Lists and other iterables are sorted as lists
-    if (is_cons(list)) {
-      let copied = NIL, last;
-      while (is_cons(list)) {
-        let item = cons(list[CAR], NIL);
-        if (last) last = last[CDR] = item;
-        else copied = last = item;
-        list = list[CDR];
-      }
-      return in_place_mergesort(copied, ...rest);
-    }
+    if (is_cons(list))
+      return in_place_mergesort(copy_list(list), ...rest);
     let copied = NIL, last;
     if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
     for (let item of list) {
