@@ -521,7 +521,7 @@ function EXPECT(test, expected) {
     if (typeof test === 'function')
       result = test.call(testScope);
     else if (typeof test === 'string')
-      result = testScope.evalString(test);
+      result = testScope.eval_string(test);
     else
       testFailed("test is neither function nor string", test, undefined, expected, report);
     try {
@@ -529,7 +529,7 @@ function EXPECT(test, expected) {
         ok = expected.call(testScope, result);
       } else {
         if (typeof expected === 'string')
-          expected = testScope.evalString(expected);
+          expected = testScope.eval_string(expected);
         ok = deep_eq(result, expected, 100, report);
       }
     } catch (error) {
@@ -561,13 +561,13 @@ function EXPECT_ERROR(test, expected) {
       if (typeof test === 'function') {
         result = test.call(testScope);
       } else if (typeof test === 'string') {
-        result = testScope.evalString(test);
+        result = testScope.eval_string(test);
       }
       testFailed("expected exception", test, result, expected, report);
     } catch (error) {
       try {
         if (typeof expected === 'string')
-          expected = testScope.evalString(expected);
+          expected = testScope.eval_string(expected);
         if (error === expected || error instanceof expected) {
           ok = true;
         } else if (typeof expected === 'function') {

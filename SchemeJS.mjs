@@ -415,8 +415,8 @@ export function createInstance(schemeOpts = {}) {
     return _eval(expr, scope);
   }
 
-  defineGlobalSymbol("eval-string", evalString, "evalString");
-  function evalString(str, scope) {
+  defineGlobalSymbol("eval-string", eval_string,);
+  function eval_string(str, scope) {
     let expr = parseSExpr(str);
     return eval_.call(this, expr, scope);
   }
