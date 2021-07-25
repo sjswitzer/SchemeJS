@@ -386,12 +386,12 @@
         (error type forms)
         <p> Java/JavaScript-style catch.
         <p> Evaluates the forms until one of them calls <code>(throw obj)</code>.
-            If the <code>type</code> matches the thrown object,
+            If the <i>type</i> matches the thrown object,
             the <i>catch-clasuse</i> forms are evaluated with the thrown object bound
-            to "<code>error</code>".
-            If <code>type</code> is an object, the catch matches if the object is an instance
-            of that object; it <code>type</code> is a string, the catch matches if the JavaScript
-            "typeof" the thrown object is that string.
+            to "<i>error</i>".
+            If <i>type</i> is an object, the catch matches if the object is an instance
+            of that object; it <i>type</i> is a string, the catch matches if it is the JavaScript
+            "typeof" the thrown object.
         <p> For example:
         <p class="example">
             (catch (e "string" (+ "thrown: " e))<br>
@@ -461,7 +461,7 @@
       <dd id="defn-atan2"><div>
         (atan2 y x)
         <p> Angle in radians from the positive x axis and the ray to the point (x, y).
-            Does not suffer from divide-by-zero issues as <code>tan</code> would.
+            Does not suffer from divide-by-zero issues as <i>tan</i> would.
       </div></dd>
       <dd id="defn-sqrt"><div>
         (sqrt x)
@@ -620,8 +620,8 @@
       </div></dd>
       <dd id="defn-ash"><div>
         (ash value shift)
-        <p> Shifts left if <code>shift</code> is positive.
-            Shifts arithmetcally right if <code>shift</code> is negative;
+        <p> Shifts left if <i>shift</i> is positive.
+            Shifts arithmetcally right if <i>shift</i> is negative;
             sign bits fill from the left.
       </div></dd>
       <dd id="defn-append"><div>
@@ -639,15 +639,15 @@
       </div></dd>
       <dd id="defn-bigintP"><div>
         (bigint? obj)
-        <p> Returns <code>true</code> if <code>obj</code> is a JavaScript BigInt.
+        <p> Returns <code>true</code> if <i>obj</i> is a JavaScript BigInt.
       </div></dd>
       <dd id="defn-booleanP"><div>
         (boolean? obj)
-        <p> Returns <code>true</code> if <code>obj</code> is a boolean.
+        <p> Returns <code>true</code> if <i>obj</i> is a boolean.
       </div></dd>
       <dd id="defn-butlast"><div>
         (butlast list)
-        <p> A copy of <code>list</code> excepting the last element.
+        <p> A copy of <i>list</i> excepting the last element.
       </div></dd>
       <dd id="defn-caaar"><div>
         (caaar list)
@@ -675,11 +675,11 @@
       </div></dd>
       <dd id="defn-car"><div>
         (car list)
-        <p> First element of <code>list</code>.
+        <p> First element of <i>list</i>.
       </div></dd>
       <dd id="defn-cdr"><div>
         (cdr list)
-        <p> Second and subsequent elements of <code>list</code>.
+        <p> Second and subsequent elements of <i>list</i>.
       </div></dd>
       <dd id="defn-cdaar"><div>
         (cdaar list)
@@ -689,9 +689,21 @@
         (cdddr list)
         <p> Shorthand for: <code>(cdr (cdr (cdr list)))</code>.
       </div></dd>
-      <dd id="defn-cxxxr"><div>
-        (xxx list)
-        <p> Shorthand for: <code>(xxx)</code>.
+      <dd id="defn-cdadr"><div>
+        (cdadr list)
+        <p> Shorthand for: <code>(cdr (car (cdr list)))</code>.
+      </div></dd>
+      <dd id="defn-cdar"><div>
+        (cdar list)
+        <p> Shorthand for: <code>(cdr (car list))</code>.
+      </div></dd>
+      <dd id="defn-cddar"><div>
+        (cddar list)
+        <p> Shorthand for: <code>(cdr (cdr (car list)))</code>.
+      </div></dd>
+      <dd id="defn-cdddr"><div>
+        (cdddr list)
+        <p> Shorthand for: <code>(cdr (cdr (cdr list)))</code>.
       </div></dd>
       <dd id="defn-cddr"><div>
         (cddr list)
@@ -699,15 +711,24 @@
       </div></dd>
       <dd id="defn-closureP"><div>
         (closure? obj)
-        <p> True if <code>obj</code> is a closure.
+        <p> True if <i>obj</i> is a closure.
       </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
+      <dd id="defn-CompileError"><div>
+        <p> Thrown when the compiler finds an error.
       </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
+      <dd id="defn-cond"><div>
+        (cond cond-clause ...)
+        <p> where <i>cond-clause</i> is:</p>
+        (predicate form ...)
+        <p> Evaluates each predicate sequentially until one is true then
+            evaluates the forms in that clause, returning the value
+            of the last form.
+        <p class="example">
+          (cond <br>
+          &nbsp;&nbsp; ((< 6 4) "a") <br>
+          &nbsp;&nbsp; ((< 4 4) "b") <br>
+          &nbsp;&nbsp; ((< 3 4) "c") <br>
+          &nbsp;&nbsp; ((< 2 4) "d"))
       </div></dd>
       <dd id="defn-xxx"><div>
         xxx
