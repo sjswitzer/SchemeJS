@@ -33,7 +33,7 @@ export function createInstance(schemeOpts = {}) {
   let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   let reportSystemError = schemeOpts.reportError ?? _reportError;
   let reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
-  let explicitClosure = schemeOpts.explicitClosure ?? true;
+  let explicitClosure = schemeOpts.explicitClosure ?? false;
   let lambdaStr = schemeOpts.lambdaStr ?? "\\";
   let slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
 
@@ -205,19 +205,7 @@ export function createInstance(schemeOpts = {}) {
       opts = aliases.shift();
     if (typeof value === 'function') {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
-      let fnInfo = analyzeJSFunction(value);
-      let paramCount = fnInfo.params.length;
-      // If this function doesn't evaluate all of its parameters, the last parameter
-      // recieves the unevaluated forms, so don't count that as a normal one.
-      if (evalCount !== MAX_INTEGER)
-        paramCount -= 1;
-      if (paramCount >= 0xff) throw new LogicError("Too many params");
-      if (fnInfo.native) paramCount = 0;
-      // Encoding chosen so that small values mean eval everything and lift that many.
-      let functionDescriptor = (~evalCount << 8) | paramCount&0xff;
-      value[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
-      // XXX TODO: make sure that every defn with evalCount !== MAX_INTEGER has a compile hook.
-      if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
+      createFunctionDescriptor(value, evalCount);
     }
     let atom;
     ({ atom, name } = normalize(name));
@@ -246,6 +234,27 @@ export function createInstance(schemeOpts = {}) {
       name = name.replace("?", "P");
       return { atom, name };
     }
+  }
+
+  function createFunctionDescriptor(fn, evalCount = MAX_INTEGER) {
+    let fnInfo = analyzeJSFunction(fn);
+    let paramCount = fnInfo.params.length;
+    let restParam = 0;
+    if (fnInfo.restParam) {
+      if (evalCount !== MAX_INTEGER)
+        throw new LogicError(`Can't have rest params with special evaluation ${name}`)
+        restParam = 0x8000;
+    }
+    // If this function doesn't evaluate all of its parameters, the last parameter
+    // recieves the unevaluated forms, so don't count that as a normal one.
+    if (evalCount !== MAX_INTEGER)
+      paramCount -= 1;
+    if (paramCount >= 0x7fff) throw new LogicError("Too many params");
+    if (fnInfo.native) paramCount = MAX_INTEGER;
+    // Encoding chosen so that small values mean eval everything and lift that many.
+    let functionDescriptor = (~evalCount << 16) | (paramCount & 0x7fff) | restParam;
+    fn[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
+    return functionDescriptor;
   }
 
   exportAPI("PAIR_SYMBOL", PAIR);
@@ -1406,8 +1415,10 @@ export function createInstance(schemeOpts = {}) {
     let scope = this;
     let jsClosure = args => _apply(cons(LAMBDA_ATOM, body), args, scope);
     jsClosure[CLOSURE_ATOM] = schemeClosure;
-    let evalCount = MAX_INTEGER, paramCount = 1;
-    let functionDescriptor = (~evalCount << 8) | paramCount&0xff;
+    if (!is_cons(body)) throw TypeError(`Bad special closure ${string(body)}`);
+    let params = body[CAR], nParams = length(params);
+    let evalCount = params, paramCount = 0;
+    let functionDescriptor = (~evalCount << 16) | (paramCount & 0x7fff);
     jsClosure[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
     return jsClosure;
   }
@@ -1421,10 +1432,10 @@ export function createInstance(schemeOpts = {}) {
     let scope = this;
     let jsClosure = args => _apply(cons(SLAMBDA_ATOM, body), args, scope);
     jsClosure[SCLOSURE_ATOM] = schemeClosure;
-    if (is_cons(body) || typeof body[CAR] === 'number')
+    if (!is_cons(body) || typeof body[CAR] !== 'number')
       throw TypeError(`Bad special closure ${string(body)}`);
-    let evalCount = body[CAR], paramCount = 1;
-    let functionDescriptor = (~evalCount << 8) | paramCount&0xff;
+    let evalCount = body[CAR], paramCount = 0;
+    let functionDescriptor = (~evalCount << 16) | (paramCount & 0x7fff);
     jsClosure[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
     return jsClosure;
   }
@@ -1617,7 +1628,7 @@ export function createInstance(schemeOpts = {}) {
     // function descriptor and I want the logic for that all in one place. Here, in fact.
     // By default apply doesn't evaluate its args, but if evaluateArguments is set
     // (as it is by eval) it does.
-    let paramCount = 0, evalCount = MAX_INTEGER;
+    let paramCount = 0, evalCount = MAX_INTEGER, restParam = false;
     if (is_cons(form)) {
       let opSym = form[CAR];
       if (opSym === SLAMBDA_ATOM) {
@@ -1628,13 +1639,17 @@ export function createInstance(schemeOpts = {}) {
       }
     } else if (typeof form === 'function') {
       let fn = form;
-      // The function descriptor is encoded as: (~evalCount << 8) | paramCount&0xff;
+      // The function descriptor is encoded as:
+      //   (~evalCount << 16) | (paramCount &0x7fff) | (restParam ? 0x8000 : 0);
       // If there's no function descriptor the default is to eval every argument
       // which, by no accident, is zero.
-      let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
+      let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL];
+      if (functionDescriptor == null)
+        functionDescriptor = createFunctionDescriptor(form);
       // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-      evalCount = ~functionDescriptor >> 7 >>> 1;
-      paramCount = functionDescriptor & 0xff;;
+      evalCount = ~functionDescriptor >> 15 >>> 1;
+      paramCount = functionDescriptor << 17 >> 16 >>> 1;
+      restParam = (functionDescriptor & 0x8000) !== 0;
     }
     if (evaluateArguments) {
       let evalledArgs = NIL, last = undefined;
@@ -1649,7 +1664,7 @@ export function createInstance(schemeOpts = {}) {
         args = evalledArgs;
       }
     }
-    let lift = evalCount > paramCount ? evalCount : paramCount;
+    let lift = restParam ? MAX_INTEGER : paramCount;
     if (typeof form === 'function') {
       let jsArgs = [];
       for (let i = 0; i < lift; ++i) {
@@ -1657,7 +1672,7 @@ export function createInstance(schemeOpts = {}) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
         } else { 
-          if (i < paramCount) {
+          if (i < paramCount && paramCount !== MAX_INTEGER) {
             if (i < 1) {
               // We can't partially apply without any arguments, but the function wants
               // parameters anyway so we supply undefined. This will allow the
@@ -1681,7 +1696,7 @@ export function createInstance(schemeOpts = {}) {
           break;
         }
       }
-      if (evalCount !== MAX_INTEGER)
+      if (evalCount !== MAX_INTEGER) // last parameter gets the remaining arguments as a list
         jsArgs.push(args);
       return form.apply(scope, jsArgs);
     }
@@ -2704,7 +2719,7 @@ export function createInstance(schemeOpts = {}) {
   }
   
   function compileApply(form, args, compileScope, tools) {
-    let paramCount = 0, evalCount = MAX_INTEGER;
+    let paramCount = 0, evalCount = MAX_INTEGER, hasRestParam = false;
     let name, params, restParam, value, body, hook;
     let saveIndent = tools.indent
     let boundVal = tools.boundVal(form);
@@ -2714,11 +2729,12 @@ export function createInstance(schemeOpts = {}) {
       ({ name, params, restParam, value, body } = analyzeJSFunction(form));
       if (restParam)  // rest-param functions need a hook
         value = body = undefined;
-      let functionDescriptor = form[FUNCTION_DESCRIPTOR_SYMBOL] ?? 0;
-      evalCount = ~functionDescriptor >> 7 >>> 1;
-      paramCount = params.length;
-      if (evalCount !== MAX_INTEGER)
-        paramCount -= 1;
+      let functionDescriptor = form[FUNCTION_DESCRIPTOR_SYMBOL];
+      if (functionDescriptor == null)
+        functionDescriptor = createFunctionDescriptor(form);
+      evalCount = ~functionDescriptor >> 15 >>> 1;
+      paramCount = functionDescriptor << 17 >> 16 >>> 1;
+      hasRestParam = (functionDescriptor & 0x8000) !== 0;
       if (name === '') name = undefined;
     } else if (is_cons(form)) {
       let opSym = form[CAR];
@@ -2736,17 +2752,14 @@ export function createInstance(schemeOpts = {}) {
       }
       paramCount = params.length;
     }
-    // Materialize the arguments in an array
-    let lift = evalCount > paramCount ? evalCount : paramCount;
     let result = tools.newTemp(name);
     let argv = [];
+    // Materialize ALL the arguments into an array
     for (let i = 0; is_cons(args); ++i) {
-      if (i < evalCount) {
-        let evalResult = compileEval(args[CAR], compileScope, tools);
-        argv.push(evalResult);
-      } else {
-        argv.push(args[CAR]);
-      }
+      let arg = args[CAR];
+      if (i < evalCount)
+        arg = compileEval(args[CAR], compileScope, tools);
+      argv.push(arg);
       args = args[CDR];
     }
     if (hook) {
@@ -2766,7 +2779,7 @@ export function createInstance(schemeOpts = {}) {
     } else {
       tools.emit(`let ${result}; {`);
       tools.indent = saveIndent + "  ";
-      let i = 0;
+      let i = 0, lift = hasRestParam ? MAX_INTEGER : paramCount;
       while (i < lift) {
         if (i < argv.length) {
           tools.emit(`let ${params[i]} = ${argv[i]};`);
@@ -2787,14 +2800,16 @@ export function createInstance(schemeOpts = {}) {
         tools.emit(`let ${params[i]} = NIL;`);
         for (let j = args.length; j > i; --j)
           tools.emit(`${params[i]} = cons(${argv[j]}, ${params[i]};`);
-      } else if (typeof form === 'function') {
+      }
+      if (typeof form === 'function') {
         if (body)
           tools.emit(body); 
         tools.emit(`${result} = (${value});`);
         tools.indent = saveIndent;
         tools.emit(`}`);
         return result;
-      } else if (is_cons(form)) {
+      }
+      if (is_cons(form)) {
         let opSym = form[CAR];
         let body = form[CDR];
         if (!is_cons(body)) throw new EvalError(`Bad form ${string(form)}`);
