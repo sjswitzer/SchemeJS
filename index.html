@@ -98,10 +98,10 @@
         position: absolute;
         top: .3em;
         right: .3em;
-        transition: .5s;
+        transition: .25s;
       }
       div.help > close-button:hover {
-        font-size: 170%;
+        font-size: 160%;
         color: black;
       }
       div.help > div {
@@ -109,9 +109,6 @@
         height: 100%;
       }
 
-      .help dl {
-        margin: .25em 0 .25em 0;
-      }
       .help dl,
       .help dl dt,
       .help dl dd {
@@ -119,10 +116,13 @@
         /* "overflow:auto" creates a block formatting context while "dislpay:block" does not! */
         overflow: auto;
       }
+      .help dl {
+        margin: .25em 0 .25em 0;
+      }
       .help dl dt {
         float: left;
         clear: right;
-        margin-inline-end: 1.5ch;
+        margin-inline-end: 1ch;
       }
       .help dl dd {
         float: right;
@@ -138,7 +138,7 @@
         font-weight: bold;
       }
       .help dd p {
-        margin: .25em 0 .25em 0;
+        margin: .5em 0 .5em 0;
       }
 
       .help dl p.impl,
@@ -155,6 +155,10 @@
       }
       .help #builtins dd p {
         font-style: normal;
+      }
+
+      #help-details dl dd {
+        --definition-margin: 5ch
       }
 
       .help ul {
@@ -396,6 +400,15 @@
                 the next object until someone invokes <i>cdr</i>.
             <p> Lazy "map" is the same, but in addition the mapping function is not applied
                 until someone invoke invokes <i>car</i> on the mapped list (<i>somewhat TBD</i>).
+          <dt>  Compiler
+          <dd>  A compiler that transforms Scheme into perfectly normal JavaScript that the
+                JIT can go to town on.
+          <dd>  Tail-call optimization <i>(coming soon!)</i>.
+          <dt>  Easly Embedded
+          <dt>  SchemeJS is a JavaScript module designed to be easily embedded into
+                other applications.
+                It comes with a node-js based CLI/REPL and this Web-based REPL,
+                they are just simple embeddings of the SchemeJS runtime.
         </dl>
         <p> A-B-C. A-Always. B-Be. C-Coding.
         <p> Copyright &copy; 2021, Stan Switzer
