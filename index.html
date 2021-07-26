@@ -108,15 +108,15 @@
         overflow-y: auto;
         height: 100%;
       }
-      dl.definitions, dl.definitions dt, dl.definitions dd {
+      .help dl, .help dl dt, .help dl dd {
         display: block;
       }
-      dl.definitions dt {
+      .help dl dt {
         float: left;
         clear: right;
         margin-inline-end: 1.5ch;
       }
-      dl.definitions dd {
+      .help dl dd {
         float: right;
         margin-inline-start: unset;
         font-style: italic;
@@ -309,7 +309,7 @@
         <div style="width: 1em;"></div>
         <div id="title"> SchemeJS: Scheme in JavaScript </div>
         <div id="about">
-          <span class="button" onclick="showHelp('help-about')"> ? </span>
+          <span class="button" style="font-size: 120%;" onclick="showHelp('help-about')"> ? </span>
         </div>
       </div>
       <div id="output">
@@ -340,17 +340,57 @@
     <div class="help" id="help-details">
       <close-button onclick="showHelp(null)"></close-button>
       <div>
-        <h2> Something </h2>
+        <h2> Implementation Details </h2>
         <p>
-        <p> A-B-C. A-Always. B-Be. C-Coding.
-        <p> Copyright &copy; 2021, Stan Switzer
-        <div style="width: 100%">
-          This work is licensed under a
-          <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
-            Creative Commons Attribution-ShareAlike 4.0 International License</a>.
-          <br> Find source on
-          <a href="https://github.com/sjswitzer/SchemeJS">GitHub</a>
-          <p></p>
+        <h3> Key Features </h3>
+        <dl>
+          <dt> JavaScript Integration
+          <dd> Scheme and JavaScript have full and fluent access to each other's objects.
+          <dd> Notations for JavaScript Object and Array literals.
+          <dd> Core Scheme primitives are implemented directly on fundamental
+               JavaScript primitives such as function closures and prototype resolution.
+          <dd> Scheme lists are iterable in JavaScript and JavaScript iterables can be
+               viewed as Scheme lists.
+          <dd> Scheme can invoke any JavaScript function natively and Scheme functions
+               can be exported to JavaScript either through compilation or materializing
+               a closure (TBD).
+          <dt> Partial Function Application
+          <dd> Functions, whether user-defined, compiled, or implemented in JavaScript, when
+               invoked with fewer than their defined number of evaluated parameters result
+               in a <i>closure</i> that binds the given arguments.
+               For instance, <code>(+ 5)</code> results in a function (closure) that adds
+               5 to its argument(s).
+          <dt> Macros
+          <dd> Users can define "special forms" which take a specified number of evaluated parameters.
+          <dt> "Rest" Parameters
+          <dd> 
+            <p> A function defined as <code>(define (fn p1 p2 . p3)</code> takes two
+                normal parameters (<i>p1</i> and <i>p2</i>) and recieves a third parameter <i>p3</i>,
+                that recieves a list of the remaining arguments.
+            <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 . p3) form ...)</code> has a
+                "rest parameter" <i>p3</i>.
+          <dt> Curry Notation
+          <dd> If you like Curry notation, go ahead and use it!
+               <code>(&lambda x.(+ x 2))</code>. The evaluator and printer
+               both understand it.
+          <dt> Lazy Lists and Map Functions
+          <dd> 
+            <p> JavaScript iterators can be turned into lazy cons cells that don't fetch
+                the next object until someone invokes <i>cdr</i>.
+            <p> Lazy "map" is the same, plus that the mapping function is not applied
+                until someone invoke invokes <i>car</i> on the mapped list.
+        </dl>
+        <div style="clear: both">
+          <p> A-B-C. A-Always. B-Be. C-Coding.
+          <p> Copyright &copy; 2021, Stan Switzer
+          <div style="width: 100%">
+            This work is licensed under a
+            <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+              Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+            <br> Find source on
+            <a href="https://github.com/sjswitzer/SchemeJS">GitHub</a>
+            <p></p>
+          </div>
         </div>
       </div>
     </div>
@@ -606,16 +646,16 @@
       </div></dd>
       <dd id="defn-bit-shl"><div>
         (&lt;&lt; value shift)
-        <p> Value left-shifted "shift" bits, bith considered as 32-bit integers.
+        <p> <i>Value</i> left-shifted "shift" bits, bith considered as 32-bit integers.
       </div></dd>
       <dd id="defn-bit-shr"><div>
         (&gt;&gt; value shift)
-        <p> Value arithmetcally right-shifted "shift" bits, bith considered as 32-bit integers.
+        <p> <i>Value</i> arithmetcally right-shifted "shift" bits, bith considered as 32-bit integers.
             The sign bit fills from the left.
       </div></dd>
       <dd id="defn-bit-ushr"><div>
         (&gt;&gt;&gt; value shift)
-        <p> Value logically right-shifted "shift" bits, bith considered as 32-bit integers.
+        <p> <i>Value</i> logically right-shifted "shift" bits, bith considered as 32-bit integers.
           Zero bits fill from the left.
       </div></dd>
       <dd id="defn-ash"><div>
@@ -743,7 +783,8 @@
       </div></dd>
       <dd id="defn-copy-list"><div>
         (copy-list list)
-        <p> Returns a new list that is an element-wise shallow copy of <i>list</i>.
+        <p> Returns a new list that is an element-wise shallow copy of <i>list</i>,
+            which can be a Scheme list or JavaScript iterable.
       </div></dd>
       <dd id="defn-xxx"><div>
         xxx
