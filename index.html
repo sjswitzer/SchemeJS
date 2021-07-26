@@ -318,7 +318,7 @@
       }
 
       /* The input box */
-      div#input {
+      #input {
         flex: 0 0 4em;
         margin-top: 0.25em;
         padding: .5em .5em .5em .5em;
@@ -326,6 +326,15 @@
         border: .1em solid;
         border-radius: .4em;
         background-color: #eee;
+      }
+      #input .match-token {
+        background-color: #fb8;
+        border: 1px solid;
+        border-color: #444;
+        padding: 0 1px 0 1px;
+      }
+      #input .error-tokens {
+        background-color: #f88;
       }
     </style>
   </head>
@@ -341,7 +350,7 @@
       </div>
       <div id="output">
       </div>
-      <div id="input">
+      <div id="input" spellcheck="false">
       </div>
     </div>
     <div class="help" id="help-about">
@@ -1000,8 +1009,7 @@
         <p> xxx
       </div></dd>
     </div>
-  </div>
-  <script type="module" src="./CloseButton.mjs"></script>
+    <script type="module" src="./CloseButton.mjs"></script>
     <script type="text/javascript">
       "use strict";
 
@@ -1009,7 +1017,7 @@
       const outputElement = document.getElementById('output');
       const builtinsElement = document.getElementById('builtins');
 
-      let globalScope, SCHEME_VERSION;
+      let globalScope, SCHEME_VERSION, ParseIncomplete;
 
       onload = importSchemeAndRunREPL()
       async function importSchemeAndRunREPL() {
@@ -1018,6 +1026,7 @@
         globalScope = SchemeJS.createInstance({ lambdaStr: "\u03BB", slambdaStr: "\u03BB\u03BB" });
         inputElement.contentEditable = 'true';
         SCHEME_VERSION = globalScope.VERSION;
+        ParseIncomplete = globalScope.ParseIncomplete;
         buildBuiltinHelp(globalScope);
       }
 
@@ -1161,17 +1170,22 @@
           showHelp(null);
       });
 
-      let varNo = 0, errorElement;
+      let varNo = 0, errorElement, highlightElement;
+      const NBSP = '\u00a0';
 
-      function enterKey(event) {
-        event.preventDefault();
-        let inputText = inputElement.textContent;
-        inputText = inputText.split('\u00a0'). join(' ');  // NBSP to space
-
-        try {
-          if (errorElement)
+      function handleInput(event, enterKey) {
+        let inputText = getInputText(), replHints = {};
+        if (errorElement) {
             errorElement.remove();
-          let expr = globalScope.parseSExpr(inputText);
+            errorElement = undefined;
+        }
+        if (highlightElement) {
+          highlightElement.replaceWith(highlightElement.textContent);
+          highlightElement = undefined;
+        }
+        try {
+          let expr = globalScope.parseSExpr(inputText, { replHints });
+          if (!enterKey) return;
           let evaluated = globalScope._eval(expr, globalScope);
           let evaluatedString = globalScope.string(evaluated);
 
@@ -1204,14 +1218,43 @@
 
           ++varNo;
           inputElement.textContent = "";
+          event.preventDefault();
         } catch (error) {
-          errorElement = document.createElement('div');
-          errorElement.setAttribute('class', 'error');
-          let div = document.createElement('div');
-          div.textContent = String(error)
-          errorElement.appendChild(div);
-          outputElement.appendChild(errorElement)
-          errorElement.scrollIntoView();
+          if (error instanceof ParseIncomplete) {
+            let parseContext = replHints.parseContext;
+            if (parseContext.length > 0) {  // It really should be!
+              let matchPos = parseContext[parseContext.length-1].position;
+              for (let child of inputElement.childNodes) {
+                let hostElement = inputElement, textNode = child;
+                if (child instanceof HTMLElement) {
+                  hostElement = child;
+                  textNode = child.firstChild;
+                }
+                let text = textNode.textContent;
+                if (matchPos < text.length) {
+                  console.log("TEXTNODE", textNode);
+                  let toReplace = textNode.splitText(matchPos);
+                  toReplace.splitText(1);
+                  highlightElement = document.createElement('span');
+                  highlightElement.setAttribute('class', 'match-token');
+                  highlightElement.textContent = toReplace.textContent;
+                  hostElement.replaceChild(highlightElement, toReplace);
+                  break;
+                }
+                matchPos -= text.length + 1;  // +1 for newline
+                if (matchPos < 0) break;
+              }
+            }
+          } else {
+            event.preventDefault();
+            errorElement = document.createElement('div');
+            errorElement.setAttribute('class', 'error');
+            let div = document.createElement('div');
+            div.textContent = String(error)
+            errorElement.appendChild(div);
+            outputElement.appendChild(errorElement)
+            errorElement.scrollIntoView();
+          }
         }
       }
 
@@ -1225,9 +1268,21 @@
         return res;
       }
 
+      function getInputText() {
+        let text = '', delim = '';
+        for (let child of inputElement.childNodes) {
+          let childText = child.textContent;
+          childText = childText.split(NBSP).join(' ');
+          text += delim + childText;
+          delim = '\n';
+        }
+        console.log("INPUT", text);
+        return text;
+      }
+
       inputElement.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter')
-          enterKey(event);
+        let enterKey = event.key === 'Enter';
+        if (enterKey) handleInput(event, enterKey);
       });
       inputElement.addEventListener('blur', function(evt) {
         // TODO
