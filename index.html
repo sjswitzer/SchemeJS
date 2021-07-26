@@ -351,8 +351,8 @@
             Scheme world, so I decided to invite them in as first-class.
             SchemeJS is fully Lisp <i>and</i> fully JavaScript.
         <p> Learn about
-            <span class="button" onclick="showHelp('help-builtin')"">built-in Scheme definitions</span> and
-            <span class="button" onclick="showHelp('help-details')"">implementation details</span>.
+            <span class="linklike" onclick="showHelp('help-builtin')"">built-in Scheme definitions</span> and
+            <span class="linklike" onclick="showHelp('help-details')"">implementation details</span>.
       </div>
     </div>
     <div class="help" id="help-details">
@@ -369,10 +369,10 @@
                 JavaScript primitives such as function closures and prototype resolution.
                 These are the things that JavaScript JITs optimize most thouroughly.
           <dd>  Scheme lists are iterable in JavaScript and JavaScript iterables can be
-                viewed as Scheme lists.
+                viewed as Scheme lists, either directly or lazily.
           <dd>  Scheme can invoke any JavaScript function natively and Scheme functions
                 can be exported to JavaScript either through compilation or materializing
-                a closure (TBD).
+                a closure (<i>TBD</i>).
           <dt>  Partial Function Application
           <dd>  Functions, whether user-defined, compiled, or implemented in JavaScript, when
                 invoked with fewer than their defined number of evaluated parameters result
@@ -381,12 +381,12 @@
                 adds 5 to its argument(s).
           <dt>  Macros
           <dd>  Users can define "special forms" which take a specified number of evaluated parameters.
-          <dt>  "Rest" Parameters
-          <dd>  A function defined as <code>(define (fn p1 p2 . p3)</code> takes two
+          <dt>  Rest Parameters
+          <dd>  A function defined as <code>(define (fn p1 p2 . p3) form ...)</code> takes two
                 normal parameters (<i>p1</i> and <i>p2</i>) and recieves a third parameter <i>p3</i>,
                 that recieves a list of the remaining arguments.
             <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 . p3) form ...)</code> has a
-                "rest parameter" <i>p3</i>.
+                rest parameter <i>p3</i>.
           <dt>  Curry Notation
           <dd>  If you like Curry notation, go ahead and use it!
                 <code>(&lambda;x.(+ x 2))</code>. The evaluator and printer
@@ -395,7 +395,7 @@
           <dd>  JavaScript iterators can be turned into lazy cons cells that don't fetch
                 the next object until someone invokes <i>cdr</i>.
             <p> Lazy "map" is the same, but in addition the mapping function is not applied
-                until someone invoke invokes <i>car</i> on the mapped list (somewhat TBD).
+                until someone invoke invokes <i>car</i> on the mapped list (<i>somewhat TBD</i>).
         </dl>
         <p> A-B-C. A-Always. B-Be. C-Coding.
         <p> Copyright &copy; 2021, Stan Switzer
