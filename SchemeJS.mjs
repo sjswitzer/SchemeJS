@@ -2074,7 +2074,7 @@ export function createInstance(schemeOpts = {}) {
         continue;
       }
 
-      if (ch === ';' && peekc() === ';') {  // ;; begins a comment
+      if (ch === ';') {  // ; begins a comment
         yield { type: 'newline', position };
         while (ch && !NL[ch])
           nextc();
@@ -2479,7 +2479,7 @@ export function createInstance(schemeOpts = {}) {
 
     function nextToken() {
       // Super janky tokenizer.
-      // Most of what it returns is garbage, but it returns anything we actually care about.
+      // Most of what it returns is garbage, but it correctly returns anything we actually care about.
       // The assumption is that what JS returns is well-formed, so it takes a lot of liberties.
       if (pos >= str.length) return token = '';
       let ch = str[pos]; // ch is always str[pos]
