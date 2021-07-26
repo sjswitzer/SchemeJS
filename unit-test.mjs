@@ -188,6 +188,15 @@ EXPECT(' (/ 100000 10 10 10) ', 100);
   EXPECT_ERROR(` (factoral 10) `, EvalError);
 }
 
+{
+  let savedScope = beginTestScope();
+  EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
+  EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
+  EXPECT(` (increment-by-3 4) `, 7);
+  EXPECT(` increment-by-3 `, is_closure);
+  endTestScope(savedScope);
+}
+
 EXPECT(` (&) `, 0);
 EXPECT(` (& 76134) `, is_closure);
 EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);

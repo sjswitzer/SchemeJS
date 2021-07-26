@@ -31,7 +31,7 @@
   ((< 2 4) '"g" '"h"))
 
 ;; (define (increment-by n) (\(x) (+ x n)))
-(define (increment-by n) (\x . (+ x n)))  ;; Curry form is allowed; both styles OK
+(define (increment-by n) (\x . (+ x n)))  ;; Curry form is allowed; both styles in
 (define increment-by-3 (increment-by 3))
 (increment-by-3 4)
 increment-by-3

@@ -939,7 +939,7 @@ export function createInstance(schemeOpts = {}) {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
       if (Array.isArray(list) && list.length > 0)
         return list.length;
-      if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
       for (let _ of list)
         n += 1;
     }
@@ -1417,8 +1417,9 @@ export function createInstance(schemeOpts = {}) {
     let jsClosure = args => _apply(cons(LAMBDA_ATOM, body), args, scope);
     jsClosure[CLOSURE_ATOM] = schemeClosure;
     if (!is_cons(body)) throw TypeError(`Bad special closure ${string(body)}`);
-    let params = body[CAR], nParams = length(params);
-    let evalCount = params, paramCount = 0;
+    let params = body[CAR];
+    let nParams = is_cons(params) ? length(params) : 1; // Curry notation
+    let evalCount = nParams, paramCount = 0;
     let functionDescriptor = (~evalCount << 16) | (paramCount & 0x7fff);
     jsClosure[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
     return jsClosure;
