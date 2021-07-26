@@ -2080,7 +2080,7 @@ export function createInstance(schemeOpts = {}) {
   // S-epression parser
   //
   
-  function* schemeTokenGenerator(characterSource) {
+  function* schemeTokenGenerator(characterSource, parseContext) {
     let characterGenerator = iteratorFor(characterSource, LogicError);
     let ch = '', _peek = [], _done = false, position = 0, charCount = 0;
     function nextc() {
@@ -2112,7 +2112,7 @@ export function createInstance(schemeOpts = {}) {
     while (ch) {
       while (WS[ch])
         nextc();
-      position = charCount;
+      position = charCount-1;
 
       if (NL[ch]) {
         yield { type: 'newline', position };
@@ -2128,6 +2128,8 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (ch === '"') {
+        if (parseContext)
+          parseContext.push({ type: 'string', value: '', position })
         let str = '';
         nextc();
         while (ch && ch != '"' && !NL[ch]) {
@@ -2138,6 +2140,12 @@ export function createInstance(schemeOpts = {}) {
           str += ch;
           nextc();
         }
+        if (!ch) {
+          yield { type: 'end', position };
+          return;
+        }
+        if (parseContext)
+          parseContext.pop();
         if (ch === '"') {
           yield { type: 'string', value: str, position };
           nextc();
@@ -2223,11 +2231,11 @@ export function createInstance(schemeOpts = {}) {
     opts = { ...schemeOpts, ...opts };
     let replHints = opts.replHints ?? {};
     let assignSyntax = opts.assignSyntax ?? false;
-    let pending = [];
-    replHints.pending = pending;
+    let parseContext = [];
+    replHints.parseContext = parseContext;
     let tokenGenerator;
     if (typeof tokenSource === 'string')
-      tokenGenerator = schemeTokenGenerator(tokenSource);
+      tokenGenerator = schemeTokenGenerator(tokenSource, parseContext);
     else
       tokenGenerator = iteratorFor(tokenSource, LogicError);
     let _toks = [], _done = false;
@@ -2266,12 +2274,12 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (token().type === '(') {
-        pending.push(token());
+        parseContext.push(token());
         consumeToken();
         return parseListBody();
         function parseListBody() {
           if (token().type === ')') {
-            pending.pop();
+            parseContext.pop();
             consumeToken();
             return NIL;
           } else if (token().type === '.') {
@@ -2292,11 +2300,11 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === '[') {  // JavaScript Array
         let res = [];
-        pending.push(token());
+        parseContext.push(token());
         consumeToken();
         for (;;) {
           if (token().type === ']') {
-            pending.pop();
+            parseContext.pop();
             consumeToken();
             return res;
           }
@@ -2310,11 +2318,11 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === '{') {  // JavaScript Object
         let res = {}, evalCount = 0;
-        pending.push(token());
+        parseContext.push(token());
         consumeToken();
         for (;;) {
           if (token().type === '}') {
-            pending.pop();
+            parseContext.pop();
             consumeToken();
             break;
           }
@@ -2323,10 +2331,10 @@ export function createInstance(schemeOpts = {}) {
                 || token().type === 'number' || token().type === '[') {
             let evaluatedKey = false, sym;
             if (token().type === '[') {
-              pending.push(token());
+              parseContext.push(token());
               consumeToken();
               sym = parseExpr();
-              pending.pop();
+              parseContext.pop();
               if (token().type !== ']') break;
               evaluatedKey = true;
               consumeToken();
@@ -2338,10 +2346,10 @@ export function createInstance(schemeOpts = {}) {
               consumeToken();
             }
             if (token().type === ':') {
-              pending.push(token());
+              parseContext.push(token());
               consumeToken();
               let val = parseExpr();
-              pending.pop();
+              parseContext.pop();
               if (evaluatedKey)
                 res[gensym] = new EvaluateKeyValue(sym, val);
               else
@@ -2360,7 +2368,7 @@ export function createInstance(schemeOpts = {}) {
 
       if (token().type === "'") {
         consumeToken();
-        pending.push(token());
+        parseContext.push(token());
         let quoted = parseExpr();
         return cons(QUOTE_ATOM, cons(quoted, NIL));
       }
