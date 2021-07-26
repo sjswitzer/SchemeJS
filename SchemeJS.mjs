@@ -967,16 +967,29 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("copy-list", copy_list);  // TODO: should take iterables too
+  defineGlobalSymbol("copy-list", copy_list);  // TODO: unit tests!
   function copy_list(list) {
     let res = NIL, last;
-    while (is_cons(list)) {
-      let item = cons(list[CAR], NIL);
-      if (last) last = last[CDR] = item;
-      else res = last = item;
-      list = list[CDR];
+    if (list === NIL) return NIL;
+    if (is_cons(list)) {
+      while (is_cons(list)) {
+        let item = cons(list[CAR], NIL);
+        if (last) last = last[CDR] = item;
+        else res = last = item;
+        list = list[CDR];
+      }
+      return res;
     }
-    return res;
+    if (is_iterable(list)) {
+      for (let item of list) {
+        item = cons(item, NIL);
+        if (last) last = last[CDR] = item;
+        else res = last = item;
+        list = list[CDR];
+      }
+      return res;
+    }
+    throw new TypeError(`Not a list or iterable ${list}`);
   }
 
   // (member key list)
