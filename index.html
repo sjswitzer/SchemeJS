@@ -134,10 +134,6 @@
       .help dl dt {
         padding-top: .5em;
       }
-      .help dl > div { /* grouping */
-        xxxpadding-top: .75em;
-        xxxclear: both;
-      }
       .help dl .heading {
         font-weight: bold;
       }
@@ -366,48 +362,40 @@
         <p>
         <h3> Key Features </h3>
         <dl>
-          <div>
-            <dt> JavaScript Integration
-            <dd> 
-              <p> Scheme and JavaScript have full and fluent access to each other's objects.
-            <dd> 
-              <p> Notations for JavaScript Object and Array literals.
-            <dd> Core Scheme primitives are implemented directly on fundamental
+          <dt>  JavaScript Integration
+          <dd>  Scheme and JavaScript have full and fluent access to each other's objects.
+          <dd>  Notations for JavaScript Object and Array literals.
+          <dd>  Core Scheme primitives are implemented directly on fundamental
                 JavaScript primitives such as function closures and prototype resolution.
-            <dd> Scheme lists are iterable in JavaScript and JavaScript iterables can be
+                These are the things that JavaScript JITs optimize most thouroughly.
+          <dd>  Scheme lists are iterable in JavaScript and JavaScript iterables can be
                 viewed as Scheme lists.
-            <dd> Scheme can invoke any JavaScript function natively and Scheme functions
+          <dd>  Scheme can invoke any JavaScript function natively and Scheme functions
                 can be exported to JavaScript either through compilation or materializing
                 a closure (TBD).
-            <dt> Partial Function Application
-            <dd> Functions, whether user-defined, compiled, or implemented in JavaScript, when
-                 invoked with fewer than their defined number of evaluated parameters result
-                 in a <i>closure</i> that binds the given arguments.
-                 For instance, <code>(+ 5)</code> results in a function (closure) that adds
-                 ßß5 to its argument(s).
-          </div>
-          <div>
-            <dt> Macros
-            <dd> Users can define "special forms" which take a specified number of evaluated parameters.
-          </div>
-          <div>
-            <dt> "Rest" Parameters
-            <dd> 
-              <p> A function defined as <code>(define (fn p1 p2 . p3)</code> takes two
+          <dt>  Partial Function Application
+          <dd>  Functions, whether user-defined, compiled, or implemented in JavaScript, when
+                invoked with fewer than their defined number of evaluated parameters result
+                in a <i>closure</i> that binds the given arguments.
+                For instance, <code>(+ 5)</code> results in a function (closure) that
+                adds 5 to its argument(s).
+          <dt>  Macros
+          <dd>  Users can define "special forms" which take a specified number of evaluated parameters.
+          <dt>  "Rest" Parameters
+          <dd>  A function defined as <code>(define (fn p1 p2 . p3)</code> takes two
                 normal parameters (<i>p1</i> and <i>p2</i>) and recieves a third parameter <i>p3</i>,
                 that recieves a list of the remaining arguments.
             <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 . p3) form ...)</code> has a
                 "rest parameter" <i>p3</i>.
-          <dt> Curry Notation
-          <dd> If you like Curry notation, go ahead and use it!
-               <code>(&lambda x.(+ x 2))</code>. The evaluator and printer
-               both understand it.
-          <dt> Lazy Lists and Map Functions
-          <dd> 
-            <p> JavaScript iterators can be turned into lazy cons cells that don't fetch
+          <dt>  Curry Notation
+          <dd>  If you like Curry notation, go ahead and use it!
+                <code>(&lambda;x.(+ x 2))</code>. The evaluator and printer
+                both understand it.
+          <dt>  Lazy Lists and Map Functions
+          <dd>  JavaScript iterators can be turned into lazy cons cells that don't fetch
                 the next object until someone invokes <i>cdr</i>.
-            <p> Lazy "map" is the same, plus that the mapping function is not applied
-                until someone invoke invokes <i>car</i> on the mapped list.
+            <p> Lazy "map" is the same, but in addition the mapping function is not applied
+                until someone invoke invokes <i>car</i> on the mapped list (somewhat TBD).
         </dl>
         <p> A-B-C. A-Always. B-Be. C-Coding.
         <p> Copyright &copy; 2021, Stan Switzer
