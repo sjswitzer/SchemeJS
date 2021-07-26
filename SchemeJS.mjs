@@ -33,6 +33,7 @@ export function createInstance(schemeOpts = {}) {
   let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   let reportSystemError = schemeOpts.reportError ?? _reportError;
   let reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
+  let explicitClosure = schemeOpts.explicitClosure ?? true;
   let lambdaStr = schemeOpts.lambdaStr ?? "\\";
   let slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
 
@@ -1396,19 +1397,47 @@ export function createInstance(schemeOpts = {}) {
   // Maybe a non-recursive evaluator with explicit stack?
   // Promises and async functions?
 
-  // (\ (params) (body1) (body2) ...)
+  // (\ (params) (form1) (form2) ...)
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0 });
-  function lambda(body) { return cons(CLOSURE_ATOM, cons(this, body)) }
+  function lambda(body) {
+    let schemeClosure = cons(CLOSURE_ATOM, cons(this, body));
+    if (explicitClosure)
+      return schemeClosure;
+    let scope = this;
+    let jsClosure = args => _apply(cons(LAMBDA_ATOM, body), args, scope);
+    jsClosure[CLOSURE_ATOM] = schemeClosure;
+    let evalCount = MAX_INTEGER, paramCount = 1;
+    let functionDescriptor = (~evalCount << 8) | paramCount&0xff;
+    jsClosure[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
+    return jsClosure;
+  }
 
-  // (\\ (params) (body1) (body2) ...)
-  // (\\ param . form) -- Curry notation
+  // (\\ n (params) (body1) (body2) ...)
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
-  function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(0, cons(this, body))) }
+  function special_lambda(body) {
+    let schemeClosure = cons(SCLOSURE_ATOM, cons(this, body));
+    if (explicitClosure)
+      return schemeClosure;
+    let scope = this;
+    let jsClosure = args => _apply(cons(SLAMBDA_ATOM, body), args, scope);
+    jsClosure[SCLOSURE_ATOM] = schemeClosure;
+    if (is_cons(body) || typeof body[CAR] === 'number')
+      throw TypeError(`Bad special closure ${string(body)}`);
+    let evalCount = body[CAR], paramCount = 1;
+    let functionDescriptor = (~evalCount << 8) | paramCount&0xff;
+    jsClosure[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
+    return jsClosure;
+  }
 
   exportAPI("is_closure", is_closure)
-  defineGlobalSymbol("closure?", is_closure);  // XXX TODO: Should work with compiled functions
+  defineGlobalSymbol("closure?", is_closure);
+  // XXX TODO: Should work with compiled functions
   function is_closure(form) {
-    return is_cons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
+    if (is_cons(form))
+      return !!(form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
+    if (typeof form === 'function')
+      return !!(form[CLOSURE_ATOM] || form[SCLOSURE_ATOM]);
+    return false;
   }
 
   //

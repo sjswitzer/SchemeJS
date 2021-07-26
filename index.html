@@ -1015,7 +1015,7 @@
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
         console.log("MODULE", SchemeJS);
-        globalScope = SchemeJS.createInstance();
+        globalScope = SchemeJS.createInstance({ lambdaStr: "\u03BB", slambdaStr: "\u03BB\u03BB" });
         inputElement.contentEditable = 'true';
         SCHEME_VERSION = globalScope.VERSION;
         buildBuiltinHelp(globalScope);
