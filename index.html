@@ -374,9 +374,8 @@
                 These are the things that JavaScript JITs optimize most thouroughly.
           <dd>  Scheme lists are iterable in JavaScript and JavaScript iterables can be
                 viewed as Scheme lists, either directly or lazily.
-          <dd>  Scheme can invoke any JavaScript function natively and Scheme functions
-                can be exported to JavaScript either through compilation or materializing
-                a closure (<i>TBD</i>).
+          <dd>  Scheme can invoke any JavaScript function natively and Scheme closures
+                are JavaScript functions by default, so can be called directly by JavaScript.
           <dt>  Partial Function Application
           <dd>  Functions, whether user-defined, compiled, or implemented in JavaScript, when
                 invoked with fewer than their defined number of evaluated parameters result
@@ -455,7 +454,7 @@
         <p> Java/JavaScript-style catch.
         <p> Evaluates the forms until one of them calls <code>(throw obj)</code>.
             If the <i>type</i> matches the thrown object,
-            the <i>catch-clasuse</i> forms are evaluated with the thrown object bound
+            the <i>catch-clause</i> forms are evaluated with the thrown object bound
             to "<i>error</i>".
             If <i>type</i> is an object, the catch matches if the object is an instance
             of that object; it <i>type</i> is a string, the catch matches if it is the JavaScript
@@ -1050,37 +1049,15 @@
 
       function buildBuiltinHelp(globalScope) {
         const IMPL_SYMBOL = globalScope["IMPL_SYMBOL"], string = globalScope.string;
-        let symMap = new Map; 
-        for (let sym of Object.getOwnPropertySymbols(globalScope)) {
-          let val = globalScope[sym]
-          let item = symMap.get(val);
-          if (!item)
-            symMap.set(val, { firstSym: sym, syms: [ sym ] });
-          else
-            item.syms.push(sym);
-        }
-        let symtab = [];
-        for (let item of symMap.values())
-          symtab.push({ key: item.firstSym.description.toLowerCase(), syms: item.syms });
-        symtab.sort((a, b) => keyFor(a) < keyFor(b) ? -1 : 1);
-        function keyFor(item) {
-          let key = item.key;
-          if (! ("abcdefghighlmnopqrstuvwxyz" + // shove special chars to the end
-                  "ABCDEFGHIGKLMNOPQRSTUVWXYZ").includes(key[0]))
-            key = '\x7f' + key;
-          return key;
-        }
-        function textElement(type, text, cls) {
-          let element = document.createElement(type);
-          element.textContent = text;
-          if (cls)
-            element.setAttribute('class', cls);
-          return element;
-        }
-        for (let { syms } of symtab) {
-          for (let sym of syms)
-            builtinsElement.appendChild(textElement('dt', sym.description));
-          let name = syms[0].description, elementId = "defn-" + name;
+        let symtab = [], helpHelper = globalScope._help_;
+        let syms = Object.getOwnPropertySymbols(helpHelper);
+        for (let sym of syms)
+          symtab.push({ key: keyFor(sym), ...helpHelper[sym] });
+        symtab.sort((a, b) => a.key < b.key ? -1 : 1);
+        for (let { atoms, value } of symtab) {
+          for (let atom of atoms)
+            builtinsElement.appendChild(textElement('dt', atom.description));
+          let name = atoms[0].description, elementId = "defn-" + name;
           for (;;) {
             let prevElementId = elementId;
             elementId = elementId.replace('*', '_star_').replace('?', 'P');
@@ -1090,7 +1067,6 @@
           if (!dd)
             dd = textElement('dd', "TBD");
           builtinsElement.appendChild(dd);
-          let value = globalScope[syms[0]];
           if (typeof value === 'function') {
             let impl = value[IMPL_SYMBOL];
             if (!impl) impl = string(value);
@@ -1101,6 +1077,19 @@
             if (valStr.length < 50)
               dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
           }
+        }
+        function keyFor(atom) {
+          let key = atom.description;
+          key = key.replace('*', '');
+          key = key.toLowerCase();
+          return key;
+        }
+        function textElement(type, text, cls) {
+          let element = document.createElement(type);
+          element.textContent = text;
+          if (cls)
+            element.setAttribute('class', cls);
+          return element;
         }
       }
 

@@ -195,6 +195,7 @@ export function createInstance(schemeOpts = {}) {
   const COMPILE_HOOK = Symbol("*schemeJS-compile-hook*");
   const MAX_INTEGER = 2**31-1;  // Presumably allows JIT to do small-int optimizations
   const analyzedFunctions = new Map();
+  globalScope._help_ = {};  // For clients that want to implement help.
 
   exportAPI("defineGlobalSymbol", defineGlobalSymbol);
   function defineGlobalSymbol(name, value, ...aliases) {
@@ -222,10 +223,13 @@ export function createInstance(schemeOpts = {}) {
     globalScope[atom] = value;
     if (!opts.schemeOnly)
       globalScope[name] = value;
+    let atoms = [ atom ];
+    globalScope._help_[atom] = { atoms, value };
     for (let alias of aliases) {
       ({ atom, name } = normalize(alias));
-        globalScope[atom] = value;
-      if (!opts.schemeOnly)
+      globalScope[atom] = value;
+      atoms.push(atom);
+      if (!opts.schemeOnly) 
         globalScope[name] = value;
     }
     return atom;
@@ -405,9 +409,6 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
 
   defineGlobalSymbol("intern", a => Atom(a));
-  defineGlobalSymbol("Symbol", a => Symbol(a));  // XXX name?
-  defineGlobalSymbol("Number", a => Number(a));
-  defineGlobalSymbol("BigInt", a => BigInt(a));
 
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, ...scope) { // Javascript practically treats "eval" as a keyword
@@ -1868,6 +1869,7 @@ export function createInstance(schemeOpts = {}) {
         }
         {
           // Plain object
+          if (obj === globalThis) return put("{*globalThis*}");
           put("{");
           indent += indentMore;
           sep = "";
