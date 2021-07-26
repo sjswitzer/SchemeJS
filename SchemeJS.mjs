@@ -296,14 +296,11 @@ export function createInstance(schemeOpts = {}) {
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
   // In SchemeJS, NIL, null, undefined, and false are false and everything else is true.
   //
+  // Written this way so that actual bools do not need to be compared to NIL; most of this
+  // is just a tag-bit compare in the runtime.
+  //
+  const bool = a => a === true || (a !== false && a != null && a !== NIL);
   exportAPI("bool", bool);
-  function bool(val) {
-    // Give priority to actual true and false values
-    if (typeof val === 'boolean') return val;
-    if (val === NIL || val == null) // The val == null is _intended_ as a nullish test
-      return false;
-    return true;
-  }
 
   const cons = (car, cdr) => new Cons(car, cdr);
   const car = a => a[CAR];
@@ -328,7 +325,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("NIL", NIL);
   defineGlobalSymbol("nil", NIL);
   defineGlobalSymbol("null", null);
-  defineGlobalSymbol("true", true, "t");
+  defineGlobalSymbol("true", true, "t", "#t"); // SIOD: t, MIT Scheme: #t
   defineGlobalSymbol("false", false);
   defineGlobalSymbol("is-cons", is_cons, "pair?");
   defineGlobalSymbol("cons", cons);
@@ -1311,7 +1308,8 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("deep_eq", deep_eq);
-  function deep_eq(a, b, maxDepth, report) {
+  function deep_eq(a, b, ... rest) {
+    let maxDepth = rest[0], report = rest[1];
     if (!bool(maxDepth)) maxDepth = 10000; // Protection from circular lists
     return deep_eq(a, b, maxDepth);
     function deep_eq(a, b, maxDepth) {
@@ -1408,7 +1406,7 @@ export function createInstance(schemeOpts = {}) {
   function special_lambda(body) { return cons(SCLOSURE_ATOM, cons(0, cons(this, body))) }
 
   exportAPI("is_closure", is_closure)
-  defineGlobalSymbol("closure?", is_closure);  // XXX TODO: works with compiled functions? Should it?
+  defineGlobalSymbol("closure?", is_closure);  // XXX TODO: Should work with compiled functions
   function is_closure(form) {
     return is_cons(form) && (form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
   }
@@ -1934,8 +1932,9 @@ export function createInstance(schemeOpts = {}) {
 
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
   defineGlobalSymbol("to-list", to_list);
-  function to_list(obj, depth) {
-    if (!bool(depth)) depth = 1;
+  function to_list(obj, ...rest) {
+    let depth = rest[0];
+    if (!bool(depth) == null) depth = 1;
     if (depth <= 0) return obj;
     if (obj === NIL || is_cons(obj)) return obj;
     if (typeof obj === 'object') {
