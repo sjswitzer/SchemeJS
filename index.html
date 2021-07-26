@@ -108,8 +108,16 @@
         overflow-y: auto;
         height: 100%;
       }
-      .help dl, .help dl dt, .help dl dd {
+
+      .help dl {
+        margin: .25em 0 .25em 0;
+      }
+      .help dl,
+      .help dl dt,
+      .help dl dd {
         display: block;
+        /* "overflow:auto" creates a block formatting context while "dislpay:block" does not! */
+        overflow: auto;
       }
       .help dl dt {
         float: left;
@@ -119,33 +127,47 @@
       .help dl dd {
         float: right;
         margin-inline-start: unset;
-        font-style: italic;
-        width: 80%;
+        --definition-margin: 10ch;
+        width: calc(100% - var(--definition-margin));
       }
-      dl.definitions dd .example {
-        font-style: italic;
+      .help dl dd,
+      .help dl dt {
+        padding-top: .5em;
       }
-      dl.definitions > div {
-        padding-top: .75em;
-        clear: both;
+      .help dl > div { /* grouping */
+        xxxpadding-top: .75em;
+        xxxclear: both;
       }
-      dl .heading {
+      .help dl .heading {
         font-weight: bold;
       }
-      dl p {
+      .help dd p {
         margin: .25em 0 .25em 0;
-        font-style: normal;
       }
-      dl p.impl, dl p.value {
+
+      .help dl p.impl,
+      .help dl p.value {
         color: #555;
       }
 
-      div.help ul {
+      .help .example {
+        font-style: italic;
+      }
+
+      .help #builtins dd {
+        font-style: italic;
+      }
+      .help #builtins dd p {
+        font-style: normal;
+      }
+
+      .help ul {
         padding-left: 1.25em;
       }
-      div.help ul > li {
+      .help ul > li {
         margin: .5em;
       }
+
       code {
         font-style: italic;
         font-family: caption, sans-serif;
@@ -344,27 +366,34 @@
         <p>
         <h3> Key Features </h3>
         <dl>
-          <dt> JavaScript Integration
-          <dd> Scheme and JavaScript have full and fluent access to each other's objects.
-          <dd> Notations for JavaScript Object and Array literals.
-          <dd> Core Scheme primitives are implemented directly on fundamental
-               JavaScript primitives such as function closures and prototype resolution.
-          <dd> Scheme lists are iterable in JavaScript and JavaScript iterables can be
-               viewed as Scheme lists.
-          <dd> Scheme can invoke any JavaScript function natively and Scheme functions
-               can be exported to JavaScript either through compilation or materializing
-               a closure (TBD).
-          <dt> Partial Function Application
-          <dd> Functions, whether user-defined, compiled, or implemented in JavaScript, when
-               invoked with fewer than their defined number of evaluated parameters result
-               in a <i>closure</i> that binds the given arguments.
-               For instance, <code>(+ 5)</code> results in a function (closure) that adds
-               5 to its argument(s).
-          <dt> Macros
-          <dd> Users can define "special forms" which take a specified number of evaluated parameters.
-          <dt> "Rest" Parameters
-          <dd> 
-            <p> A function defined as <code>(define (fn p1 p2 . p3)</code> takes two
+          <div>
+            <dt> JavaScript Integration
+            <dd> 
+              <p> Scheme and JavaScript have full and fluent access to each other's objects.
+            <dd> 
+              <p> Notations for JavaScript Object and Array literals.
+            <dd> Core Scheme primitives are implemented directly on fundamental
+                JavaScript primitives such as function closures and prototype resolution.
+            <dd> Scheme lists are iterable in JavaScript and JavaScript iterables can be
+                viewed as Scheme lists.
+            <dd> Scheme can invoke any JavaScript function natively and Scheme functions
+                can be exported to JavaScript either through compilation or materializing
+                a closure (TBD).
+            <dt> Partial Function Application
+            <dd> Functions, whether user-defined, compiled, or implemented in JavaScript, when
+                 invoked with fewer than their defined number of evaluated parameters result
+                 in a <i>closure</i> that binds the given arguments.
+                 For instance, <code>(+ 5)</code> results in a function (closure) that adds
+                 ßß5 to its argument(s).
+          </div>
+          <div>
+            <dt> Macros
+            <dd> Users can define "special forms" which take a specified number of evaluated parameters.
+          </div>
+          <div>
+            <dt> "Rest" Parameters
+            <dd> 
+              <p> A function defined as <code>(define (fn p1 p2 . p3)</code> takes two
                 normal parameters (<i>p1</i> and <i>p2</i>) and recieves a third parameter <i>p3</i>,
                 that recieves a list of the remaining arguments.
             <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 . p3) form ...)</code> has a
@@ -380,17 +409,15 @@
             <p> Lazy "map" is the same, plus that the mapping function is not applied
                 until someone invoke invokes <i>car</i> on the mapped list.
         </dl>
-        <div style="clear: both">
-          <p> A-B-C. A-Always. B-Be. C-Coding.
-          <p> Copyright &copy; 2021, Stan Switzer
-          <div style="width: 100%">
-            This work is licensed under a
-            <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
-              Creative Commons Attribution-ShareAlike 4.0 International License</a>.
-            <br> Find source on
-            <a href="https://github.com/sjswitzer/SchemeJS">GitHub</a>
-            <p></p>
-          </div>
+        <p> A-B-C. A-Always. B-Be. C-Coding.
+        <p> Copyright &copy; 2021, Stan Switzer
+        <div style="width: 100%">
+          This work is licensed under a
+          <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+            Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+          <br> Find source on
+          <a href="https://github.com/sjswitzer/SchemeJS">GitHub</a>
+          <p></p>
         </div>
       </div>
     </div>
@@ -398,7 +425,7 @@
       <close-button onclick="showHelp(null)"></close-button>
       <div>
         <h2> Built-In Functions and Constants </h2>
-          <dl id="builtins" class="definitions">
+          <dl id="builtins">
             <dt class="heading"> Symbol
             <dd class="heading"> Description
             <!-- definitions inserted here when SchemeJS module is loaded -->
@@ -1050,10 +1077,8 @@
           return element;
         }
         for (let { syms } of symtab) {
-          let group = document.createElement('div');
-          builtinsElement.appendChild(group);
           for (let sym of syms)
-            group.appendChild(textElement('dt', sym.description));
+            builtinsElement.appendChild(textElement('dt', sym.description));
           let name = syms[0].description, elementId = "defn-" + name;
           for (;;) {
             let prevElementId = elementId;
@@ -1063,7 +1088,7 @@
           let dd = document.getElementById(elementId);
           if (!dd)
             dd = textElement('dd', "TBD");
-          group.appendChild(dd);
+          builtinsElement.appendChild(dd);
           let value = globalScope[syms[0]];
           if (typeof value === 'function') {
             let impl = value[IMPL_SYMBOL];
@@ -1117,22 +1142,6 @@
           return false;
         persistedState = wad;
         return true;
-      }
-
-      addExampleStuffs();
-      function addExampleStuffs() {
-        document.documentElement.addEventListener('click', function(event) {
-          let element = event.target;
-          while (element) {
-            let styles = window.getComputedStyle(element);
-            let action = styles.getPropertyValue("--click-action");
-            if (action.trim() === "stuff-text") {
-              // TODO
-              return;
-            }
-            element = element.parentElement;
-          }
-        });
       }
 
       document.body.setAttribute('data-protocol', window.location.protocol);
