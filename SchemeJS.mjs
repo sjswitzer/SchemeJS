@@ -206,6 +206,7 @@ export function createInstance(schemeOpts = {}) {
     if (typeof value === 'function') {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       createFunctionDescriptor(value, evalCount);
+      if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
     }
     let atom;
     ({ atom, name } = normalize(name));

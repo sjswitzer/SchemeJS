@@ -169,7 +169,7 @@ EXPECT(' (/ 100000 10 10 10) ', 100);
   EXPECT_ERROR(` (factoral 10) `, EvalError);
 }
 
-if (false) {
+{
   let savedScope = beginTestScope();
   EXPECT(`
     (compile (factoral x)
