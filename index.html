@@ -113,8 +113,13 @@
       .help dl dt,
       .help dl dd {
         display: block;
-        /* "overflow:auto" creates a block formatting context while "dislpay:block" does not! */
-        overflow: auto;
+        /*
+         * "overflow:auto" creates a block formatting context while "dislpay:block" does not!
+         * I *think* "contain: paint" is more sensible, though.
+         * Look up "CSS block formatting context." It's wild!
+         */
+        /* overflow: auto; */
+        contain: paint;
       }
       .help dl {
         margin: .25em 0 .25em 0;
@@ -404,9 +409,9 @@
                 JIT can go to town on.
           <dd>  Tail-call optimization <i>(coming soon!)</i>.
           <dt>  Easly Embedded
-          <dt>  SchemeJS is a JavaScript module designed to be easily embedded into
+          <dd>  SchemeJS is a JavaScript module designed to be easily embedded into
                 other applications.
-                It comes with a node-js based CLI/REPL and this Web-based REPL,
+                It comes with a node-js based CLI/REPL and this Web-based REPL;
                 they are just simple embeddings of the SchemeJS runtime.
         </dl>
         <p> A-B-C. A-Always. B-Be. C-Coding.
