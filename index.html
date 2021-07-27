@@ -1182,6 +1182,7 @@
         if (highlightElement) {
           highlightElement.replaceWith(highlightElement.textContent);
           highlightElement = undefined;
+          inputElement.normalize();
         }
         try {
           let expr = globalScope.parseSExpr(inputText, { replHints });
@@ -1234,11 +1235,15 @@
                 if (matchPos < text.length) {
                   console.log("TEXTNODE", textNode);
                   let toReplace = textNode.splitText(matchPos);
-                  toReplace.splitText(1);
+                  let after = toReplace.splitText(1);
                   highlightElement = document.createElement('span');
                   highlightElement.setAttribute('class', 'match-token');
                   highlightElement.textContent = toReplace.textContent;
                   hostElement.replaceChild(highlightElement, toReplace);
+                  inputElement.normalize();
+                  let selection = window.getSelection();
+                  if (selection.anchorNode.parentElement === highlightElement)
+                    selection.collapse(after);
                   break;
                 }
                 matchPos -= text.length + 1;  // +1 for newline
