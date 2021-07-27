@@ -1170,7 +1170,6 @@
       const NBSP = '\u00a0';
 
       function handleInput(enterKey) {
-        let inputText = getInputText(), replHints = {};
         if (errorElement) {
             errorElement.remove();
             errorElement = undefined;
@@ -1180,6 +1179,7 @@
           highlightElement = undefined;
           inputElement.normalize();
         }
+        let inputText = getInputText(), replHints = {};
         try {
           let expr = globalScope.parseSExpr(inputText, { replHints });
           if (!enterKey) return;
@@ -1293,7 +1293,8 @@
         //
         // Maybe this should be a "microtask?"
         //   https://www.google.com/search?q=mdn+microtask
-        if (enterKey) setTimeout(() => handleInput(enterKey), 0);
+        // setTimeout(() => handleInput(enterKey), 0);
+        if (enterKey) queueMicrotask(() => handleInput(enterKey));
       });
       
       inputElement.addEventListener('blur', function(evt) {
