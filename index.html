@@ -246,7 +246,7 @@
       #lambda {
         flex: 0 0 auto;
         align-self: flex-end;
-        font-size: 300%;
+        font-size: 250%;
       }
 
       #header #title {
@@ -1236,11 +1236,13 @@
                   console.log("TEXTNODE", textNode);
                   let toReplace = textNode.splitText(matchPos);
                   let after = toReplace.splitText(1);
+                  // Keep the selection from collapsing into the highlighted item
+                  if (after.textContent === '')
+                    after.textContent = ' ';
                   highlightElement = document.createElement('span');
                   highlightElement.setAttribute('class', 'match-token');
                   highlightElement.textContent = toReplace.textContent;
                   hostElement.replaceChild(highlightElement, toReplace);
-                  inputElement.normalize();
                   let selection = window.getSelection();
                   if (selection.anchorNode.parentElement === highlightElement)
                     selection.collapse(after);
