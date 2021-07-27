@@ -243,17 +243,15 @@
         width: 100%;
       }
 
-      #lambda {
-        flex: 0 0 auto;
-        align-self: flex-end;
-        font-size: 250%;
-      }
-
       #header #title {
         flex: 1 0 auto;
         align-self: flex-end;
-        margin-bottom: .25em;
+        xxmargin-bottom: .25em;
+        font-size: 160%;
+      }
+      #lambda {
         font-size: 150%;
+        margin-right: .2em;
       }
 
       #header #about {
@@ -341,9 +339,7 @@
   <body>
     <div id="container">
       <div id="header">
-        <div id="lambda">&lambda;</div>
-        <div style="width: 1em;"></div>
-        <div id="title"> SchemeJS: Scheme in JavaScript </div>
+        <div id="title"> <span id="lambda">&lambda;</span> SchemeJS: Scheme in JavaScript </div>
         <div id="about">
           <span class="button" style="font-size: 120%;" onclick="showHelp('help-about')"> ? </span>
         </div>
@@ -1236,16 +1232,17 @@
                   console.log("TEXTNODE", textNode);
                   let toReplace = textNode.splitText(matchPos);
                   let after = toReplace.splitText(1);
-                  // Keep the selection from collapsing into the highlighted item
-                  if (after.textContent === '')
-                    after.textContent = ' ';
                   highlightElement = document.createElement('span');
                   highlightElement.setAttribute('class', 'match-token');
                   highlightElement.textContent = toReplace.textContent;
                   hostElement.replaceChild(highlightElement, toReplace);
                   let selection = window.getSelection();
-                  if (selection.anchorNode.parentElement === highlightElement)
+                  if (highlightElement.contains(selection.anchorNode)) {
+                  // Keep the selection from collapsing into the highlighted item
+                  if (after.textContent === '')
+                      after.textContent = ' ';
                     selection.collapse(after);
+                  }
                   break;
                 }
                 matchPos -= text.length + 1;  // +1 for newline
