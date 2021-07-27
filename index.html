@@ -241,17 +241,17 @@
         flex: 0 10 auto;
         flex-flow: row nowrap;
         width: 100%;
+        font-size: 160%;
       }
 
       #header #title {
         flex: 1 0 auto;
         align-self: flex-end;
-        xxmargin-bottom: .25em;
-        font-size: 160%;
+        xxxfont-size: 160%;
       }
       #lambda {
         font-size: 150%;
-        margin-right: .2em;
+        margin-right: .15em;
       }
 
       #header #about {
@@ -341,7 +341,7 @@
       <div id="header">
         <div id="title"> <span id="lambda">&lambda;</span> SchemeJS: Scheme in JavaScript </div>
         <div id="about">
-          <span class="button" style="font-size: 120%;" onclick="showHelp('help-about')"> ? </span>
+          <span class="button" style="font-size: 80%;" onclick="showHelp('help-about')"> ? </span>
         </div>
       </div>
       <div id="output">
@@ -1238,9 +1238,13 @@
                   hostElement.replaceChild(highlightElement, toReplace);
                   let selection = window.getSelection();
                   if (highlightElement.contains(selection.anchorNode)) {
-                  // Keep the selection from collapsing into the highlighted item
-                  if (after.textContent === '')
-                      after.textContent = ' ';
+                    // Keep the selection from collapsing into the highlighted item
+                    if (after.textContent === '') {
+                      event.preventDefault();
+                      let newAfter = document.createElement('div');
+                      hostElement.replaceChild(newAfter, after)
+                      after = newAfter;
+                    }
                     selection.collapse(after);
                   }
                   break;
