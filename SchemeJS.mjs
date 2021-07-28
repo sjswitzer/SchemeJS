@@ -2970,7 +2970,7 @@ export function createInstance(schemeOpts = {}) {
     defineGlobalSymbol("readline", (...prompt) => readline(prompt[0] ?? "? "));
     function* charStreamPromptInput() {
       for(;;) {
-        let line = readline(prompt + "  ".repeat(replHints.pending.length));
+        let line = readline(prompt + "  ".repeat(replHints.parseContext.length));
         if (line == null || endTest(line)) {
           quitRepl = true;
           return;

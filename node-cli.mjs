@@ -71,6 +71,7 @@ try {
     let endTest = (line => line === ".");  // end on a "."
     let globalScope = SchemeJS.createInstance({ readFile, endTest });
     globalScope[globalScope.Atom('*argv*')] = globalScope.to_list(argv);
+    globalScope[globalScope.Atom('*env*')] = process.env;
     for (let file of loadFiles)
       globalScope.load(file);
 
