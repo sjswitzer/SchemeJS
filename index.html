@@ -1239,7 +1239,7 @@
         function colorize(element) {
           for (let node of element.childNodes) {
             if (node instanceof Element) {
-              if (node.tagName !== 'SPAN') pos += 1;  // newline
+              if (node.tagName === 'BR') pos += 1;  // newline
               colorize(node);
             } else if (node instanceof Text) {
               let text = node.textContent;
@@ -1288,8 +1288,7 @@
         for (let node of element.childNodes) {
           if (node instanceof Element) {
             text += getElementText(node);
-            if (node.tagName !== 'SPAN')
-              text += '\n';
+            if (node.tagName === 'BR') text += '\n';
           } else if (node instanceof Text) {
             let childText = node.textContent;
             childText = childText.split(NBSP).join(' ');
@@ -1321,7 +1320,7 @@
         console.log("POS", pos);
         return pos;
         function countCharsInNode(node) {
-          if (node instanceof Element && node.tagName !== 'SPAN') pos += 1;  // "newline"
+          if (node instanceof Element && node.tagName === 'BR') pos += 1;
           for (let child of node.childNodes) {
             if (child instanceof Element) {
               countCharsInNode(child);
@@ -1338,7 +1337,7 @@
         function setSel(element) {
           for (let node of element.childNodes) {
             if (node instanceof Element) {
-              if (node.tagName !== 'SPAN') pos -= 1;  // newline
+              if (node.tagName === 'BR') pos -= 1;
               if (setSel(node))
                 return true;
             } else if (node instanceof Text) {
