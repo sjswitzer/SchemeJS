@@ -1322,14 +1322,11 @@
         console.log("POS", pos);
         return pos;
         function countCharsInNode(node) {
-          if (node instanceof Element && node.tagName === 'BR') pos += 1;
-          for (let child of node.childNodes) {
-            if (child instanceof Element) {
-              countCharsInNode(child);
-            } else if (child instanceof Text) {
-              pos += child.data.length;
-            }
-          }
+          if (node === element) return;
+          if (node instanceof Text) pos += node.data.length;
+          else if (node instanceof Element && node.tagName === 'BR') pos += 1;
+          for (let child of node.childNodes)
+            countCharsInNode(child);
         }
       }
 
