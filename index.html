@@ -1215,7 +1215,7 @@
         } catch (error) {
           if (error instanceof ParseIncomplete) {
             let parseContext = replHints.parseContext;
-            let red = 255, gb = 200, alpha = 255;
+            let red = 255, gb = 100, alpha = 255;
             for (let i = parseContext.length; i > 0; --i) {
               let pos = parseContext[i-1].position;
               colorizeCharsAt(inputElement, pos, 1, 'colorized-text', red, 255-gb, 255-gb, alpha);
@@ -1240,7 +1240,7 @@
           for (let node of element.childNodes) {
             if (node instanceof Element) {
               if (node.tagName !== 'SPAN') pos += 1;  // newline
-              colorize(element);
+              colorize(node);
             } else if (node instanceof Text) {
               let text = node.textContent;
               if (pos < text.length) {
@@ -1308,26 +1308,28 @@
         if (!element.contains(node)) return undefined;
         let pos = selection.anchorOffset;
         console.log("SEL", selection.anchorNode, selection.anchorOffset, selection);
-        countCharsBeforeNode(node, true);
-        return pos;
-        function countCharsBeforeNode(node, parentsToo) {
-          while (node && node !== element) {
-            if (node.previousSibling)
-              node = node.previousSibling;
-            else if (parentsToo && node.parentNode)
-              node = node.parentNode.previousSibling;
-            else
-              break;
-            if (node instanceof Text) {
-              pos += node.data.length;
-            } else if (node instanceof Element) {
-              if (node.tagName !== 'SPAN') pos+1;  // "newline"
-              countCharsBeforeNode(node.lastChild);
-            }
-          }
+        while (node && node !== element) {
+          if (node.previousSibling)
+            node = node.previousSibling;
+          else if (node.parentNode && node.parentNode !== element)
+            node = node.parentNode.previousSibling;
+          else
+            break;
+          if (node)
+            countCharsInNode(node);
         }
         console.log("POS", pos);
         return pos;
+        function countCharsInNode(node) {
+          if (node instanceof Element && node.tagName !== 'SPAN') pos += 1;  // "newline"
+          for (let child of node.childNodes) {
+            if (child instanceof Element) {
+              countCharsInNode(child);
+            } else if (child instanceof Text) {
+              pos += child.data.length;
+            }
+          }
+        }
       }
 
       function setSelectionPosition(element, pos) {
