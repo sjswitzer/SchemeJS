@@ -1007,7 +1007,7 @@
       const outputElement = document.getElementById('output');
       const builtinsElement = document.getElementById('builtins');
 
-      let globalScope, SCHEME_VERSION, ParseError, ParseExtraTokens;
+      let globalScope, SCHEME_VERSION, SchemeParseError, SchemeSyntaxError;
 
       onload = importSchemeAndRunREPL()
       async function importSchemeAndRunREPL() {
@@ -1016,8 +1016,8 @@
         globalScope = SchemeJS.createInstance({ lambdaStr: "\u03BB", slambdaStr: "\u03BB\u03BB" });
         inputElement.contentEditable = 'true';
         SCHEME_VERSION = globalScope.VERSION;
-        ParseError = globalScope.ParseError;
-        ParseExtraTokens = globalScope.ParseExtraTokens;
+        SchemeParseError = globalScope.SchemeParseError;
+        SchemeSyntaxError = globalScope.SchemeSyntaxError;
         buildBuiltinHelp(globalScope);
       }
 
@@ -1214,7 +1214,7 @@
           ++varNo;
           inputElement.textContent = "";
         } catch (error) {
-          if (error instanceof ParseError) {
+          if (error instanceof SchemeParseError) {
             console.log("ERROR", error);
             let parseContext = replHints.parseContext;
             let alpha = 1;
@@ -1223,7 +1223,7 @@
               colorizeCharsAt(inputElement, pos, 1, 'colorized-text', `hsl(44, 100%, 50%, ${alpha})`);
               alpha *= .8;
             }
-            if (error instanceof ParseExtraTokens) {
+            if (error instanceof SchemeSyntaxError) {
               let position = error.position;
               colorizeCharsAt(inputElement, position, parseText.length - position, 'error-tokens');
             }
