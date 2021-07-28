@@ -247,7 +247,6 @@
       #header #title {
         flex: 1 0 auto;
         align-self: flex-end;
-        xxxfont-size: 160%;
       }
       #lambda {
         font-size: 150%;
@@ -262,7 +261,7 @@
         /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
         flex: 1 1 10em;
         overflow: scroll;
-        justify-content: flex-end;
+        justify-items: end;
         margin-top: 0.1em;
         padding: .15em .15em .15em .15em;
         width: 100%;
@@ -325,11 +324,8 @@
         border-radius: .4em;
         background-color: #eee;
       }
-      #input .match-token {
-        background-color: #fb8;
-        border: 1px solid;
-        border-color: #444;
-        padding: 0 1px 0 1px;
+      #input .colorized-text {
+        border-radius: .4em;
       }
       #input .error-tokens {
         background-color: #f88;
@@ -339,15 +335,13 @@
   <body>
     <div id="container">
       <div id="header">
-        <div id="title"> <span id="lambda">&lambda;</span> SchemeJS: Scheme in JavaScript </div>
+        <div id="title"><span id="lambda">&lambda;</span> SchemeJS: Scheme in JavaScript</div>
         <div id="about">
           <span class="button" style="font-size: 80%;" onclick="showHelp('help-about')"> ? </span>
         </div>
       </div>
-      <div id="output">
-      </div>
-      <div id="input" spellcheck="false">
-      </div>
+      <div id="output"></div>
+      <div id="input" spellcheck="false"></div>
     </div>
     <div class="help" id="help-about">
       <close-button onclick="showHelp(null)"></close-button>
@@ -1166,7 +1160,7 @@
           showHelp(null);
       });
 
-      let varNo = 0, errorElement, highlightElement;
+      let varNo = 0, errorElement;
       const NBSP = '\u00a0';
 
       function handleInput(enterKey) {
@@ -1174,15 +1168,18 @@
             errorElement.remove();
             errorElement = undefined;
         }
-        if (highlightElement) {
-          highlightElement.replaceWith(highlightElement.textContent);
-          highlightElement = undefined;
-          inputElement.normalize();
-        }
-        let inputText = getInputText(), replHints = {};
+        let replHints = {};
+        let inputText = getElementText(inputElement);
+        console.log("TEXT", inputText);
+        let pos = getSelectionPosition(inputElement);
+        for (let span of inputElement.getElementsByTagName('span'))
+          span.replaceWith(span.textContent);
+        inputElement.normalize();
         try {
-          let expr = globalScope.parseSExpr(inputText, { replHints });
-          if (!enterKey) return;
+          let parseText = inputText;
+          if (pos != null) parseText = parseText.substr(0, pos);
+          let expr = globalScope.parseSExpr(parseText, { replHints });
+          if (!enterKey || parseText != inputText) return;
           let evaluated = globalScope._eval(expr, globalScope);
           let evaluatedString = globalScope.string(evaluated);
 
@@ -1218,39 +1215,13 @@
         } catch (error) {
           if (error instanceof ParseIncomplete) {
             let parseContext = replHints.parseContext;
-            if (parseContext.length > 0) {  // It really should be!
-              let matchPos = parseContext[parseContext.length-1].position;
-              for (let child of inputElement.childNodes) {
-                let hostElement = inputElement, textNode = child;
-                if (child instanceof HTMLElement) {
-                  hostElement = child;
-                  textNode = child.firstChild;
-                }
-                let text = textNode.textContent;
-                if (matchPos < text.length) {
-                  console.log("TEXTNODE", textNode);
-                  let toReplace = textNode.splitText(matchPos);
-                  let after = toReplace.splitText(1);
-                  highlightElement = document.createElement('span');
-                  highlightElement.setAttribute('class', 'match-token');
-                  highlightElement.textContent = toReplace.textContent;
-                  hostElement.replaceChild(highlightElement, toReplace);
-                  let selection = window.getSelection();
-                  if (highlightElement.contains(selection.anchorNode)) {
-                    // Keep the selection from collapsing into the highlighted item
-                    if (after.textContent === '') {
-                      let newAfter = document.createElement('div');
-                      hostElement.replaceChild(newAfter, after)
-                      after = newAfter;
-                    }
-                    selection.collapse(after);
-                  }
-                  break;
-                }
-                matchPos -= text.length + 1;  // +1 for newline
-                if (matchPos < 0) break;
-              }
+            let red = 255, gb = 200, alpha = 255;
+            for (let i = parseContext.length; i > 0; --i) {
+              let pos = parseContext[i-1].position;
+              colorizeCharsAt(inputElement, pos, 1, 'colorized-text', red, 255-gb, 255-gb, alpha);
+              gb = gb * .6;
             }
+            setSelectionPosition(inputElement, pos);
           } else {
             errorElement = document.createElement('div');
             errorElement.setAttribute('class', 'error');
@@ -1259,6 +1230,45 @@
             errorElement.appendChild(div);
             outputElement.appendChild(errorElement)
             errorElement.scrollIntoView();
+          }
+        }
+      }
+
+      function colorizeCharsAt(element, pos, n, cls, red, green, blue, alpha) {
+        return colorize(element);
+        function colorize(element) {
+          for (let node of element.childNodes) {
+            if (node instanceof Element) {
+              if (node.tagName !== 'SPAN') pos += 1;  // newline
+              colorize(element);
+            } else if (node instanceof Text) {
+              let text = node.textContent;
+              if (pos < text.length) {
+                let before, replace, after, nchar = n;
+                if (pos + nchar > text.length)
+                  nchar = text.length - pos;
+                if (pos === 0) {
+                  replace = node;
+                  if (nchar < text.length)
+                    after = node.splitText(nchar);
+                } else {
+                  before = node;
+                  replace = node.splitText(pos);
+                  if (nchar < replace.textContent.length)
+                    after = replace.splitText(nchar);
+                }
+                let highlightElement = document.createElement('span');
+                highlightElement.textContent = replace.textContent;
+                if (cls)
+                  highlightElement.setAttribute('class', cls);
+                highlightElement.setAttribute('style',
+                    `background-color: rgba(${red},${green}, ${blue},${alpha})`);
+                element.replaceChild(highlightElement, replace);
+                pos -= text.length;
+                n -= nchar;
+              }
+            }
+            if (pos <= 0 || n <= 0) return;
           }
         }
       }
@@ -1273,16 +1283,76 @@
         return res;
       }
 
-      function getInputText() {
-        let text = '', delim = '';
-        for (let child of inputElement.childNodes) {
-          let childText = child.textContent;
-          childText = childText.split(NBSP).join(' ');
-          text += delim + childText;
-          delim = '\n';
+      function getElementText(element) { 
+        let text = '';
+        for (let node of element.childNodes) {
+          if (node instanceof Element) {
+            text += getElementText(node);
+            if (node.tagName !== 'SPAN')
+              text += '\n';
+          } else if (node instanceof Text) {
+            let childText = node.textContent;
+            childText = childText.split(NBSP).join(' ');
+            text += childText;
+          }
         }
-        console.log("INPUT", text);
         return text;
+      }
+
+      // Screwy things happen when you modify text adjacent to the cursor
+      // but brute force always works.
+      function getSelectionPosition(element) {
+        let selection = window.getSelection();
+        if (!selection) return undefined;
+        let node = selection.anchorNode;
+        if (!element.contains(node)) return undefined;
+        let pos = selection.anchorOffset;
+        console.log("SEL", selection.anchorNode, selection.anchorOffset, selection);
+        countCharsBeforeNode(node, true);
+        return pos;
+        function countCharsBeforeNode(node, parentsToo) {
+          while (node && node !== element) {
+            if (node.previousSibling)
+              node = node.previousSibling;
+            else if (parentsToo && node.parentNode)
+              node = node.parentNode.previousSibling;
+            else
+              break;
+            if (node instanceof Text) {
+              pos += node.data.length;
+            } else if (node instanceof Element) {
+              if (node.tagName !== 'SPAN') pos+1;  // "newline"
+              countCharsBeforeNode(node.lastChild);
+            }
+          }
+        }
+        console.log("POS", pos);
+        return pos;
+      }
+
+      function setSelectionPosition(element, pos) {
+        console.log("SET", element, pos);
+        return setSel(element);
+        function setSel(element) {
+          for (let node of element.childNodes) {
+            if (node instanceof Element) {
+              if (node.tagName !== 'SPAN') pos -= 1;  // newline
+              if (setSel(node))
+                return true;
+            } else if (node instanceof Text) {
+              let text = node.textContent;
+              if (pos <= text.length) {
+                let selection = window.getSelection();
+                if (!selection) return null;
+                console.log("SETSEL", node, pos);
+                selection.collapse(node, pos);
+                return true;
+              }
+              pos -= text.length;
+            }
+          }
+          return false;
+        }
       }
 
       inputElement.addEventListener('keydown', function(event) {
@@ -1290,11 +1360,7 @@
 
         // The idea here is to let the user code exacute after the keypress has been
         // completely processed.
-        //
-        // Maybe this should be a "microtask?"
-        //   https://www.google.com/search?q=mdn+microtask
-        // setTimeout(() => handleInput(enterKey), 0);
-        if (enterKey) queueMicrotask(() => handleInput(enterKey));
+        setTimeout(() => handleInput(enterKey), 0);
       });
       
       inputElement.addEventListener('blur', function(evt) {
