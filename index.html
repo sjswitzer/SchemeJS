@@ -1007,7 +1007,7 @@
       const outputElement = document.getElementById('output');
       const builtinsElement = document.getElementById('builtins');
 
-      let globalScope, SCHEME_VERSION, ParseIncomplete;
+      let globalScope, SCHEME_VERSION, ParseError, ParseExtraTokens;
 
       onload = importSchemeAndRunREPL()
       async function importSchemeAndRunREPL() {
@@ -1016,7 +1016,8 @@
         globalScope = SchemeJS.createInstance({ lambdaStr: "\u03BB", slambdaStr: "\u03BB\u03BB" });
         inputElement.contentEditable = 'true';
         SCHEME_VERSION = globalScope.VERSION;
-        ParseIncomplete = globalScope.ParseIncomplete;
+        ParseError = globalScope.ParseError;
+        ParseExtraTokens = globalScope.ParseExtraTokens;
         buildBuiltinHelp(globalScope);
       }
 
@@ -1172,12 +1173,12 @@
         let inputText = getElementText(inputElement);
         console.log("TEXT", inputText);
         let pos = getSelectionPosition(inputElement);
-        for (let span of inputElement.querySelectorAll('span.colorized-text'))
+        for (let span of inputElement.querySelectorAll('span'))
           span.replaceWith(span.textContent);
         inputElement.normalize();
+        let parseText = inputText;
+        if (pos != null) parseText = parseText.substr(0, pos);
         try {
-          let parseText = inputText;
-          if (pos != null) parseText = parseText.substr(0, pos);
           let expr = globalScope.parseSExpr(parseText, { replHints });
           if (!enterKey || parseText != inputText) return;
           let evaluated = globalScope._eval(expr, globalScope);
@@ -1213,13 +1214,18 @@
           ++varNo;
           inputElement.textContent = "";
         } catch (error) {
-          if (error instanceof ParseIncomplete) {
+          if (error instanceof ParseError) {
+            console.log("ERROR", error);
             let parseContext = replHints.parseContext;
             let alpha = 1;
             for (let i = parseContext.length; i > 0; --i) {
               let pos = parseContext[i-1].position;
               colorizeCharsAt(inputElement, pos, 1, 'colorized-text', `hsl(44, 100%, 50%, ${alpha})`);
               alpha *= .8;
+            }
+            if (error instanceof ParseExtraTokens) {
+              let position = error.position;
+              colorizeCharsAt(inputElement, position, parseText.length - position, 'error-tokens');
             }
             let indent = '';
             if (enterKey) {
@@ -1266,7 +1272,8 @@
                 highlightElement.textContent = replace.textContent;
                 if (cls)
                   highlightElement.setAttribute('class', cls);
-                highlightElement.setAttribute('style',
+                if (color)
+                  highlightElement.setAttribute('style',
                     `background-color: ${color};`);
                 element.replaceChild(highlightElement, replace);
                 pos -= text.length;

@@ -2095,7 +2095,6 @@ export function createInstance(schemeOpts = {}) {
         return ch = _peek.shift();
       if (_done) return ch = '';
       let next = characterGenerator.next();
-      schemeTokenGenerator.position = charCount;
       charCount += 1;
       if (next.done) {
         _done = true;
@@ -2106,7 +2105,6 @@ export function createInstance(schemeOpts = {}) {
     function peekc(n = 0) {
       for (let get = n - _peek.length + 1; get > 0; --get) {
         let next = characterGenerator.next();
-        schemeTokenGenerator.position = charCount;
         charCount += 1;
         if (next.done) {
           _done = true;
@@ -2279,18 +2277,19 @@ export function createInstance(schemeOpts = {}) {
       // It might or might not be a good idea. It isn't worse than "evalquote", if anyone
       // else remembers that. In any case it's opt-in.
       let sym = token().value;
+      parseContext.push({ type: 'assign', value: sym });
       consumeToken();
       consumeToken();
-      let assigned = parseExpr(1);
+      let assigned = parseExpr();
+      parseContext.pop();
       expr = list(Atom("define"), sym, assigned);
     } else {
       expr = parseExpr(0);
     }
 
-    let unparsed = unParesedInput();
-    if (!unparsed)
+    if (_toks.length === 0 || _toks[0].type === 'newline' || _toks[0].type === 'end')
       return expr;
-    throw new ParseExtraTokens(unparsed);
+    throwParseExtraTokens();
 
     function parseExpr() {
       if (token().type === 'string' || token().type === 'number') {
@@ -2316,12 +2315,12 @@ export function createInstance(schemeOpts = {}) {
             consumeToken();
             let val = parseExpr();
             if (token().type !== ')')
-              throw new ParseExtraTokens(unParesedInput());
+              throwParseExtraTokens();
             consumeToken();
             return val;
           }
           if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
-          if (token().type === 'garbage') throw new ParseExtraTokens(unParesedInput(), tokenGenerator.position);
+          if (token().type === 'garbage') throwParseExtraTokens();
           let first = parseExpr();
           let rest = parseListBody();
           return cons(first, rest);
@@ -2391,7 +2390,7 @@ export function createInstance(schemeOpts = {}) {
             if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
           }
           if (!gotIt)
-            throw new ParseExtraTokens(unParesedInput(), tokenGenerator.position);
+            throwParseExtraTokens();
         }
         return res;
       }
@@ -2405,7 +2404,7 @@ export function createInstance(schemeOpts = {}) {
 
       if (token(1).type === 'end')
         return null;
-      throw new ParseExtraTokens(unParesedInput(), tokenGenerator.position);
+      throwParseExtraTokens();
     }
 
     function token(n = 0) {
@@ -2423,7 +2422,7 @@ export function createInstance(schemeOpts = {}) {
             _toks.push(next.value);
         }
         if (n >= _toks.length)
-          return { type: 'end'};
+          return { type: 'end', };
         let res = _toks[n];
         if (n > 0 || res.type !== 'newline')
           return res;
@@ -2437,8 +2436,8 @@ export function createInstance(schemeOpts = {}) {
       return _toks.shift();
     }
 
-    function unParesedInput() {
-      let str = "", sep = "";
+    function throwParseExtraTokens() {
+      let str = "", sep = "", position = token().position;
       while (_toks.length > 0) {
         let tok = _toks.shift();
         if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial')
@@ -2455,6 +2454,7 @@ export function createInstance(schemeOpts = {}) {
         str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
         sep = " ";
       }
+      throw new ParseExtraTokens(str, position);
     }
   }
 
