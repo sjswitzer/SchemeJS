@@ -1215,11 +1215,11 @@
         } catch (error) {
           if (error instanceof ParseIncomplete) {
             let parseContext = replHints.parseContext;
-            let red = 255, gb = 100, alpha = 255;
+            let alpha = 1;
             for (let i = parseContext.length; i > 0; --i) {
               let pos = parseContext[i-1].position;
-              colorizeCharsAt(inputElement, pos, 1, 'colorized-text', red, 255-gb, 255-gb, alpha);
-              gb = gb * .6;
+              colorizeCharsAt(inputElement, pos, 1, 'colorized-text', `hsl(44, 100%, 50%, ${alpha})`);
+              alpha *= .8;
             }
             let indent = '';
             if (enterKey) {
@@ -1239,7 +1239,7 @@
         }
       }
 
-      function colorizeCharsAt(element, pos, n, cls, red, green, blue, alpha) {
+      function colorizeCharsAt(element, pos, n, cls, color) {
         return colorize(element);
         function colorize(element) {
           for (let node of element.childNodes) {
@@ -1267,7 +1267,7 @@
                 if (cls)
                   highlightElement.setAttribute('class', cls);
                 highlightElement.setAttribute('style',
-                    `background-color: rgba(${red},${green}, ${blue},${alpha})`);
+                    `background-color: ${color};`);
                 element.replaceChild(highlightElement, replace);
                 pos -= text.length;
                 n -= nchar;
