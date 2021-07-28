@@ -1179,7 +1179,7 @@
         let parseText = inputText;
         if (pos != null) parseText = parseText.substr(0, pos);
         try {
-          let expr = globalScope.parseSExpr(parseText, { replHints });
+          let expr = globalScope.parseSExpr(parseText, { replHints, assignSyntax });
           if (!enterKey || parseText != inputText) return;
           let evaluated = globalScope._eval(expr, globalScope);
           let evaluatedString = globalScope.string(evaluated);

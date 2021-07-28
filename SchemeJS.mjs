@@ -2267,7 +2267,7 @@ export function createInstance(schemeOpts = {}) {
       tokenGenerator = schemeTokenGenerator(tokenSource, parseContext);
     else
       tokenGenerator = iteratorFor(tokenSource, LogicError);
-    let _toks = [], _done = false;
+    let _tokens = [], _done = false;
     let expr;
     if (assignSyntax && token().type === 'atom' &&
         token(1).type === 'atom' && token(1).value === Atom('=')) {
@@ -2288,7 +2288,7 @@ export function createInstance(schemeOpts = {}) {
       expr = parseExpr(0);
     }
 
-    if (_toks.length === 0 || _toks[0].type === 'newline' || _toks[0].type === 'end')
+    if ((_tokens.length > 0 && _tokens[0].type === 'newline') || token().type === 'end')
       return expr;
     throwParseExtraTokens();
 
@@ -2400,10 +2400,6 @@ export function createInstance(schemeOpts = {}) {
         let quoted = parseExpr();
         return cons(QUOTE_ATOM, cons(quoted, NIL));
       }
-
-      if (token(1).type === 'end')
-        return null;
-      throwParseExtraTokens();
     }
 
     function token(n = 0) {
@@ -2412,33 +2408,32 @@ export function createInstance(schemeOpts = {}) {
       // (2) Foil attempts to peek for tokens across a line boundary by leaving
       //     'newline' tokens in the peek buffer. But to simplify the parser,
       //      token(0) skips past any newline tokens.
-      for (;;) {
-        for (let get = n - _toks.length; get >= 0 && !_done; --get) {
-          let next = tokenGenerator.next();
-          if (next.done)
-            _done = true;
-          else
-            _toks.push(next.value);
-        }
-        if (n >= _toks.length)
-          return { type: 'end', };
-        let res = _toks[n];
-        if (n > 0 || res.type !== 'newline')
-          return res;
-        // token(0) never returns a newline token
-        while (_toks.length > 0 && _toks[0].type === 'newline')
-          _toks.shift();
+      if (n < _tokens.length)
+        return _tokens[n];
+      for (let get = n - _tokens.length + 1; get > 0 && !_done; --get) {
+        let next = tokenGenerator.next();
+        if (next.done)
+          _done = true;
+        else
+          _tokens.push(next.value);
       }
+      // Never return a 'newline' fall as the current token
+      while (_tokens.length > 0 && _tokens[0].type === 'newline')
+        _tokens.shift();
+      if (n < _tokens.length)
+        return _tokens[n];
+      return { type: 'end', };
     }
 
     function consumeToken() {
-      return _toks.shift();
+      let tok = _tokens.shift();
+      return tok;
     }
 
     function throwParseExtraTokens() {
-      let str = "", sep = "", position = token().position, tokens = [..._toks];
-      while (_toks.length > 0) {
-        let tok = _toks.shift();
+      let str = "", sep = "", position = token().position, tokens = [..._tokens];
+      while (_tokens.length > 0) {
+        let tok = _tokens.shift();
         if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial') {
           break;
         }
