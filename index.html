@@ -1169,7 +1169,7 @@
             errorElement.remove();
             errorElement = undefined;
         }
-        let replHints = {};
+        let replHints = {}, assignSyntax = true;
         let inputText = getElementText(inputElement);
         console.log("TEXT", inputText);
         let pos = getSelectionPosition(inputElement);

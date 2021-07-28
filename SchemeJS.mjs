@@ -286,9 +286,10 @@ export function createInstance(schemeOpts = {}) {
 
   class ParseExtraTokens extends ParseError {
     position;
-    constructor(msg, position) {
+    constructor(msg, position, tokens) {
       super(msg);
       this.position = position;
+      this.tokens = tokens;
     }
   };
   ParseExtraTokens.prototype.name = "ParseExtraTokens";
@@ -2314,8 +2315,7 @@ export function createInstance(schemeOpts = {}) {
           } else if (token().type === '.') {
             consumeToken();
             let val = parseExpr();
-            if (token().type !== ')')
-              throwParseExtraTokens();
+            if (token().type !== ')') throwParseExtraTokens();
             consumeToken();
             return val;
           }
@@ -2389,8 +2389,7 @@ export function createInstance(schemeOpts = {}) {
               consumeToken();
             if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
           }
-          if (!gotIt)
-            throwParseExtraTokens();
+          if (!gotIt) throwParseExtraTokens();
         }
         return res;
       }
@@ -2437,24 +2436,26 @@ export function createInstance(schemeOpts = {}) {
     }
 
     function throwParseExtraTokens() {
-      let str = "", sep = "", position = token().position;
+      let str = "", sep = "", position = token().position, tokens = [..._toks];
       while (_toks.length > 0) {
         let tok = _toks.shift();
-        if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial')
-          return str === '' ? null : str;
+        if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial') {
+          break;
+        }
         str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
         sep = " ";
       }
       for (;;) {
         let { done, value: tok } = tokenGenerator.next();
-        if (done) return str;
+        if (done) break;
         if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial')
-          return str;
+          break;
+        tokens.push(tok);
         let val = tok.value;
         str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
         sep = " ";
       }
-      throw new ParseExtraTokens(str, position);
+      throw new ParseExtraTokens(str, position, tokens);
     }
   }
 
