@@ -284,7 +284,13 @@ export function createInstance(schemeOpts = {}) {
   ParseError.prototype.name = "ParseError";
   defineGlobalSymbol("ParseError", ParseError);
 
-  class ParseExtraTokens extends ParseError {};
+  class ParseExtraTokens extends ParseError {
+    position;
+    constructor(msg, position) {
+      super(msg);
+      this.position = position;
+    }
+  };
   ParseExtraTokens.prototype.name = "ParseExtraTokens";
   defineGlobalSymbol("ParseExtraTokens", ParseExtraTokens);
 
@@ -2083,11 +2089,13 @@ export function createInstance(schemeOpts = {}) {
   function* schemeTokenGenerator(characterSource, parseContext) {
     let characterGenerator = iteratorFor(characterSource, LogicError);
     let ch = '', _peek = [], _done = false, position = 0, charCount = 0;
+    if (!parseContext) parseContext = [];
     function nextc() {
       if (_peek.length > 0)
         return ch = _peek.shift();
       if (_done) return ch = '';
       let next = characterGenerator.next();
+      schemeTokenGenerator.position = charCount;
       charCount += 1;
       if (next.done) {
         _done = true;
@@ -2098,6 +2106,7 @@ export function createInstance(schemeOpts = {}) {
     function peekc(n = 0) {
       for (let get = n - _peek.length + 1; get > 0; --get) {
         let next = characterGenerator.next();
+        schemeTokenGenerator.position = charCount;
         charCount += 1;
         if (next.done) {
           _done = true;
@@ -2120,22 +2129,44 @@ export function createInstance(schemeOpts = {}) {
         continue;
       }
 
-      if (ch === ';') {  // ; begins a comment
+      if (ch === ';' || (ch === '/' && peekc() === '/')) {  // ; or // begins a comment
+        parseContext.push({ type: 'comment', position });
         yield { type: 'newline', position };
         while (ch && !NL[ch])
           nextc();
+        parseContext.pop();
         continue;
       }
 
+      if (ch === '/' && peekc() === '*') {
+        parseContext.push({ type: 'comment', position });
+        nextc(); nextc();
+        while (ch && !(ch === '*' && peekc() === '/'))
+          nextc();
+        parseContext.pop();
+        nextc(); nextc();
+      }
+
       if (ch === '"') {
-        if (parseContext)
-          parseContext.push({ type: 'string', value: '', position })
+        parseContext.push({ type: 'string', value: '', position })
         let str = '';
         nextc();
         while (ch && ch != '"' && !NL[ch]) {
           if (ch === '\\') {
             nextc();
-            ch = ESCAPE_STRINGS[ch] ?? `\\${ch}`;
+            if (ch === '\n') {  // special string continuation!
+              while (WS(nextc())) {}  // skips space until:
+              if (ch === '+') {  // + continues
+                nextc();
+                continue;
+              }
+              if (ch === ':') {  // : newline then continues
+                nextc();
+                str += '\n';
+                continue;
+              }
+            }
+            ch = ESCAPE_STRINGS[ch] ?? `\\x${ch.codePointAt(0).toString(16)}`;
           }
           str += ch;
           nextc();
@@ -2144,13 +2175,12 @@ export function createInstance(schemeOpts = {}) {
           yield { type: 'end', position };
           return;
         }
-        if (parseContext)
-          parseContext.pop();
+        parseContext.pop();
         if (ch === '"') {
           yield { type: 'string', value: str, position };
           nextc();
         } else {
-          yield { type: 'garbage', value: '"'+str, position };
+          yield { type: 'partial', value: '"'+str, position };
           // Don't consume the newline or the REPL will prompt for another line of input
         }
         continue;
@@ -2290,8 +2320,8 @@ export function createInstance(schemeOpts = {}) {
             consumeToken();
             return val;
           }
-          if (token().type === 'end') throw new ParseIncomplete();
-          if (token().type === 'garbage') throw new ParseExtraTokens(unParesedInput());
+          if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
+          if (token().type === 'garbage') throw new ParseExtraTokens(unParesedInput(), tokenGenerator.position);
           let first = parseExpr();
           let rest = parseListBody();
           return cons(first, rest);
@@ -2312,7 +2342,7 @@ export function createInstance(schemeOpts = {}) {
           res.push(item);
           if (token().type === ',')  // Comma is optional
             consumeToken();
-          if (token().type === 'end') throw new ParseIncomplete();
+          if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
         }
       }
 
@@ -2358,10 +2388,10 @@ export function createInstance(schemeOpts = {}) {
             gotIt = true;
             if (token().type === ',')  // Comma is optional
               consumeToken();
-            if (token().type === 'end') throw new ParseIncomplete();
+            if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
           }
           if (!gotIt)
-            throw new ParseExtraTokens(unParesedInput());
+            throw new ParseExtraTokens(unParesedInput(), tokenGenerator.position);
         }
         return res;
       }
@@ -2375,7 +2405,7 @@ export function createInstance(schemeOpts = {}) {
 
       if (token(1).type === 'end')
         return null;
-      throw new ParseExtraTokens(unParesedInput());
+      throw new ParseExtraTokens(unParesedInput(), tokenGenerator.position);
     }
 
     function token(n = 0) {
@@ -2411,7 +2441,7 @@ export function createInstance(schemeOpts = {}) {
       let str = "", sep = "";
       while (_toks.length > 0) {
         let tok = _toks.shift();
-        if (tok.type === 'newline' || tok.type === 'end')
+        if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial')
           return str === '' ? null : str;
         str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
         sep = " ";
@@ -2419,7 +2449,7 @@ export function createInstance(schemeOpts = {}) {
       for (;;) {
         let { done, value: tok } = tokenGenerator.next();
         if (done) return str;
-        if (tok.type === 'newline' || tok.type === 'end')
+        if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial')
           return str;
         let val = tok.value;
         str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
