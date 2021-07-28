@@ -1169,7 +1169,7 @@
             errorElement.remove();
             errorElement = undefined;
         }
-        let replHints = {}, assignSyntax = true;
+        let parseContext = [], assignSyntax = true;
         let inputText = getElementText(inputElement);
         console.log("TEXT", inputText);
         let pos = getSelectionPosition(inputElement);
@@ -1179,7 +1179,7 @@
         let parseText = inputText;
         if (pos != null) parseText = parseText.substr(0, pos);
         try {
-          let expr = globalScope.parseSExpr(parseText, { replHints, assignSyntax });
+          let expr = globalScope.parseSExpr(parseText, { parseContext, assignSyntax });
           if (!enterKey || parseText != inputText) return;
           let evaluated = globalScope._eval(expr, globalScope);
           let evaluatedString = globalScope.string(evaluated);
@@ -1216,7 +1216,6 @@
         } catch (error) {
           if (error instanceof SchemeParseError) {
             console.log("ERROR", error);
-            let parseContext = replHints.parseContext;
             let alpha = 1;
             for (let i = parseContext.length; i > 0; --i) {
               let pos = parseContext[i-1].position;
@@ -1386,18 +1385,13 @@
         }
       }
 
-      inputElement.addEventListener('keydown', function(event) {
-        let enterKey = event.key === 'Enter';
+      // The idea here is to let the user code exacute after the keypress has been
+      // completely processed. "oninput" is nice, but doesn't indicate the "Enter" key.
+      inputElement.onkeydown = event => setTimeout(() => handleInput(event.key === 'Enter'), 0);
 
-        // The idea here is to let the user code exacute after the keypress has been
-        // completely processed.
-        setTimeout(() => handleInput(enterKey), 0);
-      });
+      // TODO: I'm just looking for selection changes; there's probably a better way
+      inputElement.onmousedown = event => setTimeout(() => handleInput(), 0);
       
-      inputElement.addEventListener('blur', function(evt) {
-        // TODO
-      });
-
       if ('serviceWorker' in navigator && window.location.protocol === 'https:')
         navigator.serviceWorker.register('service-worker.js');
 

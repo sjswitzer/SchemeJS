@@ -19,7 +19,7 @@ const newScope = globalScope.newScope || required();
 const deep_eq = globalScope.deep_eq || required();
 const is_cons = globalScope.is_cons || required();
 const is_closure = globalScope.is_closure || required();
-const EvalError = globalScope.EvalError || required();
+const SchemeEvalError = globalScope.SchemeEvalError || required();
 
 function required() { throw "required" }
 class TestFailureError extends Error {
@@ -38,8 +38,8 @@ EXPECT(` (car '(1 . 2)) `, ` 1 `);
 EXPECT(` (cdr '(1 . 2)) `, 2);
 EXPECT(` (car '(1 2 3)) `, ` '1 `);
 EXPECT(` (cdr '(1 2 3)) `, ` '(2 3) `);
-EXPECT_ERROR( ` (car nil) `, EvalError );
-EXPECT_ERROR( ` (cdr nil) `, EvalError );
+EXPECT_ERROR( ` (car nil) `, SchemeEvalError );
+EXPECT_ERROR( ` (cdr nil) `, SchemeEvalError );
 const testList = ` '(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd))) `;
 EXPECT(` (caaar ${testList}) `, ` 'aaa `);
 EXPECT(` (cdaar ${testList}) `, ` 'daa `);
@@ -119,7 +119,7 @@ EXPECT(` (undefined? (void)) `, true);
 EXPECT(` (void 1 2 3) `, undefined);
 // Args are evaled, but undefined is returned; just like in JavaScript.
 // This is one way to deliberately materialize an "undefined" value.
-EXPECT_ERROR(` (void 1 2 (xyz q)) `, EvalError);
+EXPECT_ERROR(` (void 1 2 (xyz q)) `, SchemeEvalError);
 
 {
   let savedScope = beginTestScope();
@@ -166,7 +166,7 @@ EXPECT(' (/ 100000 10 10 10) ', 100);
   EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
   endTestScope(savedScope);
   // Factoral should be undefined now
-  EXPECT_ERROR(` (factoral 10) `, EvalError);
+  EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
 }
 
 {
@@ -185,7 +185,7 @@ EXPECT(' (/ 100000 10 10 10) ', 100);
   EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
   endTestScope(savedScope);
   // Factoral should be undefined now
-  EXPECT_ERROR(` (factoral 10) `, EvalError);
+  EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
 }
 
 {
@@ -218,7 +218,7 @@ EXPECT(` (< 3 3) `, false);
 EXPECT(` (< 1 2 3 4 5 6) `, true);  // each less than the previous
 EXPECT(` (< 1 2 3 4 4 5 6) `, false);
 EXPECT(` (< 1 2 3 10 4 5 6) `, false);
-EXPECT_ERROR(` (< 1 2 3 4 5 6 (oops!)) `, EvalError);
+EXPECT_ERROR(` (< 1 2 3 4 5 6 (oops!)) `, SchemeEvalError);
 EXPECT(` (< 1 2 3 4 4 5 6 (oops!)) `, false); // Short-circuits on false
 EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false);
 EXPECT(` (<=) `, false);
@@ -229,8 +229,8 @@ EXPECT(` (<= 3 3) `, true);
 EXPECT(` (<= 1 2 3 4 5 6) `, true);  // each less or equal to than the previous
 EXPECT(` (<= 1 2 3 4 4 5 6) `, true);
 EXPECT(` (<= 1 2 3 10 4 5 6) `, false);
-EXPECT_ERROR(` (<= 1 2 3 4 5 6 (oops!)) `, EvalError);
-EXPECT_ERROR(` (<= 1 2 3 4 4 5 6 (oops!)) `, EvalError);
+EXPECT_ERROR(` (<= 1 2 3 4 5 6 (oops!)) `, SchemeEvalError);
+EXPECT_ERROR(` (<= 1 2 3 4 4 5 6 (oops!)) `, SchemeEvalError);
 EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false); // Short-circuits on false
 EXPECT(` (>) `, false);
 EXPECT(` (> 5) `, is_closure);
@@ -240,7 +240,7 @@ EXPECT(` (> 3 3) `, false);
 EXPECT(` (> 6 5 4 3 2 1) `, true);  // each greater than the previous
 EXPECT(` (> 6 5 4 4 3 2 1) `, false);
 EXPECT(` (> 6 5 4 10 3 2 1) `, false);
-EXPECT_ERROR(` (> 6 5 4 3 2 1 (oops!)) `, EvalError);
+EXPECT_ERROR(` (> 6 5 4 3 2 1 (oops!)) `, SchemeEvalError);
 EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
 EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false);
 EXPECT(` (>=) `, false);
@@ -251,8 +251,8 @@ EXPECT(` (>= 3 3) `, true);
 EXPECT(` (>= 6 5 4 3 2 1) `, true);  // each greater than or equal to the previous
 EXPECT(` (>= 6 5 4 4 3 2 1) `, true);
 EXPECT(` (>= 6 5 4 10 3 2 1) `, false);
-EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, EvalError);
-EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, EvalError);
+EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, SchemeEvalError);
+EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, SchemeEvalError);
 EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
 EXPECT(` (==) `, true);   // nothing is equal to itself
 EXPECT(` (== 5) `, is_closure);
@@ -261,7 +261,7 @@ EXPECT(` (== 3 5) `, false);
 EXPECT(` (== 3 3) `, true);
 EXPECT(` (== 3 3 3 3 3 3) `, true);  // all equal
 EXPECT(` (== 3 3 3 3 4 3) `, false); // not all equal
-EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, EvalError);
+EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, SchemeEvalError);
 EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
 EXPECT(` (!=) `, false);  // nothing isn't equal to itself
 EXPECT(` (!= 5) `, is_closure);
@@ -270,7 +270,7 @@ EXPECT(` (!= 3 5) `, true);
 EXPECT(` (!= 3 3) `, false);
 EXPECT(` (!= 3 3 3 3 3 3) `, false);  // all equal
 EXPECT(` (!= 3 3 3 3 4 3) `, true);   // not all equal
-EXPECT_ERROR(` (!= 3 3 3 3 3 3 (oops!)) `, EvalError);
+EXPECT_ERROR(` (!= 3 3 3 3 3 3 (oops!)) `, SchemeEvalError);
 EXPECT(` (!= 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
 let list1 = `(a b (c d) 2 3)`, list2 = `(1 2 (7 3) x)`;
 // TODO: Revist these. Make sure they match SIOD.
@@ -292,7 +292,7 @@ EXPECT(` (&& 1) `, 1);
 EXPECT(` (&& 1 2) `, 2);
 EXPECT(` (&& 1 false 2) `, false);
 EXPECT(` (&& 1 false (oops!)) `, false);  // short-circuits
-EXPECT_ERROR(` (&& 1 true (oops!)) `, EvalError);
+EXPECT_ERROR(` (&& 1 true (oops!)) `, SchemeEvalError);
 EXPECT(` (||) `, undefined);
 EXPECT(` (|| 1) `, 1);
 EXPECT(` (|| 1 2) `, 1);
@@ -301,7 +301,7 @@ EXPECT(` (|| nil null (void) false 2 3) `, 2);
 EXPECT(` (|| nil null (void) false 0 2 3) `, 0);
 EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
 EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
-EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, EvalError);
+EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, SchemeEvalError);
 EXPECT(` (?) `, undefined); // Why not?
 EXPECT(` (? true) `, is_closure);
 EXPECT(` (? false) `, is_closure);
@@ -312,10 +312,10 @@ EXPECT(` (? false 1 2) `, 2);
 EXPECT(` (? true 1 2 (oops!)) `, 1);
 EXPECT(` (? false 1 2 (oops!)) `, 2);
 EXPECT(` (? true 1 (oops!)) `, 1);
-EXPECT_ERROR(` (? false 1 (oops!)) `, EvalError);
-EXPECT_ERROR(` (? true (oops!) 2) `, EvalError);
+EXPECT_ERROR(` (? false 1 (oops!)) `, SchemeEvalError);
+EXPECT_ERROR(` (? true (oops!) 2) `, SchemeEvalError);
 EXPECT(` (? false (oops!) 2) `, 2);
-EXPECT_ERROR(` (? (oops!) 1 2) `, EvalError);
+EXPECT_ERROR(` (? (oops!) 1 2) `, SchemeEvalError);
 EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
 EXPECT(` (? (> 3 5) (+ 3 4) (* 3 4)) `, 12);
 
@@ -329,9 +329,9 @@ EXPECT(` (prog1 1 2 3) `, 1);
 EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
 
 EXPECT(` (cond) `, NIL);
-EXPECT_ERROR(` (cond a) `, EvalError);
-EXPECT_ERROR(` (cond 1) `, EvalError);
-EXPECT_ERROR(` (cond ()) `, EvalError);
+EXPECT_ERROR(` (cond a) `, SchemeEvalError);
+EXPECT_ERROR(` (cond 1) `, SchemeEvalError);
+EXPECT_ERROR(` (cond ()) `, SchemeEvalError);
 EXPECT(` (cond (true) 1) `, NIL);
 EXPECT(` (cond ((< 4 5) (+ 5 6))) `, 11);
 EXPECT(` (cond ((< 4 5) (+ 5 6) (* 5 6))) `, 30);

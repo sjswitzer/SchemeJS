@@ -6,7 +6,7 @@
 //   4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
 //
 
-export const VERSION = "1.1";
+export const VERSION = "1.1 (beta)";
 
 //
 // Creates a SchemeJS instance, independent of any others.
@@ -93,10 +93,10 @@ export function createInstance(schemeOpts = {}) {
   const NIL = new ((_ => {
     return class NIL {
       [Symbol.iterator]() { return { next: () => { done: true } } }
-      get [CAR]() { throw new EvalError("car of nil") }
-      set [CAR](_) { throw new EvalError("set car of nil") }
-      get [CDR]() { throw new EvalError("cdr of nil") }
-      set [CDR](_) { throw new EvalError("set cdr of nil") }
+      get [CAR]() { throw new SchemeEvalError("car of nil") }
+      set [CAR](_) { throw new SchemeEvalError("set car of nil") }
+      get [CDR]() { throw new SchemeEvalError("cdr of nil") }
+      set [CDR](_) { throw new SchemeEvalError("set cdr of nil") }
     }
   })());
   
@@ -130,7 +130,7 @@ export function createInstance(schemeOpts = {}) {
   function Atom(name) {
     // If they pass in an atom, just return it
     if (is_atom(name)) return name;
-    if (typeof name !== 'string') throw new EvalError(`Not a string ${name}`);
+    if (typeof name !== 'string') throw new SchemeEvalError(`Not a string ${name}`);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -268,36 +268,49 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("intern", Atom);
   exportAPI("Atom", Atom);
 
-  class SchemeJSError extends Error {};
-  SchemeJSError.prototype.name = "SchemeJSError";
-  defineGlobalSymbol("SchemeJSError", SchemeJSError);
+  class SchemeError extends Error {};
+  SchemeError.prototype.name = "SchemeError";
+  defineGlobalSymbol("SchemeError", SchemeError);
 
-  class EvalError extends SchemeJSError {};
-  EvalError.prototype.name = "EvalError";
-  defineGlobalSymbol("EvalError", EvalError);
+  class SchemeEvalError extends SchemeError {};
+  SchemeEvalError.prototype.name = "SchemeEvalError";
+  defineGlobalSymbol("SchemeEvalError", SchemeEvalError);
 
-  class CompileError extends SchemeJSError {};
-  CompileError.prototype.name = "CompileError";
-  defineGlobalSymbol("CompileError", CompileError);
+  class SchemeCompileError extends SchemeError {};
+  SchemeCompileError.prototype.name = "SchemeCompileError";
+  defineGlobalSymbol("SchemeCompileError", SchemeCompileError);
 
-  class ParseError extends SchemeJSError {};
-  ParseError.prototype.name = "ParseError";
-  defineGlobalSymbol("ParseError", ParseError);
+  class SchemeParseError extends SchemeError {};
+  SchemeParseError.prototype.name = "SchemeParseError";
+  defineGlobalSymbol("SchemeParseError", SchemeParseError);
 
-  class ParseExtraTokens extends ParseError {
-    position;
-    constructor(msg, position, tokens) {
+  class SchemeSyntaxError extends SchemeParseError {
+    errorToken; tokens; position; line; lineChar
+    constructor(msg, errorToken, tokens) {
       super(msg);
-      this.position = position;
+      this.errorToken = errorToken;
       this.tokens = tokens;
+      this.position = errorToken.position;
+      this.line = errorToken.line;
+      this.lineChar = errorToken.lineChar;
     }
   };
-  ParseExtraTokens.prototype.name = "ParseExtraTokens";
-  defineGlobalSymbol("ParseExtraTokens", ParseExtraTokens);
+  SchemeSyntaxError.prototype.name = "SchemeSyntaxError";
+  defineGlobalSymbol("SchemeSyntaxError", SchemeSyntaxError);
 
-  class ParseIncomplete extends ParseError {};
-  ParseIncomplete.prototype.name = "ParseIncomplete";
-  defineGlobalSymbol("ParseIncomplete", ParseIncomplete);
+  class SchemeParseIncomplete extends SchemeParseError {
+    token; parseContext; position; line; lineChar;
+    constructor(token, parseContext) {
+      super();
+      this.token = token;
+      this.parseContext = parseContext;
+      this.position = token.position;
+      this.line = token.line;
+      this.lineChar = token.lineChar
+    }
+  };
+  SchemeParseIncomplete.prototype.name = "SchemeParseIncomplete";
+  defineGlobalSymbol("SchemeParseIncomplete", SchemeParseIncomplete);
 
   const LogicError = Error;
   defineGlobalSymbol("LogicError", LogicError);
@@ -388,7 +401,7 @@ export function createInstance(schemeOpts = {}) {
   for (let fn of [
       Object, Boolean, Symbol, Number, String, BigInt, Array,
       encodeURI, encodeURIComponent, decodeURI, decodeURIComponent,
-      Error, EvalError, RangeError, ReferenceError,
+      Error, SchemeEvalError, RangeError, ReferenceError,
       SyntaxError, TypeError, URIError,
       Date, RegExp, parseFloat, parseInt,
       Map, Set, WeakMap, WeakSet,
@@ -801,7 +814,7 @@ export function createInstance(schemeOpts = {}) {
     while (is_cons(clauses)) {
       let clause = clauses[CAR];
       if (!is_cons(clause))
-        throw new EvalError(`Bad clause in "cond" ${string(clause)}`);
+        throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
       if (bool(evaled)) {
@@ -836,18 +849,19 @@ export function createInstance(schemeOpts = {}) {
     let noEval = rest.length > 0 && bool(rest[0]);
     let fileContent;
     try {
-      if (!readFile) throw new EvalError("No file reader defined");
+      if (!readFile) throw new SchemeEvalError("No file reader defined");
       fileContent = readFile(path);
     } catch (error) {
-      let loadError = new EvalError(`Load failed ${string(path)}`);
+      let loadError = new SchemeEvalError(`Load failed ${string(path)}`);
       loadError.cause = error;
       loadError.path = path;
       return false;
     }
-    let tokenGenerator = schemeTokenGenerator(fileContent);
+    let parseContext = [], opts = { parseContext };
+    let tokenGenerator = schemeTokenGenerator(fileContent, opts);
     for(;;) {
       try {
-        let expr = parseSExpr(tokenGenerator);
+        let expr = parseSExpr(tokenGenerator, { path, opts });
         if (!expr) break;
         if (noEval) {
           if (last) last = last[CDR] = cons(expr, NIL);
@@ -857,7 +871,7 @@ export function createInstance(schemeOpts = {}) {
           reportLoadResult(evaluated);
         }
       } catch (error) {
-        if (error instanceof SchemeJSError)
+        if (error instanceof SchemeError)
           reportSchemeError(error);
         else
           reportSystemError(error);
@@ -878,7 +892,7 @@ export function createInstance(schemeOpts = {}) {
           list = list[CDR];
         }
       } else {
-        if (!is_iterable(list)) throw new EvalError(`Not a list or iterable ${list}`);
+        if (!is_iterable(list)) throw new SchemeEvalError(`Not a list or iterable ${list}`);
         for (let value of list) {
           let item = cons(value, NIL);
           if (last) last = last[CDR] = item;
@@ -1137,17 +1151,17 @@ export function createInstance(schemeOpts = {}) {
   // still benefiting from Scopes internally.
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0 }, "let", "let*");
   function letrec(forms) {
-    if (!is_cons(forms)) throw new EvalError(`No bindings`);
+    if (!is_cons(forms)) throw new SchemeEvalError(`No bindings`);
     let bindings = forms[CAR];
     forms = forms[CDR];
     let scope = newScope(this, "letrec-scope");
     while (is_cons(bindings)) {
       let binding = bindings[CAR];
       if (!is_cons(binding))
-        throw new EvalError(`Bad binding ${string(binding)}`);
+        throw new SchemeEvalError(`Bad binding ${string(binding)}`);
       let boundVar = binding[CAR], bindingForms = binding[CDR];
       if (typeof boundVar !== 'symbol')
-        throw new EvalError(`Bad binding ${string(binding)}`);
+        throw new SchemeEvalError(`Bad binding ${string(binding)}`);
       let val = NIL;
       while (is_cons(bindingForms)) {
         val = _eval(bindingForms[CAR], scope);
@@ -1463,7 +1477,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // try/catch/filnally.
   //
-  class SchemeJSThrow extends SchemeJSError {
+  class SchemeJSThrow extends SchemeError {
     constructor(tag, value, msg) {
       value;
       super(msg);
@@ -1505,17 +1519,17 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("catch", js_catch, { evalArgs: 0 });
   function js_catch(catchClause, forms) {
     if (!is_cons(catchClause))
-      throw new EvalError(`Bad catch clause ${string(catchClause)}`);
+      throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     if (!is_cons(catchForms))
-      throw new EvalError(`Bad catch clause ${string(catchClause)}`);
+      throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let typeMatch;
     if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
       typeMatch = catchForms[CAR];
       catchForms = catchForms[CDR];
     }
     if (!is_cons(catchForms))
-      throw new EvalError(`Bad catch clause ${string(catchClause)}`);
+      throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let val = NIL;
     try {
       while (is_cons(forms)) {
@@ -1543,7 +1557,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("define", define, { evalArgs: 0 });
   function define(forms) {
     if (!(is_cons(forms) && is_cons(forms[CDR])))
-      throw new EvalError(`Define requires two parameters`);
+      throw new SchemeEvalError(`Define requires two parameters`);
     let defined = forms[CAR], value = forms[CDR][CAR];
     let scope = this, name = defined;
     if (is_cons(defined)) {
@@ -1555,7 +1569,7 @@ export function createInstance(schemeOpts = {}) {
     }
     if (typeof name === 'string') name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
-    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote");
+    if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
       throw new TypeError(`Must define symbol or string ${string(defined)}`);
     globalScope[name] = value;
@@ -1571,7 +1585,7 @@ export function createInstance(schemeOpts = {}) {
     if (form === NIL) return form;
     if (typeof form === 'symbol') {
       let val = scope[form];
-      if (val === undefined) throw new EvalError(`Undefined symbol ${string(form)}`);
+      if (val === undefined) throw new SchemeEvalError(`Undefined symbol ${string(form)}`);
       return val;
     }
     if (is_cons(form)) {
@@ -1643,7 +1657,7 @@ export function createInstance(schemeOpts = {}) {
       if (opSym === SLAMBDA_ATOM) {
         evalCount = 0;
       } else if (opSym === SCLOSURE_ATOM) {
-        if (!is_cons(form[CDR])) throw new EvalError(`Bad form ${string(form)}`);
+        if (!is_cons(form[CDR])) throw new SchemeEvalError(`Bad form ${string(form)}`);
         evalCount = form[CDR][CAR];
       }
     } else if (typeof form === 'function') {
@@ -1712,21 +1726,21 @@ export function createInstance(schemeOpts = {}) {
     if (is_cons(form)) {
       let opSym = form[CAR];
       let body = form[CDR];
-      if (!is_cons(body)) throw new EvalError(`Bad form ${string(form)}`);
+      if (!is_cons(body)) throw new SchemeEvalError(`Bad form ${string(form)}`);
       if (opSym === CLOSURE_ATOM) {
-        if (!is_cons(body)) throw new EvalError(`Bad closure ${string(form)}`);
+        if (!is_cons(body)) throw new SchemeEvalError(`Bad closure ${string(form)}`);
         scope = body[CAR];
         body = body[CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === SCLOSURE_ATOM) {
-        if (!is_cons(body)) throw new EvalError(`Bad closure ${string(form)}`);
+        if (!is_cons(body)) throw new SchemeEvalError(`Bad closure ${string(form)}`);
         scope = body[CDR][CAR];
         body = body[CDR][CDR];
         opSym = LAMBDA_ATOM;
       }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        if (!is_cons(body)) throw new EvalError(`Bad lambda ${string(form)}`);
+        if (!is_cons(body)) throw new SchemeEvalError(`Bad lambda ${string(form)}`);
         let params = body[CAR];
         let forms = body[CDR];
         if (typeof params === 'symbol') { // Curry notation :)
@@ -1753,7 +1767,7 @@ export function createInstance(schemeOpts = {}) {
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           scope[params] = args;
         else if (params !== NIL)
-          throw new EvalError(`Bad parameter list ${string(origFormalParams)}`);
+          throw new SchemeEvalError(`Bad parameter list ${string(origFormalParams)}`);
         let res = NIL;
         while (is_cons(forms)) {
           res = _eval(forms[CAR], scope);
@@ -1762,7 +1776,7 @@ export function createInstance(schemeOpts = {}) {
         return res;
       }
     }
-    throw new EvalError(`Can't apply ${string(form)}`);
+    throw new SchemeEvalError(`Can't apply ${string(form)}`);
   }
 
   const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\', '\n': '' };
@@ -2087,29 +2101,41 @@ export function createInstance(schemeOpts = {}) {
   // S-epression parser
   //
   
-  function* schemeTokenGenerator(characterSource, parseContext) {
+  function* schemeTokenGenerator(characterSource, opts) {
+    let parseContext = opts.parseContext ?? [];
     let characterGenerator = iteratorFor(characterSource, LogicError);
-    let ch = '', _peek = [], _done = false, position = 0, charCount = 0;
+    let ch = '', _peek = [], _done = false;
+    let position = 0, charCount = 0, line = 0, lineCount = 0, lineChar = 0, lineCharCount = 0;
     if (!parseContext) parseContext = [];
     function nextc() {
       if (_peek.length > 0)
         return ch = _peek.shift();
       if (_done) return ch = '';
       let next = characterGenerator.next();
-      charCount += 1;
       if (next.done) {
         _done = true;
         return ch = '';
+      }
+      charCount += 1;
+      lineCharCount += 1;
+      if (ch === '\n') {
+        lineCount += 1;
+        lineCharCount = 0;
       }
       return ch = next.value;
     }
     function peekc(n = 0) {
       for (let get = n - _peek.length + 1; get > 0; --get) {
         let next = characterGenerator.next();
-        charCount += 1;
         if (next.done) {
           _done = true;
           return '';
+        }
+        charCount += 1;
+        lineCharCount += 1;
+        if (ch === '\n') {
+          lineCount += 1;
+          lineCharCount = 0;
         }
         _peek.push(next.value);
       }
@@ -2121,16 +2147,18 @@ export function createInstance(schemeOpts = {}) {
       while (WS[ch])
         nextc();
       position = charCount-1;
+      line = lineCount;
+      lineChar = lineCharCount;
 
       if (NL[ch]) {
-        yield { type: 'newline', position };
+        yield { type: 'newline', position, line, lineChar };
         nextc();
         continue;
       }
 
       if (ch === ';' || (ch === '/' && peekc() === '/')) {  // ; or // begins a comment
-        parseContext.push({ type: 'comment', position });
-        yield { type: 'newline', position };
+        parseContext.push({ type: 'comment', position, line, lineChar });
+        yield { type: 'newline', position, line, lineChar };
         while (ch && !NL[ch])
           nextc();
         parseContext.pop();
@@ -2138,7 +2166,7 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (ch === '/' && peekc() === '*') {
-        parseContext.push({ type: 'comment', position });
+        parseContext.push({ type: 'comment', position, line, lineChar });
         nextc(); nextc();
         while (ch && !(ch === '*' && peekc() === '/'))
           nextc();
@@ -2147,7 +2175,7 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (ch === '"') {
-        parseContext.push({ type: 'string', value: '', position })
+        parseContext.push({ type: 'string', value: '', position, line, lineChar })
         let str = '';
         nextc();
         while (ch && ch != '"' && !NL[ch]) {
@@ -2171,28 +2199,28 @@ export function createInstance(schemeOpts = {}) {
           nextc();
         }
         if (!ch) {
-          yield { type: 'end', position };
+          yield { type: 'end', position, line, lineChar };
           return;
         }
         parseContext.pop();
         if (ch === '"') {
-          yield { type: 'string', value: str, position };
+          yield { type: 'string', value: str, position, line, lineChar };
           nextc();
         } else {
-          yield { type: 'partial', value: '"'+str, position };
+          yield { type: 'partial', value: '"'+str, position, line, lineChar };
           // Don't consume the newline or the REPL will prompt for another line of input
         }
         continue;
       }
 
       if (TOKS[ch]) {
-        yield { type: ch, position };
+        yield { type: ch, position, line, lineChar };
         nextc();
         continue;
       }
 
       if (ch === '.' && !DIGITS[peekc()]) {
-        yield { type: ch, position };
+        yield { type: ch, position, line, lineChar };
         nextc();
         continue;
       }
@@ -2225,7 +2253,7 @@ export function createInstance(schemeOpts = {}) {
           if (value !== undefined) {
             // Consume all the characters that we peeked and succeed
             while (pos-- > 0) nextc();
-            yield { type: 'number', value, position };
+            yield { type: 'number', value, position, line, lineChar };
             continue;
           }
         }
@@ -2239,15 +2267,15 @@ export function createInstance(schemeOpts = {}) {
             break;
           str += ch, nextc();
         }
-        yield { type: 'atom', value: Atom(str), position };
+        yield { type: 'atom', value: Atom(str), position, line, lineChar };
         continue;
       }
 
       if (!ch) break;
-      yield { type: 'garbage', value: ch, position };
+      yield { type: 'garbage', value: ch, position, line, lineChar };
       nextc();
     }
-    yield { type: 'end', position };
+    yield { type: 'end', position, line, lineChar };
   }
 
   let gensym_count = 0;
@@ -2258,13 +2286,12 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("parseSExpr", parseSExpr);
   function parseSExpr(tokenSource, opts = {}) {
     opts = { ...schemeOpts, ...opts };
-    let replHints = opts.replHints ?? {};
+    let parseContext = opts.parseContext ?? [];
+    opts.parseContext = parseContext;
     let assignSyntax = opts.assignSyntax ?? false;
-    let parseContext = [];
-    replHints.parseContext = parseContext;
     let tokenGenerator;
     if (typeof tokenSource === 'string')
-      tokenGenerator = schemeTokenGenerator(tokenSource, parseContext);
+      tokenGenerator = schemeTokenGenerator(tokenSource, opts);
     else
       tokenGenerator = iteratorFor(tokenSource, LogicError);
     let _tokens = [], _done = false;
@@ -2290,7 +2317,7 @@ export function createInstance(schemeOpts = {}) {
 
     if ((_tokens.length > 0 && _tokens[0].type === 'newline') || token().type === 'end')
       return expr;
-    throwParseExtraTokens();
+    throwSyntaxError();
 
     function parseExpr() {
       if (token().type === 'string' || token().type === 'number') {
@@ -2315,12 +2342,13 @@ export function createInstance(schemeOpts = {}) {
           } else if (token().type === '.') {
             consumeToken();
             let val = parseExpr();
-            if (token().type !== ')') throwParseExtraTokens();
+            if (token().type !== ')') throwSyntaxError();
             consumeToken();
             return val;
           }
-          if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
-          if (token().type === 'garbage') throwParseExtraTokens();
+          if (token().type === 'end' || token().type === 'partial')
+            throw new SchemeParseIncomplete(token(), parseContext);
+          if (token().type === 'garbage') throwSyntaxError();
           let first = parseExpr();
           let rest = parseListBody();
           return cons(first, rest);
@@ -2341,7 +2369,8 @@ export function createInstance(schemeOpts = {}) {
           res.push(item);
           if (token().type === ',')  // Comma is optional
             consumeToken();
-          if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
+          if (token().type === 'end' || token().type === 'partial')
+            throw new SchemeParseIncomplete(token(), parseContext);
         }
       }
 
@@ -2387,9 +2416,10 @@ export function createInstance(schemeOpts = {}) {
             gotIt = true;
             if (token().type === ',')  // Comma is optional
               consumeToken();
-            if (token().type === 'end' || token().type === 'partial') throw new ParseIncomplete();
+            if (token().type === 'end' || token().type === 'partial')
+              throw new SchemeParseIncomplete(token(), parseContext);
           }
-          if (!gotIt) throwParseExtraTokens();
+          if (!gotIt) throwSyntaxError();
         }
         return res;
       }
@@ -2430,27 +2460,22 @@ export function createInstance(schemeOpts = {}) {
       return tok;
     }
 
-    function throwParseExtraTokens() {
-      let str = "", sep = "", position = token().position, tokens = [..._tokens];
-      while (_tokens.length > 0) {
-        let tok = _tokens.shift();
-        if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial') {
-          break;
+    function throwSyntaxError() {
+      let str = "", sep = "", errorToken = token(), tokens = [..._tokens];
+      if (_tokens.length > 1 && _tokens[_tokens.length-1] !== 'newline') {
+        for (;;) {
+          let tok = token(0);
+          if (tok.type === 'end' || tok.type === 'newline') break;
+          tokens.push(token);
+          if (tok.type === 'partial') break;
         }
-        str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
-        sep = " ";
       }
-      for (;;) {
-        let { done, value: tok } = tokenGenerator.next();
-        if (done) break;
-        if (tok.type === 'newline' || tok.type === 'end' || tok.type === 'partial')
-          break;
-        tokens.push(tok);
+      for (let tok of tokens) {
         let val = tok.value;
         str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
         sep = " ";
       }
-      throw new ParseExtraTokens(str, position, tokens);
+      throw new SchemeSyntaxError(str, errorToken, tokens);
     }
   }
 
@@ -2624,7 +2649,7 @@ export function createInstance(schemeOpts = {}) {
   function lambda_compiler(name, lambda) {
     name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
-    if (name === QUOTE_ATOM) throw new EvalError("Can't redefine quote ${lambda}");
+    if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
 
     let scope = newScope(this);
     // If you're compiling a dunction that's already been defined, this prevents
@@ -2639,7 +2664,7 @@ export function createInstance(schemeOpts = {}) {
     let nameStr = newTemp(name);
     tools.functionName = nameStr;
     let stringStr = bind(string, "string");
-    let evalErrorStr = bind(EvalError, "EvalError");
+    let evalErrorStr = bind(SchemeEvalError, "EvalError");
     bind(NIL, "NIL");
     bind(bool, "bool");
     bind(cons, "cons");
@@ -2708,7 +2733,7 @@ export function createInstance(schemeOpts = {}) {
   }
   function compileEval(form, compileScope, tools) {
     if (--tools.evalLimit < 0)
-      throw new CompileError(`Too comlpex ${string(form)}`);
+      throw new SchemeCompileError(`Too comlpex ${string(form)}`);
     let result;
     if (form === undefined) {
       result = "undefined";
@@ -2779,7 +2804,7 @@ export function createInstance(schemeOpts = {}) {
       }
       // Compile closures?
       params = [];
-      if (!is_cons(form[CDR])) throw new EvalError(`Bad lambda ${string(form)}`);
+      if (!is_cons(form[CDR])) throw new SchemeEvalError(`Bad lambda ${string(form)}`);
       if (typeof form[CDR] === 'symbol') {
         params.push(form[CDR])
       } else {
@@ -2848,7 +2873,7 @@ export function createInstance(schemeOpts = {}) {
       if (is_cons(form)) {
         let opSym = form[CAR];
         let body = form[CDR];
-        if (!is_cons(body)) throw new EvalError(`Bad form ${string(form)}`);
+        if (!is_cons(body)) throw new SchemeEvalError(`Bad form ${string(form)}`);
         if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
           // I don't expect to compile closures but maybe there's a reason to do so?
           let lambda = compileLambda('', form, compileScope, tools);
@@ -2863,9 +2888,9 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function compileLambda(name, form, compileScope, tools) {
-    if (!is_cons(form)) throw new EvalError(`Bad lambda ${string(form)}`);
+    if (!is_cons(form)) throw new SchemeEvalError(`Bad lambda ${string(form)}`);
     let body = form[CDR];
-    if (!is_cons(body)) throw new EvalError(`Bad lambda ${string(form)}`);
+    if (!is_cons(body)) throw new SchemeEvalError(`Bad lambda ${string(form)}`);
     let params = body[CAR];
     let forms = body[CDR];
     let paramv = [];
@@ -2880,7 +2905,7 @@ export function createInstance(schemeOpts = {}) {
     let origFormalParams = params;
     while (is_cons(params)) {
       let param = params[CAR];
-      if (typeof param !== 'symbol') throw new EvalError(`Param must be a symbol ${param}`);
+      if (typeof param !== 'symbol') throw new SchemeEvalError(`Param must be a symbol ${param}`);
       let paramVar = tools.newTemp(param);
       paramv.push(paramVar);
       compileScope[param] = paramVar;
@@ -2893,7 +2918,7 @@ export function createInstance(schemeOpts = {}) {
       compileScope[params] = paramVar;
     }
     else if (params !== NIL) {
-      throw new EvalError(`Bad parameter list ${string(origFormalParams)}`);
+      throw new SchemeEvalError(`Bad parameter list ${string(origFormalParams)}`);
     }
     if (name && name !== '')
       result = name;
@@ -2960,13 +2985,13 @@ export function createInstance(schemeOpts = {}) {
     let print = opts.print ?? (x => console.log(string(x)));
     let reportSchemeError = opts.reportSchemeError ?? (x => console.log(String(x)));;
     let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
-    let replHints = { };
     let endTest = opts.endTest ?? (_ => false);
+    let parseContext = opts.parseContext = [];
     quitRepl = false;
     defineGlobalSymbol("readline", (...prompt) => readline(prompt[0] ?? "? "));
     function* charStreamPromptInput() {
       for(;;) {
-        let line = readline(prompt + "  ".repeat(replHints.parseContext.length));
+        let line = readline(prompt + "  ".repeat(parseContext.length));
         if (line == null || endTest(line)) {
           quitRepl = true;
           return;
@@ -2979,15 +3004,15 @@ export function createInstance(schemeOpts = {}) {
       }
     }
     let charStream = charStreamPromptInput();
-    let tokenGenerator = schemeTokenGenerator(charStream);
+    let tokenGenerator = schemeTokenGenerator(charStream, opts);
     while (!quitRepl) {
       try {
-        let expr = parseSExpr(tokenGenerator, { ...opts, replHints });
+        let expr = parseSExpr(tokenGenerator, opts);
         if (!expr) continue;
         let evaluated = _eval(expr, scope);
         print (evaluated);
       } catch (error) {
-        if (error instanceof SchemeJSError)
+        if (error instanceof SchemeError)
           reportSchemeError(error);
         else
           reportSystemError(error);
@@ -3007,7 +3032,7 @@ export function createInstance(schemeOpts = {}) {
   // externally. I also just like the idea of the tests being with the code itself.
   // But I'll separate them when I finally make this a JavaScript module.
 
-  class TestFailureError extends SchemeJSError {
+  class TestFailureError extends SchemeError {
     constructor(message, test, result, expected) {
       super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
       this.test = test;
