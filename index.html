@@ -1172,7 +1172,7 @@
         let inputText = getElementText(inputElement);
         console.log("TEXT", inputText);
         let pos = getSelectionPosition(inputElement);
-        for (let span of inputElement.getElementsByTagName('span'))
+        for (let span of inputElement.querySelectorAll('span.colorized-text'))
           span.replaceWith(span.textContent);
         inputElement.normalize();
         try {
@@ -1221,7 +1221,12 @@
               colorizeCharsAt(inputElement, pos, 1, 'colorized-text', red, 255-gb, 255-gb, alpha);
               gb = gb * .6;
             }
-            setSelectionPosition(inputElement, pos);
+            let indent = '';
+            if (enterKey) {
+              indent =  NBSP.repeat(2 * parseContext.length);
+              insertTextAt(inputElement, pos, indent);
+            }
+            setSelectionPosition(inputElement, pos + indent.length);
           } else {
             errorElement = document.createElement('div');
             errorElement.setAttribute('class', 'error');
@@ -1331,6 +1336,30 @@
       }
 
       function setSelectionPosition(element, pos) {
+        return applyFnAt(setSelection, element, pos)  
+        function setSelection(node, pos) {
+        let selection = window.getSelection();
+          if (!selection) return false;
+          console.log("SETSEL", node, pos);
+          selection.collapse(node, pos);
+          return true;
+        }
+      }
+
+      function insertTextAt(element, pos, text) {
+        return applyFnAt(insertText, element, pos);
+        function insertText(node, pos) {
+          if (node instanceof Element) {
+            node.element.insertAdjacentText('afterbegin', text);
+          } else if (node instanceof Text) {
+            let str = node.textContent;
+            str = str.substr(0, pos) + text + str.substr(pos);
+            node.textContent = str;
+          }
+        }
+      }
+
+      function applyFnAt(fn, element, pos) {
         console.log("SET", element, pos);
         return setSel(element);
         function setSel(element) {
@@ -1341,13 +1370,8 @@
                 return true;
             } else if (node instanceof Text) {
               let text = node.textContent;
-              if (pos <= text.length) {
-                let selection = window.getSelection();
-                if (!selection) return null;
-                console.log("SETSEL", node, pos);
-                selection.collapse(node, pos);
-                return true;
-              }
+              if (pos <= text.length)
+                return fn(node, pos);
               pos -= text.length;
             }
           }
