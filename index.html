@@ -1307,6 +1307,8 @@
         if (!element.contains(node)) return undefined;
         let pos = selection.anchorOffset;
         console.log("SEL", selection.anchorNode, selection.anchorOffset, selection);
+        if (node instanceof Element)
+          countCharsInNode(node);
         while (node && node !== element) {
           if (node.previousSibling)
             node = node.previousSibling;
