@@ -2137,7 +2137,7 @@ export function createInstance(schemeOpts = {}) {
       let lazy = this[LAZYCDR];
       if (lazy) {
         this[LAZYCDR] = undefined;
-        return this._cdrVal = lazy();
+        return this._cdrVal = lazy(this._cdrVal, this._carVal);
       }
       return this._cdrVal;
     }
@@ -2149,7 +2149,7 @@ export function createInstance(schemeOpts = {}) {
       let lazy = this[LAZYCAR];
       if (lazy) {
         this[LAZYCAR] = undefined;
-        return this._carVal = lazy();
+        return this._carVal = lazy(this._carVal, this._cdrVal);
       }
       return this._carVal;
     }
