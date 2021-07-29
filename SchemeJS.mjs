@@ -17,16 +17,6 @@ export const VERSION = "1.1 (beta)";
 // but that should only affect that specific SchemeJS instance; others should
 // be unaffected.
 //
-
-// A brief note about naming and string conventions:
-//
-//   Generally, variable, function and class names are camel case. An exception
-//   is when a function is also a Scheme function with dashes in its name. In that case
-//   the function uses an underscore where a dash occurs in the Scheme name.
-//
-//   Constants are all-caps. Strings are generally "str" if they are for humans; and 'str'
-//   if they're for internal purposes; `str` is used when convenient, as it quite often is.
-
 export function createInstance(schemeOpts = {}) {
   let readFile = schemeOpts.readFile;
   let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
@@ -76,7 +66,8 @@ export function createInstance(schemeOpts = {}) {
   let current = this;
   return {
     next() {
-      if (!is_cons(current)) return { done: true };
+      if (!is_cons(current))
+       return { done: true, value: current };  // value is whatever wasn't a cons cell
       let value = current[CAR];
       current = current[CDR];
       return { done: false, value };
@@ -285,28 +276,35 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("SchemeParseError", SchemeParseError);
 
   class SchemeSyntaxError extends SchemeParseError {
-    errorToken; tokens; position; line; lineChar
-    constructor(msg, errorToken, tokens) {
+    path; errorToken; tokens; position; line; lineChar
+    constructor(msg, path, errorToken, tokens) {
+      let position = errorToken.position, line = errorToken.line, lineChar = errorToken.lineChar;
+      if (path == null) path = "";
+      msg = `${path}(${line},${lineChar}}) ${msg}`;
       super(msg);
+      this.path = path;
       this.errorToken = errorToken;
       this.tokens = tokens;
-      this.position = errorToken.position;
-      this.line = errorToken.line;
-      this.lineChar = errorToken.lineChar;
+      this.position = position;
+      this.line = line;
+      this.lineChar = lineChar;
     }
   };
   SchemeSyntaxError.prototype.name = "SchemeSyntaxError";
   defineGlobalSymbol("SchemeSyntaxError", SchemeSyntaxError);
 
   class SchemeParseIncomplete extends SchemeParseError {
-    token; parseContext; position; line; lineChar;
-    constructor(token, parseContext) {
-      super();
+    path; token; parseContext; position; line; lineChar;
+    constructor(path, token, parseContext) {
+      let position = token.position, line = token.line, lineChar = token.lineChar;
+      if (path == null) path = "";
+      super(`${path}(${line},${lineChar}})`);
+      this.path = path;
       this.token = token;
       this.parseContext = parseContext;
-      this.position = token.position;
-      this.line = token.line;
-      this.lineChar = token.lineChar
+      this.position = position;
+      this.line = line;
+      this.lineChar = lineChar
     }
   };
   SchemeParseIncomplete.prototype.name = "SchemeParseIncomplete";
@@ -857,7 +855,7 @@ export function createInstance(schemeOpts = {}) {
       loadError.path = path;
       return false;
     }
-    let parseContext = [], opts = { parseContext };
+    let parseContext = [], opts = { parseContext, path };
     let tokenGenerator = schemeTokenGenerator(fileContent, opts);
     for(;;) {
       try {
@@ -2020,16 +2018,16 @@ export function createInstance(schemeOpts = {}) {
   }
 
   class IteratorList {
-    [CAR]; [LAZY]; _cdrVal; _mapper;
+    [CAR]; [LAZY]; _carVal; _cdrVal; _mapper; _mapped = false;
     constructor(car, iterator, mapper) {
-      this[CAR] = car;
-      this[LAZY] = iterator;
+      this_carVal = car;
       this._mapper = mapper;
+      if (!mapper) this._mapped = true;
+      this[LAZY] = iterator;
     }
     toString() { return string(this) }
-    // TODO: make the mapping lazy; when [CAR] is first accessed.
     // TODO: investigate whether the object can mutate to a normal CONS
-    // cell via setPrototype(). Usually not a good idea, byt it might
+    // cell via setPrototype(). Usually not a good idea, but it might
     // be in this case.
     get [CDR]() {
       let iterator = this[LAZY], cdr = NIL;
@@ -2037,18 +2035,26 @@ export function createInstance(schemeOpts = {}) {
         return this._cdrVal;
       let { done, value } = iterator.next();
       if (!done) {
-        let mapper = this._mapper;
-        if (mapper)
-          value = mapper(value);
-        cdr = new IteratorList(value, iterator, mapper);
+        cdr = new IteratorList(value, iterator, this._mapper);
       }
-      delete this[LAZY];
-      delete this._mapper;
+      this[LAZY] = undefined;
       return this._cdrVal = cdr;
     }
     set [CDR](val) {
       this._iterator = undefined;
       this._cdrVal = val;
+    }
+    get [CAR]() {
+      let car = this._carVal, mapper = this._mapper;
+      if (!this._mapped) {
+        car = this._carVal = mapper(car);
+        this._mapped = true;
+      }
+      return car;
+    }
+    set [CAR](val) {
+      this._carVal = val;
+      this._mapped = true;
     }
     [Symbol.iterator] = pairIterator();
   }
@@ -2069,7 +2075,6 @@ export function createInstance(schemeOpts = {}) {
     let { done, value } = iterator.next();
     if (done) return NIL;
     let mapper = value => _apply(fn, cons(value, NIL), this);
-    value = mapper(value);
     return new IteratorList(value, iterator, mapper);
   }
 
@@ -2284,9 +2289,11 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("parse", parseSExpr);
   exportAPI("parseSExpr", parseSExpr);
-  function parseSExpr(tokenSource, opts = {}) {
+  function parseSExpr(tokenSource, ...rest) {
+    let opts = rest[0] ?? {};
     opts = { ...schemeOpts, ...opts };
     let parseContext = opts.parseContext ?? [];
+    let path = opts.path;
     opts.parseContext = parseContext;
     let assignSyntax = opts.assignSyntax ?? false;
     let tokenGenerator;
@@ -2306,16 +2313,16 @@ export function createInstance(schemeOpts = {}) {
       // else remembers that. In any case it's opt-in.
       let sym = token().value;
       parseContext.push({ type: 'assign', value: sym });
-      consumeToken();
-      consumeToken();
+      consumeToken(), consumeToken();
       let assigned = parseExpr();
       parseContext.pop();
       expr = list(Atom("define"), sym, assigned);
     } else {
       expr = parseExpr(0);
     }
-
-    if ((_tokens.length > 0 && _tokens[0].type === 'newline') || token().type === 'end')
+    let initialNewlineOK = -1;
+    let tok = token(initialNewlineOK);
+    if (tok.type === 'newline' || tok.type === 'end')
       return expr;
     throwSyntaxError();
 
@@ -2347,7 +2354,7 @@ export function createInstance(schemeOpts = {}) {
             return val;
           }
           if (token().type === 'end' || token().type === 'partial')
-            throw new SchemeParseIncomplete(token(), parseContext);
+            throw new SchemeParseIncomplete(path, token(), parseContext);
           if (token().type === 'garbage') throwSyntaxError();
           let first = parseExpr();
           let rest = parseListBody();
@@ -2370,7 +2377,7 @@ export function createInstance(schemeOpts = {}) {
           if (token().type === ',')  // Comma is optional
             consumeToken();
           if (token().type === 'end' || token().type === 'partial')
-            throw new SchemeParseIncomplete(token(), parseContext);
+            throw new SchemeParseIncomplete(path, token(), parseContext);
         }
       }
 
@@ -2417,7 +2424,7 @@ export function createInstance(schemeOpts = {}) {
             if (token().type === ',')  // Comma is optional
               consumeToken();
             if (token().type === 'end' || token().type === 'partial')
-              throw new SchemeParseIncomplete(token(), parseContext);
+              throw new SchemeParseIncomplete(path, token(), parseContext);
           }
           if (!gotIt) throwSyntaxError();
         }
@@ -2438,26 +2445,31 @@ export function createInstance(schemeOpts = {}) {
       // (2) Foil attempts to peek for tokens across a line boundary by leaving
       //     'newline' tokens in the peek buffer. But to simplify the parser,
       //      token(0) skips past any newline tokens.
-      if (n < _tokens.length)
-        return _tokens[n];
-      for (let get = n - _tokens.length + 1; get > 0 && !_done; --get) {
-        let next = tokenGenerator.next();
-        if (next.done)
-          _done = true;
-        else
-          _tokens.push(next.value);
+      let initialNewlineOK = false;
+      if (n < 0) {
+        initialNewlineOK = true;
+        n = 0;
       }
-      // Never return a 'newline' fall as the current token
-      while (_tokens.length > 0 && _tokens[0].type === 'newline')
-        _tokens.shift();
-      if (n < _tokens.length)
-        return _tokens[n];
-      return { type: 'end', };
+      for (;;) {
+        for (let get_minus_1 = n - _tokens.length; get_minus_1 >= 0 && !_done; --get_minus_1) {
+          let { done, value } = tokenGenerator.next();
+          if (done)
+            _done = true;
+          else
+            _tokens.push(value);
+        }
+        // Never return a 'newline' as the current token (unless told otherwise)
+        if (!initialNewlineOK) {
+          while (_tokens.length > 0 && _tokens[0].type === 'newline')
+            _tokens.shift();
+        }
+        if (n < _tokens.length)
+          return _tokens[n];
+      }
     }
 
     function consumeToken() {
-      let tok = _tokens.shift();
-      return tok;
+      return _tokens.shift();
     }
 
     function throwSyntaxError() {
@@ -2475,7 +2487,7 @@ export function createInstance(schemeOpts = {}) {
         str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
         sep = " ";
       }
-      throw new SchemeSyntaxError(str, errorToken, tokens);
+      throw new SchemeSyntaxError(str, path, errorToken, tokens);
     }
   }
 
@@ -2683,7 +2695,6 @@ export function createInstance(schemeOpts = {}) {
       emit(`let ${bindingName} = bound[${string(bindingName)}];`);
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
-    console.log("COMPILED", code);
     return cons(code, bindSymToObj);
 
     function bind(obj, name) {
@@ -3010,7 +3021,7 @@ export function createInstance(schemeOpts = {}) {
         let expr = parseSExpr(tokenGenerator, opts);
         if (!expr) continue;
         let evaluated = _eval(expr, scope);
-        print (evaluated);
+        print(evaluated);
       } catch (error) {
         if (error instanceof SchemeError)
           reportSchemeError(error);
