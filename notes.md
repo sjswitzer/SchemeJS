@@ -27,6 +27,13 @@ where an own "this" is required, or where a forward reference is needed.
 I don't use "const" for things that happen to be const, for instance as loop iterands;
 that's just too damn fussy. I use it for things that _should_ be const or _must_ be const.
 
+Instead of passing in booleans and other unnamed values as parameters (foo(3, true, false, 17))
+I generally try to assign the value to a variable so that it has a name then pass that variable.
+If a function has more than a few obvious parameters, I usually pass an "opts" object instead
+so that parameters can be named entries in the opts argument. Usually, the first thing the function
+does is access the options and assign them to variables and provide a default. This gets that
+out of the way up front and provides documentation on what the options are.
+
 ## Runtime Details
 
 The current scope is simply a JavaScript object and the Scheme scope chain is implemented through its
