@@ -2018,9 +2018,9 @@ export function createInstance(schemeOpts = {}) {
   }
 
   class IteratorList {
-    [CAR]; [LAZY]; _carVal; _cdrVal; _mapper; _mapped = false;
+    [LAZY]; _carVal; _cdrVal; _mapper; _mapped = false;
     constructor(car, iterator, mapper) {
-      this_carVal = car;
+      this._carVal = car;
       this._mapper = mapper;
       if (!mapper) this._mapped = true;
       this[LAZY] = iterator;
