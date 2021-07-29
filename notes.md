@@ -58,6 +58,8 @@ I stand atop all that work without hardly lifting a finger. It's interesting to 
 the degree of correspondence between Scheme's runtime and a JavaScript runtime.
 You couldn't design a better Scheme runtime if you tried:
 
+Dynamically typed: Check.
+
 Strings, numbers, booleans and Functions: Check. I threw in BigInt for fun. "Factoral" likes it.
 
 Atoms: Check. They're Symbols (in the ATOMS dictionary).
@@ -72,9 +74,20 @@ Cons cells and nil? Those are really the only thing missing and I use JavaScript
 for those and threw in lazily-evaluated CAR and CDR references with zero overhead on
 ordinary lisp cells.
 
+In short, the JavaScript runtime is ideal for Scheme--_much_ better than a Java VM--because
+it has dynamic types, the right sorts of primitive types, real closures, no need for "boxing"
+(anyway, it's transparent to users and highly-optimized)
+and implements something that can be used for scope resolution as a highly-optimized primitive.
+
+I didn't set out to write the fastest Lisp implementation but halfway through implementing
+it I realized it inevitably would be, thanks to the JavaScript runtime and JITs.
+If I could finish it, that is. And to be fair, the parser could be faster.
+
 It proved difficult to keep JavaScript objects from sneeking into the Scheme environment
-so I invited them in as first'class. SchemeJS is fully Scheme and fully JavaScript. It
-even has notations fot array and object literals. Every JavaScript operator and global
+so I invited them in as first'class. SchemeJS is fully Scheme and fully JavaScript.
+The Scheme dialect is modelled roughly on SIOD since there is a corpus of code for
+that dialect, but it could conceivably be moved in different directions.
+It even has notations fot array and object literals. Every JavaScript operator and global
 symbol is available in SchemeJS. Cons cells are JavaScript-iterables but internally
 I generally avoid iterating them because "while (is_cons(obj)) ..." is a lot faster.
 But you _can_ iterate over them using "for (let obj of list) ...".
@@ -89,3 +102,8 @@ A Scheme instance is the global scope itself. Globally-defined Scheme values and
 are the values of their atoms, i.e. symbols. JavaScript API methods are string-keyed, and
 generally must be invoked as globalScope.apiName(), which, again, is pretty much what you'd
 do anyway.
+
+The parser provides feedback to REPLs through a parseContext list. REPLs can use this for
+auto-indent and syntax highlighting if they desire. SchemeSJ comes with a node CLI/REPL and
+a Web REPL, but these are just simple embeddings of the Scheme module. All you need to do
+is import it and create a global scope.
