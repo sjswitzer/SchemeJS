@@ -1179,7 +1179,7 @@ export function createInstance(schemeOpts = {}) {
   // (qsort list predicate-fcn access-fcn)
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
   //   comparable performance and is excellent with partially-sorted lists.
-  defineGlobalSymbol("sort", mergesort, "qsort");
+  defineGlobalSymbol("mergesort", mergesort, "sort", "qsort");
   function mergesort(list, ...rest) {
     if (list === NIL) return NIL;
     // Sort Arrays as Arrays
@@ -1198,7 +1198,7 @@ export function createInstance(schemeOpts = {}) {
     return in_place_mergesort(copied, ...rest);
   }
 
-  defineGlobalSymbol("in-place-sort", in_place_mergesort);
+  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, "in-place-sort", "nsort");
   function in_place_mergesort(list, ...rest) {
     if (list === NIL) return NIL;
     let predicateFn = rest[0], accessFn = rest[1];
@@ -1209,7 +1209,7 @@ export function createInstance(schemeOpts = {}) {
         before = (a, b) => predicateFn.call(scope, accessFn.call(scope, a), accessFn.call(scope, b));
       } else if (typeof predicateFn !== 'function') {
         // Make sure it's a JS function, not a Scheme function
-        before = (a, b) => predicateFn.call(scope, predicateFn);
+        before = (a, b) => _apply(fn, cons(a, cons(b, NIL)), this);
       }
     } else {
       if (bool(accessFn)) {
@@ -1231,6 +1231,12 @@ export function createInstance(schemeOpts = {}) {
     if (list === NIL) return NIL;
     // Sort arrays as arrays
     if (Array.isArray(list)) {
+      // ES10 stipulates that it only cares wheter the compare function
+      // returns > 0, which means move "b"  before "a," or <= zero,
+      // which means leave "a" before "b". There's no ned to distinguish
+      // the "equal" case. Which is nice for us because the "before"
+      // predicate doesn't distinguish that case (without a second call
+      // with reversed arguments.)
       list.sort((a,b) => before.call(scope, a, b) ? -1 : 1);
       return list;
     }
@@ -2165,9 +2171,9 @@ export function createInstance(schemeOpts = {}) {
 
       if (ch === ';' || (ch === '/' && peekc() === '/')) {  // ; or // begins a comment
         parseContext.push({ type: 'comment', position, line, lineChar });
-        yield { type: 'newline', position, line, lineChar };
         while (ch && !NL[ch])
           nextc();
+        yield { type: (ch ? 'newline': 'end'), position, line, lineChar };
         parseContext.pop();
         continue;
       }
@@ -2177,6 +2183,8 @@ export function createInstance(schemeOpts = {}) {
         nextc(); nextc();
         while (ch && !(ch === '*' && peekc() === '/'))
           nextc();
+        if (!ch)
+          yield { type: 'end', position, line, lineChar };
         parseContext.pop();
         nextc(); nextc();
       }
@@ -2213,9 +2221,6 @@ export function createInstance(schemeOpts = {}) {
         if (ch === '"') {
           yield { type: 'string', value: str, position, line, lineChar };
           nextc();
-        } else {
-          yield { type: 'partial', value: '"'+str, position, line, lineChar };
-          // Don't consume the newline or the REPL will prompt for another line of input
         }
         continue;
       }
@@ -2357,7 +2362,7 @@ export function createInstance(schemeOpts = {}) {
             consumeToken();
             return val;
           }
-          if (token().type === 'end' || token().type === 'partial')
+          if (token().type === 'end')
             throw new SchemeParseIncomplete(path, token(), parseContext);
           if (token().type === 'garbage') throwSyntaxError();
           let first = parseExpr();
@@ -2380,7 +2385,7 @@ export function createInstance(schemeOpts = {}) {
           res.push(item);
           if (token().type === ',')  // Comma is optional
             consumeToken();
-          if (token().type === 'end' || token().type === 'partial')
+          if (token().type === 'end')
             throw new SchemeParseIncomplete(path, token(), parseContext);
         }
       }
@@ -2427,7 +2432,7 @@ export function createInstance(schemeOpts = {}) {
             gotIt = true;
             if (token().type === ',')  // Comma is optional
               consumeToken();
-            if (token().type === 'end' || token().type === 'partial')
+            if (token().type === 'end')
               throw new SchemeParseIncomplete(path, token(), parseContext);
           }
           if (!gotIt) throwSyntaxError();
@@ -2485,7 +2490,6 @@ export function createInstance(schemeOpts = {}) {
           let tok = token(0);
           if (tok.type === 'end' || tok.type === 'newline') break;
           tokens.push(token);
-          if (tok.type === 'partial') break;
         }
       }
       for (let tok of tokens) {
