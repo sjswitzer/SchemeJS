@@ -1907,6 +1907,8 @@ export function createInstance(schemeOpts = {}) {
             sep = " ";
             obj = obj[CDR];
           }
+          if (obj[LAZY])
+            return put("...)");
           if (obj !== NIL) {
             put(".");
             sep = " ";
