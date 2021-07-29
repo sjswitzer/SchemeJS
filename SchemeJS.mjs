@@ -2465,6 +2465,8 @@ export function createInstance(schemeOpts = {}) {
         }
         if (n < _tokens.length)
           return _tokens[n];
+        if (_done)
+          return { type: 'end' };
       }
     }
 
