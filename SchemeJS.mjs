@@ -281,8 +281,7 @@ export function createInstance(schemeOpts = {}) {
     path; errorToken; tokens; position; line; lineChar
     constructor(msg, path, errorToken, tokens) {
       let position = errorToken.position, line = errorToken.line, lineChar = errorToken.lineChar;
-      if (path == null) path = "";
-      msg = `${path}(${line},${lineChar}}) ${msg}`;
+      if (path) msg = `${path}(${line},${lineChar}) ${msg}`;
       super(msg);
       this.path = path;
       this.errorToken = errorToken;
@@ -299,8 +298,9 @@ export function createInstance(schemeOpts = {}) {
     path; token; parseContext; position; line; lineChar;
     constructor(path, token, parseContext) {
       let position = token.position, line = token.line, lineChar = token.lineChar;
-      if (path == null) path = "";
-      super(`${path}(${line},${lineChar}})`);
+      let msg = "";
+        if (path) msg = `${path}(${line},${lineChar}) ${msg}`;
+      super(msg);
       this.path = path;
       this.token = token;
       this.parseContext = parseContext;
