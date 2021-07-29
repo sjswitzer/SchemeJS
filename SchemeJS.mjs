@@ -2039,6 +2039,91 @@ export function createInstance(schemeOpts = {}) {
     return NIL;
   }
 
+  //
+  // Lazy lists by mutating down to ordinary Cons cells
+  //
+  class LazyCarList {
+    [LAZYCAR]; [CDR];
+    constructor(getCar, cdr) {
+      this[LAZYCAR] = getCar;
+      this[CDR] = cdr;
+    }
+    toString() { return string(this) }
+    get [CAR]() {
+      let car = this[LAZYCAR]();
+      delete this[LAZYCAR];
+      Object.setPrototypeOf(this, Cons.prototype);
+      return this[CAR] = car;
+    }
+    set [CAR](val) {
+      delete this[LAZYCAR];
+      Object.setPrototypeOf(this, Cons.prototype);
+      this[CAR] = val;
+    }
+    [Symbol.iterator] = pairIterator();
+  }
+  LazyCarList.prototype[PAIR] = true;
+
+  class LazyCdrList {
+    [CAR]; [LAZYCDR];
+    constructor(car, getCdr) {
+      this[CAR] = car;
+      this[LAZYCDR] = getCdr;
+    }
+    toString() { return string(this) }
+    get [CDR]() {
+      let cdr = this[LAZYCDR]();
+      delete this[LAZYCDR];
+      Object.setPrototypeOf(this, Cons.prototype);
+      return this[CDR] = cdr;
+    }
+    set [CDR](val) {
+      delete this[LAZYCDR];
+      Object.setPrototypeOf(this, Cons.prototype);
+      this[CDR] = val;
+    }
+    [Symbol.iterator] = pairIterator();
+  }
+  LazyCdrList.prototype[PAIR] = true;
+
+  class LazyCarCdrList {
+    [LAZYCAR]; [LAZYCDR];
+    constructor(getCar, getCdr) {
+      this[LAZYCAR] = getCar;
+      this[LAZYCDR] = getCdr;
+    }
+    toString() { return string(this) }
+    get [CAR]() {
+      let car = this[LAZYCAR]();
+      delete this[LAZYCAR];
+      Object.setPrototypeOf(this, LazyCdrList.prototype);
+      return this[CAR] = car;
+    }
+    set [CAR](val) {
+      delete this[LAZYCAR];
+      Object.setPrototypeOf(this, LazyCdrList.prototype);
+      this[CAR] = val;
+    }
+    get [CDR]() {
+      let cdr = this[LAZYCDR]();
+      delete this[LAZYCDR];
+      Object.setPrototypeOf(this, LazyCarList.prototype);
+      return this[CDR] = cdr;
+    }
+    set [CDR](val) {
+      delete this[LAZYCDR];
+      Object.setPrototypeOf(this, LazyCarList.prototype);
+      this[CDR] = val;
+    }
+    [Symbol.iterator] = pairIterator();
+  }
+  LazyCarCdrList.prototype[PAIR] = true;
+
+  //
+  // Lazy lists by being a Cons imposter
+  //   Leaving this alternat implementation in because mutating objects is deemed
+  //   sketchy and poorly-performing. Except, perhaps, in this particular case.
+  //
   class LazyList {
     [LAZYCAR]; [LAZYCDR]; _carVal; _cdrVal;
     constructor(carVal, lazyCar, cdrVal, lazyCdr) {
@@ -2048,9 +2133,6 @@ export function createInstance(schemeOpts = {}) {
       this[LAZYCDR] = lazyCdr;
     }
     toString() { return string(this) }
-    // TODO: investigate whether the object can mutate to a normal CONS
-    // cell via setPrototype(). Usually not a good idea, but it might
-    // be in this case.
     get [CDR]() {
       let lazy = this[LAZYCDR];
       if (lazy) {
@@ -2082,6 +2164,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("list-view", list_view);
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
+    /****
     function getCdr() {
       let { done, value } = iterator.next();
       if (done) return NIL;
@@ -2090,12 +2173,23 @@ export function createInstance(schemeOpts = {}) {
     let { done, value } = iterator.next();
     if (done) return NIL;
     return new LazyList(value, undefined, undefined, getCdr);
+    /*/
+    function getCdr() {
+      let { done, value } = iterator.next();
+      if (done) return NIL;
+      return new LazyCdrList(value, getCdr);
+    }
+    let { done, value } = iterator.next();
+    if (done) return NIL;
+    return new LazyCdrList(value, getCdr);
+    /**/
   }
 
   defineGlobalSymbol("lazy-map", lazy_map);
   function lazy_map(fn, obj) {
     if (!bool(fn)) return NIL; // XXX probably should throw; also mapcar
     let scope = this, iterator = iteratorFor(obj, TypeError);
+    /****
     function getCdr() {
       let { done, value } = iterator.next();
       if (done) return NIL;
@@ -2106,6 +2200,18 @@ export function createInstance(schemeOpts = {}) {
     if (done) return NIL;
     const getCar = () => _apply(fn, cons(value, NIL), scope);
     return new LazyList(undefined, getCar, undefined, getCdr);
+    /*/
+    function getCdr() {
+      let { done, value } = iterator.next();
+      if (done) return NIL;
+      const getCar = () => _apply(fn, cons(value, NIL), scope);
+      return new LazyCarCdrList(getCar, getCdr);
+    }
+    let { done, value } = iterator.next();
+    if (done) return NIL;
+    const getCar = () => _apply(fn, cons(value, NIL), scope);
+    return new LazyCarCdrList(getCar, getCdr);
+    /**/
   }
 
   // Can't be "string" directly because that has an optional parameter and
