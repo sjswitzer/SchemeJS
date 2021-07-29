@@ -2239,9 +2239,9 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
-  // S-epression parser
+  // S-epression tokenizer and parser
   //
-  
+  exportAPI("schemeTokenGenerator", schemeTokenGenerator);
   function* schemeTokenGenerator(characterSource, opts) {
     let parseContext = opts.parseContext ?? [];
     let characterGenerator = iteratorFor(characterSource, LogicError);

@@ -261,7 +261,7 @@
         /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
         flex: 1 1 10em;
         overflow: scroll;
-        justify-items: end;
+        justify-content: flex-end;
         margin-top: 0.1em;
         padding: .15em .15em .15em .15em;
         width: 100%;
@@ -276,6 +276,7 @@
 
       #output > div {
         position: relative;  /* so that the span can be positioned absolutely */
+        justify-self: end;
       }
       #output > div > div {
         overflow: scroll;
@@ -1015,6 +1016,7 @@
         console.log("MODULE", SchemeJS);
         globalScope = SchemeJS.createInstance({ lambdaStr: "\u03BB", slambdaStr: "\u03BB\u03BB" });
         inputElement.contentEditable = 'true';
+        inputElement.focus();
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
@@ -1179,11 +1181,34 @@
         let parseText = inputText;
         if (pos != null) parseText = parseText.substr(0, pos);
         try {
-          let expr = globalScope.parseSExpr(parseText, { parseContext, assignSyntax });
-          if (!enterKey || parseText != inputText) return;
+          function* characterGenerator() {
+            let part1 = inputText.substr(0, pos), part2 = inputText.substr(pos);
+            // Feed parser part up to the cursor
+            for (let ch of part1)
+              yield ch;
+            // Colorize opening grouping symbols
+            let alpha = 1;
+            for (let i = parseContext.length; i > 0; --i) {
+              let tok = parseContext[i-1], pos = tok.position, width = 1;
+              if (typeof tok.value === 'string') width = tok.value.length;
+              colorizeCharsAt(inputElement, pos, 1, 'colorized-text', `hsl(44, 100%, 50%, ${alpha})`);
+              alpha *= .8;
+            }
+            // Feed the rest
+            for (let ch of part2)
+              yield ch;
+          }
+
+          // Parse
+          let tokenGenerator = globalScope.schemeTokenGenerator(characterGenerator(), { parseContext });
+          let expr = globalScope.parseSExpr(tokenGenerator, { parseContext, assignSyntax });
+          if (!enterKey) return;
+
+          // Eval
           let evaluated = globalScope._eval(expr, globalScope);
           let evaluatedString = globalScope.string(evaluated);
 
+          // Show results and save in variables for later reuse
           let div = document.createElement('div');
           div.setAttribute('class', 'input');
           let span = document.createElement('span');
@@ -1216,12 +1241,6 @@
         } catch (error) {
           if (error instanceof SchemeParseError) {
             console.log("ERROR", error);
-            let alpha = 1;
-            for (let i = parseContext.length; i > 0; --i) {
-              let pos = parseContext[i-1].position;
-              colorizeCharsAt(inputElement, pos, 1, 'colorized-text', `hsl(44, 100%, 50%, ${alpha})`);
-              alpha *= .8;
-            }
             if (error instanceof SchemeSyntaxError) {
               let position = error.position;
               colorizeCharsAt(inputElement, position, parseText.length - position, 'error-tokens');
