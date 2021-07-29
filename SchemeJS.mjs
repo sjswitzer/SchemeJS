@@ -1859,7 +1859,7 @@ export function createInstance(schemeOpts = {}) {
         if (is_cons(obj)) {
           if (obj[LAZYCDR]) {
             if (obj[LAZYCAR])
-              return put(`(... . ...)`);
+              return put(`(... ...)`); // not `... . ...`; the cdr might be, and probably is, a list itself
             return put(`(${string(obj[CAR])} ...)`);
           } else if (obj[LAZYCAR]) {
             put("(...");
@@ -2039,41 +2039,37 @@ export function createInstance(schemeOpts = {}) {
     return NIL;
   }
 
-  class IteratorList {
-    [LAZYCAR]; [LAZYCDR]; _carVal; _cdrVal; _mapper;
-    constructor(car, iterator, mapper) {
-      this._carVal = car;
-      this._mapper = mapper;
-      if (mapper) this[LAZYCAR] = true;
-      this[LAZYCDR] = iterator;
+  class LazyList {
+    [LAZYCAR]; [LAZYCDR]; _carVal; _cdrVal;
+    constructor(carVal, lazyCar, cdrVal, lazyCdr) {
+      this._carVal = carVal;
+      this[LAZYCAR] = lazyCar;
+      this._cdrVal = cdrVal
+      this[LAZYCDR] = lazyCdr;
     }
     toString() { return string(this) }
     // TODO: investigate whether the object can mutate to a normal CONS
     // cell via setPrototype(). Usually not a good idea, but it might
     // be in this case.
     get [CDR]() {
-      let iterator = this[LAZYCDR], cdr = NIL;
-      if (!iterator)
-        return this._cdrVal;
-      let { done, value } = iterator.next();
-      if (!done) {
-        cdr = new IteratorList(value, iterator, this._mapper);
+      let lazy = this[LAZYCDR];
+      if (lazy) {
+        this[LAZYCDR] = undefined;
+        return this._cdrVal = lazy();
       }
-      this[LAZYCDR] = undefined;
-      return this._cdrVal = cdr;
+      return this._cdrVal;
     }
     set [CDR](val) {
       this[LAZYCDR] = undefined;
       this._cdrVal = val;
     }
     get [CAR]() {
-      let car = this._carVal, mapper = this._mapper;
-      if (this[LAZYCAR]) {
+      let lazy = this[LAZYCAR];
+      if (lazy) {
         this[LAZYCAR] = undefined;
-        car = this._carVal = mapper(car);
-        // Can't remove _mapper because [CDR] might still need it.
+        return this._carVal = lazy();
       }
-      return car;
+      return this._carVal;
     }
     set [CAR](val) {
       this[LAZYCAR] = undefined;
@@ -2081,24 +2077,35 @@ export function createInstance(schemeOpts = {}) {
     }
     [Symbol.iterator] = pairIterator();
   }
-  IteratorList.prototype[PAIR] = true;
+  LazyList.prototype[PAIR] = true;
 
   defineGlobalSymbol("list-view", list_view);
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
+    function getCdr() {
+      let { done, value } = iterator.next();
+      if (done) return NIL;
+      return new LazyList(value, undefined, undefined, getCdr);
+    }
     let { done, value } = iterator.next();
     if (done) return NIL;
-    return new IteratorList(value, iterator);
+    return new LazyList(value, undefined, undefined, getCdr);
   }
 
   defineGlobalSymbol("lazy-map", lazy_map);
   function lazy_map(fn, obj) {
     if (!bool(fn)) return NIL; // XXX probably should throw; also mapcar
-    let iterator = iteratorFor(obj, TypeError);
+    let scope = this, iterator = iteratorFor(obj, TypeError);
+    function getCdr() {
+      let { done, value } = iterator.next();
+      if (done) return NIL;
+      const getCar = () => _apply(fn, cons(value, NIL), scope);
+      return new LazyList(undefined, getCar, undefined, getCdr);
+    }
     let { done, value } = iterator.next();
     if (done) return NIL;
-    let mapper = value => _apply(fn, cons(value, NIL), this);
-    return new IteratorList(value, iterator, mapper);
+    const getCar = () => _apply(fn, cons(value, NIL), scope);
+    return new LazyList(undefined, getCar, undefined, getCdr);
   }
 
   // Can't be "string" directly because that has an optional parameter and
