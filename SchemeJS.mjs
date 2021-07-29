@@ -2057,15 +2057,15 @@ export function createInstance(schemeOpts = {}) {
     get [CAR]() {
       let car = this._carVal, mapper = this._mapper;
       if (this[LAZYCAR]) {
-        car = this._carVal = mapper(car);
         this[LAZYCAR] = undefined;
+        car = this._carVal = mapper(car);
         // Can't remove _mapper because [CDR] might still need it.
       }
       return car;
     }
     set [CAR](val) {
+      this[LAZYCAR] = undefined;
       this._carVal = val;
-      this._mapped = true;
     }
     [Symbol.iterator] = pairIterator();
   }
