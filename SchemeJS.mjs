@@ -1902,13 +1902,13 @@ export function createInstance(schemeOpts = {}) {
           put("(");
           indent += indentMore;
           sep = "";
-          while (is_cons(obj) && !obj[LAZY]) {
+          while (is_cons(obj)) {
             toString(obj[CAR], maxDepth);
             sep = " ";
+            if (obj[LAZY])
+              return put("...)");
             obj = obj[CDR];
           }
-          if (obj[LAZY])
-            return put("...)");
           if (obj !== NIL) {
             put(".");
             sep = " ";
