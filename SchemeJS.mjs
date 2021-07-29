@@ -1857,61 +1857,73 @@ export function createInstance(schemeOpts = {}) {
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
         if (is_cons(obj)) {
-          if (obj[LAZYCDR])
+          if (obj[LAZYCDR]) {
+            if (obj[LAZYCAR])
+              return put(`(... . ...)`);
             return put(`(${string(obj[CAR])} ...)`);
-          let objCar = obj[CAR];
-          if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
-               objCar == CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
-                && is_cons(obj[CDR])) {
-            // Specal treatment of lambdas and closures with curry notation
-            if (objCar == CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
-              if (is_cons(obj[CDR][CDR])) {
-                let evalCount, scopeCons = obj[CDR];
-                if (objCar === SCLOSURE_ATOM) {
-                  evalCount = obj[CDR][CAR];
-                  scopeCons = obj[CDR][CDR];
-                }
-                let params = scopeCons[CDR][CAR];
-                if (typeof params === 'symbol') {
-                  put("(");
-                  indent += indentMore;
-                  sep = "";
+          } else if (obj[LAZYCAR]) {
+            put("(...");
+            indent += indentMore;
+            sep = " "
+            obj = obj[CDR];
+          } else {
+            put("(");
+            indent += indentMore;
+            sep = "";
+            let objCar = obj[CAR];
+            if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
+                objCar == CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
+                  && is_cons(obj[CDR])) {
+              // Specal treatment of lambdas and closures with curry notation
+              if (objCar == CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
+                if (is_cons(obj[CDR][CDR])) {
+                  let evalCount, scopeCons = obj[CDR];
                   if (objCar === SCLOSURE_ATOM) {
-                    toString(evalCount, maxDepth);
-                    sep = " ";
+                    evalCount = obj[CDR][CAR];
+                    scopeCons = obj[CDR][CDR];
                   }
-                  toString(objCar, maxDepth);  // %%closure or %%%closure
-                  sep = " ";
-                  toString(scopeCons[CAR], maxDepth);  // scope
-                  sep = " ";
-                  toString(params, maxDepth);  // actually the atom
-                  sep = ""; put(".");
-                  toString(scopeCons[CDR][CDR], maxDepth);  // the form
-                  sep = ""; put(")", true);
-                  indent = saveIndent;
-                  return
+                  let params = scopeCons[CDR][CAR];
+                  if (typeof params === 'symbol') {
+                    put("(");
+                    indent += indentMore;
+                    sep = "";
+                    if (objCar === SCLOSURE_ATOM) {
+                      toString(evalCount, maxDepth);
+                      sep = " ";
+                    }
+                    toString(objCar, maxDepth);  // %%closure or %%%closure
+                    sep = " ";
+                    toString(scopeCons[CAR], maxDepth);  // scope
+                    sep = " ";
+                    toString(params, maxDepth);  // actually the atom
+                    sep = ""; put(".");
+                    toString(scopeCons[CDR][CDR], maxDepth);  // the form
+                    sep = ""; put(")", true);
+                    indent = saveIndent;
+                    return
+                  }
                 }
               }
-            }
-            let str = "(", params = obj[CDR][CAR], forms = obj[CDR][CDR];
-            if (objCar === LAMBDA_ATOM) str += lambdaStr;
-            if (objCar === SLAMBDA_ATOM) str += slambdaStr;
-            if (typeof params === 'symbol') {  // curry notation
-              str += `${params.description}.`;
-              put(str);
-              indent += indentMore;
-              toString(forms, maxDepth);
-              sep = "";
-              put(")", true);
-              indent = saveIndent;
-              return;
+              let str = "(", params = obj[CDR][CAR], forms = obj[CDR][CDR];
+              if (objCar === LAMBDA_ATOM) str += lambdaStr;
+              if (objCar === SLAMBDA_ATOM) str += slambdaStr;
+              if (typeof params === 'symbol') {  // curry notation
+                str += `${params.description}.`;
+                put(str);
+                indent += indentMore;
+                toString(forms, maxDepth);
+                sep = "";
+                put(")", true);
+                indent = saveIndent;
+                return;
+              }
             }
           }
-          put("(");
-          indent += indentMore;
-          sep = "";
           while (is_cons(obj)) {
-            toString(obj[CAR], maxDepth);
+            if (obj[LAZYCAR])
+              put("...");
+            else
+              toString(obj[CAR], maxDepth);
             sep = " ";
             if (obj[LAZYCDR])
               return put("...)");
