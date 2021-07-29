@@ -2293,6 +2293,7 @@ export function createInstance(schemeOpts = {}) {
     let opts = rest[0] ?? {};
     opts = { ...schemeOpts, ...opts };
     let parseContext = opts.parseContext ?? [];
+    parseContext.length = 0;
     let path = opts.path;
     opts.parseContext = parseContext;
     let assignSyntax = opts.assignSyntax ?? false;
@@ -2349,6 +2350,7 @@ export function createInstance(schemeOpts = {}) {
           } else if (token().type === '.') {
             consumeToken();
             let val = parseExpr();
+            parseContext.pop();
             if (token().type !== ')') throwSyntaxError();
             consumeToken();
             return val;
