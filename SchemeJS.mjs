@@ -2456,8 +2456,8 @@ export function createInstance(schemeOpts = {}) {
     } else {
       expr = parseExpr(0);
     }
-    let initialNewlineOK = -1;
-    let tok = token(initialNewlineOK);
+    let initialNewlineOK = true;
+    let tok = token(0, initialNewlineOK);
     if (tok.type === 'newline' || tok.type === 'end')
       return expr;
     throwSyntaxError();
@@ -2576,17 +2576,12 @@ export function createInstance(schemeOpts = {}) {
       }
     }
 
-    function token(n = 0) {
+    function token(n = 0, initialNewlineOK) {
       // Two main ideas here, mostly in support of the REPL:
       // (1) Don't read anything until absolutely necessary.
       // (2) Foil attempts to peek for tokens across a line boundary by leaving
       //     'newline' tokens in the peek buffer. But to simplify the parser,
       //      token(0) skips past any newline tokens.
-      let initialNewlineOK = false;
-      if (n < 0) {
-        initialNewlineOK = true;
-        n = 0;
-      }
       for (;;) {
         for (let get_minus_1 = n - _tokens.length; get_minus_1 >= 0 && !_done; --get_minus_1) {
           let { done, value } = tokenGenerator.next();
