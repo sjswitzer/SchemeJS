@@ -43,7 +43,8 @@ export function createInstance(schemeOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR"), LAZY = Symbol("LAZY");
+  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR");
+  const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR");
 
   // Trust the JIT to inline this
   const is_cons = obj => obj != null && obj[PAIR] === true;
@@ -252,7 +253,8 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("PAIR_SYMBOL", PAIR);
   exportAPI("CAR_SYMBOL", CAR);
   exportAPI("CDR_SYMBOL", CDR);
-  exportAPI("LAZY_SYMBOL", LAZY);
+  exportAPI("LAZYCAR_SYMBOL", LAZYCAR);
+  exportAPI("LAZYCDR_SYMBOL", LAZYCDR);
 
   defineGlobalSymbol("VERSION", VERSION);
   defineGlobalSymbol("is-atom", is_atom, "atom?");
@@ -1855,7 +1857,7 @@ export function createInstance(schemeOpts = {}) {
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
         if (is_cons(obj)) {
-          if (obj[LAZY])
+          if (obj[LAZYCDR])
             return put(`(${string(obj[CAR])} ...)`);
           let objCar = obj[CAR];
           if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
@@ -1911,7 +1913,7 @@ export function createInstance(schemeOpts = {}) {
           while (is_cons(obj)) {
             toString(obj[CAR], maxDepth);
             sep = " ";
-            if (obj[LAZY])
+            if (obj[LAZYCDR])
               return put("...)");
             obj = obj[CDR];
           }
@@ -2026,37 +2028,38 @@ export function createInstance(schemeOpts = {}) {
   }
 
   class IteratorList {
-    [LAZY]; _carVal; _cdrVal; _mapper; _mapped = false;
+    [LAZYCAR]; [LAZYCDR]; _carVal; _cdrVal; _mapper;
     constructor(car, iterator, mapper) {
       this._carVal = car;
       this._mapper = mapper;
-      if (!mapper) this._mapped = true;
-      this[LAZY] = iterator;
+      if (mapper) this[LAZYCAR] = true;
+      this[LAZYCDR] = iterator;
     }
     toString() { return string(this) }
     // TODO: investigate whether the object can mutate to a normal CONS
     // cell via setPrototype(). Usually not a good idea, but it might
     // be in this case.
     get [CDR]() {
-      let iterator = this[LAZY], cdr = NIL;
+      let iterator = this[LAZYCDR], cdr = NIL;
       if (!iterator)
         return this._cdrVal;
       let { done, value } = iterator.next();
       if (!done) {
         cdr = new IteratorList(value, iterator, this._mapper);
       }
-      this[LAZY] = undefined;
+      this[LAZYCDR] = undefined;
       return this._cdrVal = cdr;
     }
     set [CDR](val) {
-      this._iterator = undefined;
+      this[LAZYCDR] = undefined;
       this._cdrVal = val;
     }
     get [CAR]() {
       let car = this._carVal, mapper = this._mapper;
-      if (!this._mapped) {
+      if (this[LAZYCAR]) {
         car = this._carVal = mapper(car);
-        this._mapped = true;
+        this[LAZYCAR] = undefined;
+        // Can't remove _mapper because [CDR] might still need it.
       }
       return car;
     }
