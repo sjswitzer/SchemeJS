@@ -15,11 +15,12 @@ I use ===.
 
 "Let" is used rather than "var." Var is forbidden.
 
-I prefer to define functions after they're used. Tell the big picture first, then details.
+I prefer to define functions _after_ they're used. Tell the big picture first, then details.
+Pascal taught us some bad habits.
 Often a function will have a broad API, process its arguments and options then call
-a mini-me version of itself defined as a local function. This gets the grubby stuff out of
+a mini-me version of itself defined locally. This gets the grubby stuff out of
 the way and then the function can, for instance, recurse on the simpler API and common
-arguments don't need to be passed but instead can be accessed from the containing scope.
+arguments don't need to be passed around but instead can be accessed from the containing scope.
 
 I prefer arrow functions for one-liners, regular functions for longer things. for situations
 where an own "this" is required, or where a forward reference is needed.
@@ -31,7 +32,7 @@ Instead of passing in booleans and other unnamed values as parameters (foo(3, tr
 I generally try to assign the value to a variable so that it has a name then pass that variable.
 If a function has more than a few obvious parameters, I usually pass an "opts" object instead
 so that parameters can be named entries in the opts argument. Usually, the first thing the function
-does is access the options and assign them to variables and provide a default. This gets that
+does is access the options, assign them to variables and provide a default. This gets that
 out of the way up front and provides documentation on what the options are.
 
 ## Runtime Details
@@ -103,6 +104,9 @@ Garbage collector: Check.
 
 Strings, numbers, booleans and Functions: Check. I threw in BigInt for fun. "Factoral" likes it.
 
+Function are data. Check. You can create a function from a string and get the string body
+of a function.
+
 Atoms: Check. They're Symbols (in the ATOMS dictionary).
 
 Scopes: Check. I use the prototype chain and JavaScript resolves it just as it would
@@ -111,13 +115,15 @@ any ordinary "this.foo" reference. That is something JITs slave over.
 Closures: Check. SchemeJS closures are JavaScript closures. Compiled SchemeJS functions
 resolve their scope variables as statically-scoped variables in JavaScript.
 
-Cons cells and nil? Those are really the only thing missing and I use JavaScript classes
+Cons cells and nil? Those are really the only things missing and I use JavaScript classes
 for those... and threw in lazily-evaluated CAR and CDR references for fun.
 
 In short, the JavaScript runtime is ideal for Scheme--_much_ better than a Java VM--because
 it has dynamic types, the right sorts of primitive types, real closures, no need for "boxing"
 (anyway, it's transparent to users and highly-optimized)
 and implements something that can be used for scope resolution as a highly-optimized primitive.
+All it needs is cons cells, nil, an interpreter, a parser, a printer, a compiler, and a handful
+of Lisp primitives. Hence this project.
 
 I didn't set out to write the fastest Lisp implementation but halfway through implementing
 it I realized it inevitably would be, thanks to the JavaScript runtime and JITs.
