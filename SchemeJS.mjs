@@ -19,6 +19,9 @@ export const VERSION = "1.1 (beta)";
 //
 export function createInstance(schemeOpts = {}) {
   let readFile = schemeOpts.readFile;
+  let latin1 = schemeOpts.latin1 ?? true;
+  let supplemental = schemeOpts.supplemental ?? false;
+  let dumpAlphaMap = schemeOpts.dumpAlphaMap ?? false;
   let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   let reportSystemError = schemeOpts.reportError ?? _reportError;
@@ -147,13 +150,75 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Character clases for parsing
-  const NBSP = '\u00a0', TOKS = {}, DIGITS = {}, IDENT1 = {}, IDENT2 = {},
-  NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {}, WSNL = {}, JSIDENT = {};
+  const NBSP = '\u00a0', ELIPSIS = '\u0085', ALPHA = {}, WS = {}, NL = {}, WSNL = {};
+  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
+  for (let ch of "\n\r") NL[ch] = ch.codePointAt(0);
+
+  // Dig the Unicode character properties out of the RegExp engine
+  // This can take a bit of time and a LOT of memory, but people should
+  // be able to use their own languages. By default it includes the
+  // the Basic Multilingual Plane, but you can option it down to Latin-1
+  // or up to include all the supplemental planes.
+  // In addition to the memory used by the table I suspect the RegExp engine
+  // drags in some libraries dynamically when the "u" flag is specified, so
+  //
+  if (latin1) {
+    // In addition to the memory used by the table I suspect the RegExp engine
+    // drags in some libraries dynamically when the "u" flag is specified, and
+    // for that metter using RegExp at all probably drags in a dynammic library
+    // so, to reduce memory footprint, don't use it.
+
+    // Basic Latin
+    for (let codePoint = 0x41; codePoint <= 0x5a; ++codePoint)
+      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+    for (let codePoint = 0x61; codePoint <= 0x7a; ++codePoint)
+      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+    // Latin-1 Supplement
+    for (let codePoint = 0xc0; codePoint <= 0xd6; ++codePoint)
+      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+    for (let codePoint = 0xd8; codePoint <= 0xf6; ++codePoint)
+      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+    for (let codePoint = 0xf8; codePoint <= 0xff; ++codePoint)
+      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+  } else {
+    for (let codePoint = 1; codePoint < 0xD800; ++codePoint)
+      analyzeCodepoint(codePoint);
+    for (let codePoint = 0xE000; codePoint < 0x10000; ++codePoint)
+      analyzeCodepoint(codePoint);
+    if (supplemental) {
+      for (let codePoint = 0x10000; codePoint < 0x110000; ++codePoint)
+        analyzeCodepoint(codePoint);
+    }
+  }
+
+  function analyzeCodepoint(codePoint) {
+    let ch = String.fromCodePoint(codePoint);
+    if (ch.match( /^\p{Alphabetic}$/u )) ALPHA[ch] = codePoint;
+    if (!NL[ch] && ch !== ELIPSIS && ch.match( /^\p{White_Space}$/u )) WS[ch] = codePoint;
+  }
+
+  if (dumpAlphaMap) {
+    if (typeof dumpAlphaMap !== 'function') dumpAlphaMap = console.info;
+    showCodepoints("NL", NL);
+    showCodepoints("WS", WS);
+    showCodepoints("ALPHA", ALPHA);
+    function showCodepoints(tableName, table) {
+      let characters = Object.getOwnPropertyNames(table);
+      process.stdout.write(`Table ${tableName}, ${characters.length} characters\n`);
+      for (let ch of characters) {
+        let charCode = table[ch];
+        dumpAlphaMap("CHARTAB", tableName, charCode, ch, jsChar(charCode));
+      }
+    }
+  }
+
+  // Includes ALPHA by inheritence!
+  let IDENT1 = Object.create(ALPHA), IDENT2 = Object.create(ALPHA);
+  let TOKS = {}, DIGITS = {}, NUM1 = {}, NUM2 = {}, JSIDENT = {};
   for (let ch of `()[]{},':`) TOKS[ch] = true;
   for (let ch of ` \t${NBSP}`) WS[ch] = WSNL[ch] = true;
-  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = true;
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
-    IDENT1[ch] = IDENT2[ch] = JSIDENT[ch] = true;
+    JSIDENT[ch] = true;
   for (let ch of `0123456789`)
     DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = true;
   for (let ch of `+-.`)
@@ -161,11 +226,11 @@ export function createInstance(schemeOpts = {}) {
   for (let ch of `eEoOxXbBn`)
     NUM2[ch] = true;
   for (let ch of `~!@#$%^&|*_-+-=|\\<>?/`)
-    OPERATORS[ch] = IDENT1[ch] = IDENT2[ch] = true;
+    IDENT1[ch] = IDENT2[ch] = true;
 
   //
   // Everything is encapsulated in a function scope because JITs
-  // should be able to resolve lexically-scoped references most easily.
+  // should be able to resolve lexically-scoped references most efficiently.
   // Since "this" is used as the current scope, a SchemeJS instance
   // is the global scope itself!
   //
@@ -1989,9 +2054,8 @@ export function createInstance(schemeOpts = {}) {
             ch = replace;
           } else {
             let charCode = ch.charCodeAt(0);
-            if (!(charCode >= 0x20 && charCode < 0x7f)) {
-              let s = '0000' + charCode.toString(16);
-              ch = '\\u' + s.substr(s.length-4);
+            if (charCode < 0x20 || charCode >= 0x7f) {  // XXX TODO: include Latin-1?
+              ch = jsChar(charCode);
             }
           }
           str += ch;
@@ -2014,6 +2078,12 @@ export function createInstance(schemeOpts = {}) {
       }
       sep = prefix = "";
     }
+  }
+
+  function jsChar(charCode) {
+    let hex = '000000' + charCode.toString(16);
+    hex = hex.substr(hex.length-6);
+    return `\\u{${hex}}`;
   }
 
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
@@ -2335,7 +2405,7 @@ export function createInstance(schemeOpts = {}) {
             } else if (ch === '') {
               break;
             } else {
-              ch = ESCAPE_STRINGS[ch] ?? `\\x${ch.codePointAt(0).toString(16)}`;
+              ch = ESCAPE_STRINGS[ch] ?? ch;
             }
           }
           if (special && NL[ch]) {

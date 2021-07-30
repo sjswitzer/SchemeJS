@@ -16,7 +16,7 @@ export function run(opts = {}) {
       console.info("SUCCEEDED", test, result, expected));
   let succeeded = 0, failed = 0;
 
-  const globalScope = SchemeJS.createInstance();
+  const globalScope = SchemeJS.createInstance(opts);
   let testScope = globalScope;
   const setGlobalScope = globalScope._setGlobalScope_test_hook_ || required();
   const NIL = globalScope.NIL || required();
