@@ -19,7 +19,7 @@ export const VERSION = "1.1 (beta)";
 //
 export function createInstance(schemeOpts = {}) {
   let readFile = schemeOpts.readFile;
-  let latin1 = schemeOpts.latin1 ?? true;
+  let latin1 = schemeOpts.latin1 ?? false;
   let supplemental = schemeOpts.supplemental ?? false;
   let dumpAlphaMap = schemeOpts.dumpAlphaMap ?? false;
   let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
@@ -156,7 +156,21 @@ export function createInstance(schemeOpts = {}) {
   //
   const NBSP = '\u00a0', ELIPSIS = '\u0085', MUL = '\u00d7', DIV = '\u00f7'
   let ALPHA = {}, WS = {}, NL = {}, WSNL = Object.create(WS);
+  for (let ch of ` \t\u0011\u0012${NBSP}`) WS[ch] = ch.codePointAt(0);
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
+
+  // Basic Latin
+  for (let codePoint = 0x41; codePoint <= 0x5a; ++codePoint)
+    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+  for (let codePoint = 0x61; codePoint <= 0x7a; ++codePoint)
+    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+  // Latin-1 Supplement
+  for (let codePoint = 0xc0; codePoint <= 0xd6; ++codePoint)
+    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+  for (let codePoint = 0xd8; codePoint <= 0xf6; ++codePoint)
+    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
+  for (let codePoint = 0xf8; codePoint <= 0xff; ++codePoint)
+    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
 
   // Dig the Unicode character properties out of the RegExp engine
   // This can take a bit of time and a LOT of memory, but people should
@@ -165,25 +179,10 @@ export function createInstance(schemeOpts = {}) {
   // or up to include all the supplemental planes.
   // In addition to the memory used by the table I suspect the RegExp engine
   // drags in some libraries dynamically when the "u" flag is specified.
-  //
-  if (latin1) {
-    // And for that metter using RegExp at all probably drags in a dynammic library
-    // so, to reduce memory footprint, don't use it here.
-  
-    // Basic Latin
-    for (let codePoint = 0x41; codePoint <= 0x5a; ++codePoint)
-      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-    for (let codePoint = 0x61; codePoint <= 0x7a; ++codePoint)
-      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-    // Latin-1 Supplement
-    for (let codePoint = 0xc0; codePoint <= 0xd6; ++codePoint)
-      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-    for (let codePoint = 0xd8; codePoint <= 0xf6; ++codePoint)
-      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-    for (let codePoint = 0xf8; codePoint <= 0xff; ++codePoint)
-      ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-  } else {
-    for (let codePoint = 1; codePoint < 0xD800; ++codePoint)
+  // And for that metter using RegExp at all probably drags in a dynammic library
+  // so, to reduce memory footprint, don't use it here.
+  if (!latin1) {
+    for (let codePoint = 0x100; codePoint < 0xD800; ++codePoint)
       analyzeCodepoint(codePoint);
     for (let codePoint = 0xE000; codePoint < 0x10000; ++codePoint)
       analyzeCodepoint(codePoint);
@@ -2493,7 +2492,7 @@ export function createInstance(schemeOpts = {}) {
           nextc();
         parseContext.pop();
         if (!ch)
-          yield { type: 'end', position, line, lineChar };
+          yield { type: 'partial', position, line, lineChar };
         nextc(); nextc();
         continue;
       }
@@ -2544,7 +2543,7 @@ export function createInstance(schemeOpts = {}) {
         }
         if (!popped) parseContext.pop();
         if (!ch) {
-          yield { type: 'end', value: `"${str}`,  position, line, lineChar };
+          yield { type: 'partial', value: `"${str}`,  position, line, lineChar };
           return;
         }
         if (ch === '"') {
@@ -2692,7 +2691,7 @@ export function createInstance(schemeOpts = {}) {
             consumeToken();
             return val;
           }
-          if (token().type === 'end')
+          if (token().type === 'end' || token().type === 'partial')
             throw new SchemeParseIncomplete(path, token(), parseContext);
           if (token().type === 'garbage') throwSyntaxError();
           let first = parseExpr();
@@ -2715,7 +2714,7 @@ export function createInstance(schemeOpts = {}) {
           res.push(item);
           if (token().type === ',')  // Comma is optional
             consumeToken();
-          if (token().type === 'end')
+          if (token().type === 'end' || token().type === 'partial')
             throw new SchemeParseIncomplete(path, token(), parseContext);
         }
       }
@@ -2762,7 +2761,7 @@ export function createInstance(schemeOpts = {}) {
             gotIt = true;
             if (token().type === ',')  // Comma is optional
               consumeToken();
-            if (token().type === 'end')
+            if (token().type === 'end'|| token().type === 'partial')
               throw new SchemeParseIncomplete(path, token(), parseContext);
           }
           if (!gotIt) throwSyntaxError();
@@ -2810,10 +2809,12 @@ export function createInstance(schemeOpts = {}) {
 
     function throwSyntaxError() {
       let str = "", sep = "", errorToken = token(), tokens = [..._tokens];
+      if (errorToken.type === 'partial')
+        throw new SchemeParseIncomplete(path, errorToken, parseContext)
       if (_tokens.length > 1 && _tokens[_tokens.length-1] !== 'newline') {
         for (;;) {
-          let tok = token(0);
-          if (tok.type === 'end' || tok.type === 'newline') break;
+          let { done, value } =  tokenGenerator.next();
+          if (done || value.type === 'newline' || value.type === 'end') break;
           tokens.push(token);
         }
       }
