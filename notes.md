@@ -121,7 +121,15 @@ I didn't set out to write the fastest Lisp implementation but halfway through im
 it I realized it inevitably would be, thanks to the JavaScript runtime and JITs.
 If I could finish it, that is. And to be fair, the parser could be a lot faster.
 
+But probably the best way to think about it is that JavaScript was secretly Scheme all along,
+just as Brendan Eich originally intended.
+
 ## Future Work
 
 I have designs for a non-recursive interpreter and tail-call-optimization in both the interpretrer
 and compiler.
+
+It would be nice to support writing async and generator functions naturally but I haven't given it much thought
+beyond the thought that a non-recursive interpreter would make "yield" pretty straightforward. Compiling it
+would require a different compilation approach, I suspect. Probably transform the Scheme into a series of
+continuations and compile those the usual waay.
