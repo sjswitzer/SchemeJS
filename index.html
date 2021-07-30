@@ -418,6 +418,7 @@
                 It comes with a node-js based CLI/REPL and this Web-based REPL;
                 they are just simple embeddings of the SchemeJS runtime.
         </dl>
+        <p> <span class="linklike" onclick="runUnitTests()">Run unit tests</span>.
         <p> A-B-C. A-Always. B-Be. C-Coding.
         <p> Copyright &copy; 2021, Stan Switzer
         <div style="width: 100%">
@@ -1404,6 +1405,14 @@
           } else if (node instanceof Text) {
             pos += node.data.length;
           }
+        }
+      }
+
+      function runUnitTests() {
+        runTests();
+        async function runTests() {
+          let UnitTest = await(import("./UnitTest.mjs"));
+          UnitTest.run();
         }
       }
 
