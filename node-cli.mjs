@@ -9,18 +9,18 @@
 import * as SchemeJS from './SchemeJS.mjs';
 import * as fs from 'fs';
 
-let loadFiles = [], runREPL = false;
+let loadFiles = [], runREPL = true;
 
 let argv = process.argv.slice(2);
 while (argv.length > 0) {
   if (argv[0] === '--load') {
-    if (typeof argv[1] === 'string')
-      loadFiles.push(argv[1]);
+    loadFiles.push(argv[1]);
     argv = argv.slice(2);
     continue;
   }
-  if (argv[0] === '--repl') {
-    runREPL = true;
+  if (argv[0]) {
+    runREPL = false;
+    loadFiles.push(argv[0]);
     argv = argv.slice(1);
     break;
   }

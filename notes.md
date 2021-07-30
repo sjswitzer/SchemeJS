@@ -135,10 +135,9 @@ more of the underlying Lispyness and this project wouldn't have been attempted w
 
 ## Future Work
 
-I have designs for a non-recursive interpreter and tail-call-optimization in both the interpretrer
-and compiler.
+I have designs for a non-recursive interpreter and tail-call-optimization in both the
+interpretrer and compiler.
 
-It would be nice to support writing async and generator functions naturally but I haven't given it much thought
-beyond the thought that a non-recursive interpreter would make "yield" pretty straightforward. Compiling it
-would require a different compilation approach, I suspect. Probably transform the Scheme into a series of
-continuations and compile those the usual waay.
+It would be nice to support writing async and generator functions naturally but I haven't
+given it much thought beyond the sense that a non-recursive interpreter would make "yield" pretty straightforward. Compiling it would require a different compilation approach, I suspect.
+Probably transform the Scheme into a series of continuations and compile those the usual way.

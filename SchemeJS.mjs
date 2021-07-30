@@ -46,11 +46,12 @@ export function createInstance(schemeOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR");
+  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR");
 
   // Trust the JIT to inline this
   const is_cons = obj => obj != null && obj[PAIR] === true;
+  const is_null = obj => obj != null && obj[NULLSYM] === true;
 
   class Cons {
     [CAR]; [CDR];
@@ -91,6 +92,7 @@ export function createInstance(schemeOpts = {}) {
       set [CAR](_) { throw new SchemeEvalError("set car of nil") }
       get [CDR]() { throw new SchemeEvalError("cdr of nil") }
       set [CDR](_) { throw new SchemeEvalError("set cdr of nil") }
+      [NULLSYM] = true;
     }
   })());
   
@@ -394,7 +396,7 @@ export function createInstance(schemeOpts = {}) {
   // Written this way so that actual bools do not need to be compared to NIL; most of this
   // is just a tag-bit compare in the runtime.
   //
-  const bool = a => a === true || (a !== false && a != null && a !== NIL);
+  const bool = a => a === true || (a !== false && a != null && !is_null(a));
   exportAPI("bool", bool);
 
   const cons = (car, cdr) => new Cons(car, cdr);
@@ -440,7 +442,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("cddr", cddr);
   defineGlobalSymbol("typeof", a => typeof a);
   defineGlobalSymbol("undefined?", a => a === undefined);
-  defineGlobalSymbol("null?", a => a === NIL);  // SIOD clained it first. Maybe rethink the naming here.
+  defineGlobalSymbol("null?", a => is_null(a));  // SIOD clained it first. Maybe rethink the naming here.
   defineGlobalSymbol("jsnull?", a => a === null);
   defineGlobalSymbol("nullish?", a => a == null);
   defineGlobalSymbol("boolean?", a => typeof a === 'boolean');
@@ -506,7 +508,7 @@ export function createInstance(schemeOpts = {}) {
   function eval_(expr, ...scope) { // Javascript practically treats "eval" as a keyword
     let useScope = scope[0];
     if (!(useScope != null && useScope instanceof Scope)) useScope = this;
-    if (useScope === NIL) scope = globalScope; // NIL, specifically, means use the global scope
+    if (is_null(useScope)) scope = globalScope; // NIL, specifically, means use the global scope
     return _eval(expr, useScope);
   }
 
@@ -514,7 +516,7 @@ export function createInstance(schemeOpts = {}) {
   function eval_string(str, ...scope) {
     let useScope = scope[0];
     if (!(useScope != null && useScope instanceof Scope)) useScope = this;
-    if (useScope === NIL) scope = globalScope; // NIL, specifically, means use the global scope
+    if (is_null(useScope)) scope = globalScope; // NIL, specifically, means use the global scope
     let expr = parseSExpr(str);
     return eval_.call(this, expr, useScope);
   }
@@ -576,7 +578,7 @@ export function createInstance(schemeOpts = {}) {
     return a;
   }
   function sub_hook(args, compileScope, tools) {
-    if (args.length == 1)
+    if (args.length === 1)
       return `(-${args[0]})`;
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
@@ -608,7 +610,7 @@ export function createInstance(schemeOpts = {}) {
     return a;
   }
   function div_hook(args, compileScope, tools) {
-    if (args.length == 1)
+    if (args.length === 1)
       return `(1 / ${args[0]})`;
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
@@ -682,7 +684,7 @@ export function createInstance(schemeOpts = {}) {
   function compare_hooks(args, compileScope, tools, op, name) {
     if (args.length < 2)
       return 'false';
-    if (args.length == 2)
+    if (args.length === 2)
       return `(${args[0]} ${op} ${args[1]})`;
     let result = tools.newTemp(name);
     tools.emit(`let ${result} = false; ${result}: {`);
@@ -755,7 +757,7 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("eqv", eq, { evalArgs: 2, compileHook: eq_hook }, "=="); // XXX name
   function eq(a, b, forms) {
-    if (forms === undefined) return a == b;
+    if (forms === undefined) return a == b;   // TODO == or ===?
     if (!(a == b)) return false;
     a = b;
     while (is_cons(forms)) {
@@ -1091,7 +1093,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("member", member);
   function member(key, list) {
     while (is_cons(list)) {
-      if (key == list[CAR])
+      if (key === list[CAR])   // TODO: == or ===?
         return list;
       list = list[CDR];
     }
@@ -1920,13 +1922,14 @@ export function createInstance(schemeOpts = {}) {
           }
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
-        if (is_cons(obj)) {
+        // Check lazy first because is_car will snap a LazyIteratorList object out of laziness
+        if (obj[LAZYCDR] || is_cons(obj)) {
           if (obj[LAZYCDR]) {
             if (obj[LAZYCAR])
-              return put(`(... ...)`); // not `... . ...`; the cdr might be, and probably is, a list itself
+              return put(`(.. ...)`); // not `.. . ...`; the cdr might be, and probably is, a list itself
             return put(`(${string(obj[CAR])} ...)`);
           } else if (obj[LAZYCAR]) {
-            put("(...");
+            put("(..");
             indent += indentMore;
             sep = " "
             obj = obj[CDR];
@@ -1936,10 +1939,10 @@ export function createInstance(schemeOpts = {}) {
             sep = "";
             let objCar = obj[CAR];
             if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
-                objCar == CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
+                objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
                   && is_cons(obj[CDR])) {
               // Specal treatment of lambdas and closures with curry notation
-              if (objCar == CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
+              if (objCar === CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
                 if (is_cons(obj[CDR][CDR])) {
                   let evalCount, scopeCons = obj[CDR];
                   if (objCar === SCLOSURE_ATOM) {
@@ -1983,9 +1986,9 @@ export function createInstance(schemeOpts = {}) {
               }
             }
           }
-          while (is_cons(obj)) {
+          while (obj[LAZYCDR] || is_cons(obj)) {
             if (obj[LAZYCAR])
-              put("...");
+              put("..");
             else
               toString(obj[CAR], maxDepth);
             sep = " ";
@@ -2090,7 +2093,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("to-list", to_list);
   function to_list(obj, ...rest) {
     let depth = rest[0];
-    if (!bool(depth) == null) depth = 1;
+    if (!bool(depth)) depth = 1;
     if (depth <= 0) return obj;
     if (obj === NIL || is_cons(obj)) return obj;
     if (typeof obj === 'object') {
@@ -2187,13 +2190,82 @@ export function createInstance(schemeOpts = {}) {
     [Symbol.iterator] = pairIterator();
   }
   LazyCarCdrList.prototype[PAIR] = true;
+  
+  //
+  // Doesn't even know if it's a cons cell or null yet!
+  //
+  class LazyIteratorList {
+    [LAZYCAR] = true; [LAZYCDR] = true;
+    _iterator; _mapper;
+    constructor(iterator, mapper) {
+      this._iterator = iterator;
+      this._mapper = mapper;
+    }
+    get [CAR]() {
+      if (!this._getNext()) throw new TypeError(`car of nil`);
+      return this[CAR];
+    }
+    set [CAR](val) {
+      let mapper = this._mapper;
+      if (!this._getNext()) throw new TypeError(`set car of nil`);
+      if (mapper)
+        Object.setPrototypeOf(this, Cons.prototype);
+      this[CAR] = val;
+    }
+    get [CDR]() {
+      if (!this._getNext()) throw new TypeError(`cdr of nil`);
+      return this[CDR];
+    }
+    set [CDR](val) {
+      if (!this._getNext()) throw new TypeError(`set cdr of nil`);
+      this[CDR] = val;
+    }
+    get [PAIR]() { // Doesn't even know whether it's a cons or nil yet!
+      return this._getNext();
+    }
+    _getNext() {
+      let iterator = this._iterator, mapper = this._mapper;
+      let { done, value: car } = iterator.next();
+      if (done) {
+        Object.setPrototypeOf(this, Object.getPrototypeOf(NIL));
+        delete this._iterator;
+        delete this._mapper;
+        delete this[CAR];
+        delete this[CDR];
+        delete this[LAZYCAR];
+        delete this[LAZYCDR];
+        this[NULLSYM] = true;
+        return false;
+      }
+      let cdr = new LazyIteratorList(iterator, this._mapper);
+      if (mapper) {
+        Object.setPrototypeOf(this, LazyCarList.prototype);
+        delete this._iterator;
+        delete this._mapper;
+        delete this[LAZYCDR];
+        this[LAZYCAR] = () => mapper(car);
+      } else {
+        Object.setPrototypeOf(this, Cons.prototype);
+        delete this._iterator;
+        delete this._mapper;
+        delete this[LAZYCAR];
+        delete this[LAZYCDR];
+        this[CAR] = car;
+      }
+      this[CDR] = cdr;
+      return true;
+    }
+    get [NULLSYM]() { return !_this._getNext() }
+    toString() { return string(this) }
+    [Symbol.iterator] = pairIterator();
+  }
 
   //
   // Lazy lists by being a Cons imposter
-  //   Leaving this alternat implementation in because mutating objects is deemed
+  //   Leaving this alternate implementation in because mutating objects is deemed
   //   sketchy and poorly-performing. Except, perhaps, in this particular case.
   //
-  class LazyList {
+  class ConventionalLazyList {
     [LAZYCAR]; [LAZYCDR]; _carVal; _cdrVal;
     constructor(carVal, lazyCar, cdrVal, lazyCdr) {
       this._carVal = carVal;
@@ -2228,21 +2300,23 @@ export function createInstance(schemeOpts = {}) {
     }
     [Symbol.iterator] = pairIterator();
   }
-  LazyList.prototype[PAIR] = true;
+  ConventionalLazyList.prototype[PAIR] = true;
 
   defineGlobalSymbol("list-view", list_view);
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
-    /****
+    /**** Method 1
     function getCdr() {
       let { done, value } = iterator.next();
       if (done) return NIL;
-      return new LazyList(value, undefined, undefined, getCdr);
+      return new ConventionalLazyList(value, undefined, undefined, getCdr);
     }
     let { done, value } = iterator.next();
     if (done) return NIL;
-    return new LazyList(value, undefined, undefined, getCdr);
-    /*/
+    return new ConventionalLazyList(value, undefined, undefined, getCdr);
+    */
+  
+    /**** Method 2
     function getCdr() {
       let { done, value } = iterator.next();
       if (done) return NIL;
@@ -2251,25 +2325,29 @@ export function createInstance(schemeOpts = {}) {
     let { done, value } = iterator.next();
     if (done) return NIL;
     return new LazyCdrList(value, getCdr);
-    /**/
+    */
+
+    // Method 3: Even lazier since it doesn't fetch ahead to find out if should be NIL or not.
+    return new LazyIteratorList(iterator);
   }
 
   defineGlobalSymbol("lazy-map", lazy_map);
   function lazy_map(fn, obj) {
     if (!bool(fn)) return NIL; // XXX probably should throw; also mapcar
     let scope = this, iterator = iteratorFor(obj, TypeError);
-    /****
+    /**** Method 1:
     function getCdr() {
       let { done, value } = iterator.next();
       if (done) return NIL;
       const getCar = () => _apply(fn, cons(value, NIL), scope);
-      return new LazyList(undefined, getCar, undefined, getCdr);
+      return new ConventionalLazyList(undefined, getCar, undefined, getCdr);
     }
     let { done, value } = iterator.next();
     if (done) return NIL;
     const getCar = () => _apply(fn, cons(value, NIL), scope);
-    return new LazyList(undefined, getCar, undefined, getCdr);
-    /*/
+    return new ConventionalLazyList(undefined, getCar, undefined, getCdr);
+    */
+    /**** Method 2:
     function getCdr() {
       let { done, value } = iterator.next();
       if (done) return NIL;
@@ -2280,7 +2358,10 @@ export function createInstance(schemeOpts = {}) {
     if (done) return NIL;
     const getCar = () => _apply(fn, cons(value, NIL), scope);
     return new LazyCarCdrList(getCar, getCdr);
-    /**/
+    */
+
+    // Method 3: Doesn't need to fetch ahead one item to find out whether it's NIL or not.
+    return new LazyIteratorList(iterator, a => _apply(fn, cons(a, NIL), scope))
   }
 
   // Can't be "string" directly because that has an optional parameter and
@@ -2393,7 +2474,7 @@ export function createInstance(schemeOpts = {}) {
         parseContext.push({ type: 'string', value: '"', position, line, lineChar })
         let str = '', special = false;
         nextc();
-        while (ch && ch != '"' && (special || !NL[ch])) {
+        while (ch && ch !== '"' && (special || !NL[ch])) {
           if (ch === '\\') {
             nextc();
             if (ch === '\n') {
@@ -2846,7 +2927,7 @@ export function createInstance(schemeOpts = {}) {
       if (ch === '"' || ch === "'" || ch === '`') {
         let qc = ch;
         ch = str[++pos];
-        while (ch && ch != qc) {
+        while (ch && ch !== qc) {
           if (ch === '\\') ++pos;
           ch = str[++pos]
         }
@@ -2935,7 +3016,7 @@ export function createInstance(schemeOpts = {}) {
       } else {
         if (typeof obj === 'symbol')
           name = newTemp(obj.description);
-        else if (typeof obj == 'function')
+        else if (typeof obj === 'function')
           name = newTemp(obj.name);
         else
           name = newTemp();
