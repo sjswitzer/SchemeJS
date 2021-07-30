@@ -2313,30 +2313,39 @@ export function createInstance(schemeOpts = {}) {
         if (!ch)
           yield { type: 'end', position, line, lineChar };
         nextc(); nextc();
-        while (WS[ch])
-          nextc();
+        continue;
       }
 
       if (ch === '"') {
         parseContext.push({ type: 'string', value: '"', position, line, lineChar })
-        let str = '';
+        let str = '', special = false;
         nextc();
-        while (ch && ch != '"' && !NL[ch]) {
+        while (ch && ch != '"' && (special || !NL[ch])) {
           if (ch === '\\') {
             nextc();
-            if (ch === '\n') {  // special string continuation!
-              while (WS(nextc())) {}  // skips space until:
-              if (ch === '+') {  // + continues
-                nextc();
-                continue;
-              }
-              if (ch === ':') {  // : newline then continues
-                nextc();
-                str += '\n';
-                continue;
-              }
+            if (ch === '\n')  // Special string continuation!
+              special = true;
+            else if (ch === '')
+              break;
+            else
+              ch = ESCAPE_STRINGS[ch] ?? `\\x${ch.codePointAt(0).toString(16)}`;
+          }
+          if (special && NL[ch]) {
+            while (WS[nextc()]) {}  // skips space until:
+            if (ch === '') break;
+            if (ch === '+') {  // + continues
+              nextc();
+              continue;
             }
-            ch = ESCAPE_STRINGS[ch] ?? `\\x${ch.codePointAt(0).toString(16)}`;
+            if (ch === ':') {  // : newline then continues
+              nextc();
+              str += '\n';
+              continue;
+            }
+            if (ch === '"') {  // " ends string
+              nextc();
+              break;
+            }
           }
           str += ch;
           nextc();
