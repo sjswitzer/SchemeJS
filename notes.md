@@ -99,6 +99,8 @@ You couldn't design a better Scheme runtime if you tried:
 
 Dynamically typed: Check.
 
+Garbage collector: Check.
+
 Strings, numbers, booleans and Functions: Check. I threw in BigInt for fun. "Factoral" likes it.
 
 Atoms: Check. They're Symbols (in the ATOMS dictionary).
@@ -122,7 +124,8 @@ it I realized it inevitably would be, thanks to the JavaScript runtime and JITs.
 If I could finish it, that is. And to be fair, the parser could be a lot faster.
 
 But probably the best way to think about it is that JavaScript was secretly Scheme all along,
-just as Brendan Eich originally intended.
+just as Brendan Eich originally intended. Recent improvements in ES6 and beyond have exposed
+more of the underlying Lispyness and this project wouldn't have been attempted without them.
 
 ## Future Work
 

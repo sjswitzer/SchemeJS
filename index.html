@@ -1300,7 +1300,9 @@
       function getElementText(element) {
         let text = '';
         traverseEditableElement(element, onNode);
+        // Parser recognizes NBSP as whitespace but know that they're there!
         // text = text.split(NBSP).join(' ');
+        console.log("GET", text);
         return text;
         function onNode(node, pos, isNewline) {
           if (isNewline)
@@ -1311,6 +1313,7 @@
       }
 
       function insertTextAndSetCursorAfter(element, insertPosition, text = '') {
+        console.log("ISC", insertPosition, text);
         let selection = window.getSelection();
         if (!selection) return false;
         return traverseEditableElement(element, onNode);
@@ -1416,7 +1419,7 @@
         }
       }
 
-      // The idea here is to let the user code exacute after the keypress has been
+      // The idea here is to let the handleInput exacute after the keypress has been
       // completely processed. "oninput" is nice, but doesn't indicate the "Enter" key.
       inputElement.onkeydown = event => setTimeout(() => handleInput(event.key === 'Enter'), 0);
 

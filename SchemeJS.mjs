@@ -71,7 +71,8 @@ export function createInstance(schemeOpts = {}) {
         current = current[CDR];
         return { done: false, value };
       },
-      [Symbol.iterator]() { return this; }  // so that the iterator itself is iterable
+      // So that the iterator itself is iterable, with a fresh iterator at the current position
+      [Symbol.iterator]() { return pairIterator.call(current); }
     }
   }
   
