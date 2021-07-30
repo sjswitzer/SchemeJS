@@ -1275,7 +1275,7 @@
 
       function getSelectionPosition(editableElement) {
         let selection = window.getSelection();
-        console.log("SEL", selection.anchorNode, selection.anchorOffset, selection);
+        // console.log("SEL", selection.anchorNode, selection.anchorOffset, selection);
         if (!selection) return undefined;
         let anchorNode = selection.anchorNode;
         let selectionPosition = selection.anchorOffset;
@@ -1284,7 +1284,7 @@
         console.log("POS", selectionPosition);
         return selectionPosition;
         function onNode(node, pos, isNewline) {
-          console.log ("GSP", pos, node.tagName, node.data);
+          // console.log ("GSP", pos, node.tagName, node.data);
           if (node === anchorNode) {
             selectionPosition += pos;
             return true;
@@ -1308,8 +1308,10 @@
         return traverseEditableElement(element, onNode);
         function onNode(node, pos, isNewline) {
           let localPosition = insertPosition - pos;
+          console.log ("ITA", localPosition, node.tagName, node.data);
           if (localPosition < 0) return true;
           if (node instanceof Text) {
+            console.log ("ITA TEXT");
             let content = node.data;
             if (text !== '' && localPosition <= node.data.length) {
               content = content.substr(0, localPosition) + text + content.substr(localPosition);
@@ -1317,6 +1319,7 @@
               return true;
             }
           } else if (node instanceof Element) {
+            console.log ("ITA ELEMENT");
             let textElement = document.createElement('text');
             textElement.textContent = text;
             if (node.tagName === 'BR' && node.parentElement.tagName === 'DIV') {
