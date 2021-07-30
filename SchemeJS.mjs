@@ -151,22 +151,25 @@ export function createInstance(schemeOpts = {}) {
     if (throwException) throw new throwException(`Not an iterable or list ${obj}`);
   }
 
+  //
   // Character clases for parsing
-  const NBSP = '\u00a0', ELIPSIS = '\u0085', MUL = '\u00d7', DIV = '\u00f7' , ALPHA = {}, WS = {}, NL = {};
+  //
+  const NBSP = '\u00a0', ELIPSIS = '\u0085', MUL = '\u00d7', DIV = '\u00f7'
+  let ALPHA = {}, WS = {}, NL = {}, WSNL = Object.create(WS);
+  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
+
   // Dig the Unicode character properties out of the RegExp engine
   // This can take a bit of time and a LOT of memory, but people should
   // be able to use their own languages. By default it includes the
   // the Basic Multilingual Plane, but you can option it down to Latin-1
   // or up to include all the supplemental planes.
   // In addition to the memory used by the table I suspect the RegExp engine
-  // drags in some libraries dynamically when the "u" flag is specified, so
+  // drags in some libraries dynamically when the "u" flag is specified.
   //
   if (latin1) {
-    // In addition to the memory used by the table I suspect the RegExp engine
-    // drags in some libraries dynamically when the "u" flag is specified, and
-    // for that metter using RegExp at all probably drags in a dynammic library
-    // so, to reduce memory footprint, don't use it.
-
+    // And for that metter using RegExp at all probably drags in a dynammic library
+    // so, to reduce memory footprint, don't use it here.
+  
     // Basic Latin
     for (let codePoint = 0x41; codePoint <= 0x5a; ++codePoint)
       ALPHA[String.fromCodePoint(codePoint)] = codePoint;
@@ -212,23 +215,22 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Includes ALPHA by inheritence!
-  let IDENT1 = Object.create(ALPHA), IDENT2 = Object.create(IDENT1), WSNL = Object.create(WS);
+  let IDENT1 = Object.create(ALPHA), IDENT2 = Object.create(IDENT1);
   let TOKS = {}, DIGITS = {}, NUM1 = {}, NUM2 = {}, JSIDENT = {};
-  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
-  for (let ch of `()[]{},':`) TOKS[ch] = true;
+  for (let ch of `()[]{},':`) TOKS[ch] = ch.codePointAt(0);
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
-    JSIDENT[ch] = true;
+    JSIDENT[ch] = ch.codePointAt(0);
   for (let ch of `0123456789`)
-    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = true;
+    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = ch.codePointAt(0);
   for (let ch of `+-.`)
-    NUM1[ch] = NUM2[ch] = true;
+    NUM1[ch] = NUM2[ch] = ch.codePointAt(0);
   for (let ch of `eEoOxXbBn`)
-    NUM2[ch] = true;
+    NUM2[ch] = ch.codePointAt(0);
   for (let ch of `!'#$%&*+,-/<=>?@\\^_|~${MUL}${DIV}`)
-    IDENT1[ch] = IDENT2[ch] = true;
+    IDENT1[ch] = IDENT2[ch] = ch.codePointAt(0);
   for (let codePoint = 0xa1; codePoint <= 0xbf; ++codePoint) {  // Latin-1 punctuation and symbols
     let ch = String.fromCodePoint(codePoint);
-    IDENT1[ch] = IDENT2[ch] = true;
+    IDENT1[ch] = IDENT2[ch] = codePoint;
   }
 
   //
