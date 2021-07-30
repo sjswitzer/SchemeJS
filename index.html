@@ -1315,10 +1315,10 @@
         return traverseEditableElement(element, onNode);
         function onNode(node, pos, isNewline) {
           let localPos = insertPosition - pos;
-          console.log ("ITA", localPos, node.tagName, node.data);
+          // console.log ("ITA", localPos, node.tagName, node.data);
           if (localPos < 0) return;
           if (node instanceof Text) {
-            console.log ("ITA TEXT");
+            // console.log ("ITA TEXT");
             let content = node.data;
             if (localPos <= node.data.length) {
               if (text !== '') {
@@ -1346,11 +1346,11 @@
       }
 
       function colorizeCharsAt(element, colorizePosition, nchar, cls, color) {
+        console.log("COLORIZE!", colorizePosition, nchar, cls, color);
         return traverseEditableElement(element, onNode);
         function onNode(node, pos, isNewline) {
-          console.log("COLORIZE", node.tagName, node.data, )
-          let localPos = pos - colorizePosition;
-          console.log("COLORIZE", node.tagName, node.data, localPos);
+          let localPos = colorizePosition - pos;
+          console.log("COLORIZE", localPos, node.tagName, node.data);
           if (localPos < 0) return;
           if (node instanceof Text) {
             let text = node.data;
