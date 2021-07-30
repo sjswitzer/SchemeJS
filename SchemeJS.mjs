@@ -1883,29 +1883,6 @@ export function createInstance(schemeOpts = {}) {
       if (obj === null) return put( "null");   // remember: typeof null === 'object'!
       let objType = typeof obj;
       let saveIndent = indent;
-      if (typeof obj === 'function') {
-        let fnDesc = analyzeJSFunction(obj);
-        let name = fnDesc.name ? ` ${fnDesc.name}` : '';
-        let params = "";
-        for (let param of fnDesc.params) {
-          if (params) params += ', ';
-          params += param;
-        }
-        if (fnDesc.restParam) {
-          if (params) params += ', ';
-          params = `${params}...${fnDesc.restParam}`;
-        }
-        params = `(${params})`;
-        let printBody = fnDesc.printBody;
-        if (fnDesc.value && !fnDesc.body && !printBody) {
-          if (fnDesc.params.length === 1 && !fnDesc.restParam)
-            params = fnDesc.params[0];
-          return put(`{${params} => ${fnDesc.value}}`);
-        }
-        if (printBody && (printBody.length > 60 || printBody.includes('\n')))
-          printBody = '';
-        return put(`{function${name}${params}${printBody}}`);
-      }
       if (objType === 'object') {
         if (obj instanceof Scope) {
           let symStrs = "";
@@ -2043,6 +2020,29 @@ export function createInstance(schemeOpts = {}) {
           indent = saveIndent;
           return;
         }
+      }
+      if (typeof obj === 'function') {
+        let fnDesc = analyzeJSFunction(obj);
+        let name = fnDesc.name ? ` ${fnDesc.name}` : '';
+        let params = "";
+        for (let param of fnDesc.params) {
+          if (params) params += ', ';
+          params += param;
+        }
+        if (fnDesc.restParam) {
+          if (params) params += ', ';
+          params = `${params}...${fnDesc.restParam}`;
+        }
+        params = `(${params})`;
+        let printBody = fnDesc.printBody;
+        if (fnDesc.value && !fnDesc.body && !printBody) {
+          if (fnDesc.params.length === 1 && !fnDesc.restParam)
+            params = fnDesc.params[0];
+          return put(`{${params} => ${fnDesc.value}}`);
+        }
+        if (printBody && (printBody.length > 60 || printBody.includes('\n')))
+          printBody = '';
+        return put(`{function${name}${params}${printBody}}`);
       }
       if (objType === 'symbol') {
         if (obj === LAMBDA_ATOM) return put(lambdaStr);
