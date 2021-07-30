@@ -1181,8 +1181,6 @@
         for (let span of inputElement.querySelectorAll('span'))
           span.replaceWith(span.textContent);
         inputElement.normalize();
-        let parseText = inputText;
-        if (pos != null) parseText = parseText.substr(0, pos);
         try {
           function* characterGenerator() {
             let part1 = inputText.substr(0, pos), part2 = inputText.substr(pos);
@@ -1248,7 +1246,7 @@
             // console.log("SchemeParseError", error);
             if (error instanceof SchemeSyntaxError) {
               let position = error.position;
-              colorizeCharsAt(inputElement, position, parseText.length - position, 'error-tokens');
+              colorizeCharsAt(inputElement, position, inputText.length - position, 'error-tokens');
             }
             let indent = '';
             if (enterKey)
