@@ -1012,7 +1012,7 @@
       const outputElement = document.getElementById('output');
       const builtinsElement = document.getElementById('builtins');
 
-      let globalScope, SCHEME_VERSION, SchemeParseError, SchemeSyntaxError;
+      let globalScope, SCHEME_VERSION, SchemeParseError, SchemeSyntaxError, SchemeParseIncomplete;
 
       onload = importSchemeAndRunREPL()
       async function importSchemeAndRunREPL() {
@@ -1023,6 +1023,7 @@
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
+        SchemeParseIncomplete = globalScope.SchemeParseIncomplete;
         buildBuiltinHelp(globalScope);
       }
 
@@ -1243,7 +1244,8 @@
           inputElement.textContent = "";
         } catch (error) {
           if (error instanceof SchemeParseError) {
-            // console.log("SchemeParseError", error);
+            if (!(error instanceof SchemeParseIncomplete))
+              console.log("SchemeParseError", error);
             if (error instanceof SchemeSyntaxError) {
               let position = error.position;
               colorizeCharsAt(inputElement, position, inputText.length - position, 'error-tokens');

@@ -2282,6 +2282,7 @@ export function createInstance(schemeOpts = {}) {
     }
     nextc();
 
+    getToken:
     while (ch) {
       while (WS[ch])
         nextc();
@@ -2317,21 +2318,28 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (ch === '"') {
+        let popped = false;
         parseContext.push({ type: 'string', value: '"', position, line, lineChar })
         let str = '', special = false;
         nextc();
         while (ch && ch != '"' && (special || !NL[ch])) {
           if (ch === '\\') {
             nextc();
-            if (ch === '\n')  // Special string continuation!
+            if (ch === '\n') {
+              nextc();
+              continue;
+            } else if (ch === '+' && peekc() === '\n') {  // Special string continuation!
+              nextc();
               special = true;
-            else if (ch === '')
+            } else if (ch === '') {
               break;
-            else
+            } else {
               ch = ESCAPE_STRINGS[ch] ?? `\\x${ch.codePointAt(0).toString(16)}`;
+            }
           }
           if (special && NL[ch]) {
-            while (WS[nextc()]) {}  // skips space until:
+            nextc();
+            while (WS[nextc()]) {}  // skips WS
             if (ch === '') break;
             if (ch === '+') {  // + continues
               nextc();
@@ -2343,19 +2351,23 @@ export function createInstance(schemeOpts = {}) {
               continue;
             }
             if (ch === '"') {  // " ends string
-              nextc();
+              parseContext.pop();
+              popped = true;
               break;
             }
+            yield { type: 'garbage', value: `"${str}${ch}`,  position, line, lineChar };
+            continue getToken;
           }
           str += ch;
           nextc();
         }
-        parseContext.pop();
+        if (!popped) parseContext.pop();
         if (!ch) {
-          yield { type: 'end', position, line, lineChar };
+          yield { type: 'end', value: `"${str}`,  position, line, lineChar };
           return;
         }
         if (ch === '"') {
+          console.log("STRING", str);
           yield { type: 'string', value: str, position, line, lineChar };
           nextc();
         }
