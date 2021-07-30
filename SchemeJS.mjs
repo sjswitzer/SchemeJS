@@ -1247,6 +1247,32 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
+  // Something like this would be nice, but it's not quite right
+  //  let setSymWithWith = new Function("symbol", "value", "scope",
+  //    "with (scope) { return symbol = value }");
+
+  defineGlobalSymbol("set!", setq, { evalArgs: 1 }, "setq");
+  function setq(symbol, value) { return setSym(symbol, value, this) }
+
+  defineGlobalSymbol("set", setq);
+  function set(symbol, value) { return setSym(symbol, value, this) }
+
+  function setSym(symbol, value, scope) {
+    // Can _almost_ do this using "with." Maybe come back to that.
+    // The hell  of it is that JS has such a primitive internally to do
+    // the same operation but you can't seem to get at it as a user.
+    do {
+      if (scope.hasOwnProperty(symbol)) {
+        scope[symbol] = value;
+        return val;
+      }
+      scope = Object.getPrototypeOf(scope);
+    } while (scope && scope !== globalScope);  // I knew I'd use this someday!
+    // XXX TODO: Hmmm, what to do here?
+    globalScope[symbol] = val;
+    return val;
+  }
+
   // (qsort list predicate-fcn access-fcn)
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
   //   comparable performance and is excellent with partially-sorted lists.
