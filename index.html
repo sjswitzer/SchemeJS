@@ -1173,7 +1173,7 @@
         }
         let parseContext = [], assignSyntax = true;
         let inputText = getElementText(inputElement);
-        console.log("TEXT", inputText);
+        // console.log("TEXT", inputText);
         let pos = getSelectionPosition(inputElement);
         for (let span of inputElement.querySelectorAll('span'))
           span.replaceWith(span.textContent);
@@ -1191,7 +1191,7 @@
             for (let i = parseContext.length; i > 0; --i) {
               let tok = parseContext[i-1], pos = tok.position, width = 1;
               if (typeof tok.value === 'string') width = tok.value.length;
-              colorizeCharsAt(inputElement, pos, 1, 'colorized-text', `hsl(44, 100%, 50%, ${alpha})`);
+              colorizeCharsAt(inputElement, pos, width, 'colorized-text', `hsl(44, 100%, 50%, ${alpha})`);
               alpha *= .8;
             }
             // Feed the rest
@@ -1217,7 +1217,9 @@
           span.textContent = name;
           div.appendChild(span);
           let innerDiv = document.createElement('div');
-          for (let pgf of newlinesToPgf(inputText))
+          if (inputText[inputText.length-1] === '\n')
+            inputText = inputText.substr(0, inputText.length-1);
+          for (let pgf of newlinesToDivs(inputText))
             innerDiv.appendChild(pgf);
           div.appendChild(innerDiv);
           outputElement.appendChild(div);
@@ -1230,7 +1232,7 @@
           span.textContent = name;
           div.appendChild(span);
           innerDiv = document.createElement('div');
-          for (let pgf of newlinesToPgf(evaluatedString))
+          for (let pgf of newlinesToDivs(evaluatedString))
             innerDiv.appendChild(pgf);
           div.appendChild(innerDiv);
           outputElement.appendChild(div);
@@ -1240,18 +1242,16 @@
           inputElement.textContent = "";
         } catch (error) {
           if (error instanceof SchemeParseError) {
-            console.log("ERROR", error);
             if (error instanceof SchemeSyntaxError) {
               let position = error.position;
               colorizeCharsAt(inputElement, position, parseText.length - position, 'error-tokens');
             }
             let indent = '';
-            if (enterKey) {
+            if (enterKey)
               indent =  NBSP.repeat(2 * parseContext.length);
-              insertTextAt(inputElement, pos, indent);
-            }
-            setSelectionPosition(inputElement, pos + indent.length);
+            insertTextAndSetCursorAfter(inputElement, pos, indent);
           } else {
+            console.log("ERROR", error);
             errorElement = document.createElement('div');
             errorElement.setAttribute('class', 'error');
             let div = document.createElement('div');
@@ -1263,144 +1263,128 @@
         }
       }
 
-      function colorizeCharsAt(element, pos, n, cls, color) {
-        return colorize(element);
-        function colorize(element) {
-          for (let node of element.childNodes) {
-            if (node instanceof Element) {
-              if (node.tagName === 'BR') pos += 1;  // newline
-              colorize(node);
-            } else if (node instanceof Text) {
-              let text = node.textContent;
-              if (pos < text.length) {
-                let before, replace, after, nchar = n;
-                if (pos + nchar > text.length)
-                  nchar = text.length - pos;
-                if (pos === 0) {
-                  replace = node;
-                  if (nchar < text.length)
-                    after = node.splitText(nchar);
-                } else {
-                  before = node;
-                  replace = node.splitText(pos);
-                  if (nchar < replace.textContent.length)
-                    after = replace.splitText(nchar);
-                }
-                let highlightElement = document.createElement('span');
-                highlightElement.textContent = replace.textContent;
-                if (cls)
-                  highlightElement.setAttribute('class', cls);
-                if (color)
-                  highlightElement.setAttribute('style',
-                    `background-color: ${color};`);
-                element.replaceChild(highlightElement, replace);
-                pos -= text.length;
-                n -= nchar;
-              }
-            }
-            if (pos <= 0 || n <= 0) return;
-          }
-        }
-      }
-
-      function newlinesToPgf(text) {
+      function newlinesToDivs(text) {
         let res = [], lines = text.split('\n');
         for (let line of lines) {
-          let element = document.createElement('p');
+          let element = document.createElement('div');
           element.textContent = line;
           res.push(element);
         }
         return res;
       }
 
-      function getElementText(element) { 
-        let text = '';
-        for (let node of element.childNodes) {
-          if (node instanceof Element) {
-            text += getElementText(node);
-            if (node.tagName === 'BR') text += '\n';
-          } else if (node instanceof Text) {
-            let childText = node.textContent;
-            childText = childText.split(NBSP).join(' ');
-            text += childText;
-          }
-        }
-        return text;
-      }
-
-      // Screwy things happen when you modify text adjacent to the cursor
-      // but brute force always works.
-      function getSelectionPosition(element) {
+      function getSelectionPosition(editableElement) {
         let selection = window.getSelection();
-        if (!selection) return undefined;
-        let node = selection.anchorNode;
-        if (!element.contains(node)) return undefined;
-        let pos = selection.anchorOffset;
         console.log("SEL", selection.anchorNode, selection.anchorOffset, selection);
-        if (node instanceof Element)
-          countCharsInNode(node);
-        while (node && node !== element) {
-          if (node.previousSibling)
-            node = node.previousSibling;
-          else if (node.parentNode && node.parentNode !== element)
-            node = node.parentNode.previousSibling;
-          else
-            break;
-          if (node)
-            countCharsInNode(node);
-        }
-        console.log("POS", pos);
-        return pos;
-        function countCharsInNode(node) {
-          if (node === element) return;
-          if (node instanceof Text) pos += node.data.length;
-          else if (node instanceof Element && node.tagName === 'BR') pos += 1;
-          for (let child of node.childNodes)
-            countCharsInNode(child);
-        }
-      }
-
-      function setSelectionPosition(element, pos) {
-        return applyFnAt(setSelection, element, pos)  
-        function setSelection(node, pos) {
-        let selection = window.getSelection();
-          if (!selection) return false;
-          console.log("SETSEL", node, pos);
-          selection.collapse(node, pos);
-          return true;
-        }
-      }
-
-      function insertTextAt(element, pos, text) {
-        return applyFnAt(insertText, element, pos);
-        function insertText(node, pos) {
-          if (node instanceof Element) {
-            node.element.insertAdjacentText('afterbegin', text);
-          } else if (node instanceof Text) {
-            let str = node.textContent;
-            str = str.substr(0, pos) + text + str.substr(pos);
-            node.textContent = str;
+        if (!selection) return undefined;
+        let anchorNode = selection.anchorNode;
+        let selectionPosition = selection.anchorOffset;
+        if (!editableElement.contains(anchorNode)) return undefined;
+        traverseEditableElement(editableElement, onNode);
+        console.log("POS", selectionPosition);
+        return selectionPosition;
+        function onNode(node, pos, isNewline) {
+          console.log ("GSP", pos, node.tagName, node.data);
+          if (node === anchorNode) {
+            selectionPosition += pos;
+            return true;
           }
         }
       }
 
-      function applyFnAt(fn, element, pos) {
-        console.log("SET", element, pos);
-        return setSel(element);
-        function setSel(element) {
-          for (let node of element.childNodes) {
-            if (node instanceof Element) {
-              if (node.tagName === 'BR') pos -= 1;
-              if (setSel(node))
-                return true;
-            } else if (node instanceof Text) {
-              let text = node.textContent;
-              if (pos <= text.length)
-                return fn(node, pos);
-              pos -= text.length;
+      function getElementText(element) {
+        let text = '';
+        traverseEditableElement(element, onNode);
+        return text;
+        function onNode(node, pos, isNewline) {
+          if (isNewline)
+            text += '\n';
+          if (node instanceof Text)
+            text += node.data;
+        }
+      }
+
+      function insertTextAndSetCursorAfter(element, insertPosition, text = '') {
+        return traverseEditableElement(element, onNode);
+        function onNode(node, pos, isNewline) {
+          let localPosition = insertPosition - pos;
+          if (localPosition < 0) return true;
+          if (node instanceof Text) {
+            let content = node.data;
+            if (text !== '' && localPosition <= node.data.length) {
+              content = content.substr(0, localPosition) + text + content.substr(localPosition);
+              node.textContent = data;
+              return true;
+            }
+          } else if (node instanceof Element) {
+            let textElement = document.createElement('text');
+            textElement.textContent = text;
+            if (node.tagName === 'BR' && node.parentElement.tagName === 'DIV') {
+              node.replaceWith(textElement);
+            } else {
+              node.prepend(textElement);
             }
           }
-          return false;
+        }
+      }
+
+      function colorizeCharsAt(element, colorizePosition, nchar, cls, color) {
+        return traverseEditableElement(element, onNode);
+        function onNode(node, pos, isNewline) {
+          let localPosition = colorizePosition - pos;
+          if (localPosition < 0) return true;
+          if (node instanceof Text) {
+            let text = node.data;
+            if (localPosition < text.length) {
+              let before, replace, after, n = nchar;
+              if (n > text.length - localPosition)
+                n = text.length - localPosition;
+              if (localPosition === 0) {
+                replace = node;
+                if (n < text.length)
+                  after = node.splitText(n);
+              } else {
+                before = node;
+                replace = node.splitText(localPosition);
+                if (n < replace.textContent.length)
+                  after = replace.splitText(n);
+              }
+              let highlightElement = document.createElement('span');
+              highlightElement.textContent = replace.textContent;
+              if (cls)
+                highlightElement.setAttribute('class', cls);
+              if (color)
+                highlightElement.setAttribute('style', `background-color: ${color};`);
+              node.parentElement.replaceChild(highlightElement, replace);
+              nchar -= n;
+              pos += n;
+              if (nchar <= 0 || pos < 0) return true;
+            }
+          }
+        }
+      }
+
+      function traverseEditableElement(editableElement, onNode) {
+        let pos = 0;
+        return traverse(editableElement);
+        function traverse(node) {
+          let isReturn = false;
+          if (node.parentElement === editableElement && node.previousSibling && node.tagName === 'DIV') {
+              pos += 1;
+              isReturn = true;
+          }
+          if (node !== editableElement) {
+            let res = onNode(node, pos, isReturn);
+            if (res !== undefined) return res;
+          }
+          if (node instanceof Element) {
+            for (let child of node.childNodes) {
+              let res = traverse(child);
+              if (res !== undefined) return res;
+            }
+          } else if (node instanceof Text) {
+            pos += node.data.length;
+          }
         }
       }
 

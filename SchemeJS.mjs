@@ -64,18 +64,18 @@ export function createInstance(schemeOpts = {}) {
   Cons.prototype[PAIR] = true;
 
   function pairIterator() {
-  let current = this;
-  return {
-    next() {
-      if (!is_cons(current))
-       return { done: true, value: current };  // value is whatever wasn't a cons cell
-      let value = current[CAR];
-      current = current[CDR];
-      return { done: false, value };
-    },
-    [Symbol.iterator]() { return this }  // so that the iterator itself is iterable
+    let current = this;
+    return {
+      next() {
+        if (!is_cons(current))
+        return { done: true, value: current };  // value is whatever wasn't a cons cell
+        let value = current[CAR];
+        current = current[CDR];
+        return { done: false, value };
+      },
+      [Symbol.iterator]() { return this; }  // so that the iterator itself is iterable
+    }
   }
-}
   
   // Hide the NIL class because there's never any reason to
   // reference it or to instantiate it it more than once. Leaving it visible
@@ -2298,7 +2298,7 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (ch === ';' || (ch === '/' && peekc() === '/')) {  // ; or // begins a comment
-        parseContext.push({ type: 'comment', position, line, lineChar });
+        parseContext.push({ type: 'comment', value: ch === ';' ? ch : '//', position, line, lineChar });
         while (ch && !NL[ch])
           nextc();
         yield { type: (ch ? 'newline': 'end'), position, line, lineChar };
@@ -2307,18 +2307,20 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (ch === '/' && peekc() === '*') {
-        parseContext.push({ type: 'comment', position, line, lineChar });
+        parseContext.push({ type: 'comment', value: '/*', position, line, lineChar });
         nextc(); nextc();
         while (ch && !(ch === '*' && peekc() === '/'))
           nextc();
+        parseContext.pop();
         if (!ch)
           yield { type: 'end', position, line, lineChar };
-        parseContext.pop();
         nextc(); nextc();
+        while (WS[ch])
+          nextc();
       }
 
       if (ch === '"') {
-        parseContext.push({ type: 'string', value: '', position, line, lineChar })
+        parseContext.push({ type: 'string', value: '"', position, line, lineChar })
         let str = '';
         nextc();
         while (ch && ch != '"' && !NL[ch]) {
@@ -2341,11 +2343,11 @@ export function createInstance(schemeOpts = {}) {
           str += ch;
           nextc();
         }
+        parseContext.pop();
         if (!ch) {
           yield { type: 'end', position, line, lineChar };
           return;
         }
-        parseContext.pop();
         if (ch === '"') {
           yield { type: 'string', value: str, position, line, lineChar };
           nextc();
