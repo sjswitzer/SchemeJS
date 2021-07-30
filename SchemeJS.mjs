@@ -55,9 +55,7 @@ export function createInstance(schemeOpts = {}) {
       this[CAR] = car;
       this[CDR] = cdr;
     }
-    toString() {
-      return string(this, { maxDepth: 4 });
-    }
+    toString() { return string(this, { maxDepth: 4 }); }
     [Symbol.iterator] = pairIterator;
     // static [PAIR] = true;  // Hmm; Shouldn't this work?
   }
@@ -148,10 +146,10 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Character clases for parsing
-  const TOKS = {}, DIGITS = {}, IDENT1 = {}, IDENT2 = {},
+  const NBSP = '\u00a0', TOKS = {}, DIGITS = {}, IDENT1 = {}, IDENT2 = {},
   NUM1 = {}, NUM2 = {}, OPERATORS = {}, WS = {}, NL = {}, WSNL = {}, JSIDENT = {};
   for (let ch of `()[]{},':`) TOKS[ch] = true;
-  for (let ch of ` \t`) WS[ch] = WSNL[ch] = true;
+  for (let ch of ` \t${NBSP}`) WS[ch] = WSNL[ch] = true;
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = true;
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
     IDENT1[ch] = IDENT2[ch] = JSIDENT[ch] = true;

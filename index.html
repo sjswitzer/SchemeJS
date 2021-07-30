@@ -39,7 +39,7 @@
         right: 0;
       }
       html, table  {
-        font: 110% caption, sans-serif;
+        font: 100% caption, sans-serif;
       }
       @media all and (orientation:landscape) {
         /* iPhone crowds the screen in portrait but has lots of padding in landscape
@@ -255,6 +255,10 @@
 
       #header #about {
         flex: 0 0 auto;
+      }
+
+      #output, #input {
+        font-family: Monaco, Consolas, Courier New, monospace;
       }
 
       #output {
@@ -1013,7 +1017,6 @@
       onload = importSchemeAndRunREPL()
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
-        console.log("MODULE", SchemeJS);
         globalScope = SchemeJS.createInstance({ lambdaStr: "\u03BB", slambdaStr: "\u03BB\u03BB" });
         inputElement.contentEditable = 'true';
         inputElement.focus();
@@ -1242,6 +1245,7 @@
           inputElement.textContent = "";
         } catch (error) {
           if (error instanceof SchemeParseError) {
+            // console.log("SchemeParseError", error);
             if (error instanceof SchemeSyntaxError) {
               let position = error.position;
               colorizeCharsAt(inputElement, position, parseText.length - position, 'error-tokens');
@@ -1251,7 +1255,7 @@
               indent =  NBSP.repeat(2 * parseContext.length);
             insertTextAndSetCursorAfter(inputElement, pos, indent);
           } else {
-            console.log("ERROR", error);
+            console.log("Error", error);
             errorElement = document.createElement('div');
             errorElement.setAttribute('class', 'error');
             let div = document.createElement('div');
@@ -1295,6 +1299,7 @@
       function getElementText(element) {
         let text = '';
         traverseEditableElement(element, onNode);
+        // text = text.split(NBSP).join(' ');
         return text;
         function onNode(node, pos, isNewline) {
           if (isNewline)
@@ -1305,50 +1310,62 @@
       }
 
       function insertTextAndSetCursorAfter(element, insertPosition, text = '') {
+        let selection = window.getSelection();
+        if (!selection) return false;
         return traverseEditableElement(element, onNode);
         function onNode(node, pos, isNewline) {
-          let localPosition = insertPosition - pos;
-          console.log ("ITA", localPosition, node.tagName, node.data);
-          if (localPosition < 0) return true;
+          let localPos = insertPosition - pos;
+          console.log ("ITA", localPos, node.tagName, node.data);
+          if (localPos < 0) return;
           if (node instanceof Text) {
             console.log ("ITA TEXT");
             let content = node.data;
-            if (text !== '' && localPosition <= node.data.length) {
-              content = content.substr(0, localPosition) + text + content.substr(localPosition);
-              node.textContent = data;
+            if (localPos <= node.data.length) {
+              if (text !== '') {
+                content = content.substr(0, localPos) + text + content.substr(localPos);
+                node.textContent = data;
+              }
+              selection.collapse(node, localPos);
               return true;
             }
           } else if (node instanceof Element) {
-            console.log ("ITA ELEMENT");
-            let textElement = document.createElement('text');
-            textElement.textContent = text;
-            if (node.tagName === 'BR' && node.parentElement.tagName === 'DIV') {
-              node.replaceWith(textElement);
-            } else {
-              node.prepend(textElement);
+            if (localPos < 0) return false;
+            if (localPos === 0) {
+              console.log ("ITA ELEMENT");
+              let textNode = document.createTextNode(text);
+              if (node.tagName === 'BR' && node.parentElement.tagName === 'DIV') {
+                node.replaceWith(textNode);
+              } else {
+                node.prepend(textNode);
+                selection.collapse(textNode, text.length);
+              }
+              return true;
             }
           }
         }
       }
 
       function colorizeCharsAt(element, colorizePosition, nchar, cls, color) {
+        return;
         return traverseEditableElement(element, onNode);
         function onNode(node, pos, isNewline) {
-          let localPosition = colorizePosition - pos;
-          if (localPosition < 0) return true;
+          console.log("COLORIZE", node.tagName, node.data, )
+          let localPos = pos - colorizePosition;
+          console.log("COLORIZE", node.tagName, node.data, localPos);
+          if (localPos < 0) return;
           if (node instanceof Text) {
             let text = node.data;
-            if (localPosition < text.length) {
+            if (localPos < text.length) {
               let before, replace, after, n = nchar;
-              if (n > text.length - localPosition)
-                n = text.length - localPosition;
-              if (localPosition === 0) {
+              if (n > text.length - localPos)
+                n = text.length - localPos;
+              if (localPos === 0) {
                 replace = node;
                 if (n < text.length)
                   after = node.splitText(n);
               } else {
                 before = node;
-                replace = node.splitText(localPosition);
+                replace = node.splitText(localPos);
                 if (n < replace.textContent.length)
                   after = replace.splitText(n);
               }
@@ -1360,8 +1377,8 @@
                 highlightElement.setAttribute('style', `background-color: ${color};`);
               node.parentElement.replaceChild(highlightElement, replace);
               nchar -= n;
-              pos += n;
-              if (nchar <= 0 || pos < 0) return true;
+              colorizePosition += n;
+              if (nchar <= 0) return true;
             }
           }
         }
