@@ -152,10 +152,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Character clases for parsing
-  const NBSP = '\u00a0', ELIPSIS = '\u0085', ALPHA = {}, WS = {}, NL = {}, WSNL = {};
-  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
-  for (let ch of "\n\r") NL[ch] = ch.codePointAt(0);
-
+  const NBSP = '\u00a0', ELIPSIS = '\u0085', MUL = '\u00d7', DIV = '\u00f7' , ALPHA = {}, WS = {}, NL = {};
   // Dig the Unicode character properties out of the RegExp engine
   // This can take a bit of time and a LOT of memory, but people should
   // be able to use their own languages. By default it includes the
@@ -215,10 +212,10 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Includes ALPHA by inheritence!
-  let IDENT1 = Object.create(ALPHA), IDENT2 = Object.create(ALPHA);
+  let IDENT1 = Object.create(ALPHA), IDENT2 = Object.create(IDENT1), WSNL = Object.create(WS);
   let TOKS = {}, DIGITS = {}, NUM1 = {}, NUM2 = {}, JSIDENT = {};
+  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
   for (let ch of `()[]{},':`) TOKS[ch] = true;
-  for (let ch of ` \t${NBSP}`) WS[ch] = WSNL[ch] = true;
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
     JSIDENT[ch] = true;
   for (let ch of `0123456789`)
@@ -227,8 +224,12 @@ export function createInstance(schemeOpts = {}) {
     NUM1[ch] = NUM2[ch] = true;
   for (let ch of `eEoOxXbBn`)
     NUM2[ch] = true;
-  for (let ch of `~!@#$%^&|*_-+-=|\\<>?/`)
+  for (let ch of `!'#$%&*+,-/<=>?@\\^_|~${MUL}${DIV}`)
     IDENT1[ch] = IDENT2[ch] = true;
+  for (let codePoint = 0xa1; codePoint <= 0xbf; ++codePoint) {  // Latin-1 punctuation and symbols
+    let ch = String.fromCodePoint(codePoint);
+    IDENT1[ch] = IDENT2[ch] = true;
+  }
 
   //
   // Everything is encapsulated in a function scope because JITs
