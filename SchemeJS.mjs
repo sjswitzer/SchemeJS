@@ -21,7 +21,7 @@ export function createInstance(schemeOpts = {}) {
   let readFile = schemeOpts.readFile;
   let latin1 = schemeOpts.latin1 ?? false;
   let supplemental = schemeOpts.supplemental ?? false;
-  let dumpAlphaMap = schemeOpts.dumpAlphaMap ?? false;
+  let dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   let reportSystemError = schemeOpts.reportError ?? _reportError;
@@ -159,25 +159,24 @@ export function createInstance(schemeOpts = {}) {
   //
   // Character clases for parsing
   //
-  const NBSP = '\u00a0', ELIPSIS = '\u0085', MUL = '\u00d7', DIV = '\u00f7'
-  let ALPHA = {}, WS = {}, NL = {}, WSNL = Object.create(WS);
-  for (let ch of ` \t\u0011\u0012${NBSP}`) WS[ch] = ch.codePointAt(0);
+  const NBSP = '\u00a0', VTAB = '\u000b', FORMFEED = '\u000c', ELIPSIS = '\u0085', MUL = '\u00d7', DIV = '\u00f7';
+  const NL = {}, SINGLE_CHAR_TOKENS = {}, QUOTES = {}, DIGITS = {}, NUM1 = {}, NUM2 = {}, JSIDENT = {};
+  // IDENT2 includes IDENT1 by inheritence, as does WSNL WS.
+  const IDENT1 = {}, IDENT2 = Object.create(IDENT1), WS = {}, WSNL = Object.create(WS);
+  for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
+    JSIDENT[ch] = ch.codePointAt(0);
+  for (let ch of `0123456789`)
+    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = ch.codePointAt(0);
+  for (let ch of `+-.`)
+    NUM1[ch] = NUM2[ch] = ch.codePointAt(0);
+  for (let ch of `eEoOxXbBn`)
+    NUM2[ch] = ch.codePointAt(0);
+  for (let ch of ` \t${VTAB}${FORMFEED}${NBSP}`) WS[ch] = ch.codePointAt(0);
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
+  for (let ch of `()[]{}'.:`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
+  for (let ch of `\`'"`) QUOTES[ch] = ch.codePointAt(0);
 
-  // Basic Latin
-  for (let codePoint = 0x41; codePoint <= 0x5a; ++codePoint)
-    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-  for (let codePoint = 0x61; codePoint <= 0x7a; ++codePoint)
-    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-  // Latin-1 Supplement
-  for (let codePoint = 0xc0; codePoint <= 0xd6; ++codePoint)
-    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-  for (let codePoint = 0xd8; codePoint <= 0xf6; ++codePoint)
-    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-  for (let codePoint = 0xf8; codePoint <= 0xff; ++codePoint)
-    ALPHA[String.fromCodePoint(codePoint)] = codePoint;
-
-  // Dig the Unicode character properties out of the RegExp engine
+  // Digs the Unicode character properties out of the RegExp engine
   // This can take a bit of time and a LOT of memory, but people should
   // be able to use their own languages. By default it includes the
   // the Basic Multilingual Plane, but you can option it down to Latin-1
@@ -185,7 +184,20 @@ export function createInstance(schemeOpts = {}) {
   // In addition to the memory used by the table I suspect the RegExp engine
   // drags in some libraries dynamically when the "u" flag is specified.
   // And for that metter using RegExp at all probably drags in a dynammic library
-  // so, to reduce memory footprint, don't use it here.
+  // so, to reduce memory footprint, don't use it for Latin-1.
+
+  // Basic Latin (ASCII)
+  for (let codePoint = 0x21; codePoint < 0xff; ++codePoint) {
+    let ch = String.fromCodePoint(codePoint)
+     // All printable charactes except single-char tokens, digits and quotes
+    if (!SINGLE_CHAR_TOKENS[ch] && !DIGITS[ch] && !QUOTES[ch])
+      IDENT1[ch] = codePoint;
+  }
+  // Latin-1 Supplement (all printable characters)
+  for (let codePoint = 0xa1; codePoint <= 0xff; ++codePoint)
+    if (codePoint !== 0xad)  // Exclude invisible soft-hyphen
+      IDENT1[String.fromCodePoint(codePoint)] = codePoint;
+
   if (!latin1) {
     for (let codePoint = 0x100; codePoint < 0xD800; ++codePoint)
       analyzeCodepoint(codePoint);
@@ -199,42 +211,25 @@ export function createInstance(schemeOpts = {}) {
 
   function analyzeCodepoint(codePoint) {
     let ch = String.fromCodePoint(codePoint);
-    if (ch.match( /^\p{Alphabetic}$/u )) ALPHA[ch] = codePoint;
+    if (ch.match( /^\p{Alphabetic}$/u )) IDENT1[ch] = codePoint;
+    if (ch.match( /^\p{Math}$/u )) IDENT1[ch] = codePoint;
     if (!NL[ch] && ch !== ELIPSIS && ch.match( /^\p{White_Space}$/u )) WS[ch] = codePoint;
   }
 
-  if (dumpAlphaMap) {
-    if (typeof dumpAlphaMap !== 'function') dumpAlphaMap = console.info;
+  if (dumpIdentifierMap) {
+    if (typeof dumpIdentifierMap !== 'function')
+      dumpIdentifierMap = console.info;
     showCodepoints("NL", NL);
     showCodepoints("WS", WS);
-    showCodepoints("ALPHA", ALPHA);
+    showCodepoints("IDENT1", IDENT1);
     function showCodepoints(tableName, table) {
       let characters = Object.getOwnPropertyNames(table);
       process.stdout.write(`Table ${tableName}, ${characters.length} characters\n`);
       for (let ch of characters) {
         let charCode = table[ch];
-        dumpAlphaMap("CHARTAB", tableName, charCode, ch, jsChar(charCode));
+        dumpIdentifierMap("CHARTAB", tableName, charCode, ch, jsChar(charCode));
       }
     }
-  }
-
-  // Includes ALPHA by inheritence!
-  let IDENT1 = Object.create(ALPHA), IDENT2 = Object.create(IDENT1);
-  let TOKS = {}, DIGITS = {}, NUM1 = {}, NUM2 = {}, JSIDENT = {};
-  for (let ch of `()[]{},':`) TOKS[ch] = ch.codePointAt(0);
-  for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
-    JSIDENT[ch] = ch.codePointAt(0);
-  for (let ch of `0123456789`)
-    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = ch.codePointAt(0);
-  for (let ch of `+-.`)
-    NUM1[ch] = NUM2[ch] = ch.codePointAt(0);
-  for (let ch of `eEoOxXbBn`)
-    NUM2[ch] = ch.codePointAt(0);
-  for (let ch of `!'#$%&*+,-/<=>?@\\^_|~${MUL}${DIV}`)
-    IDENT1[ch] = IDENT2[ch] = ch.codePointAt(0);
-  for (let codePoint = 0xa1; codePoint <= 0xbf; ++codePoint) {  // Latin-1 punctuation and symbols
-    let ch = String.fromCodePoint(codePoint);
-    IDENT1[ch] = IDENT2[ch] = codePoint;
   }
 
   //
@@ -474,7 +469,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("is_finite", isFinite, { schemeOnly: true } , "finite?");
   defineGlobalSymbol("globalThis", globalThis);
   defineGlobalSymbol("Math", Math, { schemeOnly: true });
-  defineGlobalSymbol("Atomics", Atomics, { schemeOnly: true });
+  // defineGlobalSymbol("Atomics", Atomics, { schemeOnly: true });
   defineGlobalSymbol("JSON", JSON, { schemeOnly: true });
   defineGlobalSymbol("Reflect", Reflect, { schemeOnly: true } );
   defineGlobalSymbol("Intl", Intl, { schemeOnly: true } );
@@ -487,7 +482,8 @@ export function createInstance(schemeOpts = {}) {
       Map, Set, WeakMap, WeakSet,
       Int8Array, Uint8Array, Uint8ClampedArray,
       Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array,
-      Float64Array, BigInt64Array, BigUint64Array,
+      Float64Array, 
+      // BigInt64Array, BigUint64Array,
       ArrayBuffer, DataView,
       Function, Promise, Proxy
     ]) {
@@ -601,7 +597,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("mul", mul, { compileHook: mul_hook}, "*");
+  defineGlobalSymbol("mul", mul, { compileHook: mul_hook}, "*", MUL);
   function mul(a, b, ...rest) {
     a *= b;
     for (let b of rest)
@@ -616,7 +612,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("div", div, { compileHook: div_hook }, '/');
+  defineGlobalSymbol("div", div, { compileHook: div_hook }, '/', DIV);
   function div(a, ...rest) {
     if (rest.length === 0) return 1/a;
     for (let b of rest)
@@ -2427,40 +2423,6 @@ export function createInstance(schemeOpts = {}) {
     let ch = '', _peek = [], _done = false;
     let position = 0, charCount = 0, line = 0, lineCount = 0, lineChar = 0, lineCharCount = 0;
     if (!parseContext) parseContext = [];
-    function nextc() {
-      if (_peek.length > 0)
-        return ch = _peek.shift();
-      if (_done) return ch = '';
-      let next = characterGenerator.next();
-      if (next.done) {
-        _done = true;
-        return ch = '';
-      }
-      charCount += 1;
-      lineCharCount += 1;
-      if (ch === '\n') {
-        lineCount += 1;
-        lineCharCount = 0;
-      }
-      return ch = next.value;
-    }
-    function peekc(n = 0) {
-      for (let get = n - _peek.length + 1; get > 0; --get) {
-        let next = characterGenerator.next();
-        if (next.done) {
-          _done = true;
-          return '';
-        }
-        charCount += 1;
-        lineCharCount += 1;
-        if (ch === '\n') {
-          lineCount += 1;
-          lineCharCount = 0;
-        }
-        _peek.push(next.value);
-      }
-      return _peek[n];
-    }
     nextc();
 
     getToken:
@@ -2554,13 +2516,13 @@ export function createInstance(schemeOpts = {}) {
         continue;
       }
 
-      if (TOKS[ch]) {
+      if (ch === '.' && !DIGITS[peekc()]) {
         yield { type: ch, position, line, lineChar };
         nextc();
         continue;
       }
 
-      if (ch === '.' && !DIGITS[peekc()]) {
+      if (SINGLE_CHAR_TOKENS[ch]) {
         yield { type: ch, position, line, lineChar };
         nextc();
         continue;
@@ -2617,6 +2579,43 @@ export function createInstance(schemeOpts = {}) {
       nextc();
     }
     yield { type: 'end', position, line, lineChar };
+    return;
+
+    function nextc() {
+      if (_peek.length > 0)
+        return ch = _peek.shift();
+      if (_done) return ch = '';
+      let next = characterGenerator.next();
+      if (next.done) {
+        _done = true;
+        return ch = '';
+      }
+      charCount += 1;
+      lineCharCount += 1;
+      if (ch === '\n') {
+        lineCount += 1;
+        lineCharCount = 0;
+      }
+      return ch = next.value;
+    }
+
+    function peekc(n = 0) {
+      for (let get = n - _peek.length + 1; get > 0; --get) {
+        let next = characterGenerator.next();
+        if (next.done) {
+          _done = true;
+          return '';
+        }
+        charCount += 1;
+        lineCharCount += 1;
+        if (ch === '\n') {
+          lineCount += 1;
+          lineCharCount = 0;
+        }
+        _peek.push(next.value);
+      }
+      return _peek[n];
+    }
   }
 
   let gensym_count = 0;
