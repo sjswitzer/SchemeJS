@@ -47,11 +47,12 @@ export function createInstance(schemeOpts = {}) {
   // could be anything at all.
 
   const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR"), NULLSYM = Symbol("NULLSYM");
-  const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR");
+  const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
 
   // Trust the JIT to inline this
   const is_cons = obj => obj != null && obj[PAIR] === true;
   const is_null = obj => obj != null && obj[NULLSYM] === true;
+  const is_list = obj => obj != null && (obj[PAIR] === true || obj[NULLSYM] === true);
 
   class Cons {
     [CAR]; [CDR];
@@ -87,7 +88,7 @@ export function createInstance(schemeOpts = {}) {
   // and provides a way to trap attempts to get or set [CAR] and [CDR].
   const NIL = new ((_ => {
     return class NIL {
-      [Symbol.iterator]() { return { next: () => { done: true } } }
+      [Symbol.iterator]() { return { next: () => ({ done: true }) } }
       get [CAR]() { throw new SchemeEvalError("car of nil") }
       set [CAR](_) { throw new SchemeEvalError("set car of nil") }
       get [CDR]() { throw new SchemeEvalError("cdr of nil") }
@@ -323,6 +324,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("CDR_SYMBOL", CDR);
   exportAPI("LAZYCAR_SYMBOL", LAZYCAR);
   exportAPI("LAZYCDR_SYMBOL", LAZYCDR);
+  exportAPI("SUPERLAZY_SYMBOL", SUPERLAZY);
 
   defineGlobalSymbol("VERSION", VERSION);
   defineGlobalSymbol("is-atom", is_atom, "atom?");
@@ -529,7 +531,7 @@ export function createInstance(schemeOpts = {}) {
   function apply(fn, args, ...scope) {
     let useScope = scope[0];
     if (!(useScope != null && useScope instanceof Scope)) useScope = this;
-    if (useScope === NIL) scope = globalScope; // NIL, specifically, means use the global scope
+    if (is_null(useScope)) scope = globalScope; // NIL, specifically, means use the global scope
     return _apply(fn, args, useScope);
   }
 
@@ -952,7 +954,7 @@ export function createInstance(schemeOpts = {}) {
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
-      if (list === NIL || is_cons(list)) {
+      if (is_list(list)) {
         // Could handle as iterable, but faster not to
         while (is_cons(list)) {
           if (last) last = last[CDR] = cons(list[CAR], NIL);
@@ -974,7 +976,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("last", last);
   function last(list) {
     let res = NIL;
-    if (!list || list === NIL) return NIL; // XXX check this
+    if (!list || is_null(list)) return NIL; // XXX check this
     if (is_cons(list)) {
       while (is_cons(list)) {
         res = list[CAR];
@@ -997,7 +999,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("butlast", butlast);
   function butlast(list) {
     let res = NIL, last;
-    if (list === NIL || is_cons(list)) {
+    if (is_list(list)) {
       while (is_cons(list) && is_cons(list[CDR])) {
         if (last) last = last[CDR] = cons(list[CAR], NIL);
         else res = last = cons(list[CAR], NIL);
@@ -1019,7 +1021,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("length", length);
   function length(list) {
     let n = 0;
-    if (list === NIL || is_cons(list)) {
+    if (is_list(list)) {
       while (is_cons(list)) {
         n += 1;
         list = list[CDR];
@@ -1068,7 +1070,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("copy-list", copy_list);  // TODO: unit tests!
   function copy_list(list) {
     let res = NIL, last;
-    if (list === NIL) return NIL;
+    if (is_null(list)) return NIL;
     if (is_cons(list)) {
       while (is_cons(list)) {
         let item = cons(list[CAR], NIL);
@@ -1121,7 +1123,7 @@ export function createInstance(schemeOpts = {}) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
       throw new TypeError(`Not an integer ${string(index)}`);
     if (index < 0) throw new RangeError(`nth`);
-    if (list === NIL || is_cons(list)) {
+    if (is_list(list)) {
       while (index > 0 && is_cons(list)) {
         index -= 1;
         list = list[CDR];
@@ -1169,7 +1171,7 @@ export function createInstance(schemeOpts = {}) {
     // Actually, this will work for any iterables and lists are iterable.
     let res = NIL, last;
     for (let list of lists) {
-      if (list === NIL || is_cons(list)) {
+      if (is_list(list)) {
         // Could just let the list iterator handle it but might as well just follow the Cons chain
         // and not have to manufacture an iterator.
         while (is_cons(list)) {
@@ -1277,7 +1279,7 @@ export function createInstance(schemeOpts = {}) {
   //   comparable performance and is excellent with partially-sorted lists.
   defineGlobalSymbol("mergesort", mergesort, "sort", "qsort");
   function mergesort(list, ...rest) {
-    if (list === NIL) return NIL;
+    if (is_null(list)) return NIL;
     // Sort Arrays as Arrays
     if (Array.isArray(list))
       return in_place_mergesort(list.slice(0), ...rest);
@@ -1296,7 +1298,7 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("in-place-mergesort", in_place_mergesort, "in-place-sort", "nsort");
   function in_place_mergesort(list, ...rest) {
-    if (list === NIL) return NIL;
+    if (is_null(list)) return NIL;
     let predicateFn = rest[0], accessFn = rest[1];
     // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
     let before = predicateFn, scope = this;
@@ -1324,7 +1326,7 @@ export function createInstance(schemeOpts = {}) {
         }
       }
     }
-    if (list === NIL) return NIL;
+    if (is_null(list)) return NIL;
     // Sort arrays as arrays
     if (Array.isArray(list)) {
       // ES10 stipulates that it only cares wheter the compare function
@@ -1391,7 +1393,7 @@ export function createInstance(schemeOpts = {}) {
       //     etc.
       let i = 0;
       for ( ; i < stack.length; ++i) {
-        if (stack[i] === NIL) {
+        if (is_null(stack[i])) {
           stack[i] = run;
           run = NIL;
           break;
@@ -1399,7 +1401,7 @@ export function createInstance(schemeOpts = {}) {
         run = merge(stack[i], run);
         stack[i] = NIL;
       }
-      if (run !== NIL)
+      if (!is_null(run))
         stack.push(run);
     }
     // Merge all remaining stack elements
@@ -1682,7 +1684,7 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("_eval", _eval);
   function _eval(form, scope) {
-    if (form === NIL) return form;
+    if (is_null(form)) return NIL;
     if (typeof form === 'symbol') {
       let val = scope[form];
       if (val === undefined) throw new SchemeEvalError(`Undefined symbol ${string(form)}`);
@@ -1852,7 +1854,7 @@ export function createInstance(schemeOpts = {}) {
         while (is_cons(params)) {
           let param = params[CAR];
           if (typeof param !== 'symbol') throw new TypeError(`Param must be a symbol ${param}`);
-          if (args !== NIL) {
+          if (!is_null(args)) {
             scope[param] = args[CAR];
             if (is_cons(args)) args = args[CDR];
           } else {
@@ -1866,7 +1868,7 @@ export function createInstance(schemeOpts = {}) {
         }
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           scope[params] = args;
-        else if (params !== NIL)
+        else if (!is_null(params))
           throw new SchemeEvalError(`Bad parameter list ${string(origFormalParams)}`);
         let res = NIL;
         while (is_cons(forms)) {
@@ -1906,12 +1908,16 @@ export function createInstance(schemeOpts = {}) {
     function toString(obj, maxDepth) {
       if (maxDepth <= 0) return put("...");
       maxDepth -= 1;
-      if (obj === NIL) return put("()");
       if (obj === undefined) return put("undefined");
       if (obj === null) return put( "null");   // remember: typeof null === 'object'!
       let objType = typeof obj;
       let saveIndent = indent;
       if (objType === 'object') {
+        // MUST do this before the is_null test, which will cause eager evaluation of
+        // a LazyIteratorList, cause it to call next() and mutate into something else.
+        if (obj[SUPERLAZY])
+          return put("(...)");
+        if (is_null(obj)) return put("()");
         if (obj instanceof Scope) {
           let symStrs = "";
           if (obj !== globalScope) {
@@ -1927,81 +1933,81 @@ export function createInstance(schemeOpts = {}) {
           }
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
-        // Check lazy first because is_car will snap a LazyIteratorList object out of laziness
-        if (obj[LAZYCDR] || is_cons(obj)) {
-          if (obj[LAZYCDR]) {
-            if (obj[LAZYCAR])
-              return put(`(.. ...)`); // not `.. . ...`; the cdr might be, and probably is, a list itself
-            return put(`(${string(obj[CAR])} ...)`);
-          } else if (obj[LAZYCAR]) {
-            put("(..");
-            indent += indentMore;
-            sep = " "
-            obj = obj[CDR];
-          } else {
-            put("(");
-            indent += indentMore;
-            sep = "";
-            let objCar = obj[CAR];
-            if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
-                objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
-                  && is_cons(obj[CDR])) {
-              // Specal treatment of lambdas and closures with curry notation
-              if (objCar === CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
-                if (is_cons(obj[CDR][CDR])) {
-                  let evalCount, scopeCons = obj[CDR];
+        if (obj[LAZYCDR]) {
+          put("(");
+          sep = "";
+          if (obj[LAZYCAR])
+            put("..")
+          else
+            toString(obj[CAR], maxDepth);
+          sep = " ";
+          return put("...)", true);
+        }
+        if (is_cons(obj)) {
+          put("(");
+          indent += indentMore;
+          sep = "";
+          let objCar = obj[CAR];
+          if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
+              objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
+                && is_cons(obj[CDR])) {
+            // Specal treatment of lambdas and closures with curry notation
+            if (objCar === CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
+              if (is_cons(obj[CDR][CDR])) {
+                let evalCount, scopeCons = obj[CDR];
+                if (objCar === SCLOSURE_ATOM) {
+                  evalCount = obj[CDR][CAR];
+                  scopeCons = obj[CDR][CDR];
+                }
+                let params = scopeCons[CDR][CAR];
+                if (typeof params === 'symbol') {
+                  put("(");
+                  indent += indentMore;
+                  sep = "";
                   if (objCar === SCLOSURE_ATOM) {
-                    evalCount = obj[CDR][CAR];
-                    scopeCons = obj[CDR][CDR];
-                  }
-                  let params = scopeCons[CDR][CAR];
-                  if (typeof params === 'symbol') {
-                    put("(");
-                    indent += indentMore;
-                    sep = "";
-                    if (objCar === SCLOSURE_ATOM) {
-                      toString(evalCount, maxDepth);
-                      sep = " ";
-                    }
-                    toString(objCar, maxDepth);  // %%closure or %%%closure
+                    toString(evalCount, maxDepth);
                     sep = " ";
-                    toString(scopeCons[CAR], maxDepth);  // scope
-                    sep = " ";
-                    toString(params, maxDepth);  // actually the atom
-                    sep = ""; put(".");
-                    toString(scopeCons[CDR][CDR], maxDepth);  // the form
-                    sep = ""; put(")", true);
-                    indent = saveIndent;
-                    return
                   }
+                  toString(objCar, maxDepth);  // %%closure or %%%closure
+                  sep = " ";
+                  toString(scopeCons[CAR], maxDepth);  // scope
+                  sep = " ";
+                  toString(params, maxDepth);  // actually the atom
+                  sep = ""; put(".");
+                  toString(scopeCons[CDR][CDR], maxDepth);  // the form
+                  sep = ""; put(")", true);
+                  indent = saveIndent;
+                  return;
                 }
               }
-              let str = "(", params = obj[CDR][CAR], forms = obj[CDR][CDR];
-              if (objCar === LAMBDA_ATOM) str += lambdaStr;
-              if (objCar === SLAMBDA_ATOM) str += slambdaStr;
-              if (typeof params === 'symbol') {  // curry notation
-                str += `${params.description}.`;
-                put(str);
-                indent += indentMore;
-                toString(forms, maxDepth);
-                sep = "";
-                put(")", true);
-                indent = saveIndent;
-                return;
-              }
+            }
+            let str = "(", params = obj[CDR][CAR], forms = obj[CDR][CDR];
+            if (objCar === LAMBDA_ATOM) str += lambdaStr;
+            if (objCar === SLAMBDA_ATOM) str += slambdaStr;
+            if (typeof params === 'symbol') {  // curry notation
+              str += `${params.description}.`;
+              put(str);
+              indent += indentMore;
+              toString(forms, maxDepth);
+              sep = "";
+              put(")", true);
+              indent = saveIndent;
+              return;
             }
           }
-          while (obj[LAZYCDR] || is_cons(obj)) {
+          while (is_cons(obj)) {
             if (obj[LAZYCAR])
               put("..");
             else
               toString(obj[CAR], maxDepth);
             sep = " ";
             if (obj[LAZYCDR])
-              return put("...)");
+              return put("...)", true);
             obj = obj[CDR];
+            if (obj[SUPERLAZY])
+              return put("...)", true);
           }
-          if (obj !== NIL) {
+          if (!is_null(obj)) {
             put(".");
             sep = " ";
             toString(obj, maxDepth)
@@ -2123,7 +2129,7 @@ export function createInstance(schemeOpts = {}) {
     let depth = rest[0];
     if (!bool(depth)) depth = 1;
     if (depth <= 0) return obj;
-    if (obj === NIL || is_cons(obj)) return obj;
+    if (is_null(obj) || is_cons(obj)) return obj;
     if (typeof obj === 'object') {
       if (is_cons(obj)) return obj;  // Careful; Cons is iterable itself
       let list = NIL, last;
@@ -2223,7 +2229,6 @@ export function createInstance(schemeOpts = {}) {
   // Doesn't even know if it's a cons cell or null yet!
   //
   class LazyIteratorList {
-    [LAZYCAR] = true; [LAZYCDR] = true;
     _iterator; _mapper;
     constructor(iterator, mapper) {
       this._iterator = iterator;
@@ -2260,8 +2265,6 @@ export function createInstance(schemeOpts = {}) {
         delete this._mapper;
         delete this[CAR];
         delete this[CDR];
-        delete this[LAZYCAR];
-        delete this[LAZYCDR];
         this[NULLSYM] = true;
         return false;
       }
@@ -2270,23 +2273,21 @@ export function createInstance(schemeOpts = {}) {
         Object.setPrototypeOf(this, LazyCarList.prototype);
         delete this._iterator;
         delete this._mapper;
-        delete this[LAZYCDR];
         this[LAZYCAR] = () => mapper(car);
       } else {
         Object.setPrototypeOf(this, Cons.prototype);
         delete this._iterator;
         delete this._mapper;
-        delete this[LAZYCAR];
-        delete this[LAZYCDR];
         this[CAR] = car;
       }
       this[CDR] = cdr;
       return true;
     }
-    get [NULLSYM]() { return !_this._getNext() }
+    get [NULLSYM]() { return !this._getNext() }
     toString() { return string(this) }
     [Symbol.iterator] = pairIterator();
   }
+  LazyIteratorList.prototype[SUPERLAZY] = true;
 
   //
   // Lazy lists by being a Cons imposter
@@ -2333,7 +2334,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("list-view", list_view);
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
-    /**** Method 1
+    /**** Classic method
     function getCdr() {
       let { done, value } = iterator.next();
       if (done) return NIL;
@@ -2344,18 +2345,7 @@ export function createInstance(schemeOpts = {}) {
     return new ConventionalLazyList(value, undefined, undefined, getCdr);
     */
   
-    /**** Method 2
-    function getCdr() {
-      let { done, value } = iterator.next();
-      if (done) return NIL;
-      return new LazyCdrList(value, getCdr);
-    }
-    let { done, value } = iterator.next();
-    if (done) return NIL;
-    return new LazyCdrList(value, getCdr);
-    */
-
-    // Method 3: Even lazier since it doesn't fetch ahead to find out if should be NIL or not.
+    // Even lazier since it doesn't fetch ahead to find out if should be NIL or not.
     return new LazyIteratorList(iterator);
   }
 
@@ -2363,7 +2353,7 @@ export function createInstance(schemeOpts = {}) {
   function lazy_map(fn, obj) {
     if (!bool(fn)) return NIL; // XXX probably should throw; also mapcar
     let scope = this, iterator = iteratorFor(obj, TypeError);
-    /**** Method 1:
+    /**** Classic method
     function getCdr() {
       let { done, value } = iterator.next();
       if (done) return NIL;
@@ -2375,20 +2365,8 @@ export function createInstance(schemeOpts = {}) {
     const getCar = () => _apply(fn, cons(value, NIL), scope);
     return new ConventionalLazyList(undefined, getCar, undefined, getCdr);
     */
-    /**** Method 2:
-    function getCdr() {
-      let { done, value } = iterator.next();
-      if (done) return NIL;
-      const getCar = () => _apply(fn, cons(value, NIL), scope);
-      return new LazyCarCdrList(getCar, getCdr);
-    }
-    let { done, value } = iterator.next();
-    if (done) return NIL;
-    const getCar = () => _apply(fn, cons(value, NIL), scope);
-    return new LazyCarCdrList(getCar, getCdr);
-    */
 
-    // Method 3: Doesn't need to fetch ahead one item to find out whether it's NIL or not.
+    // Doesn't need to fetch ahead one item to find out whether it's NIL or not.
     return new LazyIteratorList(iterator, a => _apply(fn, cons(a, NIL), scope))
   }
 
@@ -3088,7 +3066,7 @@ export function createInstance(schemeOpts = {}) {
       result = "null";
     } else if (typeof form === 'number' || typeof form === 'bigint' || typeof form === 'string') {
       result = string(form);
-    } else if (form === NIL) {
+    } else if (is_null(form)) {
       result = "NIL";
     } else if (typeof form === 'symbol') {
       let sym = form;
@@ -3264,7 +3242,7 @@ export function createInstance(schemeOpts = {}) {
       paramv.push(paramVar);
       compileScope[params] = paramVar;
     }
-    else if (params !== NIL) {
+    else if (!is_null(params)) {
       throw new SchemeEvalError(`Bad parameter list ${string(origFormalParams)}`);
     }
     if (name && name !== '')
