@@ -271,13 +271,14 @@ export function createInstance(schemeOpts = {}) {
       createFunctionDescriptor(value, evalCount);
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
     }
+    let group = opts.group ?? "builtin";
     let atom;
     ({ atom, name } = normalize(name));
     globalScope[atom] = value;
     if (!opts.schemeOnly)
       globalScope[name] = value;
     let atoms = [ atom ];
-    globalScope._help_[atom] = { atoms, value };
+    globalScope._help_[atom] = { atoms, value, group };
     for (let alias of aliases) {
       ({ atom, name } = normalize(alias));
       globalScope[atom] = value;
@@ -468,46 +469,29 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("array?", a => Array.isArray(a));
   defineGlobalSymbol("nan?", isNaN, { schemeOnly: true } , "isNaN", "NaN?");
   defineGlobalSymbol("finite?", isFinite, { schemeOnly: true } , "isFinite");
-  defineGlobalSymbol("globalThis", globalThis);
 
   const IMPL_SYMBOL = Symbol('*implementation*');
   exportAPI("IMPL_SYMBOL", IMPL_SYMBOL);
 
   // Hoist a bunch of JavaScript definitions into the global scope
-  for (let obj of [
-      Object, Boolean, Symbol, Number, String, BigInt, Array,
-      encodeURI, encodeURIComponent, decodeURI, decodeURIComponent,
-      Error, "AggregateError", EvalError, "InternalError", RangeError, ReferenceError,
-      SyntaxError, TypeError, URIError,
-      Date, RegExp, parseFloat, parseInt,
-      Map, Set, WeakMap, WeakSet,
-      Int8Array, Uint8Array, Uint8ClampedArray,
-      Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array,
-      Float64Array, "BigInt64Array", "BigUint64Array", "SharedArrayBuffer",
-      ArrayBuffer, DataView, "WebAssembly",
-      Function, Promise, Proxy,
-      "JSON", "Intl", "Atomics", "Reflect", setTimeout,
-      "NaN", "Infinity", "XMLHttpRequest", "navigator", "window", "process"
-    ]) {
-    let name, value; 
-    if (typeof obj === 'string') {
-      name = obj;
-      value = globalThis[name];
-      if (typeof value === 'object') {
-        for (let [innerName, {value: innerValue}] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
-          defineGlobalSymbol(`${name}-${innerName}`, innerValue, { schemeOnly: true });
-          if (typeof innerValue === 'function')
-            innerValue[IMPL_SYMBOL] = `{(...params) => ${name}.${innerName}(...params)}`;
-        }
+  defineGlobalSymbol("NaN", NaN);
+  defineGlobalSymbol("Infinity", Infinity);
+  for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
+    defineGlobalSymbol(obj.name, obj);
+  for (let name of Object.getOwnPropertyNames(globalThis)) {
+    // Strangely, Object.entries(globalThis) and for (sym in globalThis) only return a few entries,
+    // at least in node-js under VS Code. Something about $jsDebugIsRegistered, I suspect.
+    let value = globalThis[name];
+    defineGlobalSymbol(name, value, { schemeOnly: true, group: "imported" });
+    if (name === "global" || name === "globalThis" || name === 'window' || name === 'document') 
+      continue;
+    if (value != null && typeof value === 'object') {
+      for (let [innerName, {value: innerValue}] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+        defineGlobalSymbol(`${name}-${innerName}`, innerValue, { schemeOnly: true, group: "imported" });
+        if (typeof innerValue === 'function')
+          innerValue[IMPL_SYMBOL] = `{(...params) => ${name}.${innerName}(...params)}`;
       }
-    } else if (typeof obj === 'function') {
-      name = obj.name;
-      value = obj;
     }
-    if (value !== undefined)
-      defineGlobalSymbol(name, value, { schemeOnly: true });
-    // else
-    //   console.log("What's this?", obj);
   }
 
   // Stuff the whole Math class in there!

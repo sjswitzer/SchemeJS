@@ -119,7 +119,7 @@
          * I *think* "contain: paint" is more sensible, though.
          * Look up "CSS block formatting context." It's wild!
          */
-        /* overflow: auto; */
+        overflow: auto;
         contain: paint;
       }
       .help dl {
@@ -133,7 +133,7 @@
       .help dl dd {
         float: right;
         margin-inline-start: unset;
-        --definition-margin: 10ch;
+        --definition-margin: 14ch;
         width: calc(100% - var(--definition-margin));
       }
       .help dl dd,
@@ -142,6 +142,7 @@
       }
       .help dl .heading {
         font-weight: bold;
+        font-style: normal !important;
       }
       .help dd p {
         margin: .5em 0 .5em 0;
@@ -156,10 +157,10 @@
         font-style: italic;
       }
 
-      .help #builtins dd {
+      .help definitions dd {
         font-style: italic;
       }
-      .help #builtins dd p {
+      .help definitions dd p {
         font-style: normal;
       }
 
@@ -436,12 +437,18 @@
       <close-button onclick="showHelp(null)"></close-button>
       <div>
         <h2> Built-In Functions and Constants </h2>
-          <dl id="builtins">
+          <dl class="definitions" id="helpgroup-builtin">
             <dt class="heading"> Symbol
             <dd class="heading"> Description
             <!-- definitions inserted here when SchemeJS module is loaded -->
          </dl>
-      </div>
+         <h2> Functions and Constants Imported from JavaScript </h2>
+         <dl class="definitions" id="helpgroup-imported">
+           <dt class="heading"> Symbol
+           <dd class="heading"> Description
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+     </div>
     </div>
     <div style="display: none !important">
       <dd id="defn-_star_catch"><div>
@@ -1012,8 +1019,6 @@
 
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
-      const builtinsElement = document.getElementById('builtins');
-
       let globalScope, SCHEME_VERSION, SchemeParseError, SchemeSyntaxError, SchemeParseIncomplete;
 
       onload = importSchemeAndRunREPL()
@@ -1062,33 +1067,48 @@
 
       function buildBuiltinHelp(globalScope) {
         const IMPL_SYMBOL = globalScope["IMPL_SYMBOL"], string = globalScope.string;
-        let symtab = [], helpHelper = globalScope._help_;
+        let groups = {}, helpHelper = globalScope._help_;
         let syms = Object.getOwnPropertySymbols(helpHelper);
-        for (let sym of syms)
+        for (let sym of syms) {
+          let helper = helpHelper[sym], group = helper.group;
+          if (!groups[group]) groups[group] = [];
+          let symtab = groups[group];
           symtab.push({ key: keyFor(sym), ...helpHelper[sym] });
-        symtab.sort((a, b) => a.key < b.key ? -1 : 1);
-        for (let { atoms, value } of symtab) {
-          for (let atom of atoms)
-            builtinsElement.appendChild(textElement('dt', atom.description));
-          let name = atoms[0].description, elementId = "defn-" + name;
-          for (;;) {
-            let prevElementId = elementId;
-            elementId = elementId.replace('*', '_star_').replace('?', 'P');
-            if (elementId === prevElementId) break;
+        }
+        for (let group in groups) {
+          let symtab = groups[group];
+          let helpElement = document.getElementById(`helpgroup-${group}`);
+          if (!helpHelper) {
+            console.log("Missing help group", group);
+            continue;
           }
-          let dd = document.getElementById(elementId);
-          if (!dd)
-            dd = textElement('dd', `TBD (${elementId})`);
-          builtinsElement.appendChild(dd);
-          if (typeof value === 'function') {
-            let impl = value[IMPL_SYMBOL];
-            if (!impl) impl = string(value);
-            if (impl.length < 50)
-              dd.appendChild(textElement('p', `Impl: ${impl}`, 'impl'));
-          } else {
-            let valStr = string(value);
-            if (valStr.length < 50)
-              dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
+          symtab.sort((a, b) => a.key < b.key ? -1 : 1);
+          for (let { atoms, value } of symtab) {
+            for (let atom of atoms)
+              helpElement.appendChild(textElement('dt', atom.description));
+            let name = atoms[0].description, elementId = "defn-" + name;
+            elementId = elementId.replaceAll('*', '_star_').replaceAll('?', 'P');
+            let impl;
+            if (typeof value === 'function')
+              impl = value[IMPL_SYMBOL];
+            let dd = document.getElementById(elementId);
+            if (!dd) {
+              if (group === "imported")
+                dd = textElement('dd', `Imported from JavaScript.`);
+              else
+                dd = textElement('dd', `TBD (${elementId})`);
+            }
+            helpElement.appendChild(dd);
+            if (typeof value === 'function') {
+              let impl = value[IMPL_SYMBOL];
+              if (!impl) impl = string(value);
+              if (impl.length < 50)
+                dd.appendChild(textElement('p', `Impl: ${impl}`, 'impl'));
+            } else {
+              let valStr = string(value);
+              if (valStr.length < 50)
+                dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
+            }
           }
         }
         function keyFor(atom) {
@@ -1248,7 +1268,7 @@
         } catch (error) {
           if (error instanceof SchemeParseError) {
             if (!(error instanceof SchemeParseIncomplete))
-              console.log("SchemeParseError", error);
+              // console.log("SchemeParseError", error);
             if (error instanceof SchemeSyntaxError) {
               let position = error.position;
               colorizeCharsAt(inputElement, position, inputText.length - position, 'error-tokens');
@@ -1288,7 +1308,7 @@
         let selectionPosition = selection.anchorOffset;
         if (!editableElement.contains(anchorNode)) return undefined;
         traverseEditableElement(editableElement, onNode);
-        console.log("POS", selectionPosition);
+        // console.log("POS", selectionPosition);
         return selectionPosition;
         function onNode(node, pos, isNewline) {
           // console.log ("GSP", pos, node.tagName, node.data);
@@ -1303,8 +1323,8 @@
         let text = '';
         traverseEditableElement(element, onNode);
         // Parser recognizes NBSP as whitespace but know that they're there!
-        // text = text.split(NBSP).join(' ');
-        console.log("GET", text);
+        // text = text.replaceAll(NBSP, ' ');
+        // console.log("GET", text);
         return text;
         function onNode(node, pos, isNewline) {
           if (isNewline)
@@ -1315,7 +1335,7 @@
       }
 
       function insertTextAndSetCursorAfter(element, insertPosition, text = '') {
-        console.log("ISC", insertPosition, text);
+        // console.log("ISC", insertPosition, text);
         let selection = window.getSelection();
         if (!selection) return false;
         return traverseEditableElement(element, onNode);
@@ -1337,7 +1357,7 @@
           } else if (node instanceof Element) {
             if (localPos < 0) return false;
             if (localPos === 0) {
-              console.log ("ITA ELEMENT");
+              // console.log ("ITA ELEMENT");
               let textNode = document.createTextNode(text);
               if (node.tagName === 'BR' && node.parentElement.tagName === 'DIV') {
                 node.replaceWith(textNode);
@@ -1352,11 +1372,11 @@
       }
 
       function colorizeCharsAt(element, colorizePosition, nchar, cls, style) {
-        console.log("COLORIZE!", colorizePosition, nchar, cls, style);
+        // console.log("COLORIZE!", colorizePosition, nchar, cls, style);
         return traverseEditableElement(element, onNode);
         function onNode(node, pos, isNewline) {
           let localPos = colorizePosition - pos;
-          console.log("COLORIZE", localPos, node.tagName, node.data);
+          // console.log("COLORIZE", localPos, node.tagName, node.data);
           if (localPos < 0) return;
           if (node instanceof Text) {
             let text = node.data;
