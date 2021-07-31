@@ -95,6 +95,8 @@ export function createInstance(schemeOpts = {}) {
       set [CAR](_) { throw new SchemeEvalError("set car of nil") }
       get [CDR]() { throw new SchemeEvalError("cdr of nil") }
       set [CDR](_) { throw new SchemeEvalError("set cdr of nil") }
+      [NULLSYM] = true;  // probably a _tiny_ bit faster if defined here too
+      [LIST] = true;
     }
     nilClass.prototype[NULLSYM] = true;
     nilClass.prototype[LIST] = true;
@@ -131,7 +133,8 @@ export function createInstance(schemeOpts = {}) {
   function Atom(name) {
     // If they pass in an atom, just return it
     if (is_atom(name)) return name;
-    if (typeof name !== 'string') throw new SchemeEvalError(`Not a string ${name}`);
+    if (typeof name !== 'string')
+      throw new SchemeEvalError(`Not a string ${name}`);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -463,52 +466,61 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("function?", a => typeof a === 'function');
   defineGlobalSymbol("object?", a => typeof a === 'object');
   defineGlobalSymbol("array?", a => Array.isArray(a));
-  defineGlobalSymbol("NaN", NaN, { schemeOnly: true });
-  defineGlobalSymbol("isNaN", isNaN, { schemeOnly: true } , "NaN?", "nan?");
-  defineGlobalSymbol("Infinity", Infinity, { schemeOnly: true });
-  defineGlobalSymbol("is_finite", isFinite, { schemeOnly: true } , "finite?");
+  defineGlobalSymbol("nan?", isNaN, { schemeOnly: true } , "isNaN", "NaN?");
+  defineGlobalSymbol("finite?", isFinite, { schemeOnly: true } , "isFinite");
   defineGlobalSymbol("globalThis", globalThis);
-  defineGlobalSymbol("Math", Math, { schemeOnly: true });
-  // defineGlobalSymbol("Atomics", Atomics, { schemeOnly: true });
-  defineGlobalSymbol("JSON", JSON, { schemeOnly: true });
-  defineGlobalSymbol("Reflect", Reflect, { schemeOnly: true } );
-  defineGlobalSymbol("Intl", Intl, { schemeOnly: true } );
-  for (let fn of [
+
+  const IMPL_SYMBOL = Symbol('*implementation*');
+  exportAPI("IMPL_SYMBOL", IMPL_SYMBOL);
+
+  // Hoist a bunch of JavaScript definitions into the global scope
+  for (let obj of [
       Object, Boolean, Symbol, Number, String, BigInt, Array,
       encodeURI, encodeURIComponent, decodeURI, decodeURIComponent,
-      Error, SchemeEvalError, RangeError, ReferenceError,
+      Error, "AggregateError", EvalError, "InternalError", RangeError, ReferenceError,
       SyntaxError, TypeError, URIError,
       Date, RegExp, parseFloat, parseInt,
       Map, Set, WeakMap, WeakSet,
       Int8Array, Uint8Array, Uint8ClampedArray,
       Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array,
-      Float64Array, 
-      // BigInt64Array, BigUint64Array,
-      ArrayBuffer, DataView,
-      Function, Promise, Proxy
+      Float64Array, "BigInt64Array", "BigUint64Array", "SharedArrayBuffer",
+      ArrayBuffer, DataView, "WebAssembly",
+      Function, Promise, Proxy,
+      "JSON", "Intl", "Atomics", "Reflect", setTimeout,
+      "NaN", "Infinity", "XMLHttpRequest", "navigator", "window", "process"
     ]) {
-    defineGlobalSymbol(fn.name, fn, { schemeOnly: true });
+    let name, value; 
+    if (typeof obj === 'string') {
+      name = obj;
+      value = globalThis[name];
+      if (typeof value === 'object') {
+        for (let [innerName, {value: innerValue}] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+          defineGlobalSymbol(`${name}-${innerName}`, innerValue, { schemeOnly: true });
+          if (typeof innerValue === 'function')
+            innerValue[IMPL_SYMBOL] = `{(...params) => ${name}.${innerName}(...params)}`;
+        }
+      }
+    } else if (typeof obj === 'function') {
+      name = obj.name;
+      value = obj;
+    }
+    if (value !== undefined)
+      defineGlobalSymbol(name, value, { schemeOnly: true });
+    // else
+    //   console.log("What's this?", obj);
   }
-  if (typeof XMLHttpRequest !== 'undefined')
-    defineGlobalSymbol("XMLHttpRequest", XMLHttpRequest, { schemeOnly: true });
-  if (typeof SharedArrayBuffer !== 'undefined')
-    defineGlobalSymbol("SharedArrayBuffer", SharedArrayBuffer, { schemeOnly: true });
-  if (typeof navigator !== 'undefined')
-    defineGlobalSymbol("navigator", navigator, { schemeOnly: true });
-  if (typeof window !== 'undefined')
-    defineGlobalSymbol("window", window, { schemeOnly: true });
 
   // Stuff the whole Math class in there!
-  const IMPL_SYMBOL = Symbol('*implementation*');
-  exportAPI("IMPL_SYMBOL", IMPL_SYMBOL);
+  defineGlobalSymbol("Math", Math, { schemeOnly: true });
   for (let [name, {value}] of Object.entries(Object.getOwnPropertyDescriptors(Math))) {
+    let otherName =`Math-${name}`;
     // SIOD defines *pi* so I'll just define them all like that
     if (typeof value === 'number')
       name = `*${name.toLowerCase()}*`;
     // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
     if (typeof value === 'function')
       value[IMPL_SYMBOL] = `{(...params) => Math.${name}(...params)}`;
-    defineGlobalSymbol(name, value, { schemeOnly: true });
+    defineGlobalSymbol(name, value, { schemeOnly: true }, otherName);
   }
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
 
