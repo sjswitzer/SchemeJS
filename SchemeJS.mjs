@@ -46,13 +46,14 @@ export function createInstance(schemeOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("CAR"), CDR = Symbol("CDR"), PAIR = Symbol("PAIR"), NULLSYM = Symbol("NULLSYM");
+  const CAR = Symbol("CAR"), CDR = Symbol("CDR");
+  const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
 
   // Trust the JIT to inline this
   const is_cons = obj => obj != null && obj[PAIR] === true;
   const is_null = obj => obj != null && obj[NULLSYM] === true;
-  const is_list = obj => obj != null && (obj[PAIR] === true || obj[NULLSYM] === true);
+  const is_list = obj => obj != null && obj[LIST] === true;
 
   class Cons {
     [CAR]; [CDR];
@@ -65,6 +66,7 @@ export function createInstance(schemeOpts = {}) {
     // static [PAIR] = true;  // Hmm; Shouldn't this work?
   }
   Cons.prototype[PAIR] = true;
+  Cons.prototype[LIST] = true;
 
   function pairIterator() {
     let current = this;
@@ -86,15 +88,17 @@ export function createInstance(schemeOpts = {}) {
   // just invites errors. But it's good to have a distinct class for NIL
   // for various reasons including that it looks better in a JS debugger
   // and provides a way to trap attempts to get or set [CAR] and [CDR].
-  const NIL = new ((_ => {
-    return class NIL {
+  const NIL = new ((() => {
+    let nilClass = class NIL {
       [Symbol.iterator]() { return { next: () => ({ done: true }) } }
       get [CAR]() { throw new SchemeEvalError("car of nil") }
       set [CAR](_) { throw new SchemeEvalError("set car of nil") }
       get [CDR]() { throw new SchemeEvalError("cdr of nil") }
       set [CDR](_) { throw new SchemeEvalError("set cdr of nil") }
-      [NULLSYM] = true;
     }
+    nilClass.prototype[NULLSYM] = true;
+    nilClass.prototype[LIST] = true;
+    return nilClass;
   })());
   
   // Create a new scope with newScope(oldScope, "description").
@@ -320,6 +324,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("PAIR_SYMBOL", PAIR);
+  exportAPI("LIST_SYMBOL", LIST);
   exportAPI("CAR_SYMBOL", CAR);
   exportAPI("CDR_SYMBOL", CDR);
   exportAPI("LAZYCAR_SYMBOL", LAZYCAR);
@@ -428,7 +433,6 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("null", null);
   defineGlobalSymbol("true", true, "t", "#t"); // SIOD: t, MIT Scheme: #t
   defineGlobalSymbol("false", false);
-  defineGlobalSymbol("is-cons", is_cons, "pair?");
   defineGlobalSymbol("cons", cons);
   defineGlobalSymbol("car", car, "first");
   defineGlobalSymbol("cdr", cdr, "rest");
@@ -446,6 +450,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("cddr", cddr);
   defineGlobalSymbol("typeof", a => typeof a);
   defineGlobalSymbol("undefined?", a => a === undefined);
+  defineGlobalSymbol("pair?", is_cons, "is-cons");
+  defineGlobalSymbol("list?", is_list, "is-list");
   defineGlobalSymbol("null?", a => is_null(a));  // SIOD clained it first. Maybe rethink the naming here.
   defineGlobalSymbol("jsnull?", a => a === null);
   defineGlobalSymbol("nullish?", a => a == null);
@@ -2171,6 +2177,7 @@ export function createInstance(schemeOpts = {}) {
     [Symbol.iterator] = pairIterator();
   }
   LazyCarList.prototype[PAIR] = true;
+  LazyCarList.prototype[LIST] = true;
 
   class LazyCdrList {
     [CAR]; [LAZYCDR];
@@ -2193,6 +2200,7 @@ export function createInstance(schemeOpts = {}) {
     [Symbol.iterator] = pairIterator();
   }
   LazyCdrList.prototype[PAIR] = true;
+  LazyCdrList.prototype[LIST] = true;
 
   class LazyCarCdrList {
     [LAZYCAR]; [LAZYCDR];
@@ -2226,6 +2234,7 @@ export function createInstance(schemeOpts = {}) {
     [Symbol.iterator] = pairIterator();
   }
   LazyCarCdrList.prototype[PAIR] = true;
+  LazyCarCdrList.prototype[LIST] = true;
   
   //
   // Doesn't even know if it's a cons cell or null yet!
@@ -2292,6 +2301,7 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[SUPERLAZY] = true;
   LazyIteratorList.prototype[LAZYCAR] = true;
   LazyIteratorList.prototype[LAZYCDR] = true;
+  LazyIteratorList.prototype[LIST] = true;
 
   //
   // Lazy lists by being a Cons imposter
@@ -2334,6 +2344,7 @@ export function createInstance(schemeOpts = {}) {
     [Symbol.iterator] = pairIterator();
   }
   ConventionalLazyList.prototype[PAIR] = true;
+  ConventionalLazyList.prototype[LIST] = true;
 
   defineGlobalSymbol("list-view", list_view);
   function list_view(obj) {
