@@ -122,8 +122,8 @@ In short, the JavaScript runtime is ideal for Scheme--_much_ better than a Java 
 it has dynamic types, the right sorts of primitive types, real closures, no need for "boxing"
 (anyway, it's transparent to users and highly-optimized)
 and implements something that can be used for scope resolution as a highly-optimized primitive.
-All it needs is cons cells, nil, an interpreter, a parser, a printer, a compiler, and a handful
-of Lisp primitives. Hence this project.
+All it needs is cons cells, nil, an interpreter, a parser, a "printer", a REPL, a compiler,
+and a handful of Lisp primitives. Hence this project.
 
 I didn't set out to write the fastest Lisp implementation but halfway through implementing
 it I realized it inevitably would be, thanks to the JavaScript runtime and JITs.
