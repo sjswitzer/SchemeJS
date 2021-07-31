@@ -2288,6 +2288,8 @@ export function createInstance(schemeOpts = {}) {
     [Symbol.iterator] = pairIterator();
   }
   LazyIteratorList.prototype[SUPERLAZY] = true;
+  LazyIteratorList.prototype[LAZYCAR] = true;
+  LazyIteratorList.prototype[LAZYCDR] = true;
 
   //
   // Lazy lists by being a Cons imposter
