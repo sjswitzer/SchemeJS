@@ -405,6 +405,10 @@ export function createInstance(schemeOpts = {}) {
   // Written this way so that actual bools do not need to be compared to NIL; most of this
   // is just a tag-bit compare in the runtime.
   //
+  // I'm likely to revisit this. Differet Schemes and Lisps have different policies
+  // here. What I'd like to do is define bool in a way that the JIT can trivially evaluate.
+  // In particular, treating NIL as false is expensive.
+  //
   const bool = a => a === true || (a !== false && a != null && !is_null(a));
   exportAPI("bool", bool);
 
