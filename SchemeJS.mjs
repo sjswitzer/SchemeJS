@@ -1171,10 +1171,10 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (mapcar fn list1 list2 ...)
-  defineGlobalSymbol("mapcar", mapcar), "map";
+  defineGlobalSymbol("mapcar", mapcar, "map");
   function mapcar(fn, ...lists) {
     if (!bool(fn)) return NIL;
-    // Actually, this will work for any iterables and lists are iterable.
+    // Actually, this will work for any iterables, and lists are iterable.
     let res = NIL, last;
     for (let list of lists) {
       if (is_list(list)) {
@@ -1212,6 +1212,10 @@ export function createInstance(schemeOpts = {}) {
     }
     return res;
   }
+
+  // Useful for instantiating a lazy list using "map"
+  const identity = x => x;
+  defineGlobalSymbol("identity", identity);
 
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
