@@ -790,7 +790,7 @@ export function createInstance(schemeOpts = {}) {
 
   // Sorry, "equal?"" does not get the variadic treatment at this time
   const equalp = (a, b) =>  deep_eq(a, b);
-  defineGlobalSymbol("equal?", equalp, "equal?");
+  defineGlobalSymbol("equal?", equalp);
 
   defineGlobalSymbol("ne", ne, { evalArgs: 2, compileHook: ne_hook }, "!=");
   function ne(a, b, forms) {
