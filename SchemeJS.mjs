@@ -2438,8 +2438,9 @@ export function createInstance(schemeOpts = {}) {
         parseContext.push({ type: 'comment', value: ch === ';' ? ch : '//', position, line, lineChar });
         while (ch && !NL[ch])
           nextc();
-        yield { type: (ch ? 'newline': 'end'), position, line, lineChar };
+        parseContext.currentToken = { type: 'endcomment', value: ';', endPosition: charCount-1, endWidth: 1, line, lineChar };
         parseContext.pop();
+        yield { type: (ch ? 'newline': 'end'), position, line, lineChar };
         continue;
       }
 
@@ -2448,7 +2449,7 @@ export function createInstance(schemeOpts = {}) {
         nextc(); nextc();
         while (ch && !(ch === '*' && peekc() === '/'))
           nextc();
-        parseContext.currentToken = { type: 'comment', value: '*/', position, line, lineChar };
+        parseContext.currentToken = { type: 'endcomment', value: '*/', endPosition: charCount-2, endWidth: 2, line, lineChar };
         parseContext.pop();
         if (!ch)
           yield { type: 'partial', position, line, lineChar };
@@ -2490,7 +2491,6 @@ export function createInstance(schemeOpts = {}) {
               continue;
             }
             if (ch === '"') {  // " ends string
-              parseSExpr.currentToken = { type: 'string', value: '"', position, line, lineChar };
               parseContext.pop();
               popped = true;
               break;
@@ -2502,7 +2502,6 @@ export function createInstance(schemeOpts = {}) {
           nextc();
         }
         if (!popped) {
-          parseSExpr.currentToken = { type: 'string', value: '"', position, line, lineChar };
           parseContext.pop();
         }
         if (!ch) {
@@ -2510,7 +2509,7 @@ export function createInstance(schemeOpts = {}) {
           return;
         }
         if (ch === '"') {
-          yield { type: 'string', value: str, position, line, lineChar };
+          yield { type: 'string', value: str, position, endPosition: charCount-1, endWidth: 1, line, lineChar };
           nextc();
         }
         continue;
