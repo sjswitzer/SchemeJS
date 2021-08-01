@@ -1421,15 +1421,17 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("deep_eq", deep_eq);
   function deep_eq(a, b, maxDepth = 100000, report = {}) {
-    if (!bool(maxDepth)) maxDepth = 10000; // Protection from circular lists
+    let strCmp = report.strCmp ?? ((a, b) => a === b);    
     return deep_eq(a, b, maxDepth);
     function deep_eq(a, b, maxDepth) {
-      if (a === b)
-        return true;
       if (typeof a !== typeof b) {
         report.a = a, report.b = b;
         return false;
       }
+      if (typeof a === 'string')
+        return strCmp(a, b);
+      if (a === b)
+        return true;
       // Normally NaNs are not equal to anything, including NaNs, but for
       // the purposes of this routine they are
       if (typeof a === 'number' && isNaN(a) && isNaN(b))

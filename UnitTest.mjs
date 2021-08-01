@@ -452,6 +452,7 @@ export function run(opts = {}) {
   {
     const analyzeJSFunction = globalScope.analyzeJSFunction;
     const testAnalyze = (fn) => () => analyzeJSFunction(fn);
+    const trimCompare = (a, b) => a.trim() === b.trim();
     EXPECT(testAnalyze(x => x * x),
       { name: '', params: ['x'], restParam: undefined, value: 'x * x', printParams: 'x',
         body: undefined, printBody: undefined, native: false, nonOptionalCount: 1 });
@@ -477,12 +478,14 @@ export function run(opts = {}) {
       { name: '', params: ['x', 'y', 'a', 'b', 'c', 'd'], restParam: undefined, value: 'x * y',
         printParams: '(x, y, a, b = [], c, d)',
         body: undefined, printBody: undefined, native: false, nonOptionalCount: 3 });
-      EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
-      { name: '', params: ['a'], restParam: undefined, value: 'a', printParams: ' (a)',
-        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, nonOptionalCount: 1 });
+    EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
+      { name: '', params: ['a'], restParam: undefined, value: 'a', printParams: '(a)',
+        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, nonOptionalCount: 1 },
+      { strCmp: trimCompare });
     EXPECT(testAnalyze(function(a, b, c) { a = 2 * a; return a; }),
       { name: '', params: ['a','b','c'], restParam: undefined, value: 'a', printParams: '(a, b, c)',
-        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, nonOptionalCount: 3 });
+        body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, nonOptionalCount: 3 },
+      { strCmp: trimCompare });
     EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
       { name: 'fn', params: ['a'], restParam: undefined, value: 'a', printParams: '(a)',
         body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, nonOptionalCount: 1 });
@@ -490,11 +493,11 @@ export function run(opts = {}) {
       { name: 'fn', params: ['a','b','c'], restParam: undefined, value: 'a', printParams: '(a, b, c)',
         body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, nonOptionalCount: 3 });
     EXPECT(testAnalyze(function (a, ...rest) { return a; }),
-      { name: '', params: ['a'], restParam: 'rest', value: 'a', printParams: ' (a, ...rest)',
-        body: '', printBody: ' { return a; }', native: false, nonOptionalCount: 1 });
+      { name: '', params: ['a'], restParam: 'rest', value: 'a', printParams: '(a, ...rest)',
+        body: '', printBody: ' { return a; }', native: false, nonOptionalCount: 1 }, { strCmp: trimCompare });
     EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
-      { name: '', params: ['a','b','c'], restParam: 'rest', value: 'a', printParams: ' (a, b, c, ...rest)',
-        body: '', printBody: ' { return a; }', native: false, nonOptionalCount: 3 });
+      { name: '', params: ['a','b','c'], restParam: 'rest', value: 'a', printParams: '(a, b, c, ...rest)',
+        body: '', printBody: ' { return a; }', native: false, nonOptionalCount: 3 }, { strCmp: trimCompare });
     EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
       { name: 'foo', params: ['a'], restParam: 'rest', value: 'a', printParams: '(a, ...rest)',
         body: '', printBody: ' { return a; }', native: false, nonOptionalCount: 1 });
@@ -505,8 +508,8 @@ export function run(opts = {}) {
       { name: 'baz', params: [], restParam: 'rest', value: 'a', printParams: '(...rest)',
         body: '', printBody: ' { return a; }', native: false, nonOptionalCount: 0 });
     EXPECT(testAnalyze(function (...rest) { return a; }),
-      { name: '', params: [], restParam: 'rest', value: 'a', printParams: ' (...rest)',
-        body: '', printBody: ' { return a; }', native: false, nonOptionalCount: 0 });
+      { name: '', params: [], restParam: 'rest', value: 'a', printParams: '(...rest)',
+        body: '', printBody: ' { return a; }', native: false, nonOptionalCount: 0 }, { strCmp: trimCompare });
     EXPECT(testAnalyze(function bar(a, b, c = {}, d, e = 1, ...rest) { return a; }),
       { name: 'bar', params: ['a','b','c', 'd', 'e'], restParam: 'rest', value: 'a',
         printParams: '(a, b, c = {}, d, e = 1, ...rest)',
@@ -538,8 +541,8 @@ export function run(opts = {}) {
       throw new TestFailureError(message, test, result, expected, report);
   }
 
-  function EXPECT(test, expected) {
-    let result, ok = false, report = {}, savedScope;
+  function EXPECT(test, expected, report = {}) {
+    let result, ok = false, savedScope;
     if (testScope === globalScope)
       savedScope = beginTestScope();
     try {
