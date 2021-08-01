@@ -26,7 +26,6 @@ export function createInstance(schemeOpts = {}) {
   let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   let reportSystemError = schemeOpts.reportError ?? _reportError;
   let reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
-  let explicitClosure = schemeOpts.explicitClosure ?? false;
   let lambdaStr = schemeOpts.lambdaStr ?? "\\";
   let slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
 
@@ -49,6 +48,7 @@ export function createInstance(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
+  const COMPILED = Symbol('COMPILED');
 
   // Trust the JIT to inline this
   const is_cons = obj => obj != null && obj[PAIR] === true;
@@ -61,7 +61,7 @@ export function createInstance(schemeOpts = {}) {
       this[CAR] = car;
       this[CDR] = cdr;
     }
-    toString() { return string(this, { maxDepth: 4 }); }
+    toString() { return string(this); }
     [Symbol.iterator] = pairIterator;
     // static [PAIR] = true;  // Hmm; Shouldn't this work?
   }
@@ -922,9 +922,10 @@ export function createInstance(schemeOpts = {}) {
       loadError.path = path;
       return false;
     }
+    let characterGenerator = iteratorFor(fileContent, LogicError);
     for(;;) {
       try {
-        let expr = parseSExpr(fileContent, { path });
+        let expr = parseSExpr(characterGenerator, { path });
         if (!expr) break;
         if (noEval) {
           if (last) last = last[CDR] = cons(expr, NIL);
@@ -1524,24 +1525,23 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  // Maybe a non-recursive evaluator with explicit stack?
-  // Promises and async functions?
+  function makeConsImposter(fn, form) {
+    fn[PAIR] = true;
+    fn[CAR] = form[CAR];
+    fn[CDR] = form[CDR];
+    return fn;
+  }
 
   // (\ (params) (form1) (form2) ...)
   defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0 });
   function lambda(body) {
     let schemeClosure = cons(CLOSURE_ATOM, cons(this, body));
-    if (explicitClosure)
-      return schemeClosure;
     let scope = this;
-    let jsClosure = args => _apply(cons(LAMBDA_ATOM, body), args, scope);
-    jsClosure[CLOSURE_ATOM] = schemeClosure;
     if (!is_cons(body)) throw TypeError(`Bad special closure ${string(body)}`);
-    let params = body[CAR];
-    let nParams = is_cons(params) ? length(params) : 1; // Curry notation
-    let evalCount = nParams, paramCount = 0;
-    let functionDescriptor = (~evalCount << 16) | (paramCount & 0x7fff);
-    jsClosure[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
+    let lambda = cons(LAMBDA_ATOM, body);
+    let jsClosure = args => _apply(lambda, args, scope);
+    makeConsImposter(jsClosure, cons(CLOSURE_ATOM, cons(scope, body)));
+    jsClosure[CLOSURE_ATOM] = true;
     return jsClosure;
   }
 
@@ -1549,27 +1549,23 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
   function special_lambda(body) {
     let schemeClosure = cons(SCLOSURE_ATOM, cons(this, body));
-    if (explicitClosure)
-      return schemeClosure;
     let scope = this;
-    let jsClosure = args => _apply(cons(SLAMBDA_ATOM, body), args, scope);
-    jsClosure[SCLOSURE_ATOM] = schemeClosure;
     if (!is_cons(body) || typeof body[CAR] !== 'number')
       throw TypeError(`Bad special closure ${string(body)}`);
-    let evalCount = body[CAR], paramCount = 0;
-    let functionDescriptor = (~evalCount << 16) | (paramCount & 0x7fff);
-    jsClosure[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
+    let lambda = cons(SLAMBDA_ATOM, body);
+    let jsClosure = args => _apply(lambda, args, scope);
+    makeConsImposter(jsClosure, lambda);
+    jsClosure[CLOSURE_ATOM] = true;
     return jsClosure;
   }
 
   exportAPI("is_closure", is_closure)
   defineGlobalSymbol("closure?", is_closure);
-  // XXX TODO: Should work with compiled functions
   function is_closure(form) {
+    if (form[CLOSURE_ATOM] === true)
+      return true;
     if (is_cons(form))
       return !!(form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
-    if (typeof form === 'function')
-      return !!(form[CLOSURE_ATOM] || form[SCLOSURE_ATOM]);
     return false;
   }
 
@@ -1584,7 +1580,7 @@ export function createInstance(schemeOpts = {}) {
       this.value = value;
     }
     toString() {
-      return `${super.toString()} ${this.tag} ${string(this.value)}`;
+      return `${super.toString()} ${string(this.tag)} ${string(this.value)}`;
     }
   };
   SchemeJSThrow.prototype.name = "SchemeJSThrow";
@@ -1662,7 +1658,7 @@ export function createInstance(schemeOpts = {}) {
     if (is_cons(defined)) {
       name = defined[CAR];
       let args = defined[CDR];
-      value = list(LAMBDA_ATOM, args, value);
+      value = lambda.call(scope, cons(args, cons(value, NIL)));
     } else {
       value = _eval(value, scope);
     }
@@ -1693,10 +1689,11 @@ export function createInstance(schemeOpts = {}) {
         return form[CDR][CAR];
       if (is_cons(fn)) {
         let fnCar = fn[CAR];
-        if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
+        if (!(typeof fn === 'function' || fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
           fn = _eval(fn, scope);
       } else {
-        fn = _eval(fn, scope);
+        if (typeof fn !== 'function')
+          fn = _eval(fn, scope);
       }
       // Unconventionally shifting the job of evaluating the args to the _apply function
       // because it has better visibility on the function's attributes.
@@ -1751,10 +1748,10 @@ export function createInstance(schemeOpts = {}) {
     // By default apply doesn't evaluate its args, but if evaluateArguments is set
     // (as it is by eval) it does.
     let paramCount = 0, evalCount = MAX_INTEGER, restParam = false;
-    if (is_cons(form)) {
+    if (is_cons(form) && (typeof form !== 'function' || form[CLOSURE_ATOM] === true)) {
       let opSym = form[CAR];
       if (opSym === SLAMBDA_ATOM) {
-        evalCount = 0;
+        evalCount = form[CAR];
       } else if (opSym === SCLOSURE_ATOM) {
         if (!is_cons(form[CDR])) throw new SchemeEvalError(`Bad form ${string(form)}`);
         evalCount = form[CDR][CAR];
@@ -1787,7 +1784,7 @@ export function createInstance(schemeOpts = {}) {
       }
     }
     let lift = restParam ? MAX_INTEGER : paramCount;
-    if (typeof form === 'function') {
+    if (typeof form === 'function' && form[CLOSURE_ATOM] !== true) { // Scheme functions impose as Cons cells
       let jsArgs = [];
       for (let i = 0; i < lift; ++i) {
         if (is_cons(args)) {
@@ -1811,9 +1808,12 @@ export function createInstance(schemeOpts = {}) {
             for (let anum = i; anum > 0; --anum)
               argList = cons(jsArgs[anum-1], argList);
             let forms = cons(cons(form, argList), NIL);
+            let closure;
             if (i < evalCount)
-              return cons(CLOSURE_ATOM, cons(scope, cons(paramList, forms)));
-            return cons(SCLOSURE_ATOM, cons(i-evalCount, cons(scope, cons(paramList, forms))));
+              closure = lambda.call(scope, (cons(paramList, forms)));
+            else
+              closure = special_lambda.call(scope, cons(i-evalCount, cons(paramList, forms)));
+            return closure;
           }
           break;
         }
@@ -1833,10 +1833,10 @@ export function createInstance(schemeOpts = {}) {
         opSym = LAMBDA_ATOM;
       }
       if (opSym === SCLOSURE_ATOM) {
-        if (!is_cons(body)) throw new SchemeEvalError(`Bad closure ${string(form)}`);
+        if (!is_cons(body) || !is_cons(body[CDR])) throw new SchemeEvalError(`Bad closure ${string(form)}`);
         scope = body[CDR][CAR];
         body = body[CDR][CDR];
-        opSym = LAMBDA_ATOM;
+        opSym = SLAMBDA_ATOM;
       }
       if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
         if (!is_cons(body)) throw new SchemeEvalError(`Bad lambda ${string(form)}`);
@@ -1847,26 +1847,29 @@ export function createInstance(schemeOpts = {}) {
           forms = cons(forms, NIL);
         }
         scope = newScope(scope, "lambda-scope");
-        let origFormalParams = params;
-        while (is_cons(params)) {
-          let param = params[CAR];
+        let scratchParams = params, i = 0;
+        while (is_cons(scratchParams)) {
+          let param = scratchParams[CAR];
           if (typeof param !== 'symbol') throw new TypeError(`Param must be a symbol ${param}`);
-          if (!is_null(args)) {
+          if (!is_null(args)) {  // XXX ???
             scope[param] = args[CAR];
             if (is_cons(args)) args = args[CDR];
           } else {
             // Curry up now! (partial application)
-            if (opSym === LAMBDA_ATOM)
-              return cons(CLOSURE_ATOM, cons(scope, cons(params, forms)));
+            let closure;
+            if (i < evalCount)
+              closure = lambda(cons.call(scope, scratchParams, forms));
             else
-              return cons(CSLOSURE_ATOM, cons(scope, cons(params, forms)));
+              closure = special_lambda.call(scope, cons(i-evalCount, cons(scratchParams, forms)));
+            return closure;
           }
-          params = params[CDR];
+          scratchParams = scratchParams[CDR];
+          i -= 1
         }
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           scope[params] = args;
-        else if (!is_null(params))
-          throw new SchemeEvalError(`Bad parameter list ${string(origFormalParams)}`);
+        else if (!is_null(scratchParams))
+          throw new SchemeEvalError(`Bad parameter list ${string(params)}`);
         let res = NIL;
         while (is_cons(forms)) {
           res = _eval(forms[CAR], scope);
@@ -1894,22 +1897,23 @@ export function createInstance(schemeOpts = {}) {
     opts = { ...schemeOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 100;
     let wrapChar = opts.wrapChar ?? "\n";
-    let maxDepth = opts.maxDepth ?? 100;
+    let maxDepth = opts.maxDepth ?? 500;
+    let maxCarDepth = opts.maxCarDepth ?? maxDepth;
+    let maxCdrDepth = opts.maxCdrDepth ?? maxDepth;
     let indentMore = opts.indentMorw ?? "  ";
     let line = "", lines = [], sep = "", prefix = "", indent = "";
-    toString(obj);
+    toString(obj, maxCarDepth, maxCdrDepth);
     if (lines.length === 0) return line;
     if (line)
       lines.push(line);
     return lines.join(wrapChar);
-    function toString(obj, maxDepth) {
-      if (maxDepth <= 0) return put("...");
-      maxDepth -= 1;
+    function toString(obj, maxCarDepth, maxCdrDepth) {
+      if (maxCarDepth < 0 || maxCdrDepth < 0) return put("....");
       if (obj === undefined) return put("undefined");
       if (obj === null) return put( "null");   // remember: typeof null === 'object'!
       let objType = typeof obj;
       let saveIndent = indent;
-      if (objType === 'object') {
+      if (obj[CLOSURE_ATOM] === true || objType === 'object') {
         // MUST do this before the is_null test, which will cause eager evaluation of
         // a LazyIteratorList, cause it to call next() and mutate into something else.
         if (obj[SUPERLAZY])
@@ -1936,7 +1940,7 @@ export function createInstance(schemeOpts = {}) {
           if (obj[LAZYCAR])
             put("..")
           else
-            toString(obj[CAR], maxDepth);
+            toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
           sep = " ";
           return put("...)", true);
         }
@@ -1963,16 +1967,16 @@ export function createInstance(schemeOpts = {}) {
                     indent += indentMore;
                     sep = "";
                     if (objCar === SCLOSURE_ATOM) {
-                      toString(evalCount, maxDepth);
+                      toString(evalCount, maxCarDepth, maxCdrDepth-1);
                       sep = " ";
                     }
-                    toString(objCar, maxDepth);  // %%closure or %%%closure
+                    toString(objCar, maxCarDepth-1, maxCdrDepth);  // %%closure or %%%closure
                     sep = " ";
-                    toString(scopeCons[CAR], maxDepth);  // scope
+                    toString(scopeCons[CAR], maxCarDepth-1, maxCdrDepth-2);  // scope
                     sep = " ";
-                    toString(params, maxDepth);  // actually the atom
+                    toString(params, maxCarDepth-1, maxCdrDepth-2);  // actually the atom
                     sep = ""; put(".");
-                    toString(scopeCons[CDR][CDR], maxDepth);  // the form
+                    toString(scopeCons[CDR][CDR], maxCarDepth, maxCdrDepth-3);  // the form
                     sep = ""; put(")", true);
                     indent = saveIndent;
                     return;
@@ -1986,7 +1990,7 @@ export function createInstance(schemeOpts = {}) {
                 str += `${params.description}.`;
                 put(str);
                 indent += indentMore;
-                toString(forms, maxDepth);
+                toString(forms, maxCarDepth, maxCdrDepth-1);
                 sep = "";
                 put(")", true);
                 indent = saveIndent;
@@ -1998,18 +2002,19 @@ export function createInstance(schemeOpts = {}) {
             if (obj[LAZYCAR])
               put("..");
             else
-              toString(obj[CAR], maxDepth);
+              toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
             sep = " ";
             if (obj[LAZYCDR])
               return put("...)", true);
             obj = obj[CDR];
+            maxCdrDepth -= 1;
             if (obj[SUPERLAZY])
               return put("...)", true);
           }
           if (!is_null(obj)) {
             put(".");
             sep = " ";
-            toString(obj, maxDepth)
+            toString(obj, maxCarDepth, maxCdrDepth-1);
           }
           sep = "";
           put(")", true);
@@ -2021,7 +2026,8 @@ export function createInstance(schemeOpts = {}) {
           indent += indentMore;
           sep = "";
           for (let item of obj) {
-            toString(item, maxDepth);
+            toString(item, maxCarDepth-1, maxCdrDepth);
+            maxCdrDepth -= 1;
             sep = ", ";
           }
           sep = "";
@@ -2039,12 +2045,13 @@ export function createInstance(schemeOpts = {}) {
             let item = obj[name];
             if (item instanceof EvaluateKeyValue) {
               prefix = "[";
-              toString(item.key);
+              toString(item.key, maxCdrDepth, maxCdrDepth);
               prefix = "]: ";
-              toString(item.value);
+              toString(item.value, maxCarDepth, maxCdrDepth);
             } else {
               prefix = `${string(name)}: `;
-              toString(item, maxDepth);
+              toString(item, maxCarDepth-1, maxCdrDepth);
+              maxCdrDepth -= 1;
             }
             sep = ", ";
           }
@@ -2054,7 +2061,7 @@ export function createInstance(schemeOpts = {}) {
           return;
         }
       }
-      if (typeof obj === 'function') {
+      if (typeof obj === 'function' && obj[CLOSURE_ATOM] !== true) {
         let fnDesc = analyzeJSFunction(obj);
         let name = fnDesc.name ? ` ${fnDesc.name}` : '';
         let params = "";
@@ -2071,11 +2078,17 @@ export function createInstance(schemeOpts = {}) {
         if (fnDesc.value && !fnDesc.body && !printBody) {
           if (fnDesc.params.length === 1 && !fnDesc.restParam)
             params = fnDesc.params[0];
-          return put(`{${params} => ${fnDesc.value}}`);
-        }
-        if (printBody && (printBody.length > 60 || printBody.includes('\n')))
+          put(`{${params} => ${fnDesc.value}`);
+        } else  if (printBody && (printBody.length > 60 || printBody.includes('\n'))) {
           printBody = '';
-        return put(`{function${name}${params}${printBody}}`);
+        }
+        put(`{function${name}${params}${printBody}`);
+        if (obj[COMPILED]) {
+          sep = " ";
+          toString(obj[COMPILED], maxCarDepth, maxCdrDepth);
+        }
+        sep = "";
+        return put("}", true);
       }
       if (objType === 'symbol') {
         if (obj === LAMBDA_ATOM) return put(lambdaStr);
@@ -3017,6 +3030,7 @@ export function createInstance(schemeOpts = {}) {
     bind(cons, "cons");
     bind(car, "car");
     bind(cdr, "cdr");
+    bind(COMPILED, "COMPILED");
     emit(`function outsideScope(this_, x) {`);
     emit(`  let val = this_[x];`);
     emit(`  if (val === undefined) throw new ${evalErrorStr}("Undefined symbol " + ${stringStr}(x));`);
@@ -3277,18 +3291,16 @@ export function createInstance(schemeOpts = {}) {
     }
     tools.emit(`function ${result}(${paramStr}) {`);
     tools.indent = saveIndent + "  ";
-    let res = NIL;
+    let res = 'NIL';
     while (is_cons(forms)) {
-      result = compileEval(forms[CAR], compileScope, tools);
+      res = compileEval(forms[CAR], compileScope, tools);
       forms = forms[CDR];
     }
-    if (result)
-      tools.emit(`return ${result};`);
-    else
-      tools.emit(`return NIL};`);
+    tools.emit(`return ${res};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
-    return result;
+    tools.emit(`${result}[COMPILED] = ${tools.bind(form)};`);
+    return res;
   }
   
   const JS_IDENT_REPLACEMENTS  = {
