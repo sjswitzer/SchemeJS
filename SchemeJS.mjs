@@ -303,7 +303,7 @@ export function createInstance(schemeOpts = {}) {
 
   function createFunctionDescriptor(fn, evalCount = MAX_INTEGER) {
     let fnInfo = analyzeJSFunction(fn);
-    let paramCount = fnInfo.params.length;
+    let paramCount = fnInfo.nonOptionalCount;
     let restParam = 0;
     if (fnInfo.restParam) {
       if (evalCount !== MAX_INTEGER)
@@ -506,30 +506,21 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("intern", a => Atom(a));
   defineGlobalSymbol("eval", eval_);
-  function eval_(expr, ...scope) { // Javascript practically treats "eval" as a keyword
-    let useScope = scope[0];
-    if (!(useScope != null && useScope instanceof Scope)) useScope = this;
-    if (is_null(useScope)) scope = globalScope; // NIL, specifically, means use the global scope
-    return _eval(expr, useScope);
+  function eval_(expr, scope = this) { // Javascript practically treats "eval" as a keyword
+    return _eval(expr, scope);
   }
 
   defineGlobalSymbol("eval-string", eval_string);
-  function eval_string(str, ...scope) {
-    let useScope = scope[0];
-    if (!(useScope != null && useScope instanceof Scope)) useScope = this;
-    if (is_null(useScope)) scope = globalScope; // NIL, specifically, means use the global scope
+  function eval_string(str, scope = this) {
     let expr = parseSExpr(str);
-    return eval_.call(this, expr, useScope);
+    return eval_.call(this, expr, scope);
   }
 
   defineGlobalSymbol("globalScope", globalScope);
 
   defineGlobalSymbol("apply", apply);
-  function apply(fn, args, ...scope) {
-    let useScope = scope[0];
-    if (!(useScope != null && useScope instanceof Scope)) useScope = this;
-    if (is_null(useScope)) scope = globalScope; // NIL, specifically, means use the global scope
-    return _apply(fn, args, useScope);
+  function apply(fn, args, scope = this) {
+    return _apply(fn, args, scope);
   }
 
   // Pokemon gotta catch 'em' all!
@@ -911,9 +902,8 @@ export function createInstance(schemeOpts = {}) {
   // (load fname noeval-flag)
   //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
   defineGlobalSymbol("load", load);
-  function load(path, ...rest) {
+  function load(path, noEval = false) {
     let scope = this, result = NIL, last;
-    let noEval = rest.length > 0 && bool(rest[0]);
     let fileContent;
     try {
       if (!readFile) throw new SchemeEvalError("No file reader defined");
