@@ -2066,25 +2066,13 @@ export function createInstance(schemeOpts = {}) {
       if (typeof obj === 'function' && obj[CLOSURE_ATOM] !== true) {
         let fnDesc = analyzeJSFunction(obj);
         let name = fnDesc.name ? ` ${fnDesc.name}` : '';
-        let params = "";
-        for (let param of fnDesc.params) {
-          if (params) params += ', ';
-          params += param;
-        }
-        if (fnDesc.restParam) {
-          if (params) params += ', ';
-          params = `${params}...${fnDesc.restParam}`;
-        }
-        params = `(${params})`;
+        let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
-        if (fnDesc.value && !fnDesc.body && !printBody) {
-          if (fnDesc.params.length === 1 && !fnDesc.restParam)
-            params = fnDesc.params[0];
-          put(`{${params} => ${fnDesc.value}`);
-        } else  if (printBody && (printBody.length > 60 || printBody.includes('\n'))) {
+        if (fnDesc.value && !fnDesc.body && !printBody)
+          return put(`{${params} => ${fnDesc.value}`);
+        if (printBody && (printBody.length > 60 || printBody.includes('\n')))
           printBody = '';
-        }
-        put(`{function${name}${params}${printBody}`);
+        put(`{function${name}${params}${printBody}}`);
         if (obj[COMPILED]) {
           sep = " ";
           toString(obj[COMPILED], maxCarDepth, maxCdrDepth);
@@ -2784,41 +2772,28 @@ export function createInstance(schemeOpts = {}) {
     let analyzed = analyzedFunctions.get(fn);
     if (analyzed)
       return analyzed;
-    let str = fn.toString(), pos = 0, token = "";
-    let name = fn.name, params = [], restParam, value, body, native = false, printBody;
+    let str = fn.toString(), pos = 0, token = "", paramPos = 0, nonOptionalCount;
+    let name = fn.name, params = [], restParam, value, body, native = false, printParams, printBody;
     parse: {
       if (nextToken() === 'function') {
+        paramPos = pos;
         if (nextToken() !== '(') {
           name = token;
+          paramPos = pos;
           nextToken();
         }
         if (token !== '(') break parse;
-        while (nextToken() && token !==')') {
-          scarfParamDefault();
-          if (token === ',') nextToken();
-          if (token === ')') break;
-          if (token === '...')
-            restParam = nextToken();
-          else
-            params.push(token);
-        }
+        parseParams();
         let printBodyPos = pos;
         nextToken();
         parseBody();
         printBody = str.substr(printBodyPos);
       } else { // Arrow functions
         if (token === '(') {
-          while (nextToken() && token !==')') {
-            scarfParamDefault()
-            if (token === ',') nextToken();
-            if (token === '.') break;
-            if (token === '...')
-              restParam = nextToken();
-            else
-              params.push(token);
-          }
+          parseParams();
         } else {
           params.push(token);
+          printParams = str.substring(paramPos, pos);
         }
         if (nextToken() !== '=>') break parse;
         while (WSNL[str[pos]]) ++pos;
@@ -2829,12 +2804,29 @@ export function createInstance(schemeOpts = {}) {
           value = possibleValue;
       }
     }
-    let res = { name, params, restParam, value, body, printBody, native };
+    if (nonOptionalCount === undefined)
+      nonOptionalCount = params.length;
+    let res = { name, params, restParam, value, body, printBody, printParams, native, nonOptionalCount };
     analyzedFunctions.set(fn, res);
     return res;
 
+    function parseParams() {
+      while (nextToken() && token !==')') {
+        scarfParamDefault();
+        if (token === ',') nextToken();
+        if (token === ')') break;
+        if (token === '...')
+          restParam = nextToken();
+        else
+          params.push(token);
+      }
+      printParams = str.substring(paramPos, pos);
+    }
+
     function scarfParamDefault() {
       if (token === '=') {
+        if (nonOptionalCount === undefined)
+          nonOptionalCount = params.length-1;
         let delimCount = 0;
         nextToken();
         while (token) {
