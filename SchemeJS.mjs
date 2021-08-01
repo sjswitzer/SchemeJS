@@ -1268,14 +1268,14 @@ export function createInstance(schemeOpts = {}) {
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
   //   comparable performance and is excellent with partially-sorted lists.
   defineGlobalSymbol("mergesort", mergesort, "sort", "qsort");
-  function mergesort(list, ...rest) {
+  function mergesort(list, predicateFn = undefined, accessFn = undefined) {
     if (is_null(list)) return NIL;
     // Sort Arrays as Arrays
     if (Array.isArray(list))
-      return in_place_mergesort(list.slice(0), ...rest);
+      return in_place_mergesort(list.slice(0), predicateFn, accessFn);
     // Lists and other iterables are sorted as lists
     if (is_cons(list))
-      return in_place_mergesort(copy_list(list), ...rest);
+      return in_place_mergesort(copy_list(list), predicateFn, accessFn);
     let copied = NIL, last;
     if (!is_iterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
     for (let item of list) {
@@ -1283,24 +1283,23 @@ export function createInstance(schemeOpts = {}) {
       if (last) last = last[CDR] = item;
       else copied = last = item;
     }
-    return in_place_mergesort(copied, ...rest);
+    return in_place_mergesort(copied, predicateFn, accessFn);
   }
 
   defineGlobalSymbol("in-place-mergesort", in_place_mergesort, "in-place-sort", "nsort");
-  function in_place_mergesort(list, ...rest) {
+  function in_place_mergesort(list, predicateFn = undefined, accessFn = undefined) {
     if (is_null(list)) return NIL;
-    let predicateFn = rest[0], accessFn = rest[1];
     // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
     let before = predicateFn, scope = this;
-    if (bool(predicateFn)) {
-      if (bool(accessFn)) {
+    if (predicateFn) {
+      if (accessFn) {
         before = (a, b) => predicateFn.call(scope, accessFn.call(scope, a), accessFn.call(scope, b));
       } else if (typeof predicateFn !== 'function') {
         // Make sure it's a JS function, not a Scheme function
         before = (a, b) => _apply(fn, cons(a, cons(b, NIL)), this);
       }
     } else {
-      if (bool(accessFn)) {
+      if (accessFn) {
         before = function(a, b) {
           a = accessFn.call(scope, a);
           b = accessFn.call(scope, b);
@@ -1432,15 +1431,14 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("deep_eq", deep_eq);
-  function deep_eq(a, b, ... rest) {
-    let maxDepth = rest[0], report = rest[1];
+  function deep_eq(a, b, maxDepth = 100000, report = {}) {
     if (!bool(maxDepth)) maxDepth = 10000; // Protection from circular lists
     return deep_eq(a, b, maxDepth);
     function deep_eq(a, b, maxDepth) {
       if (a === b)
         return true;
       if (typeof a !== typeof b) {
-        if (report) report.a = a, report.b = b;
+        report.a = a, report.b = b;
         return false;
       }
       // Normally NaNs are not equal to anything, including NaNs, but for
@@ -1448,71 +1446,64 @@ export function createInstance(schemeOpts = {}) {
       if (typeof a === 'number' && isNaN(a) && isNaN(b))
         return true;
       if (a == null || b == null) { // nullish and we already know thay aren't equal
-        if (report) report.a = a, report.b = b;
+        report.a = a, report.b = b;
         return false;
       }
       if (maxDepth <= 0) {
-        if (report) report.depth = true;
+        report.depth = true;
         return false;
       }
       maxDepth -= 1;
 
       if (is_cons(a)) {
         if (!is_cons(b)) {
-          if (report) report.a = a, report.b = b;
+          report.a = a, report.b = b;
           return false;
         }
         return deep_eq(a[CAR], b[CAR]) && deep_eq(a[CDR], b[CDR], maxDepth);
       }
       if (is_cons(b)) {
-        if (report) report.a = a, report.b = b;
+        report.a = a, report.b = b;
         return false;
       }
       
       if (Array.isArray(a)) {
         if (!Array.isArray(b) || a.length !== b.length) {
-          if (report) report.a = a, report.b = b;
+          report.a = a, report.b = b;
           return false;
         }
         for (let i = 0; i < a.length; ++i)
           if (!deep_eq(a[i], b[i], maxDepth)) {
-            if (report) {
-              report.a = a, report.b = b, report.index = i;
-              report = undefined;  // Don't let this report get overwritten!
-            }
+            report.a = a, report.b = b, report.index = i;
+            report = undefined;  // Don't let this report get overwritten!
             return false;
           }
         return true;
       }
       if (Array.isArray(b)) {
-        if (report) report.a = a, report.b = b;
+        report.a = a, report.b = b;
         return false;
       }
       
       if (typeof a === 'object') {
         for (let prop of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a)))
           if (!b.hasOwnProperty(prop)) {
-            if (report) {
-              report.a = a, report.b = b, report.prop = prop;
-              report.aVal = a[prop], report.bVal = b[prop];
-              report = undefined;  // Don't let this report get overwritten!
-            }
+            report.a = a, report.b = b, report.prop = prop;
+            report.aVal = a[prop], report.bVal = b[prop];
+            report = undefined;  // Don't let this report get overwritten!
             return false;
           }
         for (let prop of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b)))
           if (!(a.hasOwnProperty(prop) && deep_eq(a[prop], b[prop], maxDepth))) {
-            if (report) {
-              report.a = a, report.b = b, report.prop = prop;
-              report.aVal = a[prop], report.bVal = b[prop];
-              report.hasProp = a.hasOwnProperty(prop);
-              report = undefined;  // Don't let this report get overwritten!
-            }
+            report.a = a, report.b = b, report.prop = prop;
+            report.aVal = a[prop], report.bVal = b[prop];
+            report.hasProp = a.hasOwnProperty(prop);
+            report = undefined;  // Don't let this report get overwritten!
             return false;
           }
         return true;
       }
-
-      if (report) report.a = a, report.b = b;
+      report.a = a, report.b = b;
       return false;
     }
   }
@@ -1775,7 +1766,7 @@ export function createInstance(schemeOpts = {}) {
         args = evalledArgs;
       }
     }
-    let lift = restParam ? MAX_INTEGER : paramCount;
+    let lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount;
     if (typeof form === 'function' && form[CLOSURE_ATOM] !== true) { // Scheme functions impose as Cons cells
       let jsArgs = [];
       for (let i = 0; i < lift; ++i) {
@@ -2117,8 +2108,8 @@ export function createInstance(schemeOpts = {}) {
 
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
   defineGlobalSymbol("to-list", to_list);
-  function to_list(obj, ...rest) {
-    let depth = rest[0];
+  function to_list(obj, ...etc) {
+    let depth = etc[0];
     if (!bool(depth)) depth = 1;
     if (depth <= 0) return obj;
     if (is_null(obj) || is_cons(obj)) return obj;
@@ -2304,10 +2295,10 @@ export function createInstance(schemeOpts = {}) {
 
   // Turns iterable objects like lists into arrays, recursively to "depth" (default 1) deep.
   defineGlobalSymbol("to-array", to_array);
-  function to_array(obj, ...rest) {
+  function to_array(obj, ...etc) {
     let depth = 1;
-    if (rest.length > 0 ) {
-      let maybeDepth = rest[0];
+    if (etc.length > 0 ) {
+      let maybeDepth = etc[0];
       if (typeof maybeDepth === 'number')
         depth = maybeDepth;
     }
@@ -2545,8 +2536,7 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("parse", parseSExpr);
   exportAPI("parseSExpr", parseSExpr);
-  function parseSExpr(characterStream, ...rest) {
-    let opts = rest[0] ?? {};
+  function parseSExpr(characterStream, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let parseContext = opts.parseContext ?? [];
     opts.parseContext = parseContext;
