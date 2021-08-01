@@ -1111,12 +1111,14 @@
             }
           }
         }
+
         function keyFor(atom) {
           let key = atom.description;
           key = key.replace('*', '');
           key = key.toLowerCase();
           return key;
         }
+
         function textElement(type, text, cls) {
           let element = document.createElement(type);
           element.textContent = text;
@@ -1206,22 +1208,37 @@
         inputElement.normalize();
         try {
           function* characterGenerator() {
+            let alphaReductionFactor = .75;
             let part1 = inputText.substr(0, pos), part2 = inputText.substr(pos);
+
             // Feed parser part up to the cursor
             for (let ch of part1)
               yield ch;
+
             // Colorize opening grouping symbols
             let alpha = 1;
             for (let i = parseContext.length; i > 0; --i) {
               let tok = parseContext[i-1], pos = tok.position, width = 1;
               if (typeof tok.value === 'string') width = tok.value.length;
               colorizeCharsAt(inputElement, pos, width, 'match-tokens',
-                `background-color: hsl(44, 100%, 50%, ${alpha})`);
-              alpha *= .8;
+                `background-color: hsl(44, 100%, 50%, ${alpha}); color: red;`);
+              alpha *= alphaReductionFactor;
             }
+
+            let depth = parseContext.length;
+            alpha = 1;
             // Feed the rest
-            for (let ch of part2)
+            for (let ch of part2) {
               yield ch;
+              if (parseContext.length < depth) {
+                let tok = parseContext.currentToken, pos = tok.position, width = 1;
+                if (typeof tok.value === 'string') width = tok.value.length;
+                colorizeCharsAt(inputElement, pos, width, 'match-tokens',
+                  `background-color: hsl(44, 100%, 50%, ${alpha}); color: red;`);
+                alpha *= alphaReductionFactor;
+                depth = parseContext.length;
+              }
+            }
           }
 
           // Parse

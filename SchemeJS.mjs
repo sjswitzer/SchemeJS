@@ -929,11 +929,10 @@ export function createInstance(schemeOpts = {}) {
       loadError.path = path;
       return false;
     }
-    let parseContext = [], opts = { parseContext, path };
-    let tokenGenerator = schemeTokenGenerator(fileContent, opts);
+    let tokenGenerator = schemeTokenGenerator(fileContent, { path });
     for(;;) {
       try {
-        let expr = parseSExpr(tokenGenerator, { path, opts });
+        let expr = parseSExpr(tokenGenerator, { path });
         if (!expr) break;
         if (noEval) {
           if (last) last = last[CDR] = cons(expr, NIL);
@@ -2449,6 +2448,7 @@ export function createInstance(schemeOpts = {}) {
         nextc(); nextc();
         while (ch && !(ch === '*' && peekc() === '/'))
           nextc();
+        parseContext.currentToken = { type: 'comment', value: '*/', position, line, lineChar };
         parseContext.pop();
         if (!ch)
           yield { type: 'partial', position, line, lineChar };
@@ -2464,10 +2464,10 @@ export function createInstance(schemeOpts = {}) {
         while (ch && ch !== '"' && (special || !NL[ch])) {
           if (ch === '\\') {
             nextc();
-            if (ch === '\n') {
+            if (ch === '\n') {  // traditional string continuation
               nextc();
               continue;
-            } else if (ch === '+' && peekc() === '\n') {  // Special string continuation!
+            } else if (ch === '\\' && peekc() === '\n') {  // Special string continuation!
               nextc();
               special = true;
             } else if (ch === '') {
@@ -2490,6 +2490,7 @@ export function createInstance(schemeOpts = {}) {
               continue;
             }
             if (ch === '"') {  // " ends string
+              parseSExpr.currentToken = { type: 'string', value: '"', position, line, lineChar };
               parseContext.pop();
               popped = true;
               break;
@@ -2500,7 +2501,10 @@ export function createInstance(schemeOpts = {}) {
           str += ch;
           nextc();
         }
-        if (!popped) parseContext.pop();
+        if (!popped) {
+          parseSExpr.currentToken = { type: 'string', value: '"', position, line, lineChar };
+          parseContext.pop();
+        }
         if (!ch) {
           yield { type: 'partial', value: `"${str}`,  position, line, lineChar };
           return;
@@ -2781,10 +2785,12 @@ export function createInstance(schemeOpts = {}) {
       for (;;) {
         for (let get_minus_1 = n - _tokens.length; get_minus_1 >= 0 && !_done; --get_minus_1) {
           let { done, value } = tokenGenerator.next();
-          if (done)
+          if (done) {
             _done = true;
-          else
+          } else {
             _tokens.push(value);
+            parseContext.currentToken = value;
+          }
         }
         // Never return a 'newline' as the current token (unless told otherwise)
         if (!initialNewlineOK) {
