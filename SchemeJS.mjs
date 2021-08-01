@@ -970,7 +970,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("last", last);
   function last(list) {
     let res = NIL;
-    if (!list || is_null(list)) return NIL; // XXX check this
+    if (!list || is_null(list)) return NIL; // XXX check this.
     if (is_cons(list)) {
       while (is_cons(list)) {
         res = list[CAR];
