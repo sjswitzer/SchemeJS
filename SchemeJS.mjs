@@ -1300,25 +1300,14 @@ export function createInstance(schemeOpts = {}) {
       }
     } else {
       if (accessFn) {
-        before = function(a, b) {
-          a = accessFn.call(scope, a);
-          b = accessFn.call(scope, b);
-          if (typeof a === 'symbol') a = a.description;
-          if (typeof b === 'symbol') b = b.description;
-          return a < b;
-        }
+        before = (a, b) => accessFn.call(scope, a) <  accessFn.call(scope, b);
       } else {
-        before = function(a, b) {
-          if (typeof a === 'symbol') a = a.description;
-          if (typeof b === 'symbol') b = b.description;
-          return a < b;
-        }
+        before = (a, b) => a < b
       }
     }
-    if (is_null(list)) return NIL;
     // Sort arrays as arrays
     if (Array.isArray(list)) {
-      // ES10 stipulates that it only cares wheter the compare function
+      // ES10 stipulates that it only cares whether the compare function
       // returns > 0, which means move "b"  before "a," or <= zero,
       // which means leave "a" before "b". There's no ned to distinguish
       // the "equal" case. Which is nice for us because the "before"
@@ -1330,7 +1319,7 @@ export function createInstance(schemeOpts = {}) {
     if (is_cons(list)) {
       return llsort.call(this, list, before);
     }
-    throw new TypeError(`Not a list or iterable ${string(list)}`);
+    throw new TypeError(`Not a list or array ${string(list)}`);
   }
   
   // A bottom-up mergesort that coalesces runs of ascending or descending items.
