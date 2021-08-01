@@ -2241,61 +2241,58 @@ export function createInstance(schemeOpts = {}) {
   // Doesn't even know if it's a cons cell or null yet!
   //
   class LazyIteratorList {
-    _iterator; _mapper;
+    [LAZYCAR]; [LAZYCDR];
     constructor(iterator, mapper) {
-      this._iterator = iterator;
-      this._mapper = mapper;
+      this[LAZYCAR] = mapper;
+      this[LAZYCDR] = iterator;
     }
     get [CAR]() {
-      if (!this._getNext()) throw new TypeError(`car of nil`);
+      if (!this[PAIR]) throw new TypeError(`car of nil`);
       return this[CAR];
     }
     set [CAR](val) {
-      let mapper = this._mapper;
-      if (!this._getNext()) throw new TypeError(`set car of nil`);
+      let mapper = this[LAZYCAR];
+      if (!this[PAIR]) throw new TypeError(`set car of nil`);
       if (mapper)
         Object.setPrototypeOf(this, Cons.prototype);
       this[CAR] = val;
     }
     get [CDR]() {
-      if (!this._getNext()) throw new TypeError(`cdr of nil`);
+      if (!this[PAIR]) throw new TypeError(`cdr of nil`);
       return this[CDR];
     }
     set [CDR](val) {
-      if (!this._getNext()) throw new TypeError(`set cdr of nil`);
+      if (!this[PAIR]) throw new TypeError(`set cdr of nil`);
       this[CDR] = val;
     }
+    get [NULLSYM]() { return !this[PAIR] }
     get [PAIR]() { // Doesn't even know whether it's a cons or nil yet!
-      return this._getNext();
-    }
-    _getNext() {
-      let iterator = this._iterator, mapper = this._mapper;
+      let iterator = this[LAZYCDR], mapper = this[LAZYCAR];
       let { done, value: car } = iterator.next();
       if (done) {
         Object.setPrototypeOf(this, Object.getPrototypeOf(NIL));
-        delete this._iterator;
-        delete this._mapper;
+        delete this[LAZYCDR];
+        delete this[LAZYCAR];
         delete this[CAR];
         delete this[CDR];
         this[NULLSYM] = true;
         return false;
       }
-      let cdr = new LazyIteratorList(iterator, this._mapper);
+      let cdr = new LazyIteratorList(iterator, mapper);
       if (mapper) {
         Object.setPrototypeOf(this, LazyCarList.prototype);
-        delete this._iterator;
-        delete this._mapper;
+        delete this[LAZYCDR];
+        delete this[LAZYCAR];
         this[LAZYCAR] = () => mapper(car);
       } else {
         Object.setPrototypeOf(this, Cons.prototype);
-        delete this._iterator;
-        delete this._mapper;
+        delete this[LAZYCDR];
+        delete this[LAZYCAR];
         this[CAR] = car;
       }
       this[CDR] = cdr;
       return true;
     }
-    get [NULLSYM]() { return !this._getNext() }
     toString() { return string(this) }
     [Symbol.iterator] = pairIterator();
   }
