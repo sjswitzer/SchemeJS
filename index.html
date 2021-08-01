@@ -1394,7 +1394,7 @@
       }
 
       function colorizeCharsAt(element, colorizePosition, nchar, cls, style) {
-        console.log("COLORIZE!", colorizePosition, nchar, cls, style);
+        // console.log("COLORIZE!", colorizePosition, nchar, cls, style);
         return traverseEditableElement(element, onNode);
         function onNode(node, pos, isNewline) {
           let localPos = colorizePosition - pos;
