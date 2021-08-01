@@ -1562,7 +1562,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("is_closure", is_closure)
   defineGlobalSymbol("closure?", is_closure);
   function is_closure(form) {
-    if (form[CLOSURE_ATOM] === true)
+    if (form != null && form[CLOSURE_ATOM] === true)
       return true;
     if (is_cons(form))
       return !!(form[CAR] === CLOSURE_ATOM || form[CAR] === SCLOSURE_ATOM);
@@ -2304,64 +2304,9 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[LAZYCDR] = true;
   LazyIteratorList.prototype[LIST] = true;
 
-  //
-  // Lazy lists by being a Cons imposter
-  //   Leaving this alternate implementation in because mutating objects is deemed
-  //   sketchy and poorly-performing. Except, perhaps, in this particular case.
-  //
-  class ConventionalLazyList {
-    [LAZYCAR]; [LAZYCDR]; _carVal; _cdrVal;
-    constructor(carVal, lazyCar, cdrVal, lazyCdr) {
-      this._carVal = carVal;
-      this[LAZYCAR] = lazyCar;
-      this._cdrVal = cdrVal
-      this[LAZYCDR] = lazyCdr;
-    }
-    toString() { return string(this) }
-    get [CDR]() {
-      let lazy = this[LAZYCDR];
-      if (lazy) {
-        this[LAZYCDR] = undefined;
-        return this._cdrVal = lazy(this._cdrVal, this._carVal);
-      }
-      return this._cdrVal;
-    }
-    set [CDR](val) {
-      this[LAZYCDR] = undefined;
-      this._cdrVal = val;
-    }
-    get [CAR]() {
-      let lazy = this[LAZYCAR];
-      if (lazy) {
-        this[LAZYCAR] = undefined;
-        return this._carVal = lazy(this._carVal, this._cdrVal);
-      }
-      return this._carVal;
-    }
-    set [CAR](val) {
-      this[LAZYCAR] = undefined;
-      this._carVal = val;
-    }
-    [Symbol.iterator] = pairIterator();
-  }
-  ConventionalLazyList.prototype[PAIR] = true;
-  ConventionalLazyList.prototype[LIST] = true;
-
   defineGlobalSymbol("list-view", list_view);
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
-    /**** Classic method
-    function getCdr() {
-      let { done, value } = iterator.next();
-      if (done) return NIL;
-      return new ConventionalLazyList(value, undefined, undefined, getCdr);
-    }
-    let { done, value } = iterator.next();
-    if (done) return NIL;
-    return new ConventionalLazyList(value, undefined, undefined, getCdr);
-    */
-  
-    // Even lazier since it doesn't fetch ahead to find out if should be NIL or not.
     return new LazyIteratorList(iterator);
   }
 
@@ -2369,20 +2314,6 @@ export function createInstance(schemeOpts = {}) {
   function lazy_map(fn, obj) {
     if (!bool(fn)) return NIL; // XXX probably should throw; also mapcar
     let scope = this, iterator = iteratorFor(obj, TypeError);
-    /**** Classic method
-    function getCdr() {
-      let { done, value } = iterator.next();
-      if (done) return NIL;
-      const getCar = () => _apply(fn, cons(value, NIL), scope);
-      return new ConventionalLazyList(undefined, getCar, undefined, getCdr);
-    }
-    let { done, value } = iterator.next();
-    if (done) return NIL;
-    const getCar = () => _apply(fn, cons(value, NIL), scope);
-    return new ConventionalLazyList(undefined, getCar, undefined, getCdr);
-    */
-
-    // Doesn't need to fetch ahead one item to find out whether it's NIL or not.
     return new LazyIteratorList(iterator, a => _apply(fn, cons(a, NIL), scope))
   }
 
