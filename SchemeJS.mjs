@@ -489,7 +489,7 @@ export function createInstance(schemeOpts = {}) {
       for (let [innerName, {value: innerValue}] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
         defineGlobalSymbol(`${name}-${innerName}`, innerValue, { schemeOnly: true, group: "imported" });
         if (typeof innerValue === 'function')
-          innerValue[IMPL_SYMBOL] = `{(...params) => ${name}.${innerName}(...params)}`;
+          innerValue[IMPL_SYMBOL] = `{(...) => ${name}.${innerName}(...)}`;
       }
     }
   }
@@ -503,7 +503,7 @@ export function createInstance(schemeOpts = {}) {
       name = `*${name.toLowerCase()}*`;
     // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
     if (typeof value === 'function')
-      value[IMPL_SYMBOL] = `{(...params) => Math.${name}(...params)}`;
+      value[IMPL_SYMBOL] = `{(...) => Math.${name}(...)}`;
     defineGlobalSymbol(name, value, { schemeOnly: true }, otherName);
   }
   defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too

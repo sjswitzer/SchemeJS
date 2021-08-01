@@ -630,117 +630,89 @@
         (&gt;&gt;&gt; value shift)
         <p> <i>Value</i> logically right-shifted "shift" bits, bith considered as 32-bit integers.
           Zero bits fill from the left.
-      </div></dd>
-      <dd id="defn-ash"><div>
+      <dd id="defn-ash">
         (ash value shift)
         <p> Shifts left if <i>shift</i> is positive.
             Shifts arithmetcally right if <i>shift</i> is negative;
             sign bits fill from the left.
-      </div></dd>
-      <dd id="defn-append"><div>
+      <dd id="defn-append">
         (append list ...)
         <p> Appends the specified lists or iterable JavaScript objects, forming a new list.
-      </div></dd>
-      <dd id="defn-apply"><div>
+      <dd id="defn-apply">
         (apply function args [scope])
         <p> Applies the function to the arguments in the given scope.
             "scope" is optional; the default is the current scope.
-      </div></dd>
-      <dd id="defn-begin"><div>
+      <dd id="defn-begin">
         (begin form ...)
         <p> Evaluates the forms sequentially, returning the value of the last form.
-      </div></dd>
-      <dd id="defn-bigintP"><div>
+      <dd id="defn-bigintP">
         (bigint? obj)
         <p> Returns <code>true</code> if <i>obj</i> is a JavaScript BigInt.
-      </div></dd>
-      <dd id="defn-booleanP"><div>
+      <dd id="defn-booleanP">
         (boolean? obj)
         <p> Returns <code>true</code> if <i>obj</i> is a boolean.
-      </div></dd>
-      <dd id="defn-function?"><div>
+      <dd id="defn-function?">
         (boolean? obj)
         <p> Returns <code>true</code> if <i>obj</i> is a JavaScript function.
-      </div></dd>
-      <dd id="defn-butlast"><div>
+      <dd id="defn-butlast">
         (butlast list)
         <p> A copy of <i>list</i> excepting the last element.
-      </div></dd>
-      <dd id="defn-caaar"><div>
+      <dd id="defn-caaar">
         (caaar list)
         <p> Shorthand for: <code>(car (car (car list)))</code>.
-      </div></dd>
-      <dd id="defn-caadr"><div>
+      <dd id="defn-caadr">
         (caadr list)
         <p> Shorthand for: <code>(car (car (cdr list)))</code>.
-      </div></dd>
-      <dd id="defn-caar"><div>
+      <dd id="defn-caar">
         (caar list)
         <p> Shorthand for: <code>(car (car list))</code>.
-      </div></dd>
-      <dd id="defn-cadar"><div>
+      <dd id="defn-cadar">
         (cadar list)
         <p> Shorthand for: <code>(car (cdr (car list)))</code>.
-      </div></dd>
-      <dd id="defn-caddr"><div>
+      <dd id="defn-caddr">
         (caddr list)
         <p> Shorthand for: <code>(car (cdr (cdr list)))</code>.
-      </div></dd>
-      <dd id="defn-cadr"><div>
+      <dd id="defn-cadr">
         (cadr list)
         <p> Shorthand for: <code>(car (cdr list))</code>.
-      </div></dd>
-      <dd id="defn-cons"><div>
+      <dd id="defn-cons">
         (cons first rest)
         <p> Returns a new list object with <i>first</i> as the "car" and <i>rest</i> as the "cdr."
-      </div></dd>
-      <dd id="defn-car"><div>
+      <dd id="defn-car">
         (car list)
         <p> First element of <i>list</i>.
-      </div></dd>
-      <dd id="defn-cdr"><div>
+      <dd id="defn-cdr">
         (cdr list)
         <p> Second and subsequent elements of <i>list</i>.
-      </div></dd>
-      <dd id="defn-cdaar"><div>
+      <dd id="defn-cdaar">
         (cdaar list)
         <p> Shorthand for: <code>(cdr (car (car list)))</code>.
-      </div></dd>
-      <dd id="defn-cdddr"><div>
+      <dd id="defn-cdddr">
         (cdddr list)
         <p> Shorthand for: <code>(cdr (cdr (cdr list)))</code>.
-      </div></dd>
-      <dd id="defn-cdadr"><div>
+      <dd id="defn-cdadr">
         (cdadr list)
         <p> Shorthand for: <code>(cdr (car (cdr list)))</code>.
-      </div></dd>
-      <dd id="defn-cdar"><div>
+      <dd id="defn-cdar">
         (cdar list)
         <p> Shorthand for: <code>(cdr (car list))</code>.
-      </div></dd>
-      <dd id="defn-cddar"><div>
+      <dd id="defn-cddar">
         (cddar list)
         <p> Shorthand for: <code>(cdr (cdr (car list)))</code>.
-      </div></dd>
-      <dd id="defn-cdddr"><div>
+      <dd id="defn-cdddr">
         (cdddr list)
         <p> Shorthand for: <code>(cdr (cdr (cdr list)))</code>.
-      </div></dd>
-      <dd id="defn-cddr"><div>
+      <dd id="defn-cddr">
         (cddr list)
         <p> Shorthand for: <code>(cdr (cdr list))</code>.
-      </div></dd>
-      <dd id="defn-closureP"><div>
+      <dd id="defn-closureP">
         (closure? obj)
         <p> True if <i>obj</i> is a Scheme closure.
-      </div></dd>
-      <dd id="defn-CompileError"><div>
+      <dd id="defn-CompileError"
         <p> Thrown when the compiler finds an error.
-      </div></dd>
-      <dd id="defn-CompileError"><div>
+      <dd id="defn-CompileError">
         <p> Thrown when the there is an error evaluating Scheme functions.
-      </div></dd>
-      <dd id="defn-cond"><div>
+      <dd id="defn-cond">
         (cond cond-clause ...)
         <p> where <i>cond-clause</i> is:</p>
         (predicate form ...)
@@ -753,193 +725,64 @@
           &nbsp;&nbsp; ((< 4 4) "b") <br>
           &nbsp;&nbsp; ((< 3 4) "c") <br>
           &nbsp;&nbsp; ((< 2 4) "d"))
-      </div></dd>
-      <dd id="defn-copy-list"><div>
+      <dd id="defn-copy-list">
         (copy-list list)
         <p> Returns a new list that is an element-wise shallow copy of <i>list</i>,
             which can be a Scheme list or JavaScript iterable.
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-apropos"><div>
+      <dd id="defn-apropos">
         (apropos ["substring"])
         <p> A list of globally-defined functions and values.
             If an optional "substring" parameter is given, it returns only definitions
             whose name contains that substring.
-      </div></dd>
-      <dd id="defn-aref"><div>
+      <dd id="defn-aref">
         (@ index array)
         <p> Indexes into the JavaScript array by the given index. </p>
         (@ "prop" obj)
         <p> The value of the property "prop" in the given object.
-      </div></dd>
-      <dd id="defn-arefP"><div>
+      <dd id="defn-arefP">
         (@? index array)
         <p> The value of the property "prop" in the given object or undefined if the array is
             undefined or null.</p>
             (@ "prop" obj)
             <p> The value of the property "prop" in the given object or undefined if the array is
               undefined or null.
-          </div></dd>
-      <dd id="defn-arrayP"><div>
+      <dd id="defn-arrayP">
         (array? obj)
         <p> True if the object is a JavaScript Array.
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-false"><div>
+      <dd id="defn-false">
         false
         <p> The canonical "false" value.
             Only <code>false</code>, <code>nil</code>, <code>undefined</code> and
             <code>null</code> are considered false; unlike JavaScript,
             zero, NaN and "" are <i>not</i> considered false.
             Everything else is "true."
-      </div></dd>
-      <dd id="defn-true"><div>
+      <dd id="defn-true">
         true
         <p> The canonical "true" value.
             Only <code>false</code>, <code>nil</code>, <code>undefined</code> and
             <code>null</code> are considered false; unlike JavaScript,
             zero, NaN and "" are considered true.
             Everything else is "true."
-      </div></dd>
-      <dd id="defn-intern"><div>
+      <dd id="defn-intern">
         (intern "str")
         <p> Returns a Scheme atom named "str".
-      </div></dd>
-      <dd id="defn-Date"><div>
-        Date
-        <p> The standard JavaScript Date class.
-      </div></dd>
-      <dd id="defn-Float32Array"><div>
-        Float32Array
-        <p> The standard JavaScript Float32Array class.
-      </div></dd>
-      <dd id="defn-Float64Array"><div>
-        Float64Array
-        <p> The standard JavaScript Float64Array class.
-      </div></dd>
-      <dd id="defn-Function"><div>
-        Function
-        <p> The standard JavaScript Function class.
-      </div></dd>
-      <dd id="defn-Array"><div>
-        Array
-        <p> The standard JavaScript Array class.
-      </div></dd>
-      <dd id="defn-ArrayBuffer"><div>
-        ArrayBuffer
-        <p> The standard JavaScript ArrayBuffer class.
-      </div></dd>
-      <dd id="defn-Atomics"><div>
-        Atomics
-        <p> The standard JavaScript Atomics class.
-      </div></dd>
-      <dd id="defn-Math"><div>
-        max-height
-        <p> The standard JavaScript Math object.
-      </div></dd>
-      <dd id="defn-BigInt"><div>
-        BigInt
-        <p> The standard JavaScript BigInt class.
-      </div></dd>
-      <dd id="defn-BigInt64Array"><div>
-        BigInt64Array
-        <p> The standard JavaScript BigInt64Array.
-      </div></dd>
-      <dd id="defn-BigUint64Array"><div>
-        BigUint64Array
-        <p> The standard JavaScript BigUint64Array class.
-      </div></dd>
-      <dd id="defn-Boolean"><div>
-        Boolean
-        <p> The standard JavaScript Boolean class.
-      </div></dd>
-      <dd id="defn-DataView"><div>
-        DataView
-        <p> The standard JavaScript DataView class.
-      </div></dd>
-      <dd id="defn-decodeURI"><div>
-        decodeURI
-        <p> The standard JavaScript function decodeURI.
-      </div></dd>
-      <dd id="defn-decodeURIComponent"><div>
-        decodeURIComponent
-        <p> The standard JavaScript function decodeURIComponent.
-      </div></dd>
-      <dd id="defn-encodeURI"><div>
-        encodeURI
-        <p> The standard JavaScript function encodeURI.
-      </div></dd>
-      <dd id="defn-encodeURIComponent"><div>
-        encodeURIComponent
-        <p> The standard JavaScript function encodeURIComponent.
-      </div></dd>
-      <dd id="defn-define"><div>
+      <dd id="defn-define">
         (define a form)
         <p> Defines a global-scope variable <i>a</i> with the evaluated value of <i>form</i>.</p>
         (define (fn param...) form ...)
         <p> Defines a global-scope function <i>fn</i> with parameters <i>param...</i>
             which evaluates the forms in the context of the bound parameters.
-      </div></dd>
-      <dd id="defn-delete"><div>
+      <dd id="defn-delete">
         (delete a b)
         <p> Deletes property or array element <i>b</i> from JavaScript object <i>a</i>.
-      </div></dd>
-      <dd id="defn-eval"><div>
+      <dd id="defn-eval">
         (eval form [scope])
         <p> Evaluates <i>form</i> in the given <i>scope</i>.
             Default is the scope of the caller.
-      </div></dd>
-      <dd id="defn-eval-string"><div>
+      <dd id="defn-eval-string">
         (eval "str" [scope])
         <p> Parses the evaluates <i>"str"</i> in the given <i>scope</i>.
             Default is the scope of the caller.
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
-      <dd id="defn-xxx"><div>
-        xxx
-        <p> xxx
-      </div></dd>
     </div>
     <script type="module" src="./CloseButton.mjs"></script>
     <script type="text/javascript">
