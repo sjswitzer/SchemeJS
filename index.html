@@ -157,10 +157,10 @@
         font-style: italic;
       }
 
-      .help definitions dd {
+      .help .definitions dd {
         font-style: italic;
       }
-      .help definitions dd p {
+      .help .definitions dd p {
         font-style: normal;
       }
 
@@ -451,21 +451,19 @@
      </div>
     </div>
     <div style="display: none !important">
-      <dd id="defn-_star_catch"><div>
+      <dd id="defn-_star_catch">
         (*catch "tag" form ...)
         <p> SIOD-style catch.
             Evaluates the forms until one of them calls
             <code>(*throw "tag" value)</code>.
             Returns "value" if the tags match; otherwise the exception propagates.
-      </div></dd>
-      <dd id="defn-_star_catch"><div>
+      <dd id="defn-_star_catch">
         (*throw "tag" value)
         <p> SIOD-style throw.
             Throws the value with the given tag.
             An enclosing <code>(*catch "tag" form ...)</code> will
             return "value" if the tags match; otherwise the exception propagates.
-      </div></dd>
-      <dd id="defn-catch"><div>
+      <dd id="defn-catch">
         (catch catch-clause forms)
         <p> where <i>catch-clause</i> is:</p>
         (error type forms)
@@ -483,20 +481,16 @@
             &nbsp;&nbsp; (+ 1 2)<br>
             &nbsp;&nbsp;  (+ 3 (throw "ha ha!"))<br>
             )
-      </div></dd>
-      <dd id="defn-_star_catch"><div>
+      <dd id="defn-_star_catch">
         (*throw "tag" value)
         <p> Java/JavaScript-style-style throw.
             Throws the value with the given tag.
             An enclosing <code>(*catch "tag" form ...)</code> will
             return "value" if the tags match; otherwise the exception propagates.
-      </div></dd>
-      <dd id="defn-_star_e_star_"><div>
+      <dd id="defn-_star_e_star_">
         Euler's constant and the base of natural logarithms
-      </div></dd>
-      <dd id="defn-_star_ln10_star_"><div>
+      <dd id="defn-_star_ln10_star_">
         Natural logarithm of 10
-      </div></dd>
       <dd id="defn-_star_log10e_star_"><div>
         Base-10 logarithm of Euler's constant
       </div></dd>
@@ -515,10 +509,9 @@
       <dd id="defn-_star_ln2_star_"><div>
         Natural logarithm of 2
       </div></dd>
-      <dd id="defn-abs"><div>
+      <dd id="defn-abs">
         (abs x)
         <p> Absolute value of x.
-      </div></dd>
       <dd id="defn-acos"><div>
         (acos x)
         <p> Arccosine of x in radians.
