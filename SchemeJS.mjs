@@ -469,48 +469,40 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("nan?", isNaN, { schemeOnly: true } , "isNaN", "NaN?");
   defineGlobalSymbol("finite?", isFinite, { schemeOnly: true } , "isFinite");
 
-  const IMPL_SYMBOL = Symbol('*implementation*');
-  exportAPI("IMPL_SYMBOL", IMPL_SYMBOL);
-
   // Hoist a bunch of JavaScript definitions into the global scope
   defineGlobalSymbol("NaN", NaN);
   defineGlobalSymbol("Infinity", Infinity);
   defineGlobalSymbol("globalThis", globalThis);
   for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
     defineGlobalSymbol(obj.name, obj);
-  for (let name of Object.getOwnPropertyNames(globalThis)) {
-    // Strangely, Object.entries(globalThis) and for (sym in globalThis) only return a few entries,
-    // at least in node-js under VS Code. Something about $jsDebugIsRegistered, I suspect.
-    let value = globalThis[name];
-    if (value === globalThis) continue;  // some props repeat globalThis.
-    defineGlobalSymbol(name, value, { schemeOnly: true, group: "imported" });
-    if (name === "global" || name === "globalThis" || name === 'window' || name === 'document') 
-      continue;
-    if (value != null && typeof value === 'object') {
-      for (let [innerName, {value: innerValue}] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
-        defineGlobalSymbol(`${name}-${innerName}`, innerValue, { schemeOnly: true, group: "imported" });
-        if (typeof innerValue === 'function')
-          innerValue[IMPL_SYMBOL] = `{(...) => ${name}.${innerName}(...)}`;
+  
+  { // (Local scope so we don't hang onto the property descriptors)
+    // Import global JavaScript symbols
+    let propDescs = Object.getOwnPropertyDescriptors(globalThis);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (!get && value)
+        defineGlobalSymbol(name, value, { schemeOnly: true, group: "imported" });
+    }
+
+    // Stuff the whole Math class in there!
+    defineGlobalSymbol("Math", Math, { schemeOnly: true });
+    propDescs = Object.getOwnPropertyDescriptors(Math);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (!get && value) {
+        // SIOD defines *pi* so I'll just define them all like that
+        if (typeof value === 'number')
+          defineGlobalSymbol(`*${name.toLowerCase()}*`, value, { schemeOnly: true });
+        // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
+        if (typeof value === 'function')
+          defineGlobalSymbol(name, value, { schemeOnly: true });
       }
     }
+    defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
   }
-
-  // Stuff the whole Math class in there!
-  defineGlobalSymbol("Math", Math, { schemeOnly: true });
-  for (let [name, {value}] of Object.entries(Object.getOwnPropertyDescriptors(Math))) {
-    let otherName =`Math-${name}`;
-    // SIOD defines *pi* so I'll just define them all like that
-    if (typeof value === 'number')
-      name = `*${name.toLowerCase()}*`;
-    // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
-    if (typeof value === 'function')
-      value[IMPL_SYMBOL] = `{(...) => Math.${name}(...)}`;
-    defineGlobalSymbol(name, value, { schemeOnly: true }, otherName);
-  }
-  defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
 
   defineGlobalSymbol("intern", a => Atom(a));
-
   defineGlobalSymbol("eval", eval_);
   function eval_(expr, ...scope) { // Javascript practically treats "eval" as a keyword
     let useScope = scope[0];
@@ -551,11 +543,11 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("in", (a,b) => a in b);
   defineGlobalSymbol("new", (cls, ...args) => new cls(...args));
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b);
-  defineGlobalSymbol("aref", (a, b) => a[b], "@");  // indexing and member access (SIOD: aref)
-  defineGlobalSymbol("aref?", (a, b) => a?.[b], "@?");  // conditional indexing and member access
-  defineGlobalSymbol("js-call", (a, b, ...params) => a[b](...params), "@!");
-  defineGlobalSymbol("js-call?", (a, b, ...params) => a?.[b](...params), "@!?", "@?!");
-  defineGlobalSymbol("js-assign", (a, b, c) => a[b] = c, "@=");
+  defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access (SIOD: aref)
+  defineGlobalSymbol("@?", (a, b) => a?.[b], "aref?");  // conditional indexing and member access
+  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), "js-call");
+  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), "js-call?");
+  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, "js-assign");
   defineGlobalSymbol("delete", (a, b) => delete a[b]);
   defineGlobalSymbol("void", _ => undefined);
 
