@@ -796,13 +796,21 @@
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
         globalScope = SchemeJS.createInstance({ lambdaStr: "\u03BB", slambdaStr: "\u03BB\u03BB" });
-        inputElement.contentEditable = 'true';
         inputElement.focus();
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
         SchemeParseIncomplete = globalScope.SchemeParseIncomplete;
         buildBuiltinHelp(globalScope);
+        
+        inputElement.contentEditable = 'true';
+
+        // The idea here is to let the handleInput exacute after the keypress has been
+        // completely processed. "oninput" is nice, but doesn't indicate the "Enter" key.
+        inputElement.onkeydown = event => setTimeout(() => handleInput(event.key === 'Enter'), 0);
+
+        // TODO: I'm just looking for selection changes; there's probably a better way
+        inputElement.onmousedown = event => setTimeout(() => handleInput(), 0);
       }
 
       let helpStack = [];
@@ -837,7 +845,7 @@
       }
 
       function buildBuiltinHelp(globalScope) {
-        const IMPL_SYMBOL = globalScope["IMPL_SYMBOL"], string = globalScope.string;
+        const string = globalScope.string;
         let groups = {}, helpHelper = globalScope._help_;
         let syms = Object.getOwnPropertySymbols(helpHelper);
         for (let sym of syms) {
@@ -859,9 +867,6 @@
               helpElement.appendChild(textElement('dt', atom.description));
             let name = atoms[0].description, elementId = "defn-" + name;
             elementId = elementId.replaceAll('*', '_star_').replaceAll('?', 'P');
-            let impl;
-            if (typeof value === 'function')
-              impl = value[IMPL_SYMBOL];
             let dd = document.getElementById(elementId);
             if (!dd) {
               if (group === "imported")
@@ -871,8 +876,7 @@
             }
             helpElement.appendChild(dd);
             if (typeof value === 'function') {
-              let impl = value[IMPL_SYMBOL];
-              if (!impl) impl = string(value);
+              let impl = string(value);
               if (impl.length < 50)
                 dd.appendChild(textElement('p', `Impl: ${impl}`, 'impl'));
             } else {
@@ -1233,13 +1237,6 @@
         }
       }
 
-      // The idea here is to let the handleInput exacute after the keypress has been
-      // completely processed. "oninput" is nice, but doesn't indicate the "Enter" key.
-      inputElement.onkeydown = event => setTimeout(() => handleInput(event.key === 'Enter'), 0);
-
-      // TODO: I'm just looking for selection changes; there's probably a better way
-      inputElement.onmousedown = event => setTimeout(() => handleInput(), 0);
-      
       if ('serviceWorker' in navigator && window.location.protocol === 'https:')
         navigator.serviceWorker.register('service-worker.js');
 
