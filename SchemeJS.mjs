@@ -476,12 +476,14 @@ export function createInstance(schemeOpts = {}) {
   // Hoist a bunch of JavaScript definitions into the global scope
   defineGlobalSymbol("NaN", NaN);
   defineGlobalSymbol("Infinity", Infinity);
+  defineGlobalSymbol("globalThis", globalThis);
   for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
     defineGlobalSymbol(obj.name, obj);
   for (let name of Object.getOwnPropertyNames(globalThis)) {
     // Strangely, Object.entries(globalThis) and for (sym in globalThis) only return a few entries,
     // at least in node-js under VS Code. Something about $jsDebugIsRegistered, I suspect.
     let value = globalThis[name];
+    if (value === globalThis) continue;  // some props repeat globalThis.
     defineGlobalSymbol(name, value, { schemeOnly: true, group: "imported" });
     if (name === "global" || name === "globalThis" || name === 'window' || name === 'document') 
       continue;
