@@ -472,10 +472,7 @@ export function createInstance(schemeOpts = {}) {
   // Hoist a bunch of JavaScript definitions into the global scope
   defineGlobalSymbol("NaN", NaN);
   defineGlobalSymbol("Infinity", Infinity);
-  defineGlobalSymbol("globalThis", globalThis);
-  for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
-    defineGlobalSymbol(obj.name, obj);
-  
+
   { // (Local scope so we don't hang onto the property descriptors)
     // Import global JavaScript symbols
     let propDescs = Object.getOwnPropertyDescriptors(globalThis);
@@ -500,6 +497,11 @@ export function createInstance(schemeOpts = {}) {
       }
     }
     defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
+    // This is redundant but I want them defined in the "builtin" group.
+    defineGlobalSymbol("globalThis", globalThis);
+    for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
+      defineGlobalSymbol(obj.name, obj);
+    
   }
 
   defineGlobalSymbol("intern", a => Atom(a));
@@ -1570,7 +1572,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
-  // try/catch/filnally.
+  // try/catch/finally.
   //
   class SchemeJSThrow extends SchemeError {
     constructor(tag, value, msg) {
