@@ -1233,12 +1233,17 @@
               if (parseContext.length < depth) {
                 let tok = parseContext.currentToken, pos = tok.position, width = 1;
                 if (typeof tok.value === 'string') width = tok.value.length;
+                if (tok.endPosition)
+                  pos = tok.endPosition;
+                if (tok.endWidth)
+                  width = tok.endWidth;
                 colorizeCharsAt(inputElement, pos, width, 'match-tokens',
                   `background-color: hsl(44, 100%, 50%, ${alpha}); color: red;`);
                 alpha *= alphaReductionFactor;
                 depth = parseContext.length;
               }
             }
+            insertTextAndSetCursorAfter(inputElement, pos, "");
           }
 
           // Parse
@@ -1389,7 +1394,7 @@
       }
 
       function colorizeCharsAt(element, colorizePosition, nchar, cls, style) {
-        // console.log("COLORIZE!", colorizePosition, nchar, cls, style);
+        console.log("COLORIZE!", colorizePosition, nchar, cls, style);
         return traverseEditableElement(element, onNode);
         function onNode(node, pos, isNewline) {
           let localPos = colorizePosition - pos;
