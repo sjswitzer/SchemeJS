@@ -420,10 +420,10 @@ export function run(opts = {}) {
   EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
   EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
   EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
-  EXPECT(` (map->array (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
+  EXPECT(` (array_map (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
 
   EXPECT(` (let ((x 10)
-                  (y 20))
+                 (y 20))
               (+ x y)) `, 30);
 
   EXPECT_ERROR(` (sort) `, TypeError);

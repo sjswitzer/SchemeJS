@@ -1018,8 +1018,7 @@
           }
 
           // Parse
-          let tokenGenerator = globalScope.schemeTokenGenerator(characterGenerator(), { parseContext });
-          let expr = globalScope.parseSExpr(tokenGenerator, { parseContext, assignSyntax });
+          let expr = globalScope.parseSExpr(characterGenerator(), { parseContext, assignSyntax });
           if (!enterKey) return;
 
           // Eval
@@ -1066,8 +1065,8 @@
               let position = error.position;
               colorizeCharsAt(inputElement, position, inputText.length - position, 'error-tokens');
             }
-            let indent = '';
-            if (enterKey)
+            let indent = "";
+            if (enterKey && parseContext.currentToken?.type !== 'string')
               indent =  NBSP.repeat(2 * parseContext.length);
             insertTextAndSetCursorAfter(inputElement, pos, indent);
           } else {

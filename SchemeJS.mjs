@@ -352,14 +352,13 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("SchemeParseError", SchemeParseError);
 
   class SchemeSyntaxError extends SchemeParseError {
-    path; errorToken; tokens; position; line; lineChar
-    constructor(msg, path, errorToken, tokens) {
+    path; errorToken; position; line; lineChar
+    constructor(msg, path, errorToken) {
       let position = errorToken.position, line = errorToken.line, lineChar = errorToken.lineChar;
       if (path) msg = `${path}(${line},${lineChar}) ${msg}`;
       super(msg);
       this.path = path;
       this.errorToken = errorToken;
-      this.tokens = tokens;
       this.position = position;
       this.line = line;
       this.lineChar = lineChar;
@@ -931,10 +930,9 @@ export function createInstance(schemeOpts = {}) {
       loadError.path = path;
       return false;
     }
-    let tokenGenerator = schemeTokenGenerator(fileContent, { path });
     for(;;) {
       try {
-        let expr = parseSExpr(tokenGenerator, { path });
+        let expr = parseSExpr(fileContent, { path });
         if (!expr) break;
         if (noEval) {
           if (last) last = last[CDR] = cons(expr, NIL);
@@ -1198,8 +1196,8 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Same as mapcar but results in an Array
-  defineGlobalSymbol("map->array", map_to_array);  // XXX name
-  function map_to_array(fn, ...lists) {
+  defineGlobalSymbol("array_map", array_map);
+  function array_map(fn, ...lists) {
     let res = [];
     for (let list of lists) {
       for (let item of list) {
@@ -2410,7 +2408,6 @@ export function createInstance(schemeOpts = {}) {
   //
   // S-epression tokenizer and parser
   //
-  exportAPI("schemeTokenGenerator", schemeTokenGenerator);
   function* schemeTokenGenerator(characterSource, opts) {
     let parseContext = opts.parseContext ?? [];
     let characterGenerator = iteratorFor(characterSource, LogicError);
@@ -2457,45 +2454,55 @@ export function createInstance(schemeOpts = {}) {
       }
 
       if (ch === '"') {
-        let popped = false;
-        parseContext.push({ type: 'string', value: '"', position, line, lineChar })
-        let str = '', special = false;
+        let str = '', multiline = false;
+        let popped = false, tok = { type: 'string', value: '"', position, line, lineChar };
+        parseContext.push(tok);
+        parseContext.currentToken = tok;
         nextc();
-        while (ch && ch !== '"' && (special || !NL[ch])) {
+        while (ch && ch !== '"' && (multiline || !NL[ch])) {
           if (ch === '\\') {
             nextc();
-            if (ch === '\n') {  // traditional string continuation
+            if (NL[ch]) {  // traditional string continuation
               nextc();
               continue;
-            } else if (ch === '\\' && peekc() === '\n') {  // Special string continuation!
+            } else if (ch === '\\' && NL[peekc()]) {  // Extended string continuation!
               nextc();
-              special = true;
+              multiline = true;
             } else if (ch === '') {
               break;
             } else {
               ch = ESCAPE_STRINGS[ch] ?? ch;
             }
           }
-          if (special && NL[ch]) {
-            nextc();
-            while (WS[nextc()]) {}  // skips WS
-            if (ch === '') break;
-            if (ch === '+') {  // + continues
+          // Traditional string continuation begins when a string hits a newline and the last char
+          // is a "\""; the "\"" is ignored and the string continues at the beginning of the
+          // next line. Multiline string continuation begins when a the line ends in "\\". In that
+          // case initial whitespace is skipped on the next line(s) and the string continues
+          // after a "+", which simply appends the following text, or a "|", which appends a newline
+          // then the following text. The line does _not_ need to be terminateed with a "\"
+          // or "\\" and parsing continues until an unescaped "\".
+          if (NL[ch]) {
+            if (multiline) {
               nextc();
-              continue;
+              while (WS[nextc()]) {}  // skips WS
+              if (ch === '') break;
+              if (ch === '+') {  // + continues
+                nextc();
+                continue;
+              }
+              if (ch === '|') {  // : newline then continues
+                nextc();
+                str += '\n';
+                continue;
+              }
+              if (ch === '"') {  // " ends string
+                break;
+              }
             }
-            if (ch === ':') {  // : newline then continues
-              nextc();
-              str += '\n';
-              continue;
-            }
-            if (ch === '"') {  // " ends string
-              parseContext.pop();
-              popped = true;
-              break;
-            }
-            yield { type: 'garbage', value: `"${str}${ch}`,  position, line, lineChar };
-            continue getToken;
+            parseContext.pop();
+            popped = true;
+            yield { type: 'garbage', value: '"' + str,  position, line, lineChar };
+            continue getToken;  
           }
           str += ch;
           nextc();
@@ -2590,7 +2597,7 @@ export function createInstance(schemeOpts = {}) {
       }
       charCount += 1;
       lineCharCount += 1;
-      if (ch === '\n') {
+      if (NL[ch]) {
         lineCount += 1;
         lineCharCount = 0;
       }
@@ -2606,7 +2613,7 @@ export function createInstance(schemeOpts = {}) {
         }
         charCount += 1;
         lineCharCount += 1;
-        if (ch === '\n') {
+        if (NL[ch]) {
           lineCount += 1;
           lineCharCount = 0;
         }
@@ -2622,20 +2629,16 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("parse", parseSExpr);
   exportAPI("parseSExpr", parseSExpr);
-  function parseSExpr(tokenSource, ...rest) {
+  function parseSExpr(characterStream, ...rest) {
     let opts = rest[0] ?? {};
     opts = { ...schemeOpts, ...opts };
     let parseContext = opts.parseContext ?? [];
+    opts.parseContext = parseContext;
     parseContext.length = 0;
     let path = opts.path;
-    opts.parseContext = parseContext;
     let assignSyntax = opts.assignSyntax ?? false;
-    let tokenGenerator;
-    if (typeof tokenSource === 'string')
-      tokenGenerator = schemeTokenGenerator(tokenSource, opts);
-    else
-      tokenGenerator = iteratorFor(tokenSource, LogicError);
     let _tokens = [], _done = false;
+    let tokenGenerator = schemeTokenGenerator(characterStream, opts);
     let expr;
     if (assignSyntax && token().type === 'atom' &&
         token(1).type === 'atom' && token(1).value === Atom('=')) {
@@ -2807,22 +2810,27 @@ export function createInstance(schemeOpts = {}) {
     }
 
     function throwSyntaxError() {
-      let str = "", sep = "", errorToken = token(), tokens = [..._tokens];
+      let str = "", errorToken = token();
       if (errorToken.type === 'partial')
         throw new SchemeParseIncomplete(path, errorToken, parseContext)
-      if (_tokens.length > 1 && _tokens[_tokens.length-1] !== 'newline') {
-        for (;;) {
-          let { done, value } =  tokenGenerator.next();
-          if (done || value.type === 'newline' || value.type === 'end') break;
-          tokens.push(token);
+      let newline = false;
+      while (_tokens.length > 0) {
+        // "detokenize" any lookahead tokens
+        let token = _tokens.pop();
+        newline = (token.type === 'newline');
+        str += (tok.value !== undefined ? string(tok.value) : tok.type);
+        str += " ";
+      }
+      while (!newline) {
+        let { done, value: ch } = characterStream.next();
+        if (done) {
+          _done = true;
+          break;
         }
+        if (NL[ch]) break;
+        str += ch;
       }
-      for (let tok of tokens) {
-        let val = tok.value;
-        str += sep + (tok.value !== undefined ? string(tok.value) : tok.type);
-        sep = " ";
-      }
-      throw new SchemeSyntaxError(str, path, errorToken, tokens);
+      throw new SchemeSyntaxError(str, path, errorToken);
     }
   }
 
@@ -3337,7 +3345,10 @@ export function createInstance(schemeOpts = {}) {
     defineGlobalSymbol("readline", (...prompt) => readline(prompt[0] ?? "? "));
     function* charStreamPromptInput() {
       for(;;) {
-        let line = readline(prompt + "  ".repeat(parseContext.length));
+        let indent = "";
+        if (parseContext.currentToken?.type !== 'string')
+          indent =  "  ".repeat(parseContext.length);
+        let line = readline(prompt + indent);
         if (line == null || endTest(line)) {
           quitRepl = true;
           return;
@@ -3350,10 +3361,9 @@ export function createInstance(schemeOpts = {}) {
       }
     }
     let charStream = charStreamPromptInput();
-    let tokenGenerator = schemeTokenGenerator(charStream, opts);
     while (!quitRepl) {
       try {
-        let expr = parseSExpr(tokenGenerator, opts);
+        let expr = parseSExpr(charStream, opts);
         if (!expr) continue;
         let evaluated = _eval(expr, scope);
         print(evaluated);
