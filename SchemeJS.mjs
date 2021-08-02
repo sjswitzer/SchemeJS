@@ -304,16 +304,14 @@ export function createInstance(schemeOpts = {}) {
   function createFunctionDescriptor(fn, evalCount = MAX_INTEGER) {
     let fnInfo = analyzeJSFunction(fn);
     let paramCount = fnInfo.nonOptionalCount;
-    let restParam = 0;
     if (fnInfo.restParam) {
       if (evalCount !== MAX_INTEGER)
         throw new LogicError(`Can't have rest params with special evaluation ${name}`)
-        restParam = 0x8000;
     }
-    if (paramCount >= 0x7fff) throw new LogicError("Too many params");
+    if (paramCount > 0xffff) throw new LogicError("Too many params");
     if (fnInfo.native) paramCount = MAX_INTEGER;
     // Encoding chosen so that small values mean eval everything and lift that many.
-    let functionDescriptor = (~evalCount << 16) | (paramCount & 0x7fff) | restParam;
+    let functionDescriptor = (~evalCount << 16) | (paramCount & 0xffff);
     fn[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
     return functionDescriptor;
   }
@@ -1705,7 +1703,7 @@ export function createInstance(schemeOpts = {}) {
 
   // When defined, a function can be annotated with the number of arguments
   // to be evaluated. The definition is also examined to determine the number of
-  // non-rest parameters. Every evaluated parameter is passed as a javascript argument.
+  // non-optional parameters. Every evaluated parameter is passed as a javascript argument.
   // If there are not as many arguments as parameters, a closure is returned that
   // binds a partial application of that function.
   // Functions with unevaluated arguments get those forms as a final parameter, after
@@ -1717,7 +1715,7 @@ export function createInstance(schemeOpts = {}) {
     // function descriptor and I want the logic for that all in one place. Here, in fact.
     // By default apply doesn't evaluate its args, but if evaluateArguments is set
     // (as it is by eval) it does.
-    let paramCount = 0, evalCount = MAX_INTEGER, restParam = false;
+    let paramCount = 0, evalCount = MAX_INTEGER;
     if (is_cons(form) && (typeof form !== 'function' || form[CLOSURE_ATOM] === true)) {
       let opSym = form[CAR];
       if (opSym === SLAMBDA_ATOM) {
@@ -1729,7 +1727,7 @@ export function createInstance(schemeOpts = {}) {
     } else if (typeof form === 'function') {
       let fn = form;
       // The function descriptor is encoded as:
-      //   (~evalCount << 16) | (paramCount &0x7fff) | (restParam ? 0x8000 : 0);
+      //   (~evalCount << 16) | (paramCount &0xffff);
       // If there's no function descriptor the default is to eval every argument
       // which, by no accident, is zero.
       let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL];
@@ -1737,8 +1735,7 @@ export function createInstance(schemeOpts = {}) {
         functionDescriptor = createFunctionDescriptor(form);
       // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
       evalCount = ~functionDescriptor >> 15 >>> 1;
-      paramCount = functionDescriptor << 17 >> 16 >>> 1;
-      restParam = (functionDescriptor & 0x8000) !== 0;
+      paramCount = functionDescriptor << 16 >> 15 >>> 1;
     }
     if (evaluateArguments) {
       let evalledArgs = NIL, last = undefined;
@@ -3032,22 +3029,19 @@ export function createInstance(schemeOpts = {}) {
   }
   
   function compileApply(form, args, compileScope, tools) {
-    let paramCount = 0, evalCount = MAX_INTEGER, hasRestParam = false;
-    let name, params, restParam, value, body, hook;
+    let paramCount = 0, evalCount = MAX_INTEGER;
+    let name, params, value, body, hook;
     let saveIndent = tools.indent
     let boundVal = tools.boundVal(form);
     if (boundVal) form = boundVal;
     if (typeof form === 'function') { // form equals function :)
       hook = form[COMPILE_HOOK];
-      ({ name, params, restParam, value, body } = analyzeJSFunction(form));
-      if (restParam)  // rest-param functions need a hook
-        value = body = undefined;
+      ({ name, params, value, body } = analyzeJSFunction(form));
       let functionDescriptor = form[FUNCTION_DESCRIPTOR_SYMBOL];
       if (functionDescriptor == null)
         functionDescriptor = createFunctionDescriptor(form);
       evalCount = ~functionDescriptor >> 15 >>> 1;
-      paramCount = functionDescriptor << 17 >> 16 >>> 1;
-      hasRestParam = (functionDescriptor & 0x8000) !== 0;
+      paramCount = functionDescriptor << 16 >> 15 >>> 1;
       if (name === '') name = undefined;
     } else if (is_cons(form)) {
       let opSym = form[CAR];
