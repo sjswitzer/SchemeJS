@@ -158,7 +158,7 @@ export function createInstance(schemeOpts = {}) {
 
   function iteratorFor(obj, throwException) {
     if (obj != null) {
-      if (typeof obj[Symbol.iterator === 'function']) return obj[Symbol.iterator]();
+      if (typeof obj[Symbol.iterator] === 'function') return obj[Symbol.iterator]();
       if (typeof obj.next === 'function') return obj;
     }
     if (throwException) throw new throwException(`Not an iterable or list ${obj}`);
@@ -955,21 +955,22 @@ export function createInstance(schemeOpts = {}) {
     }
     let characterGenerator = iteratorFor(fileContent, LogicError);
     for(;;) {
+      let expr;
       try {
-        let expr = parseSExpr(characterGenerator, { path });
+        expr = parseSExpr(characterGenerator, { path });
         if (!expr) break;
         if (noEval) {
           if (last) last = last[CDR] = cons(expr, NIL);
           else result = last = cons(expr, NIL);
         } else {
-          let evaluated = _eval(expr, scope);
-          reportLoadResult(evaluated);
+          let value = _eval(expr, scope);
+          reportLoadResult(value, expr);
         }
       } catch (error) {
         if (error instanceof SchemeError)
-          reportSchemeError(error);
+          reportSchemeError(error, expr);
         else
-          reportSystemError(error);
+          reportSystemError(error, expr);
       }
     }
     return result;

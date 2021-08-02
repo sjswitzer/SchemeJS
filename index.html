@@ -840,19 +840,19 @@
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
       let globalScope, SCHEME_VERSION, SchemeParseError, SchemeSyntaxError, SchemeParseIncomplete;
+      let varNo = 0, errorElement;
+      const NBSP = '\u00a0', lambdaStr = "\u03BB", slambdaStr = "\u03BB\u03BB";
 
-      onload = importSchemeAndRunREPL()
+      onload = importSchemeAndRunREPL();
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
-        globalScope = SchemeJS.createInstance({ lambdaStr: "\u03BB", slambdaStr: "\u03BB\u03BB" });
-        inputElement.focus();
+        globalScope = SchemeJS.createInstance(
+          { lambdaStr, slambdaStr, readFile, reportLoadResult, reportSchemeError, reportSystemError });
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
         SchemeParseIncomplete = globalScope.SchemeParseIncomplete;
         buildBuiltinHelp(globalScope);
-
-        inputElement.contentEditable = 'true';
 
         // The idea here is to let the handleInput exacute after the keypress has been
         // completely processed. "oninput" is nice, but doesn't indicate the "Enter" key.
@@ -860,6 +860,49 @@
 
         // TODO: I'm just looking for selection changes; there's probably a better way
         inputElement.onmousedown = event => setTimeout(() => handleInput(), 0);
+        
+        inputElement.contentEditable = 'true';
+        inputElement.focus();
+      }
+
+      // For "load" and "require"
+      let capturedInput;
+
+      function readFile(path) {
+        capturedInput = '';
+        let request = new XMLHttpRequest();
+        let async = false;
+        request.open('GET', path, async);
+        request.send(null);
+        if (request.status === 200)
+          return captureInput(request.responseText);
+        return null;
+
+        function* captureInput(source) {
+          for (let ch of source) {
+            capturedInput += ch;
+            yield ch;
+          }
+        }
+      }
+
+      function reportLoadResult(value, expr) {
+        showInput(capturedInput, value, varNo);
+        capturedInput = '';
+        showResult(value, varNo);
+        varNo += 1;
+      }
+
+      function reportSchemeError(error, expr) {
+        showInput(capturedInput);
+        capturedInput = '';
+        showError(error);
+      }
+
+      function reportSystemError(error, expr) {
+        showInput(capturedInput);
+        capturedInput = '';
+        showError(error);
       }
 
       let helpStack = [];
@@ -1021,9 +1064,6 @@
           showHelp(null);
       });
 
-      let varNo = 0, errorElement;
-      const NBSP = '\u00a0';
-
       function handleInput(enterKey) {
         if (errorElement) {
             errorElement.remove();
@@ -1081,39 +1121,11 @@
           if (!enterKey) return;
 
           // Eval
-          let evaluated = globalScope._eval(expr, globalScope);
-          let evaluatedString = globalScope.string(evaluated);
+          let value = globalScope._eval(expr, globalScope);
 
           // Show results and save in variables for later reuse
-          let div = document.createElement('div');
-          div.setAttribute('class', 'input');
-          let span = document.createElement('span');
-          let name = `?${varNo}`;
-          globalScope[globalScope.Atom(name)] = expr;
-          span.textContent = name;
-          div.appendChild(span);
-          let innerDiv = document.createElement('div');
-          if (inputText[inputText.length-1] === '\n')
-            inputText = inputText.substr(0, inputText.length-1);
-          for (let pgf of newlinesToDivs(inputText))
-            innerDiv.appendChild(pgf);
-          div.appendChild(innerDiv);
-          outputElement.appendChild(div);
-          
-          div = document.createElement('div');
-          div.setAttribute('class', 'result');
-          span = document.createElement('span');
-          name = `=${varNo}`;
-          globalScope[globalScope.Atom(name)] = evaluated;
-          span.textContent = name;
-          div.appendChild(span);
-          innerDiv = document.createElement('div');
-          for (let pgf of newlinesToDivs(evaluatedString))
-            innerDiv.appendChild(pgf);
-          div.appendChild(innerDiv);
-          outputElement.appendChild(div);
-          div.scrollIntoView();
-
+          showInput(inputText, expr, varNo);
+          showResult(value, varNo);
           ++varNo;
           inputElement.textContent = "";
         } catch (error) {
@@ -1129,23 +1141,67 @@
               indent =  NBSP.repeat(2 * parseContext.length);
             insertTextAndSetCursorAfter(inputElement, pos, indent);
           } else {
-            console.log("Error", error);
-            errorElement = document.createElement('div');
-            errorElement.setAttribute('class', 'error');
-            let div = document.createElement('div');
-            div.textContent = String(error)
-            errorElement.appendChild(div);
-            outputElement.appendChild(errorElement)
-            errorElement.scrollIntoView();
+            showError(error);
           }
         }
       }
 
-      function newlinesToDivs(text) {
+      function showInput(inputText, expr, varNo) {
+        // Show results and save in variables for later reuse
+        let div = document.createElement('div');
+        div.setAttribute('class', 'input');
+        if (varNo != null && expr !== undefined) {
+          let span = document.createElement('span');
+          let name = `?${varNo}`;
+          globalScope[globalScope.Atom(name)] = expr;
+          span.textContent = name;
+          div.appendChild(span);
+        }
+        let innerDiv = document.createElement('div');
+        if (inputText[inputText.length-1] === '\n')
+          inputText = inputText.substr(0, inputText.length-1);
+        for (let pgf of convertToHTMLContent(inputText))
+          innerDiv.appendChild(pgf);
+        div.appendChild(innerDiv);
+        outputElement.appendChild(div);
+        div.scrollIntoView();
+      }
+
+      function showResult(value, varNo) {
+        let div = document.createElement('div');
+        div.setAttribute('class', 'result');
+        if (varNo != null) {
+          let span = document.createElement('span');
+          let name = `=${varNo}`;
+          globalScope[globalScope.Atom(name)] = value;
+          span.textContent = name;
+          div.appendChild(span);
+        }
+        let innerDiv = document.createElement('div');
+        let evaluatedString = globalScope.string(value);
+        for (let pgf of convertToHTMLContent(evaluatedString))
+          innerDiv.appendChild(pgf);
+        div.appendChild(innerDiv);
+        outputElement.appendChild(div);
+        div.scrollIntoView();
+      }
+
+      function showError(error) {
+        console.log("Error", error);
+        errorElement = document.createElement('div');
+        errorElement.setAttribute('class', 'error');
+        let div = document.createElement('div');
+        div.textContent = String(error)
+        errorElement.appendChild(div);
+        outputElement.appendChild(errorElement)
+        errorElement.scrollIntoView();
+      }
+
+      function convertToHTMLContent(text) {
         let res = [], lines = text.split('\n');
         for (let line of lines) {
           let element = document.createElement('div');
-          element.textContent = line;
+          element.textContent = line.replaceAll(' ', NBSP);
           res.push(element);
         }
         return res;

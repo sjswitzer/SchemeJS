@@ -6,6 +6,12 @@
 //   4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
 //
 
+//
+// node [nodeopts] node-cli.mjs [--load loadfile.scm]* [file.scm]
+//   Loads and executes loadfile.scm....
+//   If file.scm is not provided, it runs the REPL,
+//   otherwise, loads and executes file.scm.
+
 import * as SchemeJS from './SchemeJS.mjs';
 import * as fs from 'fs';
 
