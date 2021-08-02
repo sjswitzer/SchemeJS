@@ -277,17 +277,21 @@ export function createInstance(schemeOpts = {}) {
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
     }
     let group = opts.group ?? "builtin";
-    let atom;
-    ({ atom, name } = normalize(name));
+    let atom, atomName;
+    ({ atom, atomName, name } = normalize(name));
     globalScope[atom] = value;
     if (!opts.schemeOnly)
       globalScope[name] = value;
     let atoms = [ atom ];
-    globalScope._help_[atom] = { atoms, value, group };
+    let atomNames = [ atomName ];  // this is in service of lambda which has atom-level aliases.
+    let names = [ name ];
+    globalScope._help_[atom] = { atoms, atomNames, value, group };
     for (let alias of aliases) {
-      ({ atom, name } = normalize(alias));
+      ({ atom, atomName, name } = normalize(alias));
       globalScope[atom] = value;
       atoms.push(atom);
+      atomNames.push(atomName);
+      names.push(name);
       if (!opts.schemeOnly) 
         globalScope[name] = value;
     }
@@ -296,13 +300,15 @@ export function createInstance(schemeOpts = {}) {
     function normalize(name) {
       if (typeof name === 'symbol')
         name = name.description;
+      let atomName = name;
       let atom = Atom(name);
+      // Java API name
       name = name.replace("->", "_to_");
       name = name.replace("-", "_");
       name = name.replace("@", "_at_");
       name = name.replace("*", "_star_");
       name = name.replace("?", "P");
-      return { atom, name };
+      return { atom, atomName, name };
     }
   }
 
@@ -1539,7 +1545,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\ (params) (form1) (form2) ...)
-  defineGlobalSymbol(LAMBDA_ATOM, lambda, { evalArgs: 0 });
+  defineGlobalSymbol(LAMBDA_CHAR, lambda, { evalArgs: 0 }, "\\", "lambda");
   function lambda(body) {
     let schemeClosure = cons(CLOSURE_ATOM, cons(this, body));
     let scope = this;
@@ -1552,7 +1558,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\\ n (params) (body1) (body2) ...)
-  defineGlobalSymbol(SLAMBDA_ATOM, special_lambda, { evalArgs: 0 });
+  defineGlobalSymbol(LAMBDA_CHAR+LAMBDA_CHAR, special_lambda, { evalArgs: 0 }, "\\\\", "special_lambda");
   function special_lambda(body) {
     let schemeClosure = cons(SCLOSURE_ATOM, cons(this, body));
     let scope = this;
@@ -1748,10 +1754,10 @@ export function createInstance(schemeOpts = {}) {
   // the evaluated ones.
 
   function _apply(form, args, scope, evaluateArguments) {
-    // Typically, it would be eval's job to evaluate the arguments but in the case of JS
-    // functions we don't know how many arguments to evaluate until we've read the
-    // function descriptor and I want the logic for that all in one place. Here, in fact.
-    // By default apply doesn't evaluate its args, but if evaluateArguments is set
+    // Typically, it would be _eval's job to evaluate the arguments but we don't know
+    // how many arguments to evaluate until we've read the function descriptor or
+    // seen the slambda form and I want the logic for that all in one place. Here, in fact.
+    // By default _apply doesn't evaluate its args, but if evaluateArguments is set
     // (as it is by eval) it does.
     let paramCount = 0, evalCount = MAX_INTEGER;
     if (is_cons(form) && (typeof form !== 'function' || form[CLOSURE_ATOM] === true)) {
@@ -1854,11 +1860,20 @@ export function createInstance(schemeOpts = {}) {
         scope = newScope(scope, "lambda-scope");
         let scratchParams = params, i = 0;
         while (is_cons(scratchParams)) {
-          let param = scratchParams[CAR];
+          let param = scratchParams[CAR], optionalForms;
+          if (is_cons(form) && form[CAR] === QUESTION_ATOM && is_cons(form[CDR])) {
+            param = form[CAR];
+            optionalForms = form[CDR];
+          }
           if (typeof param !== 'symbol') throw new TypeError(`Param must be a symbol ${param}`);
           if (!is_null(args)) {  // XXX ???
             scope[param] = args[CAR];
             if (is_cons(args)) args = args[CDR];
+          } else if (optionalForms) {
+            let val = NIL;
+            while (is_cons(optionalForms))
+              val = _eval(optionalForms[CAR], scope);  // Earler params are in scope!
+            scope[param] = val;
           } else {
             // Curry up now! (partial application)
             let closure;
@@ -2919,10 +2934,10 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("compile-lambda", compile_lambda);
   function compile_lambda(name, lambda) {
-    let compiled = lambda_compiler.call(this, name, lambda);
-    let code = car(compiled), bindSymToObj = cdr(compiled);
+    let { code, bindSymToObj } = lambda_compiler.call(this, name, lambda);
     let binder = new Function("bound", code);
-    let compiledFunction = binder(bindSymToObj);
+    console.log("COMPILED", binder, String(binder));
+    let compiledFunction = binder.call(this, bindSymToObj);
     return compiledFunction;
   }
 
@@ -2930,9 +2945,8 @@ export function createInstance(schemeOpts = {}) {
     name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
-
     let scope = newScope(this);
-    // If you're compiling a dunction that's already been defined, this prevents
+    // If you're compiling a function that's already been defined, this prevents
     // the symbol from resolving to the old definition. It also serves as a
     // sentinel to compileApply that it's gotten back around to where it started.
     scope[name] = COMPILE_SENTINEL;
@@ -2964,7 +2978,7 @@ export function createInstance(schemeOpts = {}) {
       emit(`let ${bindingName} = bound[${string(bindingName)}];`);
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
-    return cons(code, bindSymToObj);
+    return { code, bindSymToObj };
 
     function bind(obj, name) {
       if (obj === undefined) return "undefined";

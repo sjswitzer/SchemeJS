@@ -809,9 +809,11 @@
       <dd id="defn-@=">
         (@= obj "member" value)
         <p> Assigns <i>value</i> to JavaScript member <i>member</i> in object <i>obj</i>.
-      <dd id="defn-xxx">
-        xxx
-        <p> xxx
+      <dd id="defn-lambda">
+        (\ (p1 p2 ...) form ...)
+        <p> Returns a closure that binds parameters <i>p1</i>, <i>p2</i>, etc. to the arguments,
+            then evaluates the <i>form</i>s sequentially, returning the value of the last one or
+            <i>nil</i> if there are none
       <dd id="defn-xxx">
         xxx
         <p> xxx
@@ -909,14 +911,18 @@
             continue;
           }
           symtab.sort((a, b) => a.key < b.key ? -1 : 1);
-          for (let { atoms, value } of symtab) {
-            for (let atom of atoms)
-              helpElement.appendChild(textElement('dt', atom.description));
-            let name = atoms[0].description, elementId = "defn-" + name;
+          for (let { atomNames, value } of symtab) {
+            for (let atomName of atomNames)
+              helpElement.appendChild(textElement('dt', atomName));
             if (group !== "imported") {
-              let dd = document.getElementById(elementId);
+              let dd;
+              for (let name of atomNames) {
+                let elementId = "defn-" + name;
+                dd = document.getElementById(elementId);
+                if (dd) break;
+              }
               if (!dd)
-                dd = textElement('dd', `TBD (${elementId})`);
+                dd = textElement('dd', `TBD (${"defn-" + atomNames[0]})`);
               helpElement.appendChild(dd);
               if (typeof value === 'function') {
                 let impl = string(value);
