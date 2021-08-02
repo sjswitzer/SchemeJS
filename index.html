@@ -286,54 +286,14 @@
         border: .1em solid;
         border-radius: .4em;
       }
-
-      #output p {
-        margin: 0;
-      }
-
-      #output > div {
-        position: relative;  /* so that the span can be positioned absolutely */
+      #output .input-box, #output .result-box, #output .error-box {
+        position: relative;  /* so that the "tag"" can be positioned absolutely */
         justify-self: end;
-      }
-      #output .user-input,
-      #output .result-text,
-      #output .error-text {
-        overflow: scroll;
-        max-height: 10em;
-        margin-top: 0.1em;
-        min-height: 2em;
+        margin-top: 0.25em;
         border: .1em solid;
         border-radius: .4em;
-        margin-top: 0.25em;
-        padding: .5em .5em .5em .5em;
       }
-      #output .result-text,
-      #output .error-text {
-        padding: .5em .5em .5em .5em;
-      }
-      #output .user-input {
-        padding: .5em 0 .5em 0;
-      }
-      #output .user-input {
-        padding: 0 0 0 0;
-      }
-      #output .user-input-text {
-        padding: 0 .5em 0 .5em;
-      }
-      #output > div.result > div {
-        background-color: #ddd;
-        margin-left: 1em;
-      }
-      #output > div.input > div {
-        background-color: #eee;
-      }
-      #output > div.error > div {
-        background-color: #fbb;
-      }
-      #output .load-path {
-        background-color: #aaf;
-      }
-      #output > div > span:first-child {
+      #output .tag {
         position: absolute;  /* parent div must be position: relative */
         top: 0;
         right: 0;
@@ -344,6 +304,21 @@
         border-radius: .4em;
         background-color: #bbb;
       }
+      #output .input-scroller, #output .result-scroller {
+        overflow: scroll;
+        max-height: 10em;
+        min-height: 2em;
+      }
+      #output .result-scroller { padding: .5em .5em .5em .5em }
+      #output .error-box { padding: .5em .5em .5em .5em }
+      #output .input-scroller { padding: 0 0 .5em 0 }
+      #output .input-scroller .input-text { margin: 0 .5em 0 .5em }
+      #output .input-scroller .input-text:first-child { margin-top: .5em }
+      #output { background-color: #dddddd }
+      #output .error-box { background-color: #ffbbbb }
+      #output .input-box { background-color: #f8f8f8 }
+      #output .result-box { margin-left: 1em; background-color: #eeeeee }
+      #output .load-path { background-color: #aaaaff }
 
       /* The input box */
       #input {
@@ -353,7 +328,7 @@
         width: 100%;
         border: .1em solid;
         border-radius: .4em;
-        background-color: #eee;
+        background-color: #f8f8f8;
       }
       #input .match-tokens {
         border-radius: .4em;
@@ -1185,24 +1160,27 @@
 
       function showInput(inputText, path, line, expr, varNo) {
         // Show results and save in variables for later reuse
+        while (NL[inputText[inputText.length-1]])
+          inputText = inputText.substr(0, inputText.length-1);
         let div = document.createElement('div');
-        div.setAttribute('class', 'input');
+        div.setAttribute('class', 'input-box');
         if (varNo != null && expr !== undefined) {
           let span = document.createElement('span');
+          span.setAttribute('class', "tag");
           let name = `?${varNo}`;
           globalScope[globalScope.Atom(name)] = expr;
           span.textContent = name;
           div.appendChild(span);
         }
         let innerDiv = document.createElement('div');
-        innerDiv.setAttribute('class', 'user-input');
+        innerDiv.setAttribute('class', 'input-scroller');
         if (path != null) {
           let pathElement = document.createElement('div');
           pathElement.setAttribute('class', 'load-path');
           pathElement.textContent = `${path}, line ${line}:`;
           innerDiv.appendChild(pathElement);
         }
-        for (let pgf of convertToHTMLContent(inputText, 'user-input-text'))
+        for (let pgf of convertToHTMLContent(inputText, 'input-text'))
           innerDiv.appendChild(pgf);
         div.appendChild(innerDiv);
         outputElement.appendChild(div);
@@ -1211,18 +1189,19 @@
 
       function showResult(value, varNo) {
         let div = document.createElement('div');
-        div.setAttribute('class', 'result');
+        div.setAttribute('class', 'result-box');
         if (varNo != null) {
           let span = document.createElement('span');
+          span.setAttribute('class', "tag");
           let name = `=${varNo}`;
           globalScope[globalScope.Atom(name)] = value;
           span.textContent = name;
           div.appendChild(span);
         }
         let innerDiv = document.createElement('div');
-        innerDiv.setAttribute('class', 'result-text');
+        innerDiv.setAttribute('class', 'result-scroller');
         let evaluatedString = globalScope.string(value);
-        for (let pgf of convertToHTMLContent(evaluatedString))
+        for (let pgf of convertToHTMLContent(evaluatedString, 'result-text'))
           innerDiv.appendChild(pgf);
         div.appendChild(innerDiv);
         outputElement.appendChild(div);
@@ -1232,11 +1211,8 @@
       function showError(error) {
         console.log("Error", error);
         errorElement = document.createElement('div');
-        errorElement.setAttribute('class', 'error');
-        let div = document.createElement('div');
-        div.setAttribute('class', 'error-text');
-        div.textContent = String(error)
-        errorElement.appendChild(div);
+        errorElement.setAttribute('class', 'error-box');
+        errorElement.textContent = String(error)
         outputElement.appendChild(errorElement)
         errorElement.scrollIntoView();
       }
@@ -1260,6 +1236,8 @@
           if (cls)
             element.setAttribute('class', cls);
           element.textContent = line.replaceAll(' ', NBSP);
+          if (line === '')
+            element.appendChild(document.createElement('br'));
           divs.push(element);
         }
         return res;
