@@ -310,10 +310,6 @@ export function createInstance(schemeOpts = {}) {
         throw new LogicError(`Can't have rest params with special evaluation ${name}`)
         restParam = 0x8000;
     }
-    // If this function doesn't evaluate all of its parameters, the last parameter
-    // recieves the unevaluated forms, so don't count that as a normal one.
-    if (evalCount !== MAX_INTEGER)
-      paramCount -= 1;
     if (paramCount >= 0x7fff) throw new LogicError("Too many params");
     if (fnInfo.native) paramCount = MAX_INTEGER;
     // Encoding chosen so that small values mean eval everything and lift that many.
@@ -1420,8 +1416,8 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("deep_eq", deep_eq);
-  function deep_eq(a, b, maxDepth = 100000, report = {}) {
-    let strCmp = report.strCmp ?? ((a, b) => a === b);    
+  function deep_eq(a, b, maxDepth = 10000, report = {}) {
+    let strCmp = report.strCmp ?? ((a, b) => a === b);
     return deep_eq(a, b, maxDepth);
     function deep_eq(a, b, maxDepth) {
       if (typeof a !== typeof b) {
@@ -1757,7 +1753,7 @@ export function createInstance(schemeOpts = {}) {
         args = evalledArgs;
       }
     }
-    let lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount;
+    let lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount-1;
     if (typeof form === 'function' && form[CLOSURE_ATOM] !== true) { // Scheme functions impose as Cons cells
       let jsArgs = [];
       for (let i = 0; i < lift; ++i) {
@@ -3096,7 +3092,7 @@ export function createInstance(schemeOpts = {}) {
     } else {
       tools.emit(`let ${result}; {`);
       tools.indent = saveIndent + "  ";
-      let i = 0, lift = hasRestParam ? MAX_INTEGER : paramCount;
+      let i = 0, lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount-1;
       while (i < lift) {
         if (i < argv.length) {
           tools.emit(`let ${params[i]} = ${argv[i]};`);
