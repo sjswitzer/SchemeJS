@@ -295,31 +295,44 @@
         position: relative;  /* so that the span can be positioned absolutely */
         justify-self: end;
       }
-      #output > div > div {
+      #output .user-input,
+      #output .result-text,
+      #output .error-text {
         overflow: scroll;
         max-height: 10em;
         margin-top: 0.1em;
-        padding: .5em .5em .5em .5em;
         min-height: 2em;
         border: .1em solid;
         border-radius: .4em;
         margin-top: 0.25em;
         padding: .5em .5em .5em .5em;
       }
-
+      #output .result-text,
+      #output .error-text {
+        padding: .5em .5em .5em .5em;
+      }
+      #output .user-input {
+        padding: .5em 0 .5em 0;
+      }
+      #output .user-input {
+        padding: 0 0 0 0;
+      }
+      #output .user-input-text {
+        padding: 0 .5em 0 .5em;
+      }
       #output > div.result > div {
         background-color: #ddd;
         margin-left: 1em;
       }
-
       #output > div.input > div {
         background-color: #eee;
       }
-
       #output > div.error > div {
         background-color: #fbb;
       }
-
+      #output .load-path {
+        background-color: #aaf;
+      }
       #output > div > span:first-child {
         position: absolute;  /* parent div must be position: relative */
         top: 0;
@@ -839,8 +852,9 @@
 
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
-      let globalScope, SCHEME_VERSION, SchemeParseError, SchemeSyntaxError, SchemeParseIncomplete;
-      let varNo = 0, errorElement;
+      let globalScope, SCHEME_VERSION;
+      let SchemeParseError, SchemeSyntaxError, SchemeParseIncomplete, originalLoad;
+      let varNo = 0, errorElement, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB", slambdaStr = "\u03BB\u03BB";
 
       onload = importSchemeAndRunREPL();
@@ -852,6 +866,11 @@
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
         SchemeParseIncomplete = globalScope.SchemeParseIncomplete;
+        let loadAtom = globalScope.Atom("load")
+        originalLoad = globalScope[loadAtom];
+        globalScope[loadAtom] = load;
+        WS = globalScope.WS;
+        NL = globalScope.NL;
         buildBuiltinHelp(globalScope);
 
         // The idea here is to let the handleInput exacute after the keypress has been
@@ -866,7 +885,19 @@
       }
 
       // For "load" and "require"
-      let capturedInput;
+      let capturedInput, loadPath, loadLine, loadLineCount;
+
+      function load(path, noEval = false) {
+        let savePath = loadPath, saveLine = loadLine, saveLoadLineCount = loadLineCount;
+        loadPath = path;
+        loadLine = 1;
+        loadLineCount = 0;
+        let res = originalLoad.call(globalScope, path, noEval);
+        loadPath = savePath;
+        loadLine = saveLine;
+        loadLineCount = saveLoadLineCount;
+        return res;
+      }
 
       function readFile(path) {
         capturedInput = '';
@@ -877,31 +908,36 @@
         if (request.status === 200)
           return captureInput(request.responseText);
         return null;
-
         function* captureInput(source) {
           for (let ch of source) {
             capturedInput += ch;
+            if (NL[ch])
+              loadLineCount += 1;
             yield ch;
+            
           }
         }
       }
 
       function reportLoadResult(value, expr) {
-        showInput(capturedInput, value, varNo);
+        showInput(capturedInput, loadPath, loadLine, value, varNo);
         capturedInput = '';
+        loadLine = loadLineCount;
         showResult(value, varNo);
         varNo += 1;
       }
 
       function reportSchemeError(error, expr) {
-        showInput(capturedInput);
+        showInput(capturedInput, loadPath, loadLine);
         capturedInput = '';
+        loadLine = loadLineCount;
         showError(error);
       }
 
       function reportSystemError(error, expr) {
-        showInput(capturedInput);
+        showInput(capturedInput, loadPath, loadLine);
         capturedInput = '';
+        loadLine = loadLineCount;
         showError(error);
       }
 
@@ -1124,10 +1160,11 @@
           let value = globalScope._eval(expr, globalScope);
 
           // Show results and save in variables for later reuse
-          showInput(inputText, expr, varNo);
+          let loadPath = null, loadLine = null;
+          showInput(inputText, loadPath, loadLine, expr, varNo);
           showResult(value, varNo);
           ++varNo;
-          inputElement.textContent = "";
+          inputElement.textContent = '';
         } catch (error) {
           if (error instanceof SchemeParseError) {
             if (!(error instanceof SchemeParseIncomplete))
@@ -1146,7 +1183,7 @@
         }
       }
 
-      function showInput(inputText, expr, varNo) {
+      function showInput(inputText, path, line, expr, varNo) {
         // Show results and save in variables for later reuse
         let div = document.createElement('div');
         div.setAttribute('class', 'input');
@@ -1158,9 +1195,14 @@
           div.appendChild(span);
         }
         let innerDiv = document.createElement('div');
-        if (inputText[inputText.length-1] === '\n')
-          inputText = inputText.substr(0, inputText.length-1);
-        for (let pgf of convertToHTMLContent(inputText))
+        innerDiv.setAttribute('class', 'user-input');
+        if (path != null) {
+          let pathElement = document.createElement('div');
+          pathElement.setAttribute('class', 'load-path');
+          pathElement.textContent = `${path}, line ${line}:`;
+          innerDiv.appendChild(pathElement);
+        }
+        for (let pgf of convertToHTMLContent(inputText, 'user-input-text'))
           innerDiv.appendChild(pgf);
         div.appendChild(innerDiv);
         outputElement.appendChild(div);
@@ -1178,6 +1220,7 @@
           div.appendChild(span);
         }
         let innerDiv = document.createElement('div');
+        innerDiv.setAttribute('class', 'result-text');
         let evaluatedString = globalScope.string(value);
         for (let pgf of convertToHTMLContent(evaluatedString))
           innerDiv.appendChild(pgf);
@@ -1191,18 +1234,33 @@
         errorElement = document.createElement('div');
         errorElement.setAttribute('class', 'error');
         let div = document.createElement('div');
+        div.setAttribute('class', 'error-text');
         div.textContent = String(error)
         errorElement.appendChild(div);
         outputElement.appendChild(errorElement)
         errorElement.scrollIntoView();
       }
 
-      function convertToHTMLContent(text) {
-        let res = [], lines = text.split('\n');
-        for (let line of lines) {
+      function convertToHTMLContent(text, cls) {
+        let divs = [], line = '';
+        for (let ch of text) {
+          if (NL[ch]) {
+            addDiv(line);
+            line = '';
+          }
+          if (WS[ch])
+            ch = NBSP;
+          line += ch;
+        }
+        if (line !== '')
+          addDiv(line);
+        return divs;
+        function addDiv(line) {
           let element = document.createElement('div');
+          if (cls)
+            element.setAttribute('class', cls);
           element.textContent = line.replaceAll(' ', NBSP);
-          res.push(element);
+          divs.push(element);
         }
         return res;
       }
