@@ -115,8 +115,8 @@
       .help dl dd {
         display: block;
         /*
-         * "overflow:auto" creates a block formatting context while "dislpay:block" does not!
-         * I *think* "contain: paint" is more sensible, though.
+         * "overflow:auto" creates a "block formatting context" while "dislpay:block" does not!
+         * I *think* "contain: paint" is more sensible, though, but only seems to work in Chrome.
          * Look up "CSS block formatting context." It's wild!
          */
         overflow: auto;
@@ -153,6 +153,17 @@
         color: #555;
       }
 
+      #helpgroup-imported dl {
+        display: block;
+      }
+      #helpgroup-imported dt {
+        display: span;
+        font-style: italic;
+      }
+      #helpgroup-imported dd {
+        display: none;
+      }
+
       .help .example {
         font-style: italic;
       }
@@ -165,7 +176,7 @@
       }
 
       #help-details dl dd {
-        --definition-margin: 5ch
+        --definition-margin: 5ch;
       }
 
       .help ul {
@@ -444,20 +455,19 @@
          </dl>
          <h2> Functions and Constants Imported from JavaScript </h2>
          <dl class="definitions" id="helpgroup-imported">
-           <dt class="heading"> Symbol
-           <dd class="heading"> Description
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
      </div>
     </div>
+    <!-- These definitions get moved into the help section at startup -->
     <div style="display: none !important">
-      <dd id="defn-_star_catch">
+      <dd id="defn-*catch">
         (*catch "tag" form ...)
         <p> SIOD-style catch.
             Evaluates the forms until one of them calls
             <code>(*throw "tag" value)</code>.
             Returns "value" if the tags match; otherwise the exception propagates.
-      <dd id="defn-_star_catch">
+      <dd id="defn-*throw">
         (*throw "tag" value)
         <p> SIOD-style throw.
             Throws the value with the given tag.
@@ -475,33 +485,33 @@
             If <i>type</i> is an object, the catch matches if the object is an instance
             of that object; it <i>type</i> is a string, the catch matches if it is the JavaScript
             "typeof" the thrown object.
+      <dd id="defn-throw">
+        (throw "tag" value)
+        <p> Java/JavaScript-style-style throw.
+            Throws the value with the given tag.
+            An enclosing <code>(*catch "tag" form ...)</code> will
+            return "value" if the tags match; otherwise the exception propagates.
         <p> For example:
         <p class="example">
             (catch (e "string" (+ "thrown: " e))<br>
             &nbsp;&nbsp; (+ 1 2)<br>
             &nbsp;&nbsp;  (+ 3 (throw "ha ha!"))<br>
             )
-      <dd id="defn-_star_catch">
-        (*throw "tag" value)
-        <p> Java/JavaScript-style-style throw.
-            Throws the value with the given tag.
-            An enclosing <code>(*catch "tag" form ...)</code> will
-            return "value" if the tags match; otherwise the exception propagates.
-      <dd id="defn-_star_e_star_">
+      <dd id="defn-*e*">
         Euler's constant and the base of natural logarithms
-      <dd id="defn-_star_ln10_star_">
+      <dd id="defn-*ln10*">
         Natural logarithm of 10
-      <dd id="defn-_star_log10e_star_">
+      <dd id="defn-*log10e*">
         Base-10 logarithm of Euler's constant
-      <dd id="defn-_star_log2e_star_">
+      <dd id="defn-*log2e*">
         Base-2 logarithm of Euler's constant
-      <dd id="defn-_star_pi_star_">
+      <dd id="defn-*pi*">
         Ratio of the a circle's circumference to its diameter (&pi;)
-      <dd id="defn-_star_sqrt1_2_star_">
+      <dd id="defn-*sqrt1_2*">
         Square root of 1/2
-      <dd id="defn-_star_sqrt2_star_">
+      <dd id="defn-*sqrt2*">
         Square root of 2
-      <dd id="defn-_star_ln2_star_">
+      <dd id="defn-*ln2*">
         Natural logarithm of 2
       <dd id="defn-abs">
         (abs x)
@@ -645,10 +655,10 @@
       <dd id="defn-begin">
         (begin form ...)
         <p> Evaluates the forms sequentially, returning the value of the last form.
-      <dd id="defn-bigintP">
+      <dd id="defn-bigint?">
         (bigint? obj)
         <p> Returns <code>true</code> if <i>obj</i> is a JavaScript BigInt.
-      <dd id="defn-booleanP">
+      <dd id="defn-boolean?">
         (boolean? obj)
         <p> Returns <code>true</code> if <i>obj</i> is a boolean.
       <dd id="defn-function?">
@@ -687,9 +697,6 @@
       <dd id="defn-cdaar">
         (cdaar list)
         <p> Shorthand for: <code>(cdr (car (car list)))</code>.
-      <dd id="defn-cdddr">
-        (cdddr list)
-        <p> Shorthand for: <code>(cdr (cdr (cdr list)))</code>.
       <dd id="defn-cdadr">
         (cdadr list)
         <p> Shorthand for: <code>(cdr (car (cdr list)))</code>.
@@ -705,13 +712,13 @@
       <dd id="defn-cddr">
         (cddr list)
         <p> Shorthand for: <code>(cdr (cdr list))</code>.
-      <dd id="defn-closureP">
+      <dd id="defn-closure?">
         (closure? obj)
         <p> True if <i>obj</i> is a Scheme closure.
-      <dd id="defn-CompileError"
+      <dd id="defn-SchemeCompileError"
         <p> Thrown when the compiler finds an error.
-      <dd id="defn-CompileError">
-        <p> Thrown when the there is an error evaluating Scheme functions.
+      <dd id="defn-SchemeEvalError">
+        <p> Thrown when the there is an error evaluating a Scheme form.
       <dd id="defn-cond">
         (cond cond-clause ...)
         <p> where <i>cond-clause</i> is:</p>
@@ -739,14 +746,14 @@
         <p> Indexes into the JavaScript array by the given index. </p>
         (@ "prop" obj)
         <p> The value of the property "prop" in the given object.
-      <dd id="defn-arefP">
+      <dd id="defn-aref?">
         (@? index array)
         <p> The value of the property "prop" in the given object or undefined if the array is
             undefined or null.</p>
             (@ "prop" obj)
             <p> The value of the property "prop" in the given object or undefined if the array is
               undefined or null.
-      <dd id="defn-arrayP">
+      <dd id="defn-array?">
         (array? obj)
         <p> True if the object is a JavaScript Array.
       <dd id="defn-false">
@@ -783,7 +790,47 @@
         (eval "str" [scope])
         <p> Parses the evaluates <i>"str"</i> in the given <i>scope</i>.
             Default is the scope of the caller.
-    </div>
+      <dd id="defn-@">
+        (@ obj n)
+        <p> References element <i>n</i> of JavaScript array <i>obj</i>.
+        (@ obj "name")
+          <p> References member <i>n<name/i> of JavaScript object <i>obj</i>.
+      <dd id="defn-@?">
+        (@? obj n)
+        <p> References element <i>n</i> of JavaScript array <i>obj</i> if <i>obj</i> is not null
+            or undefined, otherwise returns undefined.
+        (@"" obj "name")
+        <p> References member <i>n<name/i> of JavaScript object <i>obj</i> if <i>obj</i> is not null
+            or undefined, otherwise returns undefined.
+      <dd id="defn-@!">
+        (@! obj "member" ... params)
+        <p> Invokes member function <i>member</i> in JavaScript object <i>obj</i>. E.g.</p>
+        (@! Math "sin" (/ *pi* 4))
+      <dd id="defn-@=">
+        (@= obj "member" value)
+        <p> Assigns <i>value</i> to JavaScript member <i>member</i> in object <i>obj</i>.
+      <dd id="defn-xxx">
+        xxx
+        <p> xxx
+      <dd id="defn-xxx">
+        xxx
+        <p> xxx
+      <dd id="defn-xxx">
+        xxx
+        <p> xxx
+      <dd id="defn-xxx">
+          xxx
+      <p> xxx
+        <dd id="defn-xxx">
+          xxx
+      <p> xxx
+        <dd id="defn-xxx">
+          xxx
+      <p> xxx
+        <dd id="defn-xxx">
+          xxx
+          <p> xxx
+                                                                                        </div>
     <script type="module" src="./CloseButton.mjs"></script>
     <script type="text/javascript">
       "use strict";
@@ -802,7 +849,7 @@
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
         SchemeParseIncomplete = globalScope.SchemeParseIncomplete;
         buildBuiltinHelp(globalScope);
-        
+
         inputElement.contentEditable = 'true';
 
         // The idea here is to let the handleInput exacute after the keypress has been
@@ -866,31 +913,33 @@
             for (let atom of atoms)
               helpElement.appendChild(textElement('dt', atom.description));
             let name = atoms[0].description, elementId = "defn-" + name;
-            elementId = elementId.replaceAll('*', '_star_').replaceAll('?', 'P');
-            let dd = document.getElementById(elementId);
-            if (!dd) {
-              if (group === "imported")
-                dd = textElement('dd', `Imported from JavaScript.`);
-              else
+            if (group !== "imported") {
+              let dd = document.getElementById(elementId);
+              if (!dd)
                 dd = textElement('dd', `TBD (${elementId})`);
-            }
-            helpElement.appendChild(dd);
-            if (typeof value === 'function') {
-              let impl = string(value);
-              if (impl.length < 50)
-                dd.appendChild(textElement('p', `Impl: ${impl}`, 'impl'));
-            } else {
-              let valStr = string(value);
-              if (valStr.length < 50)
-                dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
+              helpElement.appendChild(dd);
+              if (typeof value === 'function') {
+                let impl = string(value);
+                if (impl.length < 50)
+                  dd.appendChild(textElement('p', `Impl: ${impl}`, 'impl'));
+              } else {
+                let valStr = string(value);
+                if (valStr.length < 50)
+                  dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
+              }
             }
           }
         }
 
         function keyFor(atom) {
-          let key = atom.description;
-          key = key.replace('*', '');
+          let key = atom.description, alpha = "abcdefghijklmnopqrstuvwyyz", syms = "*#!?";
           key = key.toLowerCase();
+          // Strip certain special symbols before alpha (mostly for *catch and *throw)
+          if (syms.includes(key[0]) && alpha.includes(key[1]))
+            key = key.substr(1);
+          // Anything that doesn't begin with an alpha gets sorted to the top (space sorts lowest)
+          if (!alpha.includes(key[0]))
+            key = ' ' + key;
           return key;
         }
 
@@ -917,7 +966,7 @@
           localStorage.setItem(LOCAL_STORAGE_KEY, json);
           return true;
         }
-        catch (e) {
+        catch (_) {
         }
         return false;
       }
