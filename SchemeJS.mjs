@@ -167,7 +167,8 @@ export function createInstance(schemeOpts = {}) {
   //
   // Character clases for parsing
   //
-  const NBSP = '\u00a0', VTAB = '\u000b', FORMFEED = '\u000c', ELIPSIS = '\u0085', MUL = '\u00d7', DIV = '\u00f7';
+  const NBSP = '\u00a0', VTAB = '\u000b', FORMFEED = '\u000c', ELIPSIS = '\u0085';
+  const MUL = '\u00d7', DIV = '\u00f7';
   const NL = {}, SINGLE_CHAR_TOKENS = {}, QUOTES = {}, DIGITS = {}, NUM1 = {}, NUM2 = {}, JSIDENT = {};
   // IDENT2 includes IDENT1 by inheritence, as does WSNL WS.
   const IDENT1 = {}, IDENT2 = Object.create(IDENT1), WS = {}, WSNL = Object.create(WS);
@@ -195,7 +196,7 @@ export function createInstance(schemeOpts = {}) {
   // so, to reduce memory footprint, don't use it for Latin-1.
 
   // Basic Latin (ASCII)
-  for (let codePoint = 0x21; codePoint < 0xff; ++codePoint) {
+  for (let codePoint = 0x21; codePoint < 0x7f; ++codePoint) {
     let ch = String.fromCodePoint(codePoint)
      // All printable charactes except single-char tokens, digits and quotes
     if (!SINGLE_CHAR_TOKENS[ch] && !DIGITS[ch] && !QUOTES[ch])
@@ -2359,8 +2360,8 @@ export function createInstance(schemeOpts = {}) {
       while (WS[ch])
         nextc();
       position = charCount-1;
-      line = lineCount;
-      lineChar = lineCharCount;
+      line = lineCount+1;
+      lineChar = lineCharCount-1;
 
       if (NL[ch]) {
         yield { type: 'newline', position, line, lineChar };
