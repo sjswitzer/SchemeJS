@@ -1866,9 +1866,9 @@ export function createInstance(schemeOpts = {}) {
             optionalForms = form[CDR];
           }
           if (typeof param !== 'symbol') throw new TypeError(`Param must be a symbol ${param}`);
-          if (!is_null(args)) {  // XXX ???
+          if (is_cons(args)) {
             scope[param] = args[CAR];
-            if (is_cons(args)) args = args[CDR];
+            args = args[CDR];
           } else if (optionalForms) {
             let val = NIL;
             while (is_cons(optionalForms))
