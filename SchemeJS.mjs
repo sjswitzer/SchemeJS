@@ -184,6 +184,8 @@ export function createInstance(schemeOpts = {}) {
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
   for (let ch of `()[]{}'.:`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
   for (let ch of `\`'"`) QUOTES[ch] = ch.codePointAt(0);
+  globalScope.WS = WS;
+  globalScope.NL = NL;
 
   // Digs the Unicode character properties out of the RegExp engine
   // This can take a bit of time and a LOT of memory, but people should
@@ -931,7 +933,7 @@ export function createInstance(schemeOpts = {}) {
   function require_(path) {
     let sym = Atom(`*${path}-loaded*`);
     if (!bool(globalScope[sym])) {
-      load.call(this, path);
+      this.load(path);
       globalScope[sym] = true;
       return sym;
     }
