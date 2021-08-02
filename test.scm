@@ -17,10 +17,10 @@
      (* x (factoral (- x (? (bigint? x) 1n 1))))
   ))
 
-(factoral 100)
-(factoral 100n)
-(factoral 171)
-(factoral 171n)
+(define (opt a b (? c 2)) (list a b c))
+(opt 4 5 6)
+(opt 4 5)
+(opt 4)
 
 (begin (+ 1 2 3 4) (* 1 2 3 4))
 (prog1 (+ 1 2 3 4) (* 1 2 3 4))

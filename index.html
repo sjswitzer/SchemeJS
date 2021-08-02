@@ -971,7 +971,7 @@
           let symtab = groups[group];
           let helpElement = document.getElementById(`helpgroup-${group}`);
           if (!helpHelper) {
-            console.log("Missing help group", group);
+            console.error("Missing help group", group);
             continue;
           }
           symtab.sort((a, b) => a.key < b.key ? -1 : 1);
@@ -1227,7 +1227,7 @@
       }
 
       function showError(error) {
-        console.log("Error", error);
+        console.error("Error", error);
         errorElement = document.createElement('div');
         errorElement.setAttribute('class', 'error-box');
         errorElement.textContent = String(error)

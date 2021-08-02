@@ -183,7 +183,8 @@ export function createInstance(schemeOpts = {}) {
   for (let ch of ` \t${VTAB}${FORMFEED}${NBSP}`) WS[ch] = ch.codePointAt(0);
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
   for (let ch of `()[]{}'.:`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
-  for (let ch of `\`'"`) QUOTES[ch] = ch.codePointAt(0);
+  for (let ch of "'") IDENT2[ch] = ch.codePointAt(ch);  // chars which are nevertheless IDENT2
+  for (let ch of `\`"`) QUOTES[ch] = ch.codePointAt(0);
   globalScope.WS = WS;
   globalScope.NL = NL;
 
@@ -1865,9 +1866,9 @@ export function createInstance(schemeOpts = {}) {
         let scratchParams = params, i = 0;
         while (is_cons(scratchParams)) {
           let param = scratchParams[CAR], optionalForms;
-          if (is_cons(form) && form[CAR] === QUESTION_ATOM && is_cons(form[CDR])) {
-            param = form[CAR];
-            optionalForms = form[CDR];
+          if (is_cons(param) && param[CAR] === QUESTION_ATOM && is_cons(param[CDR])) {
+            optionalForms = param[CDR][CDR];
+            param = param[CDR][CAR];
           }
           if (typeof param !== 'symbol') throw new TypeError(`Param must be a symbol ${param}`);
           if (is_cons(args)) {
@@ -1875,20 +1876,22 @@ export function createInstance(schemeOpts = {}) {
             args = args[CDR];
           } else if (optionalForms) {
             let val = NIL;
-            while (is_cons(optionalForms))
+            while (is_cons(optionalForms)) {
               val = _eval(optionalForms[CAR], scope);  // Earler params are in scope!
+              optionalForms = optionalForms[CDR]
+            }
             scope[param] = val;
           } else {
             // Curry up now! (partial application)
             let closure;
             if (i < evalCount)
-              closure = lambda(cons.call(scope, scratchParams, forms));
+              closure = lambda.call(scope, cons(scratchParams, forms));
             else
               closure = special_lambda.call(scope, cons(i-evalCount, cons(scratchParams, forms)));
             return closure;
           }
           scratchParams = scratchParams[CDR];
-          i -= 1
+          i -= 1;
         }
         if (typeof params === 'symbol')  // Neat trick for 'rest' params!
           scope[params] = args;
@@ -2940,7 +2943,7 @@ export function createInstance(schemeOpts = {}) {
   function compile_lambda(name, lambda) {
     let { code, bindSymToObj } = lambda_compiler.call(this, name, lambda);
     let binder = new Function("bound", code);
-    console.log("COMPILED", binder, String(binder));
+    // console.log("COMPILED", binder, String(binder));
     let compiledFunction = binder.call(this, bindSymToObj);
     return compiledFunction;
   }
