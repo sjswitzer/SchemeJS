@@ -1924,9 +1924,8 @@ export function createInstance(schemeOpts = {}) {
     opts = { ...schemeOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 100;
     let wrapChar = opts.wrapChar ?? "\n";
-    let maxDepth = opts.maxDepth ?? 500;
-    let maxCarDepth = opts.maxCarDepth ?? maxDepth;
-    let maxCdrDepth = opts.maxCdrDepth ?? maxDepth;
+    let maxCarDepth = opts.maxCarDepth ?? 100;
+    let maxCdrDepth = opts.maxCdrDepth ?? 10000;
     let indentMore = opts.indentMorw ?? "  ";
     let line = "", lines = [], sep = "", prefix = "", indent = "";
     toString(obj, maxCarDepth, maxCdrDepth);
@@ -2035,6 +2034,8 @@ export function createInstance(schemeOpts = {}) {
               return put("...)", true);
             obj = obj[CDR];
             maxCdrDepth -= 1;
+            if (maxCdrDepth < 0)
+              return put("....)", true);
             if (obj[SUPERLAZY])
               return put("...)", true);
           }
@@ -2055,6 +2056,8 @@ export function createInstance(schemeOpts = {}) {
           for (let item of obj) {
             toString(item, maxCarDepth-1, maxCdrDepth);
             maxCdrDepth -= 1;
+            if (maxCdrDepth < 0)
+              return put("....]", true);
             sep = ", ";
           }
           sep = "";
@@ -2079,6 +2082,8 @@ export function createInstance(schemeOpts = {}) {
               prefix = `${string(name)}: `;
               toString(item, maxCarDepth-1, maxCdrDepth);
               maxCdrDepth -= 1;
+              if (maxCdrDepth < 0)
+                return put("....]", true);
             }
             sep = ", ";
           }
@@ -2095,7 +2100,7 @@ export function createInstance(schemeOpts = {}) {
         let printBody = fnDesc.printBody;
         if (fnDesc.value && !fnDesc.body && !printBody)
           return put(`{${params} => ${fnDesc.value}}`);
-        if (printBody && (printBody.length > 60 || printBody.includes('\n')))
+        if (printBody && (printBody.length > 80 || printBody.includes('\n')))
           printBody = '';
         put(`{function${name}${params}${printBody}}`);
         if (obj[COMPILED]) {
@@ -2334,8 +2339,7 @@ export function createInstance(schemeOpts = {}) {
 
   // Can't be "string" directly because that has an optional parameter and
   // calling to-string with one parameter would result in a closure.
-  const to_string = obj => string(obj);
-  defineGlobalSymbol("to-string", to_string);
+  defineGlobalSymbol("to-string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
 
   // Turns iterable objects like lists into arrays, recursively to "depth"
   defineGlobalSymbol("to-array", to_array);

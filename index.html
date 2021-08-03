@@ -302,7 +302,7 @@
         font-size: 90%;
         border: .1em solid;
         border-radius: .4em;
-        background-color: #bbb;
+        background-color: #ddd;
       }
       #output .input-scroller, #output .result-scroller {
         overflow: scroll;
@@ -989,13 +989,9 @@
                 dd = textElement('dd', `TBD (${"defn-" + atomNames[0]})`);
               helpElement.appendChild(dd);
               if (typeof value === 'function') {
-                let impl = string(value);
-                if (impl.length < 50)
-                  dd.appendChild(textElement('p', `Impl: ${impl}`, 'impl'));
+                dd.appendChild(textElement('p', `Impl: ${string(value)}`, 'impl'));
               } else {
-                let valStr = string(value);
-                if (valStr.length < 50)
-                  dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
+                dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
               }
             }
           }

@@ -68,4 +68,19 @@ increment-by-3
   (+ 3 (throw "ha ha!"))
 )
 
-(factoral 100n)
+(define a (list-view (apropos)))
+a
+(nth 5 a)
+(nth 15 a)
+a
+(length a)
+a
+
+(define b (lazy-map to-string (apropos)))
+b
+(nth 8 b)
+b
+(nth 18 b)
+b
+(length b)
+b
