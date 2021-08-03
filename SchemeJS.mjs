@@ -3289,7 +3289,7 @@ export function createInstance(schemeOpts = {}) {
       for(;;) {
         let indent = "";
         if (parseContext.currentToken?.type !== 'string' && parseContext.length > 0)
-          indent =  " ".repeat(parseContext[parseContext.length-1].lineChar + 2);
+          indent =  " ".repeat(parseContext[parseContext.length-1].lineChar + 1);
         let line = readline(prompt + indent);
         if (line == null || endTest(line)) {
           quitRepl = true;
