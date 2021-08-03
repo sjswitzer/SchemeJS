@@ -2977,24 +2977,25 @@ export function createInstance(schemeOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
     let scope = this;
-    let bindSymToObj = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
-    let tools = { bind, boundVal, emit, newTemp, scope, indent: '', evalLimit: 100 };
+    let bindSymToObj = {}, useTab = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
+    let tools = { bind, use, boundVal, emit, newTemp, scope, indent: '', evalLimit: 100 };
 
     let compileScope = new Scope();
     let nameStr = newTemp(name);
     tools.functionName = nameStr;
     tools.functionLambda = lambda;
     // Well-known names
-    bind(string, "string");
-    bind(SchemeEvalError, "SchemeEvalError");
-    bind(NIL, "NIL");
-    bind(bool, "bool");
-    bind(cons, "cons");
-    bind(car, "car");
-    bind(cdr, "cdr");
-    bind(COMPILED, "COMPILED");
+    use(bind(scope, "this_"));
+    use(bind(string, "string"));
+    use(bind(SchemeEvalError, "SchemeEvalError"));
+    use(bind(NIL, "NIL"));
+    use(bind(bool, "bool"));
+    use(bind(cons, "cons"));
+    use(bind(car, "car"));
+    use(bind(cdr, "cdr"));
+    use(bind(COMPILED, "COMPILED"));
     emit(`function outsideScope(x) {`);
-    emit(`  let val = ${bind(scope, 'scope')}[x];`);
+    emit(`  let val = this_[x];`);
     emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + string(x));`);
     emit(`  return val;`);
     emit(`}`);
@@ -3003,8 +3004,10 @@ export function createInstance(schemeOpts = {}) {
     emit(`return ${nameStr};`);
     let saveEmitted = emitted;
     emitted = [];
-    for (let bindingName of Object.keys(bindSymToObj))
+    for (let bindingName of Object.keys(bindSymToObj)) {
+      if (useTab[bindingName])
       emit(`let ${bindingName} = bound[${string(bindingName)}];`);
+    }
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     return { code, bindSymToObj };
@@ -3024,12 +3027,18 @@ export function createInstance(schemeOpts = {}) {
           name = newTemp(obj.description);
         else if (typeof obj === 'function')
           name = newTemp(obj.name);
+        else if (typeof obj === 'string')
+          name = newTemp('str_' + obj.substr(0, 10));
         else
           name = newTemp();
       }
       bindSymToObj[name] = obj;
       bindObjToSym.set(obj, name);
       return name;
+    }
+    function use(name) {
+      useTab[name] = true;
+      return name
     }
     function emit(str) {
       emitted.push(tools.indent + str + '\n');
@@ -3075,8 +3084,7 @@ export function createInstance(schemeOpts = {}) {
         if (scopedVal) {
           result = tools.bind(scopedVal, sym);
         } else {
-          let bound = tools.bind(sym);
-          result = `outsideScope(${bound})`;
+          result = `outsideScope(${tools.use(tools.bind(sym))})`;
         }
       }
     } else if (is_cons(form)) {
@@ -3110,7 +3118,10 @@ export function createInstance(schemeOpts = {}) {
       form = tools.functionLambda;
     } else {
       let boundVal = tools.boundVal(form);
-      if (boundVal) form = boundVal;
+      if (boundVal)
+        form = boundVal;
+      else
+        tools.use(form);
     }
     let closureScope;
     if (is_cons(form)) {  // must check before checking function type because closures are functions too!
@@ -3146,13 +3157,13 @@ export function createInstance(schemeOpts = {}) {
       for (let i = 0; is_cons(argList); ++i) {
         let arg = argList[CAR];
         if (i < evalCount)
-          arg = compileEval(argList[CAR], compileScope, tools);
-        jsArgs.push(arg);
+          arg = compileEval(tools.use(argList[CAR]), compileScope, tools);
+        jsArgs.push(tools.use(arg));
         argList = argList[CDR];
       }
       // Create the "rest" param for special forms
       let lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount-1;
-      if (evalCount !== MAX_INTEGER) {
+      if (evalCount !== MAX_INTEGER && !hook) {
         let rest = tools.newTemp("rest");
         tools.emit(`let ${rest} = NIL;`);
         while (jsArgs.length < lift)
@@ -3162,17 +3173,16 @@ export function createInstance(schemeOpts = {}) {
     }
     if (recursionStich || typeof form === 'function' && !form[CLOSURE_ATOM]) { // Scheme functions impose as Cons cells
       // JS function case
-      if (jsArgs.length < paramCount && paramCount !== MAX_INTEGER) {
+      if (jsArgs.length < paramCount && paramCount !== MAX_INTEGER && !hook) {
         if (paramCount === 1) {
           // Can't partially bind a function with less than 2 params, but if it has
           // one param it needs some value. So we provide "undefined" (see _apply).
           jsArgs.push('undefined');
         } else {
           // We need to return a closure.
-          let boundScope = bind(scope, 'scope');
           let result = tools.newTemp(`${name}_closure`);
           let str = `function ${result}(`, sep = '', closureParams = [];
-          for (i = jsArgs.length; i < paramCount; ++i) {
+          for (let i = jsArgs.length; i < paramCount; ++i) {
             let closureParam = tools.newTemp("p");
             closureParams.push(closureParam);
             str += sep + closureParam;
@@ -3184,8 +3194,8 @@ export function createInstance(schemeOpts = {}) {
           if (recursionStich)
             fname = tools.functionName;
           else
-            fname = tools.bind(form, `${name}_closure`);
-          str = `  return ${fname}.call(${boundScope}`;
+            fname = tools.use(tools.bind(form, `${name}_closure`));
+          str = `  return ${fname}.call(this_`;
           for (let i = 0; i < jsArgs.length; ++i)
             str += `, ${jsArgs[i]}`;
           for (let i = 0; i < closureParams.length; ++i)
@@ -3204,13 +3214,13 @@ export function createInstance(schemeOpts = {}) {
         return hook(jsArgs, compileScope, tools);
       }
       let result = tools.newTemp(name);
-      if (recursionStich || (typeof form === 'function' && !value)) {
+      if (recursionStich || !value) {
         // No template: going to have to call it after all.
         let fname, argvStr = '';
         if (recursionStich)
           fname = tools.functionName;
         else
-          fname = tools.bind(form);
+          fname = tools.use(tools.bind(form));
         for (let arg of jsArgs)
           argvStr += ', ' + arg;
         tools.emit(`${result} = ${fname}.call(this${argvStr});`);
@@ -3284,7 +3294,6 @@ export function createInstance(schemeOpts = {}) {
                 jsArgs.push('undefined');
               } else {
                 // We need to return a closure.
-                let boundScope = bind(scope, 'scope');
                 let result = tools.newTemp(`${name}_closure`);
                 let str = `function ${result}(`, sep = '', closureParams = [];
                 for (i = jsArgs.length; i < paramCount; ++i) {
@@ -3297,7 +3306,7 @@ export function createInstance(schemeOpts = {}) {
                 tools.emit(str);
                 tools.indent = saveIndent + "  ";
                 tools.emit(`function outsideScope(x) {`);
-                tools.emit(`  let val = ${bind(scope, 'scope')}[x];`);
+                tools.emit(`  let val = ${usedef(scope, 'scope')}[x];`);
                 tools.emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + ${stringStr}(x));`);
                 tools.emit(`  return val;`);
                 tools.emit(`}`);
@@ -3394,7 +3403,7 @@ export function createInstance(schemeOpts = {}) {
     tools.emit(`return ${res};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
-    tools.emit(`${result}[COMPILED] = ${tools.bind(form, 'compiled')};`);
+    tools.emit(`${result}[COMPILED] = ${tools.use(tools.bind(form, 'compiled'))};`);
     return res;
   }
   
