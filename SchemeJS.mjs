@@ -3288,8 +3288,8 @@ export function createInstance(schemeOpts = {}) {
     function* charStreamPromptInput() {
       for(;;) {
         let indent = "";
-        if (parseContext.currentToken?.type !== 'string')
-          indent =  "  ".repeat(parseContext.length);
+        if (parseContext.currentToken?.type !== 'string' && parseContext.length > 0)
+          indent =  " ".repeat(parseContext[parseContext.length-1].lineChar + 2);
         let line = readline(prompt + indent);
         if (line == null || endTest(line)) {
           quitRepl = true;

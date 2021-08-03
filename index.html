@@ -1159,8 +1159,8 @@
               colorizeCharsAt(inputElement, position, inputText.length - position, 'error-tokens');
             }
             let indent = "";
-            if (enterKey && parseContext.currentToken?.type !== 'string')
-              indent =  NBSP.repeat(2 * parseContext.length);
+            if (enterKey && parseContext.currentToken?.type !== 'string' && parseContext.length > 0)
+              indent =  NBSP.repeat(parseContext[parseContext.length-1].lineChar + 2);
             insertTextAndSetCursorAfter(inputElement, pos, indent);
           } else {
             inputText = trimEndNewlines(inputText);
