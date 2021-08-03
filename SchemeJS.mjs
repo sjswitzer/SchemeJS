@@ -2984,8 +2984,7 @@ export function createInstance(schemeOpts = {}) {
     let nameStr = newTemp(name);
     tools.functionName = nameStr;
     tools.functionLambda = lambda;
-
-    bind(scope, "scope");
+    // Well-known names
     bind(string, "string");
     bind(SchemeEvalError, "SchemeEvalError");
     bind(NIL, "NIL");
@@ -2995,7 +2994,7 @@ export function createInstance(schemeOpts = {}) {
     bind(cdr, "cdr");
     bind(COMPILED, "COMPILED");
     emit(`function outsideScope(x) {`);
-    emit(`  let val = ${bind(this, 'scope')}[x];`);
+    emit(`  let val = ${bind(scope, 'scope')}[x];`);
     emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + string(x));`);
     emit(`  return val;`);
     emit(`}`);
@@ -3138,7 +3137,6 @@ export function createInstance(schemeOpts = {}) {
         if (!name) name = 'anonymous';
       }
     }
-    let result = tools.newTemp(name);
     let jsArgs = [];
     if (recursionStich) {
       jsArgs = recursionStich.jsArgs;
@@ -3172,6 +3170,7 @@ export function createInstance(schemeOpts = {}) {
         } else {
           // We need to return a closure.
           let boundScope = bind(scope, 'scope');
+          let result = tools.newTemp(`${name}_closure`);
           let str = `function ${result}(`, sep = '', closureParams = [];
           for (i = jsArgs.length; i < paramCount; ++i) {
             let closureParam = tools.newTemp("p");
@@ -3202,8 +3201,10 @@ export function createInstance(schemeOpts = {}) {
         }
       }
       if (hook) {
-        result = hook(jsArgs, compileScope, tools);
-      } else if (recursionStich || (typeof form === 'function' && !value)) {
+        return hook(jsArgs, compileScope, tools);
+      }
+      let result = tools.newTemp(name);
+      if (recursionStich || (typeof form === 'function' && !value)) {
         // No template: going to have to call it after all.
         let fname, argvStr = '';
         if (recursionStich)
@@ -3284,6 +3285,7 @@ export function createInstance(schemeOpts = {}) {
               } else {
                 // We need to return a closure.
                 let boundScope = bind(scope, 'scope');
+                let result = tools.newTemp(`${name}_closure`);
                 let str = `function ${result}(`, sep = '', closureParams = [];
                 for (i = jsArgs.length; i < paramCount; ++i) {
                   let closureParam = tools.newTemp("p");
@@ -3299,7 +3301,7 @@ export function createInstance(schemeOpts = {}) {
                 tools.emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + ${stringStr}(x));`);
                 tools.emit(`  return val;`);
                 tools.emit(`}`);
-                          let closureResult = 'NIL';
+                let closureResult = 'NIL';
                 while (is_cons(forms)) {
                   closureResult = compileEval(forms[CAR]);
                   forms = forms[CDR];
@@ -3392,7 +3394,7 @@ export function createInstance(schemeOpts = {}) {
     tools.emit(`return ${res};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
-    tools.emit(`${result}[COMPILED] = ${tools.bind(form)};`);
+    tools.emit(`${result}[COMPILED] = ${tools.bind(form, 'compiled')};`);
     return res;
   }
   
