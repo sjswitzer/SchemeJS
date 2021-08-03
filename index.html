@@ -387,15 +387,15 @@
                 These are the things that JavaScript JITs optimize most thouroughly.
           <dd>  Scheme lists are iterable in JavaScript and JavaScript iterables can be
                 viewed as Scheme lists, either directly or lazily.
-          <dd>  Scheme can invoke any JavaScript function natively and Scheme closures
-                are JavaScript functions by default, so can be called directly by JavaScript.
+          <dd>  Scheme can invoke any JavaScript function natively and Scheme functions and closures
+                are JavaScript functions that can be called directly by JavaScript.
           <dt>  Partial Function Application
           <dd>  Functions, whether user-defined, compiled, or implemented in JavaScript, when
-                invoked with fewer than their defined number of evaluated parameters result
+                invoked with fewer than their number of required parameters result
                 in a <i>closure</i> that binds the given arguments.
                 For instance, <code>(+ 5)</code> results in a function (closure) that
                 adds 5 to its argument(s).
-          <dt>  Macros
+          <dt>  Macros (sorta)
           <dd>  Users can define "special forms" which take a specified number of evaluated parameters.
           <dt>  Rest Parameters
           <dd>  A function defined as <code>(define (fn p1 p2 . p3) form ...)</code> takes two

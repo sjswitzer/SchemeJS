@@ -123,11 +123,12 @@ it has dynamic types, the right sorts of primitive types, real closures, no need
 (anyway, it's transparent to users and highly-optimized)
 and implements something that can be used for scope resolution as a highly-optimized primitive.
 All it needs is cons cells, nil, an interpreter, a parser, a "printer", a REPL, a compiler,
-and a handful of Lisp primitives. Hence this project.
+and a handful of Lisp primitives. Hence this project. There is no emulation layer because
+there is nothing to emulate.
 
 I didn't set out to write the fastest Lisp implementation but halfway through implementing
-it I realized it inevitably would be, thanks to the JavaScript runtime and JITs.
-If I could finish it, that is. And to be fair, the parser could be a lot faster.
+it I realized it inevitably would be, thanks to the JavaScript runtime and its JITs.
+If I could finish it, that is. And to be fair, the parser could be a _lot_ faster.
 
 But probably the best way to think about it is that JavaScript was secretly Scheme all along,
 just as Brendan Eich originally intended. Recent improvements in ES6 and beyond have exposed
@@ -139,5 +140,5 @@ I have designs for a non-recursive interpreter and tail-call-optimization in bot
 interpretrer and compiler.
 
 It would be nice to support writing async and generator functions naturally but I haven't
-given it much thought beyond the sense that a non-recursive interpreter would make "yield" pretty straightforward. Compiling it would require a different compilation approach, I suspect.
+given it much thought beyond the observation that a non-recursive interpreter would make "yield" pretty straightforward. Compiling it would require a different compilation approach, I suspect.
 Probably transform the Scheme into a series of continuations and compile those the usual way.

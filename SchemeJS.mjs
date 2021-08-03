@@ -3326,6 +3326,8 @@ export function createInstance(schemeOpts = {}) {
   function _setGlobalScope_test_hook_(scope) {
     let previousGlobalScope = globalScope;
     globalScope = scope;
+    globalScope.globalScope = globalScope;
+    globalScope[Atom('globalScope')] = globalScope;
     return previousGlobalScope;
   }
 
