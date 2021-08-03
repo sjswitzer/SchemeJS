@@ -2976,7 +2976,7 @@ export function createInstance(schemeOpts = {}) {
     name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
-    let scope = newScope(this);
+    let scope = this;
     let bindSymToObj = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
     let tools = { bind, boundVal, emit, newTemp, scope, indent: '', evalLimit: 100 };
 
@@ -2984,7 +2984,9 @@ export function createInstance(schemeOpts = {}) {
     let nameStr = newTemp(name);
     tools.functionName = nameStr;
     tools.functionLambda = lambda;
-    let stringStr = bind(string, "string");
+
+    bind(scope, "scope");
+    bind(string, "string");
     bind(SchemeEvalError, "SchemeEvalError");
     bind(NIL, "NIL");
     bind(bool, "bool");
@@ -2994,7 +2996,7 @@ export function createInstance(schemeOpts = {}) {
     bind(COMPILED, "COMPILED");
     emit(`function outsideScope(x) {`);
     emit(`  let val = ${bind(this, 'scope')}[x];`);
-    emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + ${stringStr}(x));`);
+    emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + string(x));`);
     emit(`  return val;`);
     emit(`}`);
     compileScope[name] = nameStr;
