@@ -720,9 +720,9 @@ export function createInstance(schemeOpts = {}) {
     tools.emit(`let a = ${args[0]}, b = ${args[1]};`);
     tools.emit(`if (!(a ${op} b)) break ${result};`);
     for (let i = 2; i < args.length; ++i) {
-      emit(`a = b;`);
+      tools.emit(`a = b;`);
       let b = compileEval(args[i], compileScope, tools, tools.newTemp);
-      emit(`b = ${b};`);
+      tools.emit(`b = ${b};`);
       tools.emit(`if (!(a ${op} b)) break ${result};`);
     }
     tools.emit(`${result} = true;`);
@@ -1896,7 +1896,7 @@ export function createInstance(schemeOpts = {}) {
             let val = NIL;
             while (is_cons(optionalForms)) {
               val = _eval(optionalForms[CAR], scope);  // Earler params are in scope!
-              optionalForms = optionalForms[CDR]
+              optionalForms = optionalForms[CDR];
             }
             scope[param] = val;
           } else {
@@ -2949,8 +2949,6 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  const COMPILE_SENTINEL = Symbol("SENTINEL");
-
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { evalArgs: 0, dontInline: true });
@@ -2968,8 +2966,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("compile-lambda", compile_lambda);
   function compile_lambda(name, lambda) {
     let { code, bindSymToObj } = lambda_compiler.call(this, name, lambda);
+    console.log("COMPILED", code, bindSymToObj);
     let binder = new Function("bound", code);
-    // console.log("COMPILED", binder, String(binder));
     let compiledFunction = binder.call(this, bindSymToObj);
     return compiledFunction;
   }
@@ -2979,17 +2977,13 @@ export function createInstance(schemeOpts = {}) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
     let scope = newScope(this);
-    // If you're compiling a function that's already been defined, this prevents
-    // the symbol from resolving to the old definition. It also serves as a
-    // sentinel to compileApply that it's gotten back around to where it started.
-    scope[name] = COMPILE_SENTINEL;
-
     let bindSymToObj = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
     let tools = { bind, boundVal, emit, newTemp, scope, indent: '', evalLimit: 100 };
 
     let compileScope = new Scope();
     let nameStr = newTemp(name);
     tools.functionName = nameStr;
+    tools.functionLambda = lambda;
     let stringStr = bind(string, "string");
     bind(SchemeEvalError, "SchemeEvalError");
     bind(NIL, "NIL");
@@ -3003,6 +2997,7 @@ export function createInstance(schemeOpts = {}) {
     emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + ${stringStr}(x));`);
     emit(`  return val;`);
     emit(`}`);
+    compileScope[name] = nameStr;
     compileLambda(nameStr, lambda, compileScope, tools);
     emit(`return ${nameStr};`);
     let saveEmitted = emitted;
@@ -3059,7 +3054,7 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  function compileEval(form, compileScope, tools) {
+  function compileEval(form, compileScope, tools, recursionStich) {
     if (--tools.evalLimit < 0)
       throw new SchemeCompileError(`Too comlpex ${string(form)}`);
     let result;
@@ -3076,9 +3071,7 @@ export function createInstance(schemeOpts = {}) {
       result = compileScope[sym];
       if (!result) {
         let scopedVal = tools.scope[sym];
-        if (scopedVal === COMPILE_SENTINEL) {
-          result = scopedVal;
-        } else if (scopedVal) {
+        if (scopedVal) {
           result = tools.bind(scopedVal, sym);
         } else {
           let bound = tools.bind(sym);
@@ -3093,7 +3086,7 @@ export function createInstance(schemeOpts = {}) {
         if (is_cons(fn)) {
           let fnCar = fn[CAR];
           if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
-            ({ result, code } = compileApply(form, compileScope, tools));
+            ({ result, code } = compileApply(form, compileScope, tools, recursionStich));
           }
         } else {
           let evalResult = compileEval(fn, compileScope, tools);
@@ -3107,12 +3100,17 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
   
-  function compileApply(form, args, compileScope, tools) {
+  function compileApply(form, args, compileScope, tools, recursionStich) {
     let paramCount = 0, evalCount = MAX_INTEGER;
     let name, params, value, body, hook;
     let saveIndent = tools.indent;
-    let boundVal = tools.boundVal(form);
-    if (boundVal) form = boundVal;
+    let foundSelf = form === tools.functionName;
+    if (foundSelf) {
+      form = tools.functionLambda;
+    } else {
+      let boundVal = tools.boundVal(form);
+      if (boundVal) form = boundVal;
+    }
     let closureScope;
     if (is_cons(form)) {  // must check before checking function type because closures are functions too!
       let opSym = form[CAR];
@@ -3122,42 +3120,51 @@ export function createInstance(schemeOpts = {}) {
         if (!is_cons(form[CDR])) throw new SchemeCompileError(`Bad form ${string(form)}`);
         evalCount = form[CDR][CAR];
       }
-    } else if (typeof form === 'function') { // form equals function :)
+    } else if (recursionStich || typeof form === 'function') { // form equals function :)
       let fn = form;
-      hook = fn[COMPILE_HOOK];
-      ({ name, params, value, body } = analyzeJSFunction(fn));
-      let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL];
-      if (functionDescriptor == null)
-        functionDescriptor = createFunctionDescriptor(fn);
-      evalCount = ~functionDescriptor >> 15 >>> 1;
-      paramCount = functionDescriptor << 16 >> 15 >>> 1;
-      if (!name) name = 'anonymous';
+      if (recursionStich) {
+        evalCount = MAX_INTEGER;
+        paramCount = length(recursionStich.params);
+      } else {
+        hook = fn[COMPILE_HOOK];
+        ({ name, params, value, body } = analyzeJSFunction(fn));
+        let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL];
+        if (functionDescriptor == null)
+          functionDescriptor = createFunctionDescriptor(fn);
+        evalCount = ~functionDescriptor >> 15 >>> 1;
+        paramCount = functionDescriptor << 16 >> 15 >>> 1;
+        if (!name) name = 'anonymous';
+      }
     }
     let result = tools.newTemp(name);
     let jsArgs = [];
-    // Materialize ALL the arguments into an array
-    let argList = args;
-    for (let i = 0; is_cons(argList); ++i) {
-      let arg = argList[CAR];
-      if (i < evalCount)
-        arg = compileEval(argList[CAR], compileScope, tools);
-      jsArgs.push(arg);
-      argList = argList[CDR];
+    if (recursionStich) {
+      jsArgs = recursionStich.jsArgs;
+    } else {
+      // Materialize ALL the arguments into an array
+      let argList = args;
+      for (let i = 0; is_cons(argList); ++i) {
+        let arg = argList[CAR];
+        if (i < evalCount)
+          arg = compileEval(argList[CAR], compileScope, tools);
+        jsArgs.push(arg);
+        argList = argList[CDR];
+      }
+      // Create the "rest" param for special forms
+      let lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount-1;
+      if (evalCount !== MAX_INTEGER) {
+        let rest = tools.newTemp("rest");
+        tools.emit(`let ${rest} = NIL;`);
+        while (jsArgs.length < lift)
+          tools.emit(`${rest} = ${jsArgs.pop()};`);
+        jsArgs.push(rest);
+      }
     }
-    // Create the "rest" param for special forms
-    let lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount-1;
-    if (evalCount !== MAX_INTEGER) {
-      let rest = tools.newTemp("rest");
-      tools.emit(`let ${rest} = NIL;`);
-      while (jsArgs.length < lift)
-        tools.emit(`${rest} = ${jsArgs.pop()};`);
-      jsArgs.push(rest);
-    }
-    if (typeof form === 'function' && !form[CLOSURE_ATOM]) { // Scheme functions impose as Cons cells
+    if (recursionStich || typeof form === 'function' && !form[CLOSURE_ATOM]) { // Scheme functions impose as Cons cells
       // JS function case
       if (jsArgs.length < paramCount && paramCount !== MAX_INTEGER) {
         if (paramCount === 1) {
-          // Can't partially bind a function with less than 2 params, but  if it has
+          // Can't partially bind a function with less than 2 params, but if it has
           // one param it needs some value. So we provide "undefined" (see _apply).
           jsArgs.push('undefined');
         } else {
@@ -3172,7 +3179,11 @@ export function createInstance(schemeOpts = {}) {
           }
           str += ') {';
           tools.emit(str);
-          let fname = tools.bind(form, `${name}_closure`);
+          let fname;
+          if (recursionStich)
+            fname = tools.functionName;
+          else
+            fname = tools.bind(form, `${name}_closure`);
           str = `  return ${fname}.call(${boundScope}`;
           for (let i = 0; i < jsArgs.length; ++i)
             str += `, ${jsArgs[i]}`;
@@ -3190,10 +3201,10 @@ export function createInstance(schemeOpts = {}) {
       }
       if (hook) {
         result = hook(jsArgs, compileScope, tools);
-      } else if (form === COMPILE_SENTINEL || (typeof form === 'function' && !value)) {
+      } else if (recursionStich || (typeof form === 'function' && !value)) {
         // No template: going to have to call it after all.
         let fname, argvStr = '';
-        if (form === COMPILE_SENTINEL) // XXX this is questionable
+        if (recursionStich)
           fname = tools.functionName;
         else
           fname = tools.bind(form);
@@ -3210,7 +3221,7 @@ export function createInstance(schemeOpts = {}) {
       for (let i = 0; i < jsArgs.length; ++i) {
         let param = tools.newTemp('p');
         params.push(param);
-        emit(`${param} = ${jsArgs[i]}`);
+        tools.emit(`${param} = ${jsArgs[i]}`);
       }
       if (body)
         tools.emit(body); 
@@ -3245,7 +3256,7 @@ export function createInstance(schemeOpts = {}) {
           forms = cons(forms, NIL);
         }
         compileScope = newScope(compileScope, "lambda-scope");
-        let i = 0;
+        let i = 0, originalParams = params;
         while (is_cons(params)) {
           let param = params[CAR], optionalForms;
           if (is_cons(param) && param[CAR] === QUESTION_ATOM && is_cons(param[CDR])) {
@@ -3281,11 +3292,11 @@ export function createInstance(schemeOpts = {}) {
                 str += ') {';
                 tools.emit(str);
                 tools.indent = saveIndent + "  ";
-                emit(`function outsideScope(x) {`);
-                emit(`  let val = ${bind(scope, 'scope')}[x];`);
-                emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + ${stringStr}(x));`);
-                emit(`  return val;`);
-                emit(`}`);
+                tools.emit(`function outsideScope(x) {`);
+                tools.emit(`  let val = ${bind(scope, 'scope')}[x];`);
+                tools.emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + ${stringStr}(x));`);
+                tools.emit(`  return val;`);
+                tools.emit(`}`);
                           let closureResult = 'NIL';
                 while (is_cons(forms)) {
                   closureResult = compileEval(forms[CAR]);
@@ -3314,6 +3325,8 @@ export function createInstance(schemeOpts = {}) {
         } else if (!is_null(params)) {
           throw new SchemeCompileError(`Bad parameter list ${string(params)}`);
         }
+        if (foundSelf)
+          return compileApply(form, NIL, compileScope, tools, { params: originalParams, jsArgs })
         let lambdaResult = 'NIL';
         while (is_cons(forms)) {
           lambdaResult = compileEval(forms[CAR], compileScope, tools);
@@ -3324,7 +3337,6 @@ export function createInstance(schemeOpts = {}) {
     }
     throw new SchemeCompileError(`Can't apply ${string(form)}`);
   }
-  
 
   function compileLambda(name, form, compileScope, tools) {
     if (!is_cons(form)) throw new SchemeCompileError(`Bad lambda ${string(form)}`);
