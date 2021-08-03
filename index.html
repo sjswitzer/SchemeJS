@@ -848,7 +848,7 @@
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
       let globalScope, SCHEME_VERSION;
-      let SchemeParseError, SchemeSyntaxError, SchemeParseIncomplete, originalLoad;
+      let SchemeParseError, SchemeSyntaxError, SchemeParseIncomplete, NIL, originalLoad;
       let varNo = 0, errorElement, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB", slambdaStr = "\u03BB\u03BB";
 
@@ -861,6 +861,7 @@
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
         SchemeParseIncomplete = globalScope.SchemeParseIncomplete;
+        NIL = globalScope.NIL;
         let loadAtom = globalScope.Atom("load")
         originalLoad = globalScope[loadAtom];
         globalScope[loadAtom] = load;
@@ -880,31 +881,53 @@
       }
 
       // For "load" and "require"
-      let capturedInput, loadPath, loadLine, loadLineCount;
+      let capturedInput, loadPath, loadLine, loadLineCount, loadContent;
 
       function load(path, noEval = false) {
-        let savePath = loadPath, saveLine = loadLine, saveLoadLineCount = loadLineCount;
-        loadPath = path;
-        loadLine = 0;
-        loadLineCount = 0;
-        let res = originalLoad.call(globalScope, path, noEval);
-        loadPath = savePath;
-        loadLine = saveLine;
-        loadLineCount = saveLoadLineCount;
-        return res;
+        doLoad();
+        return NIL;
+        async function doLoad() {
+          let xhr = new Promise((resolve, reject) => {
+            let request = new XMLHttpRequest();
+            // Bypass the cache.
+            //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
+            let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime()
+            request.onload = _ => {
+              if (request.status === 200)
+                resolve(request.responseText);
+              reject(new Error(`Load ${path}, status ${request.status}`));
+            };
+            request.onerror = event => reject(new Error(`XMLHttpRequest error ${String(event)}`));
+            let async = true;
+            request.open('GET', reqPath, async);
+            request.send(null);
+          });
+          try {
+            let content = await xhr;
+            let saveLoadContent = loadContent, savePath = loadPath, saveLine = loadLine, saveLoadLineCount = loadLineCount;
+            loadContent = content;
+            loadPath = path;
+            loadLine = 0;
+            loadLineCount = 0;
+            let res;
+            try {
+              res = originalLoad.call(globalScope, path, noEval);
+            } finally {
+              loadContent = saveLoadContent;
+              loadPath = savePath;
+              loadLine = saveLine;
+              loadLineCount = saveLoadLineCount;
+            }
+          } catch (error) {
+            showError(error);
+          }
+        }
       }
 
-      function readFile(path) {
+      function readFile(_) {
+        // Ignore the path parameter because the load wrapper has already loadeded it as loadContent
         capturedInput = '';
-        let request = new XMLHttpRequest();
-        let async = false;  // TODO: somehow do this async
-        // Bypass the cache.
-        //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
-        let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime()
-        request.open('GET', reqPath, async);
-        request.send(null);
-        if (request.status === 200)
-          return captureInput(request.responseText);
+        return captureInput(loadContent);
         return null;
         function* captureInput(source) {
           for (let ch of source) {
