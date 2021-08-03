@@ -712,7 +712,6 @@ export function createInstance(schemeOpts = {}) {
     if (args.length === 2)
       return `(${args[0]} ${op} ${args[1]})`;
     let result = tools.newTemp(name);
-    tools.emit('"use strict";')
     tools.emit(`let ${result} = false; ${result}: {`);
     let saveIndent = tools.indent;
     tools.indent = saveIndent + "  ";
@@ -2993,19 +2992,22 @@ export function createInstance(schemeOpts = {}) {
     use(bind(car, "car"));
     use(bind(cdr, "cdr"));
     use(bind(COMPILED, "COMPILED"));
-    emit(`function outsideScope(x) {`);
-    emit(`  let val = this_[x];`);
-    emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + string(x));`);
-    emit(`  return val;`);
-    emit(`}`);
     compileScope[name] = nameStr;
     compileLambda(nameStr, lambda, compileScope, tools);
     emit(`return ${nameStr};`);
     let saveEmitted = emitted;
     emitted = [];
+    tools.emit('"use strict";')
     for (let bindingName of Object.keys(bindSymToObj)) {
       if (useTab[bindingName])
       emit(`let ${bindingName} = bound[${string(bindingName)}];`);
+    }
+    if (tools.usedOutsideScope) {
+      emit(`function outsideScope(x) {`);
+      emit(`  let val = this_[x];`);
+      emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + string(x));`);
+      emit(`  return val;`);
+      emit(`}`);
     }
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
@@ -3082,6 +3084,7 @@ export function createInstance(schemeOpts = {}) {
           result = tools.bind(scopedVal, sym);
         } else {
           result = `outsideScope(${tools.use(tools.bind(sym))})`;
+          tools.usedOutsideScope = true;
         }
       }
     } else if (is_cons(form)) {
@@ -3206,10 +3209,12 @@ export function createInstance(schemeOpts = {}) {
           return fname;
         }
       }
-      if (hook) {
-        return hook(jsArgs, compileScope, tools);
-      }
       let result = tools.newTemp(name);
+      if (hook) {
+        let res = hook(jsArgs, compileScope, tools);
+        tools.emit(`let ${result} = ${res};`)
+        return result;
+      }
       if (recursionStich || !value) {
         // No template: going to have to call it after all.
         let fname, argvStr = '';
@@ -3219,16 +3224,15 @@ export function createInstance(schemeOpts = {}) {
           fname = tools.use(tools.bind(form));
         for (let arg of jsArgs)
           argvStr += ', ' + arg;
-        tools.emit(`${result} = ${fname}.call(this${argvStr});`);
+        tools.emit(`let ${result} = ${fname}.call(this${argvStr});`);
         return result;
       }
       tools.emit(`let ${result}; {`);
       tools.indent = saveIndent + "  ";
       // We have at least as many arguments as parameters;
-      // otherwise we'd have created a closure
+      // otherwise we'd have created a closure.
       for (let i = 0; i < params.length; ++i) {
-        let param = tools.newTemp('p');
-        tools.emit(`${param[i]} = ${jsArgs[i]}`);
+        tools.emit(`let ${params[i]} = ${jsArgs[i]};`);
       }
       if (body)
         tools.emit(body); 
