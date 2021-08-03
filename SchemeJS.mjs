@@ -3145,7 +3145,6 @@ export function createInstance(schemeOpts = {}) {
           functionDescriptor = createFunctionDescriptor(fn);
         evalCount = ~functionDescriptor >> 15 >>> 1;
         paramCount = functionDescriptor << 16 >> 15 >>> 1;
-        if (!name) name = 'anonymous';
       }
     }
     let jsArgs = [];
@@ -3230,11 +3229,9 @@ export function createInstance(schemeOpts = {}) {
       tools.indent = saveIndent + "  ";
       // We have at least as many arguments as parameters;
       // otherwise we'd have created a closure
-      let params = [];
-      for (let i = 0; i < jsArgs.length; ++i) {
+      for (let i = 0; i < params.length; ++i) {
         let param = tools.newTemp('p');
-        params.push(param);
-        tools.emit(`${param} = ${jsArgs[i]}`);
+        tools.emit(`${param[i]} = ${jsArgs[i]}`);
       }
       if (body)
         tools.emit(body); 
