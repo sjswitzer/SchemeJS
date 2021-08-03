@@ -923,7 +923,7 @@ export function createInstance(schemeOpts = {}) {
       result = 'undefined';
     } else {
       let p = args[0], t = args[1], f = args[2];
-      result = tools.newTemp("if");
+      result = tools.newTemp("if");  // It's like a PHI node in SSA compilers. Sorta.
       tools.emit(`let ${result};`);
       tools.emit(`if (bool(${p})) {`);
       let saveIndent = tools.indent;
@@ -942,13 +942,19 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", begin, { evalArgs: 1 });
+  defineGlobalSymbol("begin", begin, { evalArgs: 1, compileHook: begin_hook });
   function begin(res, forms) {
     while (is_cons(forms)) {
       res = _eval(forms[CAR], this);
       forms = forms[CDR];
     }
     return res;
+  }
+  function begin_hook(args, compileScope, tools) {
+    let result = 'NIL';
+    for (let i = 0; i< args.length; ++i)
+      result = compileEval(args[i], compileLambda, tools);
+    return result;
   }
 
   // (prog1 form1 form2 form3 ...)
@@ -959,6 +965,15 @@ export function createInstance(schemeOpts = {}) {
       forms = forms[CDR];
     }
     return val;
+  }
+  function prog1_hook(args, compileScope, tools) {
+    let result = 'NIL';
+    for (let i = 0; i< args.length; ++i) {
+      let res = compileEval(args[i], compileLambda, tools);
+      if (i === 0)
+        result = res;
+    }
+    return result;
   }
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
