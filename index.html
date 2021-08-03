@@ -881,7 +881,7 @@
       }
 
       // For "load" and "require"
-      let capturedInput, loadPath, loadLine, loadLineCount, loadContent;
+      let capturedInput, loadPath, loadLine, loadLineCount, loadAsyncContent;
 
       function load(path, noEval = false) {
         doLoad();
@@ -904,8 +904,8 @@
           });
           try {
             let content = await xhr;
-            let saveLoadContent = loadContent, savePath = loadPath, saveLine = loadLine, saveLoadLineCount = loadLineCount;
-            loadContent = content;
+            let saveLoadAsyncContent = loadAsyncContent, savePath = loadPath, saveLine = loadLine, saveLoadLineCount = loadLineCount;
+            loadAsyncContent = content;
             loadPath = path;
             loadLine = 0;
             loadLineCount = 0;
@@ -913,7 +913,7 @@
             try {
               res = originalLoad.call(globalScope, path, noEval);
             } finally {
-              loadContent = saveLoadContent;
+              loadAsyncContent = saveLoadAsyncContent;
               loadPath = savePath;
               loadLine = saveLine;
               loadLineCount = saveLoadLineCount;
@@ -924,10 +924,21 @@
         }
       }
 
-      function readFile(_) {
-        // Ignore the path parameter because the load wrapper has already loadeded it as loadContent
+      function readFile(path) {
+        let content = loadAsyncContent;
+        if (content === undefined) {
+          let request = new XMLHttpRequest();
+          let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime()
+          request.onerror = event => reject(new Error(`XMLHttpRequest error ${String(event)}`));
+          let async = false;
+          request.open('GET', reqPath, async);
+          request.send(null);
+          if (request.status !== 200)
+            throw new Error(`Load ${path}, status ${request.status}`);
+          content = request.responseText;
+        }
         capturedInput = '';
-        return captureInput(loadContent);
+        return captureInput(loadAsyncContent);
         return null;
         function* captureInput(source) {
           for (let ch of source) {
