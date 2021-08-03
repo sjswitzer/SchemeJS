@@ -524,7 +524,6 @@ export function createInstance(schemeOpts = {}) {
     defineGlobalSymbol("globalThis", globalThis);
     for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
       defineGlobalSymbol(obj.name, obj);
-    
   }
 
   defineGlobalSymbol("intern", a => Atom(a));
@@ -3027,8 +3026,6 @@ export function createInstance(schemeOpts = {}) {
           name = newTemp(obj.description);
         else if (typeof obj === 'function')
           name = newTemp(obj.name);
-        else if (typeof obj === 'string')
-          name = newTemp('str_' + obj.substr(0, 10));
         else
           name = newTemp();
       }
