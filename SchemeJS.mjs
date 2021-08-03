@@ -846,7 +846,7 @@ export function createInstance(schemeOpts = {}) {
 
   // Logical & Conditional
 
-  defineGlobalSymbol("&&", and, { evalArgs: 1 }, "and");
+  defineGlobalSymbol("&&", and, { evalArgs: 0, compileHook: and_hook }, "and");
   function and(val, forms) {
     while (bool(val) && is_cons(forms)) {
       val = _eval(forms[CAR], this);
@@ -854,8 +854,28 @@ export function createInstance(schemeOpts = {}) {
     }
     return val;
   }
+  function and_hook(args, compileScope, tools,) {
+    return and_or_hook(args, compileScope, tools, 'and', 'true', '!bool');
+  }
 
-  defineGlobalSymbol("||", or, { evalArgs: 1 }, "or");
+  function and_or_hook(args, compileScope, tools, name, init, test) {
+    if (args.length < 1)
+      return `"${test}"`;
+    if (args.length == 1)
+      return compileEval(args[0], compileScope, tools);
+    let result = newTemp(name), saveIndent = tools.indent;
+    tools.indent += '  ';
+    tools.emit(`let ${result} = ${compileEval(args[0], compileScope, tools)}; ${result}: {`);
+    for (let i = 1; i < args.length; ++i) {
+      tools.emit(`if (${test}(${result})) break $result;`);
+      tools.emit(`${result} = ${compileEval(args[i], compileScope, tools)};`);
+    }
+    tools.indent = saveIndent;
+    tools.emit('}');
+    return result;
+  }
+
+  defineGlobalSymbol("||", or, { evalArgs: 1, compileHook: or_hook }, "or");
   function or(val, forms) {
     while (!bool(val) && is_cons(forms)) {
       val = _eval(forms[CAR], this);
@@ -863,8 +883,11 @@ export function createInstance(schemeOpts = {}) {
     }
     return val;
   }
+  function or_hook(args, compileScope, tools,) {
+    return and_or_hook(args, compileScope, tools, 'or', 'true', 'bool');
+  }
 
-  defineGlobalSymbol("??", nullish, { evalArgs: 1 }, "nullish");
+  defineGlobalSymbol("??", nullish, { evalArgs: 1, compileHook: nullish_hook }, "nullish");
   function nullish(val, forms) {
     while (val == null && is_cons(forms)) {
       val = _eval(forms[CAR], this);
@@ -873,6 +896,22 @@ export function createInstance(schemeOpts = {}) {
     if (is_cons(forms))
       return undefined;
     return val;
+  }
+  function nullish_hook(args, compileScope, tools) {
+    if (args.length < 1)
+      return `"undefined"`;
+    if (args.length == 1)
+      return compileEval(args[0], compileScope, tools);
+    let result = newTemp(name), saveIndent = tools.indent;
+    tools.indent += '  ';
+    tools.emit(`let ${result} = ${compileEval(args[0], compileScope, tools)}; ${result}: {`);
+    for (let i = 1; i < args.length; ++i) {
+      tools.emit(`if ((${result}) == null) { ${result} = undefined; break $result; }`);
+      tools.emit(`${result} = ${compileEval(args[i], compileScope, tools)};`);
+    }
+    tools.indent = saveIndent;
+    tools.emit('}');
+    return result;
   }
 
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
