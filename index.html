@@ -848,7 +848,7 @@
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
       let globalScope, SCHEME_VERSION;
-      let SchemeParseError, SchemeSyntaxError, SchemeParseIncomplete, NIL, originalLoad;
+      let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, NIL, originalLoad;
       let varNo = 0, errorElement, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB", slambdaStr = "\u03BB\u03BB";
 
@@ -860,7 +860,7 @@
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
-        SchemeParseIncomplete = globalScope.SchemeParseIncomplete;
+        SchemeParseIncompleteError = globalScope.SchemeParseIncompleteError;
         NIL = globalScope.NIL;
         let loadAtom = globalScope.Atom("load")
         originalLoad = globalScope[loadAtom];
@@ -1202,7 +1202,7 @@
           inputElement.textContent = '';
         } catch (error) {
           if (error instanceof SchemeParseError) {
-            if (!(error instanceof SchemeParseIncomplete))
+            if (!(error instanceof SchemeParseIncompleteError))
               // console.log("SchemeParseError", error);
             if (error instanceof SchemeSyntaxError) {
               let position = error.position;

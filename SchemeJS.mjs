@@ -276,15 +276,18 @@ export function createInstance(schemeOpts = {}) {
     let opts = {};
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
+    let group = opts.group ?? "builtin";
     if (typeof value === 'function') {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       createFunctionDescriptor(value, evalCount);
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
       let fnInfo = analyzeJSFunction(value);
-      if (!opts.compileHook && !fnInfo.value && !fnInfo.native)
+      if (evalCount !== MAX_INTEGER && !opts.compileHook && !opts.dontInline)
+        console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, value);
+      else if (!opts.compileHook && !fnInfo.value && group === 'builtin' && !opts.dontInline &&
+          !fnInfo.native && !(subclassOf(value, Error)))
         console.log("FUNCTION REQUIRES COMPILE HOOK", name, value);
     }
-    let group = opts.group ?? "builtin";
     let atom, atomName;
     ({ atom, atomName, name } = normalize(name));
     globalScope[atom] = value;
@@ -318,6 +321,14 @@ export function createInstance(schemeOpts = {}) {
       name = name.replace("?", "P");
       return { atom, atomName, name };
     }
+
+    function subclassOf(cls, supercls) {
+      while (cls.__proto__) {
+        if (cls === supercls) return true;
+        cls = cls.__proto__;
+      }
+      return false;
+    }
   }
 
   function createFunctionDescriptor(fn, evalCount = MAX_INTEGER) {
@@ -345,7 +356,6 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("VERSION", VERSION);
   defineGlobalSymbol("is-atom", is_atom, "atom?");
-  defineGlobalSymbol("intern", Atom);
   exportAPI("Atom", Atom);
 
   class SchemeError extends Error {};
@@ -380,7 +390,7 @@ export function createInstance(schemeOpts = {}) {
   SchemeSyntaxError.prototype.name = "SchemeSyntaxError";
   defineGlobalSymbol("SchemeSyntaxError", SchemeSyntaxError);
 
-  class SchemeParseIncomplete extends SchemeParseError {
+  class SchemeParseIncompleteError extends SchemeParseError {
     path; token; parseContext; position; line; lineChar;
     constructor(path, token, parseContext) {
       let position = token.position, line = token.line, lineChar = token.lineChar;
@@ -395,8 +405,8 @@ export function createInstance(schemeOpts = {}) {
       this.lineChar = lineChar
     }
   };
-  SchemeParseIncomplete.prototype.name = "SchemeParseIncomplete";
-  defineGlobalSymbol("SchemeParseIncomplete", SchemeParseIncomplete);
+  SchemeParseIncompleteError.prototype.name = "SchemeParseIncompleteError";
+  defineGlobalSymbol("SchemeParseIncompleteError", SchemeParseIncompleteError);
 
   const LogicError = Error;
   defineGlobalSymbol("LogicError", LogicError);
@@ -518,22 +528,25 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("intern", a => Atom(a));
-  defineGlobalSymbol("eval", eval_);
+  defineGlobalSymbol("eval", eval_, { dontInline: true });
   function eval_(expr, scope = this) { // Javascript practically treats "eval" as a keyword
+    let result = _eval(expr, scope);
     return _eval(expr, scope);
   }
 
   defineGlobalSymbol("eval-string", eval_string);
   function eval_string(str, scope = this) {
     let expr = parseSExpr(str);
-    return eval_.call(this, expr, scope);
+    let result = eval_.call(this, expr, scope);
+    return result;
   }
 
   defineGlobalSymbol("globalScope", globalScope);
 
   defineGlobalSymbol("apply", apply);
   function apply(fn, args, scope = this) {
-    return _apply(fn, args, scope);
+    let result = _apply(fn, args, scope);
+    return result;
   }
 
   // Pokemon gotta catch 'em' all!
@@ -934,7 +947,7 @@ export function createInstance(schemeOpts = {}) {
     return NIL;
   }
 
-  defineGlobalSymbol("require", require_);
+  defineGlobalSymbol("require", require_, { dontInline: true });
   function require_(path) {
     let sym = Atom(`*${path}-loaded*`);
     if (!bool(globalScope[sym])) {
@@ -947,7 +960,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (load fname noeval-flag)
   //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
-  defineGlobalSymbol("load", load);
+  defineGlobalSymbol("load", load, { dontInline: true });
   function load(path, noEval = false) {
     let scope = this, result = NIL, last;
     let fileContent;
@@ -1006,7 +1019,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("last", last);
+  defineGlobalSymbol("last", last, { dontInline: true });
   function last(list) {
     let res = NIL;
     if (!list || is_null(list)) return NIL; // XXX check this.
@@ -1051,7 +1064,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("length", length);
+  defineGlobalSymbol("length", length, { dontInline: true });
   function length(list) {
     let n = 0;
     if (is_list(list)) {
@@ -1100,7 +1113,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("copy-list", copy_list);  // TODO: unit tests!
+  defineGlobalSymbol("copy-list", copy_list, { dontInline: true });  // TODO: unit tests!
   function copy_list(list) {
     let res = NIL, last;
     if (is_null(list)) return NIL;
@@ -1127,7 +1140,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
-  defineGlobalSymbol("member", member);
+  defineGlobalSymbol("member", member, { dontInline: true });
   function member(key, list) {
     while (is_cons(list)) {
       if (key === list[CAR])   // TODO: == or ===?
@@ -1139,7 +1152,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (memq key list)
   //     Returns the portion of the list where the car is eq to the key, or () if none found.
-  defineGlobalSymbol("memq", memq);
+  defineGlobalSymbol("memq", memq, { dontInline: true });
   function memq(key, list) {
     while (is_cons(list)) {
       if (key === list[CAR])
@@ -1151,7 +1164,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (nth index list)
   //     Reference the list using index, with the first element being index 0.
-  defineGlobalSymbol("nth", nth);
+  defineGlobalSymbol("nth", nth, { dontInline: true });
   function nth(index, list) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
       throw new TypeError(`Not an integer ${string(index)}`);
@@ -1178,7 +1191,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (apropos substring) -- Returns a list of all symbols containing the given substring
-  defineGlobalSymbol("apropos", apropos);
+  defineGlobalSymbol("apropos", apropos, { dontInline: true });
   function apropos(substring) {
     if (!substring) substring = "";
     substring = substring.toLowerCase();
@@ -1198,11 +1211,10 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (mapcar fn list1 list2 ...)
-  defineGlobalSymbol("mapcar", mapcar, "map");
+  defineGlobalSymbol("mapcar", mapcar, { dontInline: true });
   function mapcar(fn, ...lists) {
-    if (!bool(fn)) return NIL;
     // Actually, this will work for any iterables, and lists are iterable.
-    let res = NIL, last;
+    let result = NIL, last;
     for (let list of lists) {
       if (is_list(list)) {
         // Could just let the list iterator handle it but might as well just follow the Cons chain
@@ -1211,7 +1223,7 @@ export function createInstance(schemeOpts = {}) {
           let item = list[CAR];
           item = _apply(fn, cons(item, NIL), this);
           if (last) last = last[CDR] = cons(item, NIL);
-          else res = last = cons(item, NIL);
+          else result = last = cons(item, NIL);
             list = list[CDR];
         }
       } else {
@@ -1220,15 +1232,15 @@ export function createInstance(schemeOpts = {}) {
           item =  _apply(fn, cons(item, NIL), this);
           item = cons(item, NIL);
           if (last) last = last[CDR] = item;
-          else res = last = item;
+          else result = last = item;
         }
       }
     }
-    return res;
+    return result;
   }
 
   // Same as mapcar but results in an Array
-  defineGlobalSymbol("array_map", array_map);
+  defineGlobalSymbol("array_map", array_map, { dontInline: true });
   function array_map(fn, ...lists) {
     let res = [];
     for (let list of lists) {
@@ -1290,10 +1302,10 @@ export function createInstance(schemeOpts = {}) {
   //    "with (scope) { return symbol = value }");
 
   defineGlobalSymbol("set!", setq, { evalArgs: 1 }, "setq");
-  function setq(symbol, value) { return setSym(symbol, value, this) }
+  function setq(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   defineGlobalSymbol("set", setq);
-  function set(symbol, value) { return setSym(symbol, value, this) }
+  function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   function setSym(symbol, value, scope) {
     // Can _almost_ do this using "with." Maybe come back to that.
@@ -1314,7 +1326,7 @@ export function createInstance(schemeOpts = {}) {
   // (qsort list predicate-fcn access-fcn)
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
   //   comparable performance and is excellent with partially-sorted lists.
-  defineGlobalSymbol("mergesort", mergesort, "sort", "qsort");
+  defineGlobalSymbol("mergesort", mergesort, { dontInline: true }, "sort", "qsort");
   function mergesort(list, predicateFn = undefined, accessFn = undefined) {
     if (is_null(list)) return NIL;
     // Sort Arrays as Arrays
@@ -1333,7 +1345,7 @@ export function createInstance(schemeOpts = {}) {
     return in_place_mergesort(copied, predicateFn, accessFn);
   }
 
-  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, "in-place-sort", "nsort");
+  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { dontInline: true }, "in-place-sort", "nsort");
   function in_place_mergesort(list, predicateFn = undefined, accessFn = undefined) {
     if (is_null(list)) return NIL;
     // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
@@ -1554,7 +1566,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\ (params) (form1) (form2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR, lambda, { evalArgs: 0 }, "\\", "lambda");
+  defineGlobalSymbol(LAMBDA_CHAR, lambda, { evalArgs: 0, dontInline: true }, "\\", "lambda");
   function lambda(body) {
     let scope = this;
     let schemeClosure = cons(CLOSURE_ATOM, cons(scope, body));
@@ -1568,7 +1580,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\\ nEval (params) (body1) (body2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR+LAMBDA_CHAR, special_lambda, { evalArgs: 0 }, "\\\\", "special_lambda");
+  defineGlobalSymbol(LAMBDA_CHAR+LAMBDA_CHAR, special_lambda, { evalArgs: 0, dontInline: true }, "\\\\", "special_lambda");
   function special_lambda(body) {
     let scope = this;
     let schemeClosure = cons(SCLOSURE_ATOM, cons(scope, body));
@@ -1583,7 +1595,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("is_closure", is_closure)
-  defineGlobalSymbol("closure?", is_closure);
+  defineGlobalSymbol("closure?", is_closure, { dontInline: true });
   function is_closure(form) {
     if (form != null && form[CLOSURE_ATOM])
       return true;
@@ -1609,7 +1621,7 @@ export function createInstance(schemeOpts = {}) {
   SchemeJSThrow.prototype.name = "SchemeJSThrow";
 
   // (*throw tag value) -- SIOD style
-  defineGlobalSymbol("*throw", schemeThrow);
+  defineGlobalSymbol("*throw", schemeThrow, { dontInline: true });
   function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style
@@ -1631,7 +1643,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (throw value) -- Java/JavaScript style
   defineGlobalSymbol("throw", js_throw);
-  function js_throw(value) { throw value }
+  function js_throw(value) { throw value; return undefined; } // "return" lets compiler use template
 
   // (catch (var [type] forms) forms) -- Java/JavaScript style
   defineGlobalSymbol("catch", js_catch, { evalArgs: 0 });
@@ -1672,7 +1684,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (define variable value)
   // (define (fn args) forms)
-  defineGlobalSymbol("define", define, { evalArgs: 0 });
+  defineGlobalSymbol("define", define, { evalArgs: 0, dontInline: true });
   function define(forms) {
     if (!(is_cons(forms) && is_cons(forms[CDR])))
       throw new SchemeEvalError(`Define requires two parameters`);
@@ -2166,7 +2178,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
-  defineGlobalSymbol("to-list", to_list);
+  defineGlobalSymbol("to-list", to_list, { dontInline: true });
   function to_list(obj, ...etc) {
     let depth = etc[0];
     if (!bool(depth)) depth = 1;
@@ -2334,13 +2346,13 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[LAZYCDR] = true;
   LazyIteratorList.prototype[LIST] = true;
 
-  defineGlobalSymbol("list-view", list_view);
+  defineGlobalSymbol("list-view", list_view, { dontInline: true });
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator);
   }
 
-  defineGlobalSymbol("lazy-map", lazy_map);
+  defineGlobalSymbol("lazy-map", lazy_map, { dontInline: true });
   function lazy_map(fn, obj) {
     if (!bool(fn)) return NIL; // XXX probably should throw; also mapcar
     let scope = this, iterator = iteratorFor(obj, TypeError);
@@ -2352,7 +2364,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("to-string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
 
   // Turns iterable objects like lists into arrays, recursively to "depth"
-  defineGlobalSymbol("to-array", to_array);
+  defineGlobalSymbol("to-array", to_array, { dontInline: true });
   function to_array(obj, depth = 1) {
     if (depth <= 0) return obj;
     res = [];
@@ -2586,7 +2598,7 @@ export function createInstance(schemeOpts = {}) {
   const gensym = () => Symbol(`*gensym-${gensym_count++}*`);
   defineGlobalSymbol("gensym", gensym);
 
-  defineGlobalSymbol("parse", parseSExpr);
+  defineGlobalSymbol("parse", parseSExpr, { dontInline: true });
   exportAPI("parseSExpr", parseSExpr);
   function parseSExpr(characterStream, opts = {}) {
     opts = { ...schemeOpts, ...opts };
@@ -2650,7 +2662,7 @@ export function createInstance(schemeOpts = {}) {
             return val;
           }
           if (token().type === 'end' || token().type === 'partial')
-            throw new SchemeParseIncomplete(path, token(), parseContext);
+            throw new SchemeParseIncompleteError(path, token(), parseContext);
           if (token().type === 'garbage') throwSyntaxError();
           let first = parseExpr();
           let rest = parseListBody();
@@ -2673,7 +2685,7 @@ export function createInstance(schemeOpts = {}) {
           if (token().type === ',')  // Comma is optional
             consumeToken();
           if (token().type === 'end' || token().type === 'partial')
-            throw new SchemeParseIncomplete(path, token(), parseContext);
+            throw new SchemeParseIncompleteError(path, token(), parseContext);
         }
       }
 
@@ -2720,7 +2732,7 @@ export function createInstance(schemeOpts = {}) {
             if (token().type === ',')  // Comma is optional
               consumeToken();
             if (token().type === 'end'|| token().type === 'partial')
-              throw new SchemeParseIncomplete(path, token(), parseContext);
+              throw new SchemeParseIncompleteError(path, token(), parseContext);
           }
           if (!gotIt) throwSyntaxError();
         }
@@ -2770,7 +2782,7 @@ export function createInstance(schemeOpts = {}) {
     function throwSyntaxError() {
       let str = "", errorToken = token();
       if (errorToken.type === 'partial')
-        throw new SchemeParseIncomplete(path, errorToken, parseContext)
+        throw new SchemeParseIncompleteError(path, errorToken, parseContext)
       let newline = false;
       while (_tokens.length > 0) {
         // "detokenize" any lookahead tokens
@@ -2941,7 +2953,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
-  defineGlobalSymbol("compile", compile, { evalArgs: 0 });
+  defineGlobalSymbol("compile", compile, { evalArgs: 0, dontInline: true });
   function compile(nameAndParams, forms, _) {
     if (!is_cons(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[CAR]);
@@ -3401,7 +3413,7 @@ export function createInstance(schemeOpts = {}) {
   const quit = _ => quitRepl = true;
   defineGlobalSymbol("quit", quit);
 
-  defineGlobalSymbol("REPL", REPL);
+  exportAPI("REPL", REPL);
   function REPL(readline, opts = {}) {  // readline(prompt) => str | nullish
     let scope = this;
     opts = { ...schemeOpts, ...opts };
