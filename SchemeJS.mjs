@@ -449,8 +449,7 @@ export function createInstance(schemeOpts = {}) {
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
 
-  const quote = quoted => quoted[CAR];
-  const QUOTE_ATOM = defineGlobalSymbol("quote", quote, { evalArgs: 0 }, "'");
+  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[CAR], { evalArgs: 0, dontInline: true }, "quote");
   defineGlobalSymbol("scope", function() { return this });
 
   exportAPI("NIL", NIL);
