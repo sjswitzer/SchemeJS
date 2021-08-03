@@ -592,22 +592,22 @@
       <dd id="defn-and">
         (&& value value ...)
         <p> Evaluates its arguments until one of them is false.
-            Results in the first "falsey" value; otherwise the last value.
+            Results in the first "false" value; otherwise the last value.
             Evaluation ends when a false value is found.
-            "Falsey" values are
+            "False" values are
             <code>false</code>, <code>nil</code>, <code>undefined</code> and
             <code>null</code>; unlike JavaScript,
-            zero, NaN and "" are <i>not</i> falsey.
+            zero, NaN and "" are <i>not</i> false.
       <dd id="defn-or">
         (|| value value ...)
         <p> Evaluates its arguments until one of them is true.
-          Results in the first "truthy" value; otherwise the last value.
+          Results in the first "true" value; otherwise the last value.
           Evaluation ends when a true value is found.
-          "Falsey" values are
+          "False" values are
           <code>false</code>, <code>nil</code>, <code>undefined</code> and
           <code>null</code>; unlike JavaScript,
-          zero, NaN and "" are <i>not</i> falsey.
-          Everything else is "truthy."
+          zero, NaN and "" are <i>not</i> considered false.
+          Everything else is "true."
       <dd id="defn-bit-and">
         (& value value ...)
         <p> Bitwise "and" of the values considered as 32-bit integers.
@@ -805,22 +805,39 @@
         <p> Returns a closure that binds parameters <i>p1</i>, <i>p2</i>, etc. to the arguments,
             then evaluates the <i>form</i>s sequentially, returning the value of the last one or
             <i>nil</i> if there are none
-      <dd id="defn-xxx">
-        xxx
-        <p> xxx
-      <dd id="defn-xxx">
-        xxx
-        <p> xxx
-      <dd id="defn-xxx">
-          xxx
-      <p> xxx
-        <dd id="defn-xxx">
-          xxx
-      <p> xxx
-        <dd id="defn-xxx">
-          xxx
-      <p> xxx
-        <dd id="defn-xxx">
+      <dd id="defn-not">
+        (! value)
+        <p> Logical "not." Returns <i>true</i> if <i>value</i> is not true.
+            "False" values are
+            <code>false</code>, <code>nil</code>, <code>undefined</code> and
+            <code>null</code>; unlike JavaScript,
+            zero, NaN and "" are <i>not</i> considerd false.
+            Everything else is "true."
+      <dd id="defn-eqv">
+        (== a b ...)
+        <p> Returns true if all the values are equal to each other.
+            Evaluation ends when two items are different.
+      <dd id="defn-ne">
+        (!= a b ...)
+        <p> Returns true unless all the values are equal to each other.
+            Evaluation ends when two items are different.
+      <dd id="defn-lt">
+        (< a b ...)
+        <p> Returns true if each value is less than the previous.
+            Evaluation ends as soon as this this is not the case.
+      <dd id="defn-le">
+        (<= a b ...)
+        <p> Returns true if each value is less than or equal to the previous.
+            Evaluation ends as soon as this this is not the case.
+      <dd id="defn-gt">
+        (> a b ...)
+        <p> Returns true if each value is greater than the previous.
+            Evaluation ends as soon as this this is not the case.
+      <dd id="defn-ge">
+        (> a b ...)
+        <p> Returns true if each value is greater than or equal the previous.
+            Evaluation ends as soon as this this is not the case.
+              <dd id="defn-xxx">
           xxx
           <p> xxx
                                                                                         </div>
@@ -880,8 +897,11 @@
       function readFile(path) {
         capturedInput = '';
         let request = new XMLHttpRequest();
-        let async = false;
-        request.open('GET', path, async);
+        let async = false;  // TODO: somehow do this async
+        // Bypass the cache.
+        //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
+        let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime()
+        request.open('GET', reqPath, async);
         request.send(null);
         if (request.status === 200)
           return captureInput(request.responseText);
@@ -986,7 +1006,7 @@
                 if (dd) break;
               }
               if (!dd)
-                dd = textElement('dd', `TBD (${"defn-" + atomNames[0]})`);
+                dd = textElement('dd', 'TBD');
               helpElement.appendChild(dd);
               if (typeof value === 'function') {
                 dd.appendChild(textElement('p', `Impl: ${string(value)}`, 'impl'));
