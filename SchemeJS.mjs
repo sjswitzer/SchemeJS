@@ -530,7 +530,6 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("intern", a => Atom(a));
   defineGlobalSymbol("eval", eval_, { dontInline: true });
   function eval_(expr, scope = this) { // Javascript practically treats "eval" as a keyword
-    let result = _eval(expr, scope);
     return _eval(expr, scope);
   }
 
@@ -714,6 +713,7 @@ export function createInstance(schemeOpts = {}) {
     if (args.length === 2)
       return `(${args[0]} ${op} ${args[1]})`;
     let result = tools.newTemp(name);
+    tools.emit('"use strict";')
     tools.emit(`let ${result} = false; ${result}: {`);
     let saveIndent = tools.indent;
     tools.indent = saveIndent + "  ";
