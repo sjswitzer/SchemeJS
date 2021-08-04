@@ -5,17 +5,35 @@
      (? (bigint? x) 1n 1)
      (* x (factoral (- x (? (bigint? x) 1n 1))))
   ))
-
 (factoral 100)
 (factoral 100n)
 (factoral 171)
 (factoral 171n)
+
+(define (factoral' x)
+  (? (<= x 1) 
+     (bigint? x 1n 1)
+     (* x (factoral (- x (bigint? x 1n 1))))
+  ))
+(factoral' 50)
+(factoral' 50n)
 
 (compile (factoral x)
   (? (<= x 1) 
      (? (bigint? x) 1n 1)
      (* x (factoral (- x (? (bigint? x) 1n 1))))
   ))
+
+(factoral 50)
+(factoral 50n)
+
+(compile (factoral' x)
+  (? (<= x 1) 
+     (bigint? x 1n 1)
+     (* x (factoral (- x (bigint? x 1n 1))))
+  ))
+(factoral' 50)
+(factoral' 50n)
 
 (define (opt a b (? c 2)) (list a b c))
 (opt 4 5 6)
