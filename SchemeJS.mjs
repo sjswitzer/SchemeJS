@@ -931,12 +931,12 @@ export function createInstance(schemeOpts = {}) {
     tools.emit(`if (${test}) {`);
     let saveIndent = tools.indent;
     tools.indent = saveIndent + "  ";
-    let tResult = compileEval(t, compileScope, tools);
+    let tResult = t === undefined ? 'true' : compileEval(t, compileScope, tools);
     tools.emit(`${result} = ${tResult};`);
     tools.indent = saveIndent;
     tools.emit(`} else {`);
     tools.indent = saveIndent + "  ";
-    let fResult = compileEval(f, compileScope, tools);
+    let fResult = f === undefined ? 'false' : compileEval(f, compileScope, tools);
     tools.emit(`${result} = ${fResult};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
