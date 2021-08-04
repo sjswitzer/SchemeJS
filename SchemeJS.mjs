@@ -333,17 +333,20 @@ export function createInstance(schemeOpts = {}) {
 
   function createFunctionDescriptor(fn, evalCount = MAX_INTEGER) {
     let fnInfo = analyzeJSFunction(fn);
-    let paramCount = fnInfo.nonOptionalCount;
-    if (fnInfo.restParam) {
+    let paramCount = fnInfo.params.length;
+    let requiredCount = fnInfo.requiredCount;
+    if (fnInfo.restParam || fnInfo.native) {
       if (evalCount !== MAX_INTEGER)
         throw new LogicError(`Can't have rest params with special evaluation ${name}`)
+      paramCount = MAX_INTEGER;
     }
-    if (paramCount > 0xffff) throw new LogicError("Too many params");
-    if (fnInfo.native) paramCount = MAX_INTEGER;
-    // Encoding chosen so that small values mean eval everything and lift that many.
-    let functionDescriptor = (~evalCount << 16) | (paramCount & 0xffff);
+    let functionDescriptor =  encodeFunctionDescriptor(evalCount, requiredCount, paramCount);
     fn[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
     return functionDescriptor;
+  }
+
+  function encodeFunctionDescriptor(evalCount, requiredCount, paramCount) {
+    return evalCount << 24 | (requiredCount & 0xfff) << 12 | (paramCount & 0xfff);
   }
 
   exportAPI("PAIR_SYMBOL", PAIR);
@@ -481,7 +484,6 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("nullish?", a => a == null);
   defineGlobalSymbol("boolean?", a => typeof a === 'boolean');
   defineGlobalSymbol("number?", a => typeof a === 'number');
-  defineGlobalSymbol("bigint?", a => typeof a === 'bigint');
   defineGlobalSymbol("numeric?", a => typeof a === 'number' || typeof a === 'bigint');
   defineGlobalSymbol("string?", a => typeof a === 'string');
   defineGlobalSymbol("symbol?", a => typeof a === 'symbol');
@@ -915,30 +917,37 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
-  function ifelse(p, t, f, _) { return bool(p) ? _eval(t, this): _eval(f, this) }
+  function ifelse(p, t = true, f = false, _) {
+    return bool(p) ? _eval(t, this): _eval(f, this) }
   function ifelse_hook(args, compileScope, tools) {
-    let p = args[0], t = args[1], f = args[2];
-    let result;
-    if (args.length < 3) {
-      result = 'undefined';
-    } else {
-      let p = args[0], t = args[1], f = args[2];
-      result = tools.newTemp("if");  // It's like a PHI node in SSA compilers. Sorta.
-      tools.emit(`let ${result};`);
-      tools.emit(`if (bool(${p})) {`);
-      let saveIndent = tools.indent;
-      tools.indent = saveIndent + "  ";
-      let tResult = compileEval(t, compileScope, tools);
-      tools.emit(`${result} = ${tResult};`);
-      tools.indent = saveIndent;
-      tools.emit(`} else {`);
-      tools.indent = saveIndent + "  ";
-      let fResult = compileEval(f, compileScope, tools);
-      tools.emit(`${result} = ${fResult};`);
-      tools.indent = saveIndent;
-      tools.emit(`}`);
-    }
+    return test_hook(args, compileScope, tools, 'if', 'bool(*)');
+  }
+
+  function test_hook(args, compileScope, tools, name, test) {
+    let a = args[0], t = args[1], f = args[2];
+    result = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
+    tools.emit(`let ${result};`);
+    test = test.replace('X', a);
+    tools.emit(`if (${test}) {`);
+    let saveIndent = tools.indent;
+    tools.indent = saveIndent + "  ";
+    let tResult = compileEval(t, compileScope, tools);
+    tools.emit(`${result} = ${tResult};`);
+    tools.indent = saveIndent;
+    tools.emit(`} else {`);
+    tools.indent = saveIndent + "  ";
+    let fResult = compileEval(f, compileScope, tools);
+    tools.emit(`${result} = ${fResult};`);
+    tools.indent = saveIndent;
+    tools.emit(`}`);
     return result;
+  }
+
+  defineGlobalSymbol("bigint?" ,is_bigint, { compileHook: is_bigint_hook });
+  function is_bigint(a, t = true, f = false) {
+     return typeof a === 'bigint' ? _eval(t, this): _eval(f, this) }
+  function is_bigint_hook(args, compileScope, tools) {
+    return test_hook(args, compileScope, tools, 'is_bigint', `typeof * === 'bigint'`);
   }
 
   // (begin form1 form2 ...)
@@ -1833,7 +1842,7 @@ export function createInstance(schemeOpts = {}) {
     // seen the slambda form and I want the logic for that all in one place. Here, in fact.
     // By default _apply doesn't evaluate its args, but if evaluateArguments is set
     // (as it is by eval) it does.
-    let paramCount = 0, evalCount = MAX_INTEGER;
+    let evalCount = MAX_INTEGER, paramCount = MAX_INTEGER, requiredCount = 0;
     if (is_cons(form)) {  // must check before checking function type because closures are functions too!
       let opSym = form[CAR];
       if (opSym === SLAMBDA_ATOM) {
@@ -1845,15 +1854,14 @@ export function createInstance(schemeOpts = {}) {
     } else if (typeof form === 'function') {
       let fn = form;
       // The function descriptor is encoded as:
-      //   (~evalCount << 16) | (paramCount &0xffff);
-      // If there's no function descriptor the default is to eval every argument
-      // which, by no accident, is zero.
+      //   evalCount << 24) | (requiredCount&0xfff) << 12 | (paramCount&0xfff)
       let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL];
       if (functionDescriptor == null)
         functionDescriptor = createFunctionDescriptor(form);
       // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-      evalCount = ~functionDescriptor >> 15 >>> 1;
-      paramCount = functionDescriptor << 16 >> 15 >>> 1;
+      evalCount = functionDescriptor >> 23 >>> 1;
+      requiredCount = functionDescriptor << 8 >> 19 >>> 1;
+      paramCount = functionDescriptor << 20 >> 19 >>> 1;
     }
     if (evaluateArguments) {
       let evalledArgs = NIL, last = undefined;
@@ -1876,18 +1884,20 @@ export function createInstance(schemeOpts = {}) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
         } else { 
-          if (i < paramCount && paramCount !== MAX_INTEGER) {
+          if (i < requiredCount) {
             if (i < 1) {
               // We can't partially apply without any arguments, but the function wants
               // parameters anyway so we supply undefined. This will allow the
               // "forms" parameter to go into the correct parameter.
-              while (i++ < paramCount)
-                jsArgs.push(undefined);
+              if (evalCount !== MAX_INTEGER) {
+                while (i++ < lift)
+                  jsArgs.push(undefined);
+              }
               break;
             }
             // Partial application of built-in functions
             let paramList = NIL;
-            for (let pnum = paramCount; pnum > i; --pnum)
+            for (let pnum = requiredCount; pnum > i; --pnum)
               paramList = cons(Atom(`p${(pnum)}`), paramList);
             let argList = paramList;
             for (let anum = i; anum > 0; --anum)
@@ -2867,7 +2877,7 @@ export function createInstance(schemeOpts = {}) {
     let analyzed = analyzedFunctions.get(fn);
     if (analyzed)
       return analyzed;
-    let str = fn.toString(), pos = 0, token = "", paramPos = 0, nonOptionalCount;
+    let str = fn.toString(), pos = 0, token = "", paramPos = 0, requiredCount;
     let name = fn.name, params = [], restParam, value, body, native = false, printParams, printBody;
     parse: {
       if (nextToken() === 'function') {
@@ -2899,9 +2909,9 @@ export function createInstance(schemeOpts = {}) {
           value = possibleValue;
       }
     }
-    if (nonOptionalCount === undefined)
-      nonOptionalCount = params.length;
-    let res = { name, params, restParam, value, body, printBody, printParams, native, nonOptionalCount };
+    if (requiredCount === undefined)
+      requiredCount = params.length;
+    let res = { name, params, restParam, value, body, printBody, printParams, native, requiredCount };
     analyzedFunctions.set(fn, res);
     return res;
 
@@ -2920,8 +2930,8 @@ export function createInstance(schemeOpts = {}) {
 
     function scarfParamDefault() {
       if (token === '=') {
-        if (nonOptionalCount === undefined)
-          nonOptionalCount = params.length-1;
+        if (requiredCount === undefined)
+          requiredCount = params.length-1;
         let delimCount = 0;
         nextToken();
         while (token) {
@@ -3163,7 +3173,7 @@ export function createInstance(schemeOpts = {}) {
   }
   
   function compileApply(form, args, compileScope, tools, recursionStich) {
-    let paramCount = 0, evalCount = MAX_INTEGER;
+    let evalCount = MAX_INTEGER, paramCount = MAX_INTEGER, requiredCount = 0;
     let name, params, value, body, hook;
     let saveIndent = tools.indent;
     let foundSelf = form === tools.functionName;
@@ -3196,8 +3206,9 @@ export function createInstance(schemeOpts = {}) {
         let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL];
         if (functionDescriptor == null)
           functionDescriptor = createFunctionDescriptor(fn);
-        evalCount = ~functionDescriptor >> 15 >>> 1;
-        paramCount = functionDescriptor << 16 >> 15 >>> 1;
+        evalCount = functionDescriptor >> 23 >>> 1;
+        requiredCount = functionDescriptor << 8 >> 19 >>> 1;
+        paramCount = functionDescriptor << 20 >> 19 >>> 1;
       }
     }
     let jsArgs = [];
@@ -3225,8 +3236,8 @@ export function createInstance(schemeOpts = {}) {
     }
     if (recursionStich || typeof form === 'function' && !form[CLOSURE_ATOM]) { // Scheme functions impose as Cons cells
       // JS function case
-      if (jsArgs.length < paramCount && paramCount !== MAX_INTEGER && !hook) {
-        if (paramCount === 1) {
+      if (jsArgs.length < requiredCount && !hook) {
+        if (requiredCount === 1) {
           // Can't partially bind a function with less than 2 params, but if it has
           // one param it needs some value. So we provide "undefined" (see _apply).
           jsArgs.push('undefined');
