@@ -925,9 +925,9 @@ export function createInstance(schemeOpts = {}) {
 
   function test_hook(args, compileScope, tools, name, test) {
     let a = args[0], t = args[1], f = args[2];
-    result = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
+    let result = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
     tools.emit(`let ${result};`);
-    test = test.replace('X', a);
+    test = test.replace('*', a);
     tools.emit(`if (${test}) {`);
     let saveIndent = tools.indent;
     tools.indent = saveIndent + "  ";
@@ -943,8 +943,8 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("bigint?" ,is_bigint, { compileHook: is_bigint_hook });
-  function is_bigint(a, t = true, f = false) {
+  defineGlobalSymbol("bigint?" ,is_bigint, { evalArgs: 1, compileHook: is_bigint_hook });
+  function is_bigint(a, t = true, f = false, _) {
      return typeof a === 'bigint' ? _eval(t, this): _eval(f, this) }
   function is_bigint_hook(args, compileScope, tools) {
     return test_hook(args, compileScope, tools, 'is_bigint', `typeof * === 'bigint'`);
@@ -1884,17 +1884,7 @@ export function createInstance(schemeOpts = {}) {
           jsArgs.push(args[CAR]);
           args = args[CDR];
         } else { 
-          if (i < requiredCount) {
-            if (i < 1) {
-              // We can't partially apply without any arguments, but the function wants
-              // parameters anyway so we supply undefined. This will allow the
-              // "forms" parameter to go into the correct parameter.
-              if (evalCount !== MAX_INTEGER) {
-                while (i++ < lift)
-                  jsArgs.push(undefined);
-              }
-              break;
-            }
+          if (i < requiredCount && i > 0) {
             // Partial application of built-in functions
             let paramList = NIL;
             for (let pnum = requiredCount; pnum > i; --pnum)
@@ -1910,7 +1900,11 @@ export function createInstance(schemeOpts = {}) {
               closure = special_lambda.call(scope, cons(i-evalCount, cons(paramList, forms)));
             return closure;
           }
-          break;
+          if (evalCount === MAX_INTEGER) break;
+          // We can't partially apply without any arguments, but the function wants
+          // parameters anyway so we supply undefined. This will allow the
+          // "forms" parameter to go into the correct parameter.
+          jsArgs.push(undefined);
         }
       }
       if (evalCount !== MAX_INTEGER) // last parameter gets the remaining arguments as a list
