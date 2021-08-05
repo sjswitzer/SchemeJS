@@ -52,7 +52,8 @@ export function createInstance(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
-  const COMPILED = Symbol('COMPILED'), PARAMETER_DESCRIPTOR = Symbol('PARAMETER_DESCRIPTOR');
+  const COMPILED = Symbol('COMPILED'), JITCOMPILED = Symbol("JITCOMPILED"), JITCOUNT = Symbol("JITCOUNT"), JIT_THRESHOLD = 1000;
+  const PARAMETER_DESCRIPTOR = Symbol('PARAMETER_DESCRIPTOR'), NAMETAG = Symbol("NAMETAG");
 
   // Trust the JIT to inline this
   const isCons = obj => obj != null && obj[PAIR] === true;
@@ -1693,7 +1694,24 @@ export function createInstance(schemeOpts = {}) {
     if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
       throw new TypeError(`Must define symbol or string ${string(defined)}`);
+    if (value != null &(typeof value === 'function' || typeof value === 'object'))
+      value[NAMETAG] = name;
     globalScope[name] = value;
+    return name;
+  }
+
+  // (compile (fn args) forms) -- defines a compiled function
+  // (compile lambda) -- returns a compiled lambda expression
+  defineGlobalSymbol("compile", compile, { evalArgs: 0, dontInline: true });
+  function compile(nameAndParams, forms, _) {
+    if (!isCons(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
+    let name = Atom(nameAndParams[CAR]);
+    let args = nameAndParams[CDR];
+    if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
+    let form = list(LAMBDA_ATOM, args, forms);
+    let compiledFunction = compile_lambda.call(this, name, form);
+    compiledFunction[NAMETAG] = name;
+    globalScope[name] = compiledFunction;
     return name;
   }
 
@@ -1744,6 +1762,8 @@ export function createInstance(schemeOpts = {}) {
       if (argCount >= requiredCount) {
         if (evalCount !== MAX_INTEGER)
           argv.push(args);
+        let jitCompiled = fn[JITCOMPILED];
+        if (jitCompiled) fn = jitCompiled;
         return fn.apply(scope, argv);
       }
       // Insufficient # of parameters. If there is at least one argument, create a closure.
@@ -1899,6 +1919,12 @@ export function createInstance(schemeOpts = {}) {
     }
     if (typeof params === 'symbol') hasRestParam = true;
     function jsClosure(...args) {
+      if (--jsClosure[JITCOUNT] < 0) {
+        // jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
+      }
+      // TODO: implement JIT by having a counter here and after "n" calls
+      // compile the code then forward to the compiler or "tag" the closure with an "APPLY"
+      // symbol that tells eval and apply what to do instead of applying this closure.
       let scope = newScope(closureScope, "*lambda-scope*"), params = lambdaParams, i = 0, argLength = args.length;
       for ( ; i < argLength && isCons(params); ++i, params = params[CDR]) {
         let param = params[CAR], optionalForms;
@@ -1935,6 +1961,7 @@ export function createInstance(schemeOpts = {}) {
     jsClosure[CAR] = schemeClosure[CAR];
     jsClosure[CDR] = schemeClosure[CDR];
     jsClosure[LIST] = jsClosure[PAIR] = true;
+    jsClosure[JITCOUNT] = JIT_THRESHOLD;
     return jsClosure;
   }
 
@@ -2296,7 +2323,13 @@ export function createInstance(schemeOpts = {}) {
       }
       if (typeof obj === 'function' && !obj[CLOSURE_ATOM]) {
         let fnDesc = analyzeJSFunction(obj);
-        let name = fnDesc.name ? ` ${fnDesc.name}` : '';
+        let name;
+        if (obj[NAMETAG])
+          name = obj[NAMETAG];
+        else
+          name = fnDesc.name ?? '';
+        if (typeof name === 'symbol')
+          name = name.description;
         let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
         if (fnDesc.value && !fnDesc.body && !printBody)
@@ -3123,20 +3156,6 @@ export function createInstance(schemeOpts = {}) {
       }
       return token = str[pos++] ?? '';
     }
-  }
-
-  // (compile (fn args) forms) -- defines a compiled function
-  // (compile lambda) -- returns a compiled lambda expression
-  defineGlobalSymbol("compile", compile, { evalArgs: 0, dontInline: true });
-  function compile(nameAndParams, forms, _) {
-    if (!isCons(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
-    let name = Atom(nameAndParams[CAR]);
-    let args = nameAndParams[CDR];
-    if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
-    let form = list(LAMBDA_ATOM, args, forms);
-    let compiledFunction = compile_lambda.call(this, name, form);
-    globalScope[name] = compiledFunction;
-    return name;
   }
 
   defineGlobalSymbol("compile-lambda", compile_lambda);
