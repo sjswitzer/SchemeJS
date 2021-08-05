@@ -159,7 +159,7 @@ export function createInstance(schemeOpts = {}) {
 
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
 
-  function iteratorFor(obj, throwException) {
+  function iteratorFor(obj, throwException = TypeError) {
     if (obj != null) {
       if (typeof obj[Symbol.iterator] === 'function') return obj[Symbol.iterator]();
       if (typeof obj.next === 'function') return obj;
@@ -1760,8 +1760,13 @@ export function createInstance(schemeOpts = {}) {
         argv.push(args[CAR]);
       argCount = argv.length;
       if (argCount >= requiredCount) {
-        if (evalCount !== MAX_INTEGER)
-          argv.push(args);
+        if (evalCount !== MAX_INTEGER) {
+          if (lift === MAX_INTEGER) throw new LogicError('not supposed to happen'); // XXX remove
+          for ( ; argCount < lift; ++argCount)
+            argv.push(undefined);
+          if (evalCount !== MAX_INTEGER)
+            argv.push(args);
+        }
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled) fn = jitCompiled;
         return fn.apply(scope, argv);
@@ -2809,7 +2814,7 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("parse", parseSExpr, { dontInline: true });
   exportAPI("parseSExpr", parseSExpr);
-  function parseSExpr(characterStream, opts = {}) {
+  function parseSExpr(characterSource, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let parseContext = opts.parseContext ?? [];
     opts.parseContext = parseContext;
@@ -2817,7 +2822,9 @@ export function createInstance(schemeOpts = {}) {
     let path = opts.path;
     let assignSyntax = opts.assignSyntax ?? false;
     let _tokens = [], _done = false;
-    let tokenGenerator = schemeTokenGenerator(characterStream, opts);
+    if (typeof characterSource === 'string')
+      characterSource = iteratorFor(characterSource);
+    let tokenGenerator = schemeTokenGenerator(characterSource, opts);
     let expr;
     if (assignSyntax && token().type === 'atom' &&
         token(1).type === 'atom' && token(1).value === Atom('=')) {
@@ -3001,7 +3008,8 @@ export function createInstance(schemeOpts = {}) {
         str += " ";
       }
       while (!newline) {
-        let { done, value: ch } = characterStream.next();
+        if (_done) break;
+        let { done, value: ch } = characterSource.next();
         if (done) {
           _done = true;
           break;

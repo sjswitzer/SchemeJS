@@ -160,7 +160,7 @@ export function run(opts = {}) {
   EXPECT(` (?) `, false);
   EXPECT(` (? true) `, true);
   EXPECT(` (? false) `, false);
-  EXPECT(` (? true 1) `, is_clo1sure);
+  EXPECT(` (? true 1) `, 1);
   EXPECT(` (? false 2) `, false);
   EXPECT(` (? true 1 2) `, 1);
   EXPECT(` (? false 1 2) `, 2);
@@ -168,7 +168,7 @@ export function run(opts = {}) {
   EXPECT(` (? (> 3 5) (+ 3 4) (* 3 4)) `, 12);
   EXPECT(` (? nil) `, false );
   EXPECT(` (? null) `, false );
-  EXPECT(` (? (void))) `, false );
+  EXPECT(` (? (void)) `, false );
   EXPECT(` (? false) `, false );
   EXPECT(` (? true) `, true );
   EXPECT(` (? 'a') `, true );
