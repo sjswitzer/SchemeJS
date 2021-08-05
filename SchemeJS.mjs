@@ -27,7 +27,7 @@ export function createInstance(schemeOpts = {}) {
   const supplemental = schemeOpts.supplemental ?? false;
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   const jitThreshold = schemeOpts.jitThreshold ?? undefined;
-  const DEBUG_TRACE = schemeOpts.DEBUG_TRACE ?? true;  // XXX change the default
+  const TRACE_INTERPRETER = schemeOpts.traceInterpreter ?? true;  // XXX change the default
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   const reportSystemError = schemeOpts.reportError ?? _reportError;
@@ -46,6 +46,9 @@ export function createInstance(schemeOpts = {}) {
   //
   // Fetching properties is something JITs really optimize.
   // It's probably as fast as or faster than "instanceof".
+  // I presume that typeof checks are very cheap to free because the runtime
+  // and JIT generally have to be doing the checks already and sometimes already
+  // know through dataflow analysis what the type is already
   //
   // Beware when traversing lists. Things purported to be lists might not be
   // and although lists are conventionally NIL-terminated, the final "cdr"
@@ -54,13 +57,16 @@ export function createInstance(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
-  const COMPILED = Symbol('COMPILED'), JITCOMPILED = Symbol("JITCOMPILED"), JITCOUNT = Symbol("JITCOUNT");
+  const COMPILED = Symbol('COMPILED'), JITCOMPILED = Symbol("JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('PARAMETER_DESCRIPTOR'), NAMETAG = Symbol("NAMETAG");
 
-  // Trust the JIT to inline this
+  // I trust JITs to inline these
   const isCons = obj => obj != null && obj[PAIR] === true;
   const isNil = obj => obj != null && obj[NULLSYM] === true;
   const isList = obj => obj != null && obj[LIST] === true;
+
+  // Objects that "eval" to themselves
+  const isPrimitive = obj => typeof obj !== 'symbol' && typeof obj !== 'object';
 
   class Cons {
     [CAR]; [CDR];
@@ -875,9 +881,9 @@ export function createInstance(schemeOpts = {}) {
   function ifelse(p, t = true, f = false, _) {
     p = isTrue(p);
     if (p)
-      return typeof t === 'boolean' ? t : _eval(t, this);
+      return isPrimitive(t) ? t : _eval(t, this);
     else
-      return typeof f === 'boolean' ? f : _eval(f, this);
+      return isPrimitive(f) ? f : _eval(f, this);
   }
   function ifelse_hook(args, compileScope, tools) {
     return test_hooks(args, compileScope, tools, 'if', 'isTrue(*)');
@@ -906,9 +912,9 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook });
   function is_bigint(a, t = true, f = false, _) {
     if (typeof a === 'bigint')
-      return typeof t === 'boolean' ? t : _eval(t, this);
+      return isPrimitive(t) ? t : _eval(t, this);
     else
-      return typeof f === 'boolean' ? f : _eval(f, this);
+      return isPrimitive(f) ? f : _eval(f, this);
   }
   function is_bigint_hook(args, compileScope, tools) {
     return test_hooks(args, compileScope, tools, 'is_bigint', `typeof * === 'bigint'`);
@@ -1739,7 +1745,7 @@ export function createInstance(schemeOpts = {}) {
     if (form[NULLSYM] === true) return NIL; // might as well replace imposter nils with the "real" one
     if (typeof form === 'function' || typeof form !== 'object' )
       return form;
-    if (DEBUG_TRACE) {
+    if (TRACE_INTERPRETER) {
       console.log("EVAL", string(form));
     }
     if (isCons(form)) {
@@ -1770,6 +1776,8 @@ export function createInstance(schemeOpts = {}) {
       let argv = [];
       for (let i = 0; i < lift && isCons(args); ++i, args = args[CDR])
         argv.push(args[CAR]);
+      let jitCompiled = fn[JITCOMPILED];
+      if (jitCompiled) fn = jitCompiled;
       argCount = argv.length;
       if (argCount >= requiredCount) {
         if (evalCount !== MAX_INTEGER) {
@@ -1779,15 +1787,13 @@ export function createInstance(schemeOpts = {}) {
           if (evalCount !== MAX_INTEGER)
             argv.push(args);
         }
-        let jitCompiled = fn[JITCOMPILED];
-        if (jitCompiled) fn = jitCompiled;
         let fName = fn[NAMETAG] ?? fn.name;
-        if (DEBUG_TRACE) {
-          let logArgs = [ "APPLY", fName, ...argv ];
+        if (TRACE_INTERPRETER) {
+          let logArgs = [ "APPLY (eval)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
         let result = fn.apply(scope, argv);
-        if (DEBUG_TRACE)
+        if (TRACE_INTERPRETER)
           console.log("RETURNS", fName, result);
         return result;
       }
@@ -1797,12 +1803,33 @@ export function createInstance(schemeOpts = {}) {
       // required parameters, like apropos, and those that have required parameters.
       // The other case handled here is that it's a native function and the requiredCount
       // is MAX_INTEGER.
-      if (argCount === 0 || requiredCount === MAX_INTEGER)
-        return fn.apply(scope, argv);
+      if (argCount === 0 || requiredCount === MAX_INTEGER) {
+        let fName = fn[NAMETAG] ?? fn.name;
+        if (TRACE_INTERPRETER) {
+          let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
+          console.log.apply(scope, logArgs);
+        }
+        let result = fn.apply(scope, argv);
+        if (TRACE_INTERPRETER)
+          console.log("RETURNS", fName, result);
+        return result;
+      }
 
       // OK, now create a closure.
       // This is a bit involved, but it doesn't happen often
-      let closure = (...args) => fn.apply(scope, {...argv, ...args});
+      const boundArgv = argv;
+      let closure = (...args) => {
+        let argv = boundArgv.concat(args);
+        let fName = fn[NAMETAG] ?? fn.name;
+        if (TRACE_INTERPRETER) {
+          let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
+          console.log.apply(scope, logArgs);
+        }
+        let result = fn.apply(scope, argv);
+        if (TRACE_INTERPRETER)
+          console.log("RETURNS", fName, result);
+        return result;
+      };
       // A closure function leads a double life: as a closure function but also a closure form!
       // Dig out the original function's closure, if it had one.
       let closureBody = fn[CDR];
@@ -1898,7 +1925,15 @@ export function createInstance(schemeOpts = {}) {
     let argv = [];
     for ( ;isCons(args); args = args[CDR])
       argv.push(args[CAR])
-    return fn.apply(scope, argv);
+    let fName = fn[NAMETAG] ?? fn.name;
+    if (TRACE_INTERPRETER) {
+      let logArgs = [ "APPLY (api)", fName, ...argv ];
+      console.log.apply(scope, logArgs);
+    }
+    let result = fn.apply(scope, argv);
+    if (TRACE_INTERPRETER)
+      console.log("RETURNS", fName, result);
+    return result;
   }
 
   // (\ (params) (form1) (form2) ...)
@@ -1943,9 +1978,10 @@ export function createInstance(schemeOpts = {}) {
       paramCount += 1;
     }
     if (typeof params === 'symbol') hasRestParam = true;
+    let jitCount = jitThreshold;
     function jsClosure(...args) {
       // How easy is a JIT?
-      if (--jsClosure[JITCOUNT] < 0) {  // disable by setting jitThreshold to undefined :)
+      if (jitThreshold !== undefined && --jitCount < 0) {  // disable by setting jitThreshold to undefined
         jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
       }
       let scope = newScope(closureScope, "*lambda-scope*"), params = lambdaParams, i = 0, argLength = args.length;
@@ -1984,7 +2020,6 @@ export function createInstance(schemeOpts = {}) {
     jsClosure[CAR] = schemeClosure[CAR];
     jsClosure[CDR] = schemeClosure[CDR];
     jsClosure[LIST] = jsClosure[PAIR] = true;
-    jsClosure[JITCOUNT] = jitThreshold;
     return jsClosure;
   }
 
@@ -1998,165 +2033,6 @@ export function createInstance(schemeOpts = {}) {
   }
   function closureP_hook(args, compileScope, tools) {
     return test_hooks(args, compileScope, tools, 'is_closure', `is_closure(*)`);
-  }
-
-  // Invocation of JavaScript functions:
-
-  // When defined, a function can be annotated with the number of arguments
-  // to be evaluated. The definition is also examined to determine the number of
-  // non-optional parameters. Every evaluated parameter is passed as a javascript argument.
-  // If there are not as many arguments as parameters, a closure is returned that
-  // binds a partial application of that function.
-  // Functions with unevaluated arguments get those forms as a final parameter, after
-  // the evaluated ones.
-
-  function oldApply(form, args, scope, evaluateArguments) {
-    // Typically, it would be _eval's job to evaluate the arguments but we don't know
-    // how many arguments to evaluate until we've read the function descriptor or
-    // seen the slambda form and I want the logic for that all in one place. Here, in fact.
-    // By default _apply doesn't evaluate its args, but if evaluateArguments is set
-    // (as it is by eval) it does.
-    let evalCount = MAX_INTEGER, paramCount = MAX_INTEGER, requiredCount = 0;
-    if (isCons(form)) {  // must check before checking function type because closures are functions too!
-      let opSym = form[CAR];
-      if (opSym === SLAMBDA_ATOM) {
-        evalCount = form[CAR];
-      } else if (opSym === SCLOSURE_ATOM) {
-        if (!isCons(form[CDR])) throw new SchemeEvalError(`Bad form ${string(form)}`);
-        evalCount = form[CDR][CAR];
-      }
-    } else if (typeof form === 'function') {
-      let fn = form;
-      // The function descriptor is encoded as:
-      //   evalCount << 24) | (requiredCount&0xfff) << 12 | (paramCount&0xfff)
-      let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL];
-      if (functionDescriptor == null)
-        functionDescriptor = createFunctionDescriptor(form);
-      // Turns paramCounts and evalCounts that were MAX_INTEGER back into MAX_INTEGER, without branches
-      evalCount = functionDescriptor >> 23 >>> 1;
-      requiredCount = functionDescriptor << 8 >> 19 >>> 1;
-      paramCount = functionDescriptor << 20 >> 19 >>> 1;
-    }
-    if (evaluateArguments) {
-      let evalledArgs = NIL, last = undefined;
-      for (let i = 0; i < evalCount && isCons(args); ++i) {
-        let evalledArgCons = cons(_eval(args[CAR], scope), evalledArgs);
-        if (last) last = last[CDR] = evalledArgCons;
-        else evalledArgs = last = evalledArgCons;
-        args = args[CDR];
-      }
-      if (last) {
-        last[CDR] = args;
-        args = evalledArgs;
-      }
-    }
-    let lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount-1;
-    if (typeof form === 'function' && !form[CLOSURE_ATOM]) { // Scheme functions impose as Cons cells
-      let jsArgs = [];
-      for (let i = 0; i < lift; ++i) {
-        if (isCons(args)) {
-          jsArgs.push(args[CAR]);
-          args = args[CDR];
-        } else { 
-          if (i < requiredCount && i > 0) {
-            // Partial application of built-in functions
-            let paramList = NIL;
-            for (let pnum = requiredCount; pnum > i; --pnum)
-              paramList = cons(Atom(`p${(pnum)}`), paramList);
-            let argList = paramList;
-            for (let anum = i; anum > 0; --anum)
-              argList = cons(jsArgs[anum-1], argList);
-            let forms = cons(cons(form, argList), NIL);
-            let closure;
-            if (i < evalCount)
-              closure = lambda.call(scope, (cons(paramList, forms)));
-            else
-              closure = special_lambda.call(scope, cons(i-evalCount, cons(paramList, forms)));
-            return closure;
-          }
-          if (evalCount === MAX_INTEGER) break;
-          // We can't partially apply without any arguments, but the function wants
-          // parameters anyway so we supply undefined. This will allow the
-          // "forms" parameter to go into the correct parameter.
-          jsArgs.push(undefined);
-        }
-      }
-      if (evalCount !== MAX_INTEGER) // last parameter gets the remaining arguments as a list
-        jsArgs.push(args);
-      return form.apply(scope, jsArgs);
-    }
-    if (isCons(form)) {
-      let opSym = form[CAR];
-      let body = form[CDR];
-      if (!isCons(body)) throw new SchemeEvalError(`Bad form ${string(form)}`);
-      if (opSym === CLOSURE_ATOM) {
-        if (!isCons(body)) throw new SchemeEvalError(`Bad closure ${string(form)}`);
-        scope = body[CAR];
-        body = body[CDR];
-        opSym = LAMBDA_ATOM;
-      }
-      if (opSym === SCLOSURE_ATOM) {
-        if (!isCons(body) || !isCons(body[CDR])) throw new SchemeEvalError(`Bad closure ${string(form)}`);
-        scope = body[CDR][CAR];
-        body = body[CDR][CDR];
-        opSym = SLAMBDA_ATOM;
-      }
-      if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        if (!isCons(body)) throw new SchemeEvalError(`Bad lambda ${string(form)}`);
-        let params = body[CAR];
-        let forms = body[CDR];
-        if (typeof params === 'symbol') { // Curry notation :)
-          params = cons(params, NIL);
-          forms = cons(forms, NIL);
-        }
-        scope = newScope(scope, "lambda-scope");
-        let i = 0;
-        while (isCons(params)) {
-          let param = params[CAR], optionalForms;
-          if (isCons(param) && param[CAR] === QUESTION_ATOM && isCons(param[CDR])) {
-            optionalForms = param[CDR][CDR];
-            param = param[CDR][CAR];
-          }
-          if (typeof param !== 'symbol') throw new TypeError(`Param must be a symbol ${param}`);
-          if (isCons(args)) {
-            scope[param] = args[CAR];
-            args = args[CDR];
-          } else if (optionalForms) {
-            let val = NIL;
-            while (isCons(optionalForms)) {
-              val = _eval(optionalForms[CAR], scope);  // Earler params are in scope!
-              optionalForms = optionalForms[CDR];
-            }
-            scope[param] = val;
-          } else {
-            if (i === 1) {
-              scope[param] = undefined
-            } else {
-            // Curry up now! (partial application)
-            let closure;
-              if (i < evalCount)
-                closure = lambda.call(scope, cons(params, forms));
-              else
-                closure = special_lambda.call(scope, cons(i-evalCount, cons(params, forms)));
-              return closure;
-            }
-          }
-          params = params[CDR];
-          i -= 1;
-        }
-        if (typeof params === 'symbol')  // Neat trick for 'rest' params!
-          scope[params] = args;
-        else if (!isNil(params))
-          throw new SchemeEvalError(`Bad parameter list ${string(params)}`);
-        let res = NIL;
-        while (isCons(forms)) {
-          res = _eval(forms[CAR], scope);
-          forms = forms[CDR];
-        }
-        return res;
-      }
-    }
-    throw new SchemeEvalError(`Can't apply ${string(form)}`);
   }
 
   const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\', '\n': '' };
