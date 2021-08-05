@@ -157,6 +157,46 @@ export function run(opts = {}) {
   EXPECT(' (/ 3 7) ', 3/7);
   EXPECT(' (/ 100000 10 10 10) ', 100);
 
+  EXPECT(` (?) `, false);
+  EXPECT(` (? true) `, true);
+  EXPECT(` (? false) `, false);
+  EXPECT(` (? true 1) `, is_clo1sure);
+  EXPECT(` (? false 2) `, false);
+  EXPECT(` (? true 1 2) `, 1);
+  EXPECT(` (? false 1 2) `, 2);
+  EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
+  EXPECT(` (? (> 3 5) (+ 3 4) (* 3 4)) `, 12);
+  EXPECT(` (? nil) `, false );
+  EXPECT(` (? null) `, false );
+  EXPECT(` (? (void))) `, false );
+  EXPECT(` (? false) `, false );
+  EXPECT(` (? true) `, true );
+  EXPECT(` (? 'a') `, true );
+  EXPECT(` (? 1) `, true );
+  EXPECT(` (? 0) `, true );
+  EXPECT(` (? "str") `, true );
+  EXPECT(` (? "") `, true );
+  EXPECT(` (? cons) `, true );
+  EXPECT(` (? {a: 1}) `, true );
+  EXPECT(` (? {}) `, true );
+  EXPECT(` (? []) `, true );
+  EXPECT(` (? [1 2 3]) `, true );
+  EXPECT(` (? true 1 2 (oops!)) `, 1);
+  EXPECT(` (? false 1 2 (oops!)) `, 2);
+  EXPECT(` (? true 1 (oops!)) `, 1);
+  EXPECT(` (? false (oops!) 2) `, 2);
+  EXPECT_ERROR(` (? false 1 (oops!)) `, SchemeEvalError);
+  EXPECT_ERROR(` (? true (oops!) 2) `, SchemeEvalError);
+  EXPECT_ERROR(` (? (oops!) 1 2) `, SchemeEvalError);
+
+  EXPECT(` (bigint? 1n) `, true);
+  EXPECT(` (bigint? 1) `, false);
+  EXPECT(` (bigint? "str" `, false);
+  EXPECT(` (bigint? 1n "foo") `, "foo");
+  EXPECT(` (bigint? 1n "foo") `, false);
+  EXPECT(` (bigint? 1n 2n 2) `, 2n);
+  EXPECT(` (bigint? 1 2n 2) `, 2);
+
   {
     let savedScope = beginTestScope();
     EXPECT(`
@@ -308,22 +348,6 @@ export function run(opts = {}) {
   EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
   EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
   EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, SchemeEvalError);
-  EXPECT(` (?) `, undefined); // Why not?
-  EXPECT(` (? true) `, is_closure);
-  EXPECT(` (? false) `, is_closure);
-  EXPECT(` (? true 1) `, is_closure);
-  EXPECT(` (? false 2) `, is_closure);
-  EXPECT(` (? true 1 2) `, 1);
-  EXPECT(` (? false 1 2) `, 2);
-  EXPECT(` (? true 1 2 (oops!)) `, 1);
-  EXPECT(` (? false 1 2 (oops!)) `, 2);
-  EXPECT(` (? true 1 (oops!)) `, 1);
-  EXPECT_ERROR(` (? false 1 (oops!)) `, SchemeEvalError);
-  EXPECT_ERROR(` (? true (oops!) 2) `, SchemeEvalError);
-  EXPECT(` (? false (oops!) 2) `, 2);
-  EXPECT_ERROR(` (? (oops!) 1 2) `, SchemeEvalError);
-  EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
-  EXPECT(` (? (> 3 5) (+ 3 4) (* 3 4)) `, 12);
 
   EXPECT(` (begin) `, undefined);
   EXPECT(` (begin 1) `, 1);
