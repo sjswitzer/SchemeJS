@@ -1771,8 +1771,15 @@ export function createInstance(schemeOpts = {}) {
       }
       // Run through the arg list evaluating args
       let argCount = 0, args = form[CDR];
-      for (let al = args; argCount < evalCount && isCons(al) ; ++argCount, al = al[CDR])
-        al[CAR] = _eval(al[CAR], scope);
+      let evaluatedArgs = NIL, last;
+      for ( ; argCount < evalCount && isCons(args) ; ++argCount, args = args[CDR]) {
+        let item = cons(_eval(args[CAR], scope), NIL);
+        if (last) last = last[CDR] = item;
+        else evaluatedArgs = last = item;
+      }
+      if (last) last[CDR] = args;
+      else evaluatedArgs = args;
+      args = evaluatedArgs;
       let argv = [];
       for (let i = 0; i < lift && isCons(args); ++i, args = args[CDR])
         argv.push(args[CAR]);
