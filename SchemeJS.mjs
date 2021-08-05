@@ -54,7 +54,6 @@ export function createInstance(schemeOpts = {}) {
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
   const COMPILED = Symbol('COMPILED'), PARAMETER_DESCRIPTOR = Symbol('PARAMETER_DESCRIPTOR');
 
-
   // Trust the JIT to inline this
   const isCons = obj => obj != null && obj[PAIR] === true;
   const isNil = obj => obj != null && obj[NULLSYM] === true;
@@ -267,9 +266,8 @@ export function createInstance(schemeOpts = {}) {
   // Some of the short exported functions are all on one line. This is intentional.
   // Those function's bodies are included in the string representation used for dispay.
   // 
-  const FUNCTION_DESCRIPTOR_SYMBOL = Symbol("*schemeJS-function-descriptor*");
-  const COMPILE_HOOK = Symbol("*schemeJS-compile-hook*");
-  const MAX_INTEGER = 2**31-1;  // Presumably allows JIT to do small-int optimizations
+  const COMPILE_HOOK = Symbol("COMPILE-HOOK");
+  const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
   const analyzedFunctions = new Map();
   globalScope._help_ = {};  // For clients that want to implement help.
 
@@ -281,7 +279,7 @@ export function createInstance(schemeOpts = {}) {
     let group = opts.group ?? "builtin";
     if (typeof value === 'function') {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
-      createFunctionDescriptor(value, evalCount);
+      makeParameterDescriptor(value, evalCount);
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
       let fnInfo = analyzeJSFunction(value);
       if (evalCount !== MAX_INTEGER && !opts.compileHook && !opts.dontInline)
@@ -331,24 +329,6 @@ export function createInstance(schemeOpts = {}) {
       }
       return false;
     }
-  }
-
-  function createFunctionDescriptor(fn, evalCount = MAX_INTEGER) {
-    let fnInfo = analyzeJSFunction(fn);
-    let paramCount = fnInfo.params.length;
-    let requiredCount = fnInfo.requiredCount;
-    if (fnInfo.restParam || fnInfo.native) {
-      if (evalCount !== MAX_INTEGER)
-        throw new LogicError(`Can't have rest params with special evaluation ${name}`)
-      paramCount = MAX_INTEGER;
-    }
-    let functionDescriptor =  encodeFunctionDescriptor(evalCount, requiredCount, paramCount);
-    fn[FUNCTION_DESCRIPTOR_SYMBOL] = functionDescriptor;
-    return functionDescriptor;
-  }
-
-  function encodeFunctionDescriptor(evalCount, requiredCount, paramCount) {
-    return evalCount << 24 | (requiredCount & 0xfff) << 12 | (paramCount & 0xfff);
   }
 
   exportAPI("PAIR_SYMBOL", PAIR);
@@ -1917,25 +1897,24 @@ export function createInstance(schemeOpts = {}) {
     function jsClosure(...args) {
       let scope = newScope(closureScope, "*lambda-scope*"), params = lambdaParams, i = 0, argLength = args.length;
       for ( ; i < argLength && isCons(params); ++i) {
-          let param = params[CAR], optionalForms;
-          if (isCons(param) && param[CAR] === QUESTION_ATOM) {
-            let paramCdr = param[CDR];
-            param = paramCdr[CAR];
-            optionalForms = paramCdr[CDR];
-          }
-          if (arg == undefined) {
-            arg = NIL;
-            for ( ; isCons(optionalForms); optionalForms = optionalForms[CDR])
-              arg = eval(optionalForms[CAR], scope);
-          }
-          scope[param] = arg;
-          params = params[CDR];
+        let param = params[CAR], optionalForms;
+        if (isCons(param) && param[CAR] === QUESTION_ATOM) {
+          let paramCdr = param[CDR];
+          param = paramCdr[CAR];
+          optionalForms = paramCdr[CDR];
         }
-        while (isCons(params))  // fill with NIL
-          scope[params[CAR]] = NIL;
-        if (typeof param === 'symbol')
-          scope[param] = args[i] !== undefined ? args[i] : NIL;
+        if (arg == undefined) {
+          arg = NIL;
+          for ( ; isCons(optionalForms); optionalForms = optionalForms[CDR])
+            arg = eval(optionalForms[CAR], scope);
+        }
+        scope[param] = arg;
+        params = params[CDR];
       }
+      while (isCons(params))  // fill with NIL
+        scope[params[CAR]] = NIL;
+      if (typeof param === 'symbol')
+        scope[param] = args[i] !== undefined ? args[i] : NIL;
       let result = NIL;
       for (let form of forms)
         result = _eval(form, this);
