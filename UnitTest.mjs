@@ -171,7 +171,7 @@ export function run(opts = {}) {
   EXPECT(` (? (void)) `, false );
   EXPECT(` (? false) `, false );
   EXPECT(` (? true) `, true );
-  EXPECT(` (? 'a') `, true );
+  EXPECT(` (? 'a) `, true );
   EXPECT(` (? 1) `, true );
   EXPECT(` (? 0) `, true );
   EXPECT(` (? "str") `, true );
