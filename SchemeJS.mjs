@@ -1679,10 +1679,7 @@ export function createInstance(schemeOpts = {}) {
   // (define variable value)
   // (define (fn args) forms)
   defineGlobalSymbol("define", define, { evalArgs: 0, dontInline: true });
-  function define(forms) {
-    if (!(isCons(forms) && isCons(forms[CDR])))
-      throw new SchemeEvalError(`Define requires two parameters`);
-    let defined = forms[CAR], value = forms[CDR][CAR];
+  function define(defined, value, _) {
     let scope = this, name = defined;
     if (isCons(defined)) {
       name = defined[CAR];
@@ -1833,13 +1830,14 @@ export function createInstance(schemeOpts = {}) {
       // specially-evaluated functions receive overflow forms in the last parameter,
       // so lift one fewer
       lift = params.length-1;
+      if (requiredCount > lift) requiredCount = lift;
     }
     if (native)
       evalCount = lift = requiredCount = MAX_INTEGER;
-    return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift, evalCount = MAX_INTEGER);
+    return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift, evalCount);
   }
 
-  function makeParameterDescriptor(requiredCount, lift, evalCount) {
+  function makeParameterDescriptor(requiredCount, lift, evalCount = MAX_INTEGER55) {
     if (requiredCount !== MAX_INTEGER && requiredCount >= 0xfff)
       throw new LogicError(`Too many required paramaters`);
     if (lift !== MAX_INTEGER && lift >= 0xfff)
