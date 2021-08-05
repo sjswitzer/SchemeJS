@@ -217,29 +217,12 @@ export function run(opts = {}) {
 
   {
     let savedScope = beginTestScope();
-    EXPECT(`
-      (compile (factoral x)
-        (? (<= x 1) 
-          (? (bigint? x) 1n 1)
-          (* x (factoral (- x (? (bigint? x) 1n 1))))
-      ))`,
-      ` 'factoral `);
-    EXPECT(` factoral `, obj => typeof obj === 'function');
-    EXPECT(` (factoral 10) `, 3628800);
-    EXPECT(` (factoral 10n) `, 3628800n);
-    EXPECT(` (factoral 171) `, Infinity);
-    EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
-    endTestScope(savedScope);
-    // Factoral should be undefined now
-    EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
-  }
-
-  {
-    let savedScope = beginTestScope();
+    EXPECT(` (define mul-by-5 (* 5) `, ` 'mul-by-5 `);
+    EXPECT(` (mul-by-5 3) `, 15);
     EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
     EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
-    EXPECT(` (increment-by-3 4) `, 7);
     EXPECT(` increment-by-3 `, is_closure);
+    EXPECT(` (increment-by-3 4) `, 7);
     endTestScope(savedScope);
   }
 
@@ -543,6 +526,25 @@ export function run(opts = {}) {
     //  EXPECT(testAnalyze([].sort),
     //    { name: 'sort', params: [], restParam: undefined, value: undefined,
     //      body: undefined, printBody: ' { [native code] }', native: true });
+  }
+
+  {
+    let savedScope = beginTestScope();
+    EXPECT(`
+      (compile (factoral x)
+        (? (<= x 1) 
+          (? (bigint? x) 1n 1)
+          (* x (factoral (- x (? (bigint? x) 1n 1))))
+      ))`,
+      ` 'factoral `);
+    EXPECT(` factoral `, obj => typeof obj === 'function');
+    EXPECT(` (factoral 10) `, 3628800);
+    EXPECT(` (factoral 10n) `, 3628800n);
+    EXPECT(` (factoral 171) `, Infinity);
+    EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
+    endTestScope(savedScope);
+    // Factoral should be undefined now
+    EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
   }
 
   //
