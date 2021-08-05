@@ -1755,7 +1755,7 @@ export function createInstance(schemeOpts = {}) {
       // The other case handled here is that it's a native function and the requiredCount
       // is MAX_INTEGER.
       if (argCount === 0 || requiredCount === MAX_INTEGER)
-        fn.apply(scope, argv);
+        return fn.apply(scope, argv);
 
       // OK, now create a closure.
       // This is a bit involved, but it doesn't happen often
