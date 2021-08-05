@@ -1353,8 +1353,8 @@ export function createInstance(schemeOpts = {}) {
   //  let setSymWithWith = new Function("symbol", "value", "scope",
   //    "with (scope) { return symbol = value }");
 
-  defineGlobalSymbol("set!", setq, { evalArgs: 1 }, "setq");
-  function setq(symbol, value) { let result = setSym(symbol, value, this); return result; }
+  defineGlobalSymbol("set'", setq, { evalArgs: 0 }, "setq");
+  function setq(symbol, value) { let result = setSym(symbol, _eval(value, this), this); return result; }
 
   defineGlobalSymbol("set", setq);
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
@@ -1745,9 +1745,8 @@ export function createInstance(schemeOpts = {}) {
     if (form[NULLSYM] === true) return NIL; // might as well replace imposter nils with the "real" one
     if (typeof form === 'function' || typeof form !== 'object' )
       return form;
-    if (TRACE_INTERPRETER) {
+    if (TRACE_INTERPRETER)
       console.log("EVAL", string(form));
-    }
     if (isCons(form)) {
       let fn = form[CAR];
       if (fn === QUOTE_ATOM) { // QUOTE is a special function that will do this but catch it here anyway.
@@ -1794,8 +1793,9 @@ export function createInstance(schemeOpts = {}) {
           if (evalCount !== MAX_INTEGER)
             argv.push(args);
         }
-        let fName = fn[NAMETAG] ?? fn.name;
+        let fName;
         if (TRACE_INTERPRETER) {
+          fName = fn[NAMETAG] ?? fn.name;
           let logArgs = [ "APPLY (eval)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
@@ -1811,8 +1811,9 @@ export function createInstance(schemeOpts = {}) {
       // The other case handled here is that it's a native function and the requiredCount
       // is MAX_INTEGER.
       if (argCount === 0 || requiredCount === MAX_INTEGER) {
-        let fName = fn[NAMETAG] ?? fn.name;
+        let fName;
         if (TRACE_INTERPRETER) {
+          fName = fn[NAMETAG] ?? fn.name;
           let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
@@ -1827,8 +1828,9 @@ export function createInstance(schemeOpts = {}) {
       const boundArgv = argv;
       let closure = (...args) => {
         let argv = boundArgv.concat(args);
-        let fName = fn[NAMETAG] ?? fn.name;
+        let fName;
         if (TRACE_INTERPRETER) {
+          fName = fn[NAMETAG] ?? fn.name;
           let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
@@ -1848,7 +1850,7 @@ export function createInstance(schemeOpts = {}) {
         closureParams = closureBody[CAR];
         closureForms = closureBody[CDR];
       }
-      if (argCount < evalCount) {
+      if (argCount < evalCount && evalCount !== MAX_INTEGER) {
         evalCount -= argCount;
         closure[CAR] = SCLOSURE_ATOM;
         closure[CDR] = cons(closureScope, cons(evalCount-argCount, cons(closureParams, closureForms)));
@@ -1863,7 +1865,7 @@ export function createInstance(schemeOpts = {}) {
       requiredCount -= argCount;  // can't go negative
       if (requiredCount < 0)
         requiredCount = 0;
-      closure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift,  eval);
+      closure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift,  evalCount);
       return closure;
     }
 
@@ -1924,6 +1926,8 @@ export function createInstance(schemeOpts = {}) {
       throw new LogicError(`Too many lifted paramaters`);
     if (evalCount !== MAX_INTEGER && evalCount >= 0xff)
       throw new LogicError(`Too many evaluated paramaters`);
+    if (evalCount !== MAX_INTEGER && lift === MAX_INTEGER)
+      throw new LogicError(`Special functions must not have "rest" parameters`);
     return (requiredCount << 20) | ((lift & 0xfff) << 8) | (evalCount & 0xff);
   }
 
@@ -1932,8 +1936,9 @@ export function createInstance(schemeOpts = {}) {
     let argv = [];
     for ( ;isCons(args); args = args[CDR])
       argv.push(args[CAR])
-    let fName = fn[NAMETAG] ?? fn.name;
+    let fName;
     if (TRACE_INTERPRETER) {
+      fName = fn[NAMETAG] ?? fn.name;
       let logArgs = [ "APPLY (api)", fName, ...argv ];
       console.log.apply(scope, logArgs);
     }

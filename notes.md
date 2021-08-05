@@ -27,7 +27,9 @@ where an own "this" is required, or where a forward reference is needed.
 
 I don't use "const" for things that happen to be const, for instance as loop iterands;
 that's just too damn fussy. I use it for things that _should_ be const or _must_ be const.
-Sometimes I use const to make it trivial for JITs to discover that sonething cannot change.
+Sometimes I use const to make it trivial for JITs to discover that sonething cannot change or,
+in the case of selectable options like the SchemeJS JIT and TRACE_INTERPRETER, JITs can easily
+and dependably DCE the optional code.
 
 Instead of passing in booleans and other unnamed values as parameters (foo(3, true, false, 17))
 I generally try to assign the value to a variable so that it has a name then pass that variable.

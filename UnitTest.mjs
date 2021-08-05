@@ -217,7 +217,7 @@ export function run(opts = {}) {
 
   {
     let savedScope = beginTestScope();
-    EXPECT(` (define mul-by-5 (* 5) `, ` 'mul-by-5 `);
+    EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
     EXPECT(` (mul-by-5 3) `, 15);
     EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
     EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
