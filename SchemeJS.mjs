@@ -340,7 +340,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("SUPERLAZY_SYMBOL", SUPERLAZY);
 
   defineGlobalSymbol("VERSION", VERSION);
-  exportAPI("Atom", Atom);
+  defineGlobalSymbol("intern", Atom, "Atom");
 
   class SchemeError extends Error {};
   SchemeError.prototype.name = "SchemeError";
