@@ -1706,7 +1706,7 @@ export function createInstance(schemeOpts = {}) {
     if (form == null) return form; // get "nullish" out of the way
     if (typeof form === 'symbol') { // atom resolution is the most common case
       let val = scope[form];
-      if (val === undefined) throwBadForm();
+      if (val === undefined) throw new SchemeEvalError(`undefined ${string(form)}`);
       return val;
     }
     if (form[NULLSYM] === true) return form; // nil
@@ -1921,7 +1921,7 @@ export function createInstance(schemeOpts = {}) {
         scope[param] = args[i] !== undefined ? args[i] : NIL;
       let result = NIL;
       for (let form of forms)
-        result = _eval(form, this);
+        result = _eval(form, scope);
       return result;
     }
     if (requiredCount === undefined) requiredCount = paramCount;
