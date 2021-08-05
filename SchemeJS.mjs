@@ -1740,6 +1740,7 @@ export function createInstance(schemeOpts = {}) {
       let argv = [];
       for (let i = 0; i < lift && isCons(args); ++i, args = args[CDR])
         argv.push(args[CAR]);
+      argCount = argv.length;
       if (argCount >= requiredCount) {
         if (evalCount !== MAX_INTEGER)
           argv.push(args);
