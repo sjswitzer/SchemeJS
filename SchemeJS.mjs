@@ -656,11 +656,10 @@ export function createInstance(schemeOpts = {}) {
     if (forms === undefined) return a < b;
     if (!(a < b)) return false;
     a = b;
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR]) {
       let b = _eval(forms[CAR], this);
       if (!(a < b)) return false;
       a = b;
-      forms = forms[CDR];
     }
     return true;
   }
@@ -696,11 +695,10 @@ export function createInstance(schemeOpts = {}) {
     if (forms === undefined) return a <= b;
     if (!(a <= b)) return false;
     a = b;
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR]) {
       let b = _eval(forms[CAR], this);
       if (!(a <= b)) return false;
       a = b;
-      forms = forms[CDR];
     }
     return true;
   }
@@ -713,11 +711,10 @@ export function createInstance(schemeOpts = {}) {
     if (forms === undefined) return a > b;
     if (!(a > b)) return false;
     a = b;
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR]) {
       let b = _eval(forms[CAR], this);
       if (!(a > b)) return false;
       a = b;
-      forms = forms[CDR];
     }
     return true;
   }
@@ -730,11 +727,10 @@ export function createInstance(schemeOpts = {}) {
     if (forms === undefined) return a >= b;
     if (!(a >= b)) return false;
     a = b;
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR]) {
       let b = _eval(forms[CAR], this);
       if (!(a >= b)) return false;
       a = b;
-      forms = forms[CDR];
     }
     return true;
   }
@@ -747,10 +743,9 @@ export function createInstance(schemeOpts = {}) {
     if (forms === undefined) return a == b;   // TODO == or ===?
     if (!(a == b)) return false;
     a = b;
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR]) {
       let b = _eval(forms[CAR], this);
       if (!(a == b)) return false;
-      forms = forms[CDR];
     }
     return true;
   }
@@ -763,10 +758,9 @@ export function createInstance(schemeOpts = {}) {
     if (forms === undefined) return a == b;   // TODO == or ===?
     if (!(a === b)) return false;
     a = b;
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR]) {
       let b = _eval(forms[CAR], this);
       if (!(a === b)) return false;
-      forms = forms[CDR];
     }
     return true;
   }
@@ -811,10 +805,8 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("&&", and, { evalArgs: 0, compileHook: and_hook }, "and");
   function and(val, forms) {
-    while (isTrue(val) && isCons(forms)) {
+    for (; isTrue(val) && isCons(forms); forms = forms[CDR])
       val = _eval(forms[CAR], this);
-      forms = forms[CDR];
-    }
     return val;
   }
   function and_hook(args, compileScope, tools,) {
@@ -840,10 +832,8 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("||", or, { evalArgs: 1, compileHook: or_hook }, "or");
   function or(val, forms) {
-    while (!isTrue(val) && isCons(forms)) {
+    for ( ; !isTrue(val) && isCons(forms); forms = forms[CDR])
       val = _eval(forms[CAR], this);
-      forms = forms[CDR];
-    }
     return val;
   }
   function or_hook(args, compileScope, tools,) {
@@ -852,10 +842,8 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("??", nullish, { evalArgs: 1, compileHook: nullish_hook }, "nullish");
   function nullish(val, forms) {
-    while (val == null && isCons(forms)) {
+    for ( ; val == null && isCons(forms); forms = forms[CDR])
       val = _eval(forms[CAR], this);
-      forms = forms[CDR];
-    }
     if (isCons(forms))
       return undefined;
     return val;
@@ -941,10 +929,8 @@ export function createInstance(schemeOpts = {}) {
   // (begin form1 form2 ...)
   defineGlobalSymbol("begin", begin, { evalArgs: 1, compileHook: begin_hook });
   function begin(res, forms) {
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR])
       res = _eval(forms[CAR], this);
-      forms = forms[CDR];
-    }
     return res;
   }
   function begin_hook(args, compileScope, tools) {
@@ -957,10 +943,8 @@ export function createInstance(schemeOpts = {}) {
   // (prog1 form1 form2 form3 ...)
   defineGlobalSymbol("prog1", prog1, { evalArgs: 1 });
   function prog1(val, forms) {
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR])
        _eval(forms[CAR], this);
-      forms = forms[CDR];
-    }
     return val;
   }
   function prog1_hook(args, compileScope, tools) {
@@ -976,7 +960,7 @@ export function createInstance(schemeOpts = {}) {
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
   defineGlobalSymbol("cond", cond, { evalArgs: 0 });
   function cond(clauses) {
-    while (isCons(clauses)) {
+    for ( ; isCons(clauses); clauses = clauses[CDR]) {
       let clause = clauses[CAR];
       if (!isCons(clause))
         throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
@@ -984,13 +968,10 @@ export function createInstance(schemeOpts = {}) {
       let evaled = _eval(pe, this);
       if (isTrue(evaled)) {
         let res = NIL;
-        while (isCons(forms)) {
+        for ( ; isCons(forms); forms = forms[CDR])
           res = _eval(forms[CAR], this);
-          forms = forms[CDR];
-        }
         return res;
       }
-      clauses = clauses[CDR];
     }
     return NIL;
   }
@@ -1050,11 +1031,9 @@ export function createInstance(schemeOpts = {}) {
     for (let list of lists) {
       if (isList(list)) {
         // Could handle as iterable, but faster not to
-        while (isCons(list)) {
+        for ( ; isCons(list); list = list[CDR])
           if (last) last = last[CDR] = cons(list[CAR], NIL);
           else res = last = cons(list[CAR], NIL);
-          list = list[CDR];
-        }
       } else {
         if (!isIterable(list)) throw new SchemeEvalError(`Not a list or iterable ${list}`);
         for (let value of list) {
@@ -1072,10 +1051,8 @@ export function createInstance(schemeOpts = {}) {
     let res = NIL;
     if (!list || isNil(list)) return NIL; // XXX check this.
     if (isCons(list)) {
-      while (isCons(list)) {
+      for ( ; isCons(list); list = list[CDR])
         res = list[CAR];
-        list = list[CDR];
-      }
     } else {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
       if (Array.isArray(list)) {
@@ -1094,11 +1071,9 @@ export function createInstance(schemeOpts = {}) {
   function butlast(list) {
     let res = NIL, last;
     if (isList(list)) {
-      while (isCons(list) && isCons(list[CDR])) {
+      for ( ; isCons(list) && isCons(list[CDR]); list = list[CDR])
         if (last) last = last[CDR] = cons(list[CAR], NIL);
         else res = last = cons(list[CAR], NIL);
-        list = list[CDR];
-      }
     } else {
       if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
       for (let value of list) {
@@ -1116,10 +1091,8 @@ export function createInstance(schemeOpts = {}) {
   function length(list) {
     let n = 0;
     if (isList(list)) {
-      while (isCons(list)) {
+      for ( ; isCons(list); list = list[CDR])
         n += 1;
-        list = list[CDR];
-      }
     } else {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
       if (Array.isArray(list) && list.length > 0)
@@ -1142,10 +1115,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("reverse", reverse);
   function reverse(list) {
     let res = NIL;
-    while (isCons(list)) {
+    for ( ; isCons(list); list = list[CDR])
       res = cons(list[CAR], res)
-      list = list[CDR];
-    }
     return res;
   }
 
@@ -1166,11 +1137,10 @@ export function createInstance(schemeOpts = {}) {
     let res = NIL, last;
     if (isNil(list)) return NIL;
     if (isCons(list)) {
-      while (isCons(list)) {
+      for ( ; isCons(list); list = list[CDR]) {
         let item = cons(list[CAR], NIL);
         if (last) last = last[CDR] = item;
         else res = last = item;
-        list = list[CDR];
       }
       return res;
     }
@@ -1190,11 +1160,9 @@ export function createInstance(schemeOpts = {}) {
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
   defineGlobalSymbol("member", member, { dontInline: true });
   function member(key, list) {
-    while (isCons(list)) {
+    for ( ; isCons(list); list = list[CDR])
       if (key === list[CAR])   // TODO: == or ===?
         return list;
-      list = list[CDR];
-    }
     return NIL;
   }
 
@@ -1202,11 +1170,9 @@ export function createInstance(schemeOpts = {}) {
   //     Returns the portion of the list where the car is eq to the key, or () if none found.
   defineGlobalSymbol("memq", memq, { dontInline: true });
   function memq(key, list) {
-    while (isCons(list)) {
+    for ( ; isCons(list); list = list[CDR])
       if (key === list[CAR])
         return list;
-      list = list[CDR];
-    }
     return NIL;
   }
 
@@ -1218,10 +1184,8 @@ export function createInstance(schemeOpts = {}) {
       throw new TypeError(`Not an integer ${string(index)}`);
     if (index < 0) throw new RangeError(`nth`);
     if (isList(list)) {
-      while (index > 0 && isCons(list)) {
+      for ( ; index > 0 && isCons(list); list = list[CDR])
         index -= 1;
-        list = list[CDR];
-      }
       if (isCons(list))
         return list[CAR];
   ``} else if (Array.isArray(list)) {
@@ -1244,7 +1208,7 @@ export function createInstance(schemeOpts = {}) {
     if (!substring) substring = "";
     substring = substring.toLowerCase();
     let matches = NIL, scope = this;
-    while (scope && scope !== Object) {
+    for ( ; scope && scope !== Object; scope = Object.getPrototypeOf(scope)) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
         if (!is_atom(symbol)) continue;
@@ -1252,7 +1216,6 @@ export function createInstance(schemeOpts = {}) {
         if (name.toLowerCase().includes(substring))
           matches = cons(symbol, matches);
       }
-      scope = Object.getPrototypeOf(scope);
     }
     return this.sort(matches,
       (a,b) => a.description.toLowerCase() < b.description.toLowerCase());
@@ -1267,12 +1230,12 @@ export function createInstance(schemeOpts = {}) {
       if (isList(list)) {
         // Could just let the list iterator handle it but might as well just follow the Cons chain
         // and not have to manufacture an iterator.
-        while (isCons(list)) {
+        for ( ; isCons(list); list = list[CDR]) {
           let item = list[CAR];
           item = fn.call(this, item);
-          if (last) last = last[CDR] = cons(item, NIL);
-          else result = last = cons(item, NIL);
-            list = list[CDR];
+          item = cons(item, NIL)
+          if (last) last = last[CDR] = item;
+          else result = last = item;
         }
       } else {
         if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
@@ -1288,9 +1251,11 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Same as mapcar but results in an Array
-  defineGlobalSymbol("array_map", array_map, { dontInline: true });
+  defineGlobalSymbol("array-map", array_map, { dontInline: true });
   function array_map(fn, ...lists) {
     let res = [];
+    // TODO: does not currently special-case the list case.
+    // This is intentional for now as it ensures lists-as-iterables is sufficiently tested.
     for (let list of lists) {
       for (let item of list) {
         item = fn.call(this, item);
@@ -1300,9 +1265,37 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  // Useful for instantiating a lazy list using "map"
-  const identity = x => x;
-  defineGlobalSymbol("identity", identity);
+  // (mapcar fn list1 list2 ...)
+  defineGlobalSymbol("filter", filter, { dontInline: true });
+  function filter(predicateFn, ...lists) {
+    // Actually, this will work for any iterables, and lists are iterable.
+    let result = NIL, last;
+    for (let list of lists) {
+      if (isList(list)) {
+        // Could just let the list iterator handle it but might as well just follow the Cons chain
+        // and not have to manufacture an iterator.
+        for ( ; isCons(list); list = list[CDR]) {
+          let item = list[CAR];
+          if (isTrue(fn(item))) {
+            item = fn.call(this, item);
+            item = cons(item, NIL);
+            if (last) last = last[CDR] = item;
+            else result = last = item;
+          }
+        }
+      } else {
+        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+        for (let item of list) {
+          if(isTrue(fn(item))) {
+            item = cons(item, NIL);
+            if (last) last = last[CDR] = item;
+            else result = last = item;
+          }
+        }
+      }
+    }
+    return result;
+  }  
 
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
@@ -1326,7 +1319,7 @@ export function createInstance(schemeOpts = {}) {
     let bindings = forms[CAR];
     forms = forms[CDR];
     let scope = newScope(this, "letrec-scope");
-    while (isCons(bindings)) {
+    for ( ; isCons(bindings); bindings = bindings[CDR]) {
       let binding = bindings[CAR];
       if (!isCons(binding))
         throw new SchemeEvalError(`Bad binding ${string(binding)}`);
@@ -1334,18 +1327,13 @@ export function createInstance(schemeOpts = {}) {
       if (typeof boundVar !== 'symbol')
         throw new SchemeEvalError(`Bad binding ${string(binding)}`);
       let val = NIL;
-      while (isCons(bindingForms)) {
+      for ( ; isCons(bindingForms); bindingForms = bindingForms[CDR])
         val = _eval(bindingForms[CAR], scope);
-        bindingForms = bindingForms[CDR];
-      }
       scope[boundVar] = val;
-      bindings = bindings[CDR];
     }
     let res = NIL;
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR])
       res = _eval(forms[CAR], scope);
-      forms = forms[CDR];
-    }
     return res;
   }
 
@@ -1639,10 +1627,8 @@ export function createInstance(schemeOpts = {}) {
   function schemeCatch(tag, forms) {  // XXX order of args?
     let val = NIL;
     try {
-      while (isCons(forms)) {
+      for ( ; isCons(forms); forms = forms[CDR])
         val = _eval(forms[CAR], this);
-        forms = forms[CDR];
-      }
     } catch (e) {
       if (!(e instanceof SchemeJSThrow)) throw e;  // rethrow
       if (e.tag !== tag) throw e;
@@ -1672,19 +1658,15 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let val = NIL;
     try {
-      while (isCons(forms)) {
+      for ( ; isCons(forms); forms = forms[CDR])
         val = _eval(forms[CAR], this);
-        forms = forms[CDR];
-      }
     } catch (e) {
       if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
           || e instanceof typeMatch) {
         let scope = newScope(this, "catch-scope");
         scope[catchVar] = e;
-        while (isCons(catchForms)) {
+        for ( ; isCons(catchForms); catchForms = catchForms[CDR])
           val = _eval(catchForms[CAR], scope);
-          catchForms = catchForms[CDR];
-        }
       } else {
         throw e; // rethrow
       }
@@ -2019,7 +2001,7 @@ export function createInstance(schemeOpts = {}) {
         }
         scope[param] = arg;
       }
-      while (isCons(params))  // fill with NIL
+      for ( ; isCons(params); params = params[CDR])  // fill with NIL
         scope[params[CAR]] = NIL;
       if (typeof param === 'symbol')  // rest param
         scope[param] = args[i] !== undefined ? args[i] : NIL;
@@ -3383,7 +3365,7 @@ export function createInstance(schemeOpts = {}) {
         }
         compileScope = newScope(compileScope, "lambda-scope");
         let i = 0, originalParams = params;
-        while (isCons(params)) {
+        for ( ; isCons(params); params = params[CDR]) {
           let param = params[CAR], optionalForms;
           if (isCons(param) && param[CAR] === QUESTION_ATOM && isCons(param[CDR])) {
             optionalForms = param[CDR][CDR];
@@ -3394,10 +3376,8 @@ export function createInstance(schemeOpts = {}) {
             compileScope[param] = jsArgs[i];
           } else if (optionalForms) {
             let val = 'NIL';
-            while (isCons(optionalForms)) {
+            for ( ; isCons(optionalForms); optionalForms = optionalForms[CDR])
               val = compileEval(optionalForms[CAR], compileScope, tools);  // Earler params are in scope!
-              optionalForms = optionalForms[CDR];
-            }
             compileScope[param] = val;
           } else {
             if (jsArgs.length < paramCount && paramCount !== MAX_INTEGER) {
@@ -3424,10 +3404,8 @@ export function createInstance(schemeOpts = {}) {
                 tools.emit(`  return val;`);
                 tools.emit(`}`);
                 let closureResult = 'NIL';
-                while (isCons(forms)) {
+                for ( ; isCons(forms); forms = forms[CDR])
                   closureResult = compileEval(forms[CAR]);
-                  forms = forms[CDR];
-                }
                 tools.emit(`return ${closureResult};`);
                 tools.indent = saveIndent;
                 tools.emit('};');
@@ -3439,7 +3417,6 @@ export function createInstance(schemeOpts = {}) {
               }
             }
           }
-          params = params[CDR];
           i -= 1;
         }
         if (typeof params === 'symbol') {  // Neat trick for 'rest' params!
@@ -3454,10 +3431,8 @@ export function createInstance(schemeOpts = {}) {
         if (foundSelf)
           return compileApply(form, NIL, compileScope, tools, { params: originalParams, jsArgs })
         let lambdaResult = 'NIL';
-        while (isCons(forms)) {
+        for ( ; isCons(forms); forms = forms[CDR])
           lambdaResult = compileEval(forms[CAR], compileScope, tools);
-          forms = forms[CDR];
-        }
         return lambdaResult;
       }
     }
@@ -3480,13 +3455,12 @@ export function createInstance(schemeOpts = {}) {
       forms = cons(forms, NIL);
     }
     let origFormalParams = params;
-    while (isCons(params)) {
+    for ( ; isCons(params); params = params[CDR]) {
       let param = params[CAR];
       if (typeof param !== 'symbol') throw new SchemeCompileError(`Param must be a symbol ${param}`);
       let paramVar = tools.newTemp(param);
       paramv.push(paramVar);
       compileScope[param] = paramVar;
-      params = params[CDR];
     }
     if (typeof params === 'symbol') {
       // Hmmm... 'rest' params? This is probably not quite right.
@@ -3509,10 +3483,8 @@ export function createInstance(schemeOpts = {}) {
     tools.emit(`function ${result}(${paramStr}) {`);
     tools.indent = saveIndent + "  ";
     let res = 'NIL';
-    while (isCons(forms)) {
+    for ( ; isCons(forms); forms = forms[CDR])
       res = compileEval(forms[CAR], compileScope, tools);
-      forms = forms[CDR];
-    }
     tools.emit(`return ${res};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
