@@ -1772,6 +1772,11 @@ export function createInstance(schemeOpts = {}) {
         }
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled) fn = jitCompiled;
+        if (true) {
+          let fName = fn[NAMETAG] ?? fn.name;
+          let logArgs = [ "APPLY", fName, ...argv ];
+          console.log.apply(this, logArgs);
+        }
         return fn.apply(scope, argv);
       }
       // Insufficient # of parameters. If there is at least one argument, create a closure.
