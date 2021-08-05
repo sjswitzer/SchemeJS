@@ -2148,28 +2148,7 @@ export function createInstance(schemeOpts = {}) {
               }
             }
           }
-          while (isCons(obj)) {
-            if (obj[LAZYCAR])
-              put("..");
-            else
-              toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
-            sep = " ";
-            if (obj[LAZYCDR])
-              return put("...)", true);
-            obj = obj[CDR];
-            maxCdrDepth -= 1;
-            if (maxCdrDepth < 0)
-              return put("....)", true);
-            if (obj != null && obj[SUPERLAZY])
-              return put("...)", true);
-          }
-          if (!isNil(obj)) {
-            put(".");
-            sep = " ";
-            toString(obj, maxCarDepth, maxCdrDepth-1);
-          }
-          sep = "";
-          put(")", true);
+          listRest(obj);
           indent = saveIndent;
           return;
         }
@@ -2236,6 +2215,11 @@ export function createInstance(schemeOpts = {}) {
         if (obj[COMPILED]) {
           sep = " ";
           toString(obj[COMPILED], maxCarDepth, maxCdrDepth);
+        } else if (obj[LIST]) {
+          sep = " ";
+          toString(obj[CAR]);
+          sep = " ";
+          listRest(obj[CDR]);
         }
         sep = "";
         return put("}", true);
@@ -2267,7 +2251,31 @@ export function createInstance(schemeOpts = {}) {
       }
       return put(String(obj));
     }
-    function put(str, nobreak) {
+function listRest(obj) {
+  while (isCons(obj)) {
+    if (obj[LAZYCAR])
+      put("..");
+    else
+      toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
+    sep = " ";
+    if (obj[LAZYCDR])
+      return put("...)", true);
+    obj = obj[CDR];
+    maxCdrDepth -= 1;
+    if (maxCdrDepth < 0)
+      return put("....)", true);
+    if (obj != null && obj[SUPERLAZY])
+      return put("...)", true);
+  }
+  if (!isNil(obj)) {
+    put(".");
+    sep = " ";
+    toString(obj, maxCarDepth, maxCdrDepth-1);
+  }
+  sep = "";
+  put(")", true);
+}
+function put(str, nobreak) {
       if (!nobreak && line.length > 0 && line.length + str.length > stringWrap) {
         line += sep;
         lines.push(line);
