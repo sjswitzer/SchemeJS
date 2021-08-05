@@ -220,8 +220,8 @@ export function run(opts = {}) {
     EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
     EXPECT(` mul-by-5 `, is_closure);
     EXPECT(` (mul-by-5 3) `, 15);
-    EXPECT(` (define (add' a b) (+ a b)) `, ` 'add' `);  // Hmm, allowing ' ("prime") in identifiers leads to an odd notation...
-    EXPECT(` (define (add-4 a b) (add' 4)) `, ` 'add-4 `);
+    EXPECT(` (define (_add a b) (+ a b)) `, ` '_add `);
+    EXPECT(` (define (add-4 a b) (_add 4)) `, ` 'add-4 `);
     EXPECT(` add-4 `, is_closure);
     EXPECT(` (add-4 3) `, 7);
     EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form

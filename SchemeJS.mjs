@@ -194,7 +194,6 @@ export function createInstance(schemeOpts = {}) {
   for (let ch of ` \t${VTAB}${FORMFEED}${NBSP}`) WS[ch] = ch.codePointAt(0);
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
   for (let ch of `()[]{}'.:`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
-  for (let ch of "'") IDENT2[ch] = ch.codePointAt(ch);  // chars which are nevertheless IDENT2
   for (let ch of `\`"`) QUOTES[ch] = ch.codePointAt(0);
   globalScope.WS = WS;
   globalScope.NL = NL;
