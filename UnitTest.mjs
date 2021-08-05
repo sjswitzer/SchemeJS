@@ -23,7 +23,7 @@ export function run(opts = {}) {
   const string = globalScope.string || required();
   const newScope = globalScope.newScope || required();
   const deep_eq = globalScope.deep_eq || required();
-  const is_cons = globalScope.is_cons || required();
+  const isCons = globalScope.isCons || required();
   const is_closure = globalScope.is_closure || required();
   const SchemeEvalError = globalScope.SchemeEvalError || required();
 
@@ -415,7 +415,7 @@ export function run(opts = {}) {
   EXPECT_ERROR(` (nth 7 '[a b c d e f g]) `, RangeError);
   EXPECT_ERROR(` (nth 7 "abcdefg") `, RangeError);
 
-  EXPECT(` (apropos "c") `, is_cons);  // weak test but gets coverage
+  EXPECT(` (apropos "c") `, isCons);  // weak test but gets coverage
   EXPECT(` (mapcar) `, NIL);
   EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
   EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);

@@ -56,7 +56,7 @@ so I invited them in as first'class. SchemeJS is fully Scheme _and_ fully JavaSc
 
 It even has notations fof array and object literals. Every JavaScript operator and global
 symbol is available in SchemeJS. Cons cells are JavaScript-iterables but internally
-I generally avoid iterating them because "while (is_cons(obj)) ..." is a lot faster.
+I generally avoid iterating them because "while (isCons(obj)) ..." is a lot faster.
 But you _can_ iterate over them using "for (let obj of list) ...".
 SchemeJS does _not_ see iterables as Cons cells by default. That would be too slow.
 But it can create a "list-view" wrapper which lazily invokes the iterator every time
