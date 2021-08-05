@@ -1954,7 +1954,8 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function makeJsClosure(closureScope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
-    // Examine property list and throw any errors now rather than later
+    // Examine property list and throw any errors now rather than later.
+    // In general, do more work here so the closure can do less work when executed.
     if (typeof lambdaParams === 'symbol') // curry notation; normalize to classic
       lambdaParams = cons(lambdaParams, NIL);
     let params = lambdaParams, paramCount = 0, requiredCount, hasRestParam = false;
