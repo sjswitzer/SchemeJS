@@ -191,9 +191,9 @@ export function run(opts = {}) {
 
   EXPECT(` (bigint? 1n) `, true);
   EXPECT(` (bigint? 1) `, false);
-  EXPECT(` (bigint? "str" `, false);
-  EXPECT(` (bigint? 1n "foo") `, "foo");
-  EXPECT(` (bigint? 1n "foo") `, false);
+  EXPECT(` (bigint? "str") `, false);
+  EXPECT(` (bigint? 1n "foo") `, expectString("foo"));
+  EXPECT(` (bigint? 1 "foo") `, false);
   EXPECT(` (bigint? 1n 2n 2) `, 2n);
   EXPECT(` (bigint? 1 2n 2) `, 2);
 

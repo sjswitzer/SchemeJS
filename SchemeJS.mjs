@@ -496,8 +496,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("eval-string", eval_string);
   function eval_string(str, scope = this) {
     let expr = parseSExpr(str);
-    let result = _eval(expr, scope);
-    return result;
+    return _eval(expr, scope);
   }
 
   defineGlobalSymbol("globalScope", globalScope);
@@ -873,8 +872,10 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
   function ifelse(p, t = true, f = false, _) {
     p = isTrue(p);
-    if (p) return typeof t === 'boolean' ? t : _eval(t, this);
-    else return typeof f === 'boolean' ? f : _eval(f, this);
+    if (p)
+      return typeof t === 'boolean' ? t : _eval(t, this);
+    else
+      return typeof f === 'boolean' ? f : _eval(f, this);
   }
   function ifelse_hook(args, compileScope, tools) {
     return test_hooks(args, compileScope, tools, 'if', 'isTrue(*)');
@@ -902,8 +903,10 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook });
   function is_bigint(a, t = true, f = false, _) {
-    if (typeof a === 'bigint') typeof t === 'boolean' ? t : _eval(t, this);
-    else typeof f === 'boolean' ? f : _eval(f, this);
+    if (typeof a === 'bigint')
+      return typeof t === 'boolean' ? t : _eval(t, this);
+    else
+      return typeof f === 'boolean' ? f : _eval(f, this);
   }
   function is_bigint_hook(args, compileScope, tools) {
     return test_hooks(args, compileScope, tools, 'is_bigint', `typeof * === 'bigint'`);
@@ -1727,7 +1730,7 @@ export function createInstance(schemeOpts = {}) {
       if (val === undefined) throw new SchemeEvalError(`undefined ${string(form)}`);
       return val;
     }
-    if (form[NULLSYM] === true) return form; // nil
+    if (form[NULLSYM] === true) return NIL; // might as well replace imposter nils with the "real" one
     if (typeof form === 'function' || typeof form !== 'object' )
       return form;
     if (isCons(form)) {
