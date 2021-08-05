@@ -1864,7 +1864,7 @@ export function createInstance(schemeOpts = {}) {
     let params = body[CAR], forms = body[CDR];
     let closureScope = this;
     let schemeClosure = cons(CLOSURE_ATOM, cons(closureScope, body));
-    return makeJsClosure(closureScope, params, lambda, schemeClosure);
+    return makeJsClosure(closureScope, params, lambda, forms, schemeClosure);
   }
 
   // (\\ evalCount (params) (body1) (body2) ...)
@@ -1877,16 +1877,16 @@ export function createInstance(schemeOpts = {}) {
     let params = paramsEtc[CAR], forms = paramsEtc[CDR];
     let closureScope = this;
     let schemeClosure = cons(CLOSURE_ATOM, cons(closureScope, body));
-    return makeJsClosure(closureScope, params, lambda, schemeClosure, evalCount);
+    return makeJsClosure(closureScope, params, lambda, forms, schemeClosure, evalCount);
   }
 
-  function makeJsClosure(closureScope, params, lambda, schemeClosure, evalCount = MAX_INTEGER) {
+  function makeJsClosure(closureScope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
     // Examine property list and throw any errors now rather than later
-    if (typeof params === 'symbol') // curry notation; normalize to classic
-      params = cons(params, NIL);
-    let plist = params, paramCount = 0, requiredCount, hasRestParam = false;
-    for (plist = params; isCons(plist); plist = plist[CDR]) {
-      let param = plist[CAR];
+    if (typeof lambdaParams === 'symbol') // curry notation; normalize to classic
+      lambdaParams = cons(lambdaParams, NIL);
+    let params = lambdaParams, paramCount = 0, requiredCount, hasRestParam = false;
+    for (params = lambdaParams; isCons(params); params = params[CDR]) {
+      let param = params[CAR];
       if (isCons(param)) {
         if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
           throwBadLambda(lambda, `bad optional parameter ${string(param)}`);
@@ -1897,23 +1897,23 @@ export function createInstance(schemeOpts = {}) {
       }
       paramCount += 1;
     }
-    if (typeof plist === 'symbol') hasRestParam = true;
+    if (typeof params === 'symbol') hasRestParam = true;
     function jsClosure(...args) {
       let scope = newScope(closureScope, "*lambda-scope*"), params = lambdaParams, i = 0, argLength = args.length;
-      for ( ; i < argLength && isCons(params); ++i) {
+      for ( ; i < argLength && isCons(params); ++i, params = params[CDR]) {
         let param = params[CAR], optionalForms;
         if (isCons(param) && param[CAR] === QUESTION_ATOM) {
           let paramCdr = param[CDR];
           param = paramCdr[CAR];
           optionalForms = paramCdr[CDR];
         }
+        let arg = args[i];
         if (arg == undefined) {
           arg = NIL;
           for ( ; isCons(optionalForms); optionalForms = optionalForms[CDR])
             arg = eval(optionalForms[CAR], scope);
         }
         scope[param] = arg;
-        params = params[CDR];
       }
       while (isCons(params))  // fill with NIL
         scope[params[CAR]] = NIL;
