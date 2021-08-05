@@ -279,7 +279,7 @@ export function createInstance(schemeOpts = {}) {
     let group = opts.group ?? "builtin";
     if (typeof value === 'function') {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
-      makeParameterDescriptor(value, evalCount);
+      examineFunctionForParameterDescriptor(value, evalCount);
       if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
       let fnInfo = analyzeJSFunction(value);
       if (evalCount !== MAX_INTEGER && !opts.compileHook && !opts.dontInline)
@@ -1724,12 +1724,13 @@ export function createInstance(schemeOpts = {}) {
       if (typeof fn !== 'function')  // Lambdas eval to closures, which _are_ functions
         fn = _eval(fn, scope);
       if (typeof fn !== 'function') throwBadForm();
-      // parameterDescriptor = (requiredCount << 20) | (lift & 0xfff) << 12) | (evalCount & 0xff);
-      // >> n >>> 1 restores MAX_INTEGER to MAX_INTEGER
+      // See makeParameterDescriptor for the truth, but
+      //   parameterDescriptor = (requiredCount << 20) | ((lift & 0xfff) << 8) | (evalCount & 0xff);
+      // ">> n >>> 1" restores MAX_INTEGER to MAX_INTEGER
       let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
       let requiredCount = parameterDescriptor >> 19 >>> 1;
       let lift = parameterDescriptor << 12 >> 19 >>> 1;
-      let evalCount = parameterDescriptor  << 24 >> 19 >>> 1;
+      let evalCount = parameterDescriptor << 24 >> 23 >>> 1;
       if (fn[CAR] === SCLOSURE_ATOM) {
         let fnCdr = fn[CDR];
         if (!isCons(fnCdr)) throwBadForm();
@@ -1737,9 +1738,8 @@ export function createInstance(schemeOpts = {}) {
       }
       // Run through the arg list evaluating args
       let argCount = 0, args = form[CDR];
-      for (; argCount < evalCount && isCons(args) ; ++argCount, args = args[CDR]) {
-        args[CAR] = _eval(args[CAR], scope);
-
+      for (let al = args; argCount < evalCount && isCons(al) ; ++argCount, al = al[CDR])
+        al[CAR] = _eval(al[CAR], scope);
       let argv = [];
       for (let i = 0; i < lift && isCons(args); ++i, args = args[CDR])
         argv.push(args[CAR]);
@@ -1841,7 +1841,7 @@ export function createInstance(schemeOpts = {}) {
       throw new LogicError(`Too many lifted paramaters`);
     if (evalCount !== MAX_INTEGER && evalCount >= 0xff)
       throw new LogicError(`Too many evaluated paramaters`);
-    return (requiredCount << 20) | ((lift & 0xfff) << 12) | (evalCount & 0xff);
+    return (requiredCount << 20) | ((lift & 0xfff) << 8) | (evalCount & 0xff);
   }
 
   defineGlobalSymbol("apply", apply);
@@ -2233,7 +2233,7 @@ export function createInstance(schemeOpts = {}) {
             maxCdrDepth -= 1;
             if (maxCdrDepth < 0)
               return put("....)", true);
-            if (obj[SUPERLAZY])
+            if (obj != null && obj[SUPERLAZY])
               return put("...)", true);
           }
           if (!isNil(obj)) {
