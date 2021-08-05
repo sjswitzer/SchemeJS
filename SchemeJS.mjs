@@ -1975,9 +1975,7 @@ export function createInstance(schemeOpts = {}) {
     if (typeof params === 'symbol') hasRestParam = true;
     let jitCount = jitThreshold;
     function jsClosure(...args) {
-      // How easy is a JIT?
-      // Disable by optioning jitThreshold as undefined and the JS JIT will DCE this code.
-      if (jitThreshold !== undefined) {
+      if (jitThreshold !== undefined) {  // Disable by optioning jitThreshold as undefined
         let jitFn = jsClosure[JITCOMPILED];
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
         if (jitFn)
@@ -2115,8 +2113,6 @@ export function createInstance(schemeOpts = {}) {
                   }
                   let params = scopeCons[CDR][CAR];
                   if (typeof params === 'symbol') {
-                    put("(");
-                    indent += indentMore;
                     sep = "";
                     if (objCar === SCLOSURE_ATOM) {
                       toString(evalCount, maxCarDepth, maxCdrDepth-1);
@@ -2129,13 +2125,11 @@ export function createInstance(schemeOpts = {}) {
                     toString(params, maxCarDepth-1, maxCdrDepth-2);  // actually the atom
                     sep = ""; put(".");
                     toString(scopeCons[CDR][CDR], maxCarDepth, maxCdrDepth-3);  // the form
-                    sep = ""; put(")", true);
-                    indent = saveIndent;
                     return;
                   }
                 }
               }
-              let str = "(", params = obj[CDR][CAR], forms = obj[CDR][CDR];
+              let str = '', params = obj[CDR][CAR], forms = obj[CDR][CDR];
               if (objCar === LAMBDA_ATOM) str += lambdaStr;
               if (objCar === SLAMBDA_ATOM) str += slambdaStr;
               if (typeof params === 'symbol') {  // curry notation
@@ -2143,8 +2137,6 @@ export function createInstance(schemeOpts = {}) {
                 put(str);
                 indent += indentMore;
                 toString(forms, maxCarDepth, maxCdrDepth-1);
-                sep = "";
-                put(")", true);
                 indent = saveIndent;
                 return;
               }
@@ -2897,7 +2889,7 @@ function put(str, nobreak) {
         // "detokenize" any lookahead tokens
         let token = _tokens.pop();
         newline = (token.type === 'newline');
-        str += (tok.value !== undefined ? string(tok.value) : tok.type);
+        str += (token.value !== undefined ? string(token.value) : token.type);
         str += " ";
       }
       while (!newline) {
