@@ -1752,9 +1752,12 @@ export function createInstance(schemeOpts = {}) {
       // Otherwise, call the function with no arguments. Returning the function is tempting
       // but that would be error-prone and create an asymmetry between functions with zero
       // required parameters, like apropos, and those that have required parameters.
-      if (argCount === 0)
-        fn.call(scope);
+      // The other case handled here is that it's a native function and the requiredCount
+      // is MAX_INTEGER.
+      if (argCount === 0 || requiredCount === MAX_INTEGER)
+        fn.apply(scope, argv);
 
+      // OK, now create a closure.
       // This is a bit involved, but it doesn't happen often
       let closure = (...args) => fn.apply(scope, {...argv, ...args});
       // A closure function leads a double life: as a closure function but also a closure form!
@@ -1823,7 +1826,7 @@ export function createInstance(schemeOpts = {}) {
 
   function examineFunctionForParameterDescriptor(fn, evalCount = MAX_INTEGER) {
     //let res = { name, params, restParam, value, body, printBody, printParams, native, requiredCount };
-    let { params, requiredCount, restParam } = analyzeJSFunction(fn);
+    let { params, requiredCount, restParam, native } = analyzeJSFunction(fn);
     let lift = params.length;  // normal functions have all their parameters lifted
     if (restParam) lift = MAX_INTEGER;
     if (evalCount !== MAX_INTEGER) {
@@ -1831,6 +1834,8 @@ export function createInstance(schemeOpts = {}) {
       // so lift one fewer
       lift = params.length-1;
     }
+    if (native)
+      evalCount = lift = requiredCount = MAX_INTEGER;
     return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift, evalCount = MAX_INTEGER);
   }
 
