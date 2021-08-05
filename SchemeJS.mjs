@@ -1880,7 +1880,7 @@ export function createInstance(schemeOpts = {}) {
     return makeJsClosure(closureScope, params, lambda, schemeClosure, evalCount);
   }
 
-  function makeJsClosure(closureScope, params, lambda, closure, evalCount = MAX_INTEGER) {
+  function makeJsClosure(closureScope, params, lambda, schemeClosure, evalCount = MAX_INTEGER) {
     // Examine property list and throw any errors now rather than later
     if (typeof params === 'symbol') // curry notation; normalize to classic
       params = cons(params, NIL);
