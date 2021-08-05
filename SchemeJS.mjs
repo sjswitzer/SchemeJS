@@ -26,6 +26,7 @@ export function createInstance(schemeOpts = {}) {
   let latin1 = schemeOpts.latin1 ?? false;
   let supplemental = schemeOpts.supplemental ?? false;
   let dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
+  let jitThreshold = schemeOpts.jitThreshold ?? undefined;
   let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   let reportSystemError = schemeOpts.reportError ?? _reportError;
@@ -52,7 +53,7 @@ export function createInstance(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
-  const COMPILED = Symbol('COMPILED'), JITCOMPILED = Symbol("JITCOMPILED"), JITCOUNT = Symbol("JITCOUNT"), JIT_THRESHOLD = 1000;
+  const COMPILED = Symbol('COMPILED'), JITCOMPILED = Symbol("JITCOMPILED"), JITCOUNT = Symbol("JITCOUNT");
   const PARAMETER_DESCRIPTOR = Symbol('PARAMETER_DESCRIPTOR'), NAMETAG = Symbol("NAMETAG");
 
   // Trust the JIT to inline this
@@ -1303,6 +1304,10 @@ export function createInstance(schemeOpts = {}) {
   // Because of this implementation uses a scope chain instead
   // of an environment, each kind of let is as piwerful as "letrec".
   //
+  // TODO: Reconsider that; it's not too hard to implenement let and let*;
+  // it's just that I think they're bad idead. But it's possible there's existing
+  // SIOD code that depends on the behavior of let and let*.
+  //
   // TODO: Make a shape-shifting Scope object that mimics a Cons
   // and transforms into an environment on demand, conversely
   // functions that take an "env" param should transform it back into
@@ -1772,12 +1777,16 @@ export function createInstance(schemeOpts = {}) {
         }
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled) fn = jitCompiled;
-        if (true) {
-          let fName = fn[NAMETAG] ?? fn.name;
+        let trace = true;
+        let fName = fn[NAMETAG] ?? fn.name;
+        if (trace) {
           let logArgs = [ "APPLY", fName, ...argv ];
-          console.log.apply(this, logArgs);
+          console.log.apply(scope, logArgs);
         }
-        return fn.apply(scope, argv);
+        let result = fn.apply(scope, argv);
+        if (trace)
+          console.log("RETURNS", fName, result);
+        return result;
       }
       // Insufficient # of parameters. If there is at least one argument, create a closure.
       // Otherwise, call the function with no arguments. Returning the function is tempting
@@ -1932,12 +1941,10 @@ export function createInstance(schemeOpts = {}) {
     }
     if (typeof params === 'symbol') hasRestParam = true;
     function jsClosure(...args) {
-      if (--jsClosure[JITCOUNT] < 0) {
-        // jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
+      // How easy is a JIT?
+      if (--jsClosure[JITCOUNT] < 0) {  // disable by setting jitThreshold to undefined :)
+        jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
       }
-      // TODO: implement JIT by having a counter here and after "n" calls
-      // compile the code then forward to the compiler or "tag" the closure with an "APPLY"
-      // symbol that tells eval and apply what to do instead of applying this closure.
       let scope = newScope(closureScope, "*lambda-scope*"), params = lambdaParams, i = 0, argLength = args.length;
       for ( ; i < argLength && isCons(params); ++i, params = params[CDR]) {
         let param = params[CAR], optionalForms;
@@ -1956,7 +1963,7 @@ export function createInstance(schemeOpts = {}) {
       }
       while (isCons(params))  // fill with NIL
         scope[params[CAR]] = NIL;
-      if (typeof param === 'symbol')
+      if (typeof param === 'symbol')  // rest param
         scope[param] = args[i] !== undefined ? args[i] : NIL;
       let result = NIL;
       for (let form of forms)
@@ -1974,7 +1981,7 @@ export function createInstance(schemeOpts = {}) {
     jsClosure[CAR] = schemeClosure[CAR];
     jsClosure[CDR] = schemeClosure[CDR];
     jsClosure[LIST] = jsClosure[PAIR] = true;
-    jsClosure[JITCOUNT] = JIT_THRESHOLD;
+    jsClosure[JITCOUNT] = jitThreshold;
     return jsClosure;
   }
 
