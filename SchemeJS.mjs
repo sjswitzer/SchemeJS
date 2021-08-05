@@ -1592,7 +1592,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function makeConsImposter(fn, form) {
-    fn[PAIR] = true;
+    fn[PAIR] = fn[LIST] = true;
     fn[CAR] = form[CAR];
     fn[CDR] = form[CDR];
     return fn;
@@ -1777,7 +1777,7 @@ export function createInstance(schemeOpts = {}) {
         closure[CAR] = CLOSURE_ATOM;
         closure[CDR] = cons(closureScope, cons(closureParams, closureForms));
       }
-      closure[LIST] = true;
+      closure[LIST] = closure[PAIR] = true;
       // recompute lift and requiredParameters
       if (lift !== MAX_INTEGER)
         lift -= argCount;
@@ -1934,7 +1934,7 @@ export function createInstance(schemeOpts = {}) {
     jsClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift, evalCount);
     jsClosure[CAR] = schemeClosure[CAR];
     jsClosure[CDR] = schemeClosure[CDR];
-    jsClosure[LIST] = true;
+    jsClosure[LIST] = jsClosure[PAIR] = true;
     return jsClosure;
   }
 
