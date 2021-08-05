@@ -27,7 +27,7 @@ export function createInstance(schemeOpts = {}) {
   const supplemental = schemeOpts.supplemental ?? false;
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   const jitThreshold = schemeOpts.jitThreshold ?? undefined;
-  const TRACE_INTERPRETER = schemeOpts.traceInterpreter ?? true;  // XXX change the default
+  const TRACE_INTERPRETER = schemeOpts.traceInterpreter ?? false;
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   const reportSystemError = schemeOpts.reportError ?? _reportError;
@@ -1993,8 +1993,15 @@ export function createInstance(schemeOpts = {}) {
     let jitCount = jitThreshold;
     function jsClosure(...args) {
       // How easy is a JIT?
-      if (jitThreshold !== undefined && --jitCount < 0) {  // disable by setting jitThreshold to undefined
-        jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
+      // Disable by optioning jitThreshold as undefined and the JS JIT will DCE this code.
+      if (jitThreshold !== undefined) {
+        let jitFn = jsClosure[JITCOMPILED];
+        // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
+        if (jitFn)
+          return jitFn.apply(this, args);
+        if (--jitCount < 0) {
+          jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
+        }
       }
       let scope = newScope(closureScope, "*lambda-scope*"), params = lambdaParams, i = 0, argLength = args.length;
       for ( ; i < argLength && isCons(params); ++i, params = params[CDR]) {
@@ -2024,10 +2031,6 @@ export function createInstance(schemeOpts = {}) {
     if (requiredCount === undefined) requiredCount = paramCount;
     let lift = requiredCount;
     if (hasRestParam) lift = MAX_INTEGER;
-    if (evalCount !== MAX_INTEGER) {
-      if (restParam) throwBadLambda(`can't have a rest param with "evalCount"`);
-      lift = paramCount-1;
-    }
     jsClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift, evalCount);
     jsClosure[CAR] = schemeClosure[CAR];
     jsClosure[CDR] = schemeClosure[CDR];
@@ -3235,7 +3238,7 @@ export function createInstance(schemeOpts = {}) {
         tools.use(form);
     }
     let closureScope;
-    if (isCons(form)) {  // must check before checking function type because closures are functions too!
+    if (isCons(form)) {  // must check this before checking function type because closures are functions too!
       let opSym = form[CAR];
       if (opSym === SLAMBDA_ATOM) {
         evalCount = form[CAR];
