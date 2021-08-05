@@ -2232,7 +2232,7 @@ export function createInstance(schemeOpts = {}) {
           return put(`{${params} => ${fnDesc.value}}`);
         if (printBody && (printBody.length > 80 || printBody.includes('\n')))
           printBody = '';
-        put(`{function${name}${params}${printBody}`);
+        put(`{function ${name}${params}${printBody}`);
         if (obj[COMPILED]) {
           sep = " ";
           toString(obj[COMPILED], maxCarDepth, maxCdrDepth);
