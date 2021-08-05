@@ -1840,6 +1840,7 @@ export function createInstance(schemeOpts = {}) {
         closure[CDR] = cons(closureScope, cons(closureParams, closureForms));
       }
       closure[LIST] = closure[PAIR] = true;
+      closure[CLOSURE_ATOM] = true; // marks closure for special "printing"
       // recompute lift and requiredParameters
       if (lift !== MAX_INTEGER)
         lift -= argCount;
@@ -2017,6 +2018,7 @@ export function createInstance(schemeOpts = {}) {
     jsClosure[CAR] = schemeClosure[CAR];
     jsClosure[CDR] = schemeClosure[CDR];
     jsClosure[LIST] = jsClosure[PAIR] = true;
+    jsClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
     return jsClosure;
   }
 
@@ -2148,7 +2150,28 @@ export function createInstance(schemeOpts = {}) {
               }
             }
           }
-          listRest(obj);
+          while (isCons(obj)) {
+            if (obj[LAZYCAR])
+              put("..");
+            else
+              toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
+            sep = " ";
+            if (obj[LAZYCDR])
+              return put("...)", true);
+            obj = obj[CDR];
+            maxCdrDepth -= 1;
+            if (maxCdrDepth < 0)
+              return put("....)", true);
+            if (obj != null && obj[SUPERLAZY])
+              return put("...)", true);
+          }
+          if (!isNil(obj)) {
+            put(".");
+            sep = " ";
+            toString(obj, maxCarDepth, maxCdrDepth-1);
+          }
+          sep = "";
+          put(")", true);
           indent = saveIndent;
           return;
         }
@@ -2196,7 +2219,7 @@ export function createInstance(schemeOpts = {}) {
           return;
         }
       }
-      if (typeof obj === 'function' && !obj[CLOSURE_ATOM]) {
+      if (typeof obj === 'function' && !obj[LIST]) {
         let fnDesc = analyzeJSFunction(obj);
         let name;
         if (obj[NAMETAG])
@@ -2215,11 +2238,6 @@ export function createInstance(schemeOpts = {}) {
         if (obj[COMPILED]) {
           sep = " ";
           toString(obj[COMPILED], maxCarDepth, maxCdrDepth);
-        } else if (obj[LIST]) {
-          sep = " ";
-          toString(obj[CAR]);
-          sep = " ";
-          listRest(obj[CDR]);
         }
         sep = "";
         return put("}", true);
@@ -2251,30 +2269,6 @@ export function createInstance(schemeOpts = {}) {
       }
       return put(String(obj));
     }
-function listRest(obj) {
-  while (isCons(obj)) {
-    if (obj[LAZYCAR])
-      put("..");
-    else
-      toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
-    sep = " ";
-    if (obj[LAZYCDR])
-      return put("...)", true);
-    obj = obj[CDR];
-    maxCdrDepth -= 1;
-    if (maxCdrDepth < 0)
-      return put("....)", true);
-    if (obj != null && obj[SUPERLAZY])
-      return put("...)", true);
-  }
-  if (!isNil(obj)) {
-    put(".");
-    sep = " ";
-    toString(obj, maxCarDepth, maxCdrDepth-1);
-  }
-  sep = "";
-  put(")", true);
-}
 function put(str, nobreak) {
       if (!nobreak && line.length > 0 && line.length + str.length > stringWrap) {
         line += sep;
