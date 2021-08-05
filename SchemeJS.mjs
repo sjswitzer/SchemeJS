@@ -1984,7 +1984,7 @@ export function createInstance(schemeOpts = {}) {
           jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
         }
       }
-      let scope = newScope(closureScope, "*lambda-scope*"), params = lambdaParams, i = 0, argLength = args.length;
+      let scope = newScope(closureScope, "lambda-scope"), params = lambdaParams, i = 0, argLength = args.length;
       for ( ; i < argLength && isCons(params); ++i, params = params[CDR]) {
         let param = params[CAR], optionalForms;
         if (isCons(param) && param[CAR] === QUESTION_ATOM) {
