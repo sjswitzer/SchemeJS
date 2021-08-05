@@ -22,17 +22,18 @@ export const VERSION = "1.1 (alpha)";
 // Which is a sin but not a crime.
 //
 export function createInstance(schemeOpts = {}) {
-  let readFile = schemeOpts.readFile;
-  let latin1 = schemeOpts.latin1 ?? false;
-  let supplemental = schemeOpts.supplemental ?? false;
-  let dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
-  let jitThreshold = schemeOpts.jitThreshold ?? undefined;
-  let _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
-  let reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
-  let reportSystemError = schemeOpts.reportError ?? _reportError;
-  let reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
-  let lambdaStr = schemeOpts.lambdaStr ?? "\\";
-  let slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
+  const readFile = schemeOpts.readFile;
+  const latin1 = schemeOpts.latin1 ?? false;
+  const supplemental = schemeOpts.supplemental ?? false;
+  const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
+  const jitThreshold = schemeOpts.jitThreshold ?? undefined;
+  const DEBUG_TRACE = schemeOpts.DEBUG_TRACE ?? true;  // XXX change the default
+  const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
+  const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
+  const reportSystemError = schemeOpts.reportError ?? _reportError;
+  const reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
+  const lambdaStr = schemeOpts.lambdaStr ?? "\\";
+  const slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
 
   // Creating a Cons should be as cheap as possible, so no subclassing
   // or calls to super. But people should be able to be able to define their
@@ -1738,6 +1739,9 @@ export function createInstance(schemeOpts = {}) {
     if (form[NULLSYM] === true) return NIL; // might as well replace imposter nils with the "real" one
     if (typeof form === 'function' || typeof form !== 'object' )
       return form;
+    if (DEBUG_TRACE) {
+      console.log("EVAL", string(form));
+    }
     if (isCons(form)) {
       let fn = form[CAR];
       if (fn === QUOTE_ATOM) { // QUOTE is a special function that will do this but catch it here anyway.
@@ -1777,14 +1781,13 @@ export function createInstance(schemeOpts = {}) {
         }
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled) fn = jitCompiled;
-        let trace = true;
         let fName = fn[NAMETAG] ?? fn.name;
-        if (trace) {
+        if (DEBUG_TRACE) {
           let logArgs = [ "APPLY", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
         let result = fn.apply(scope, argv);
-        if (trace)
+        if (DEBUG_TRACE)
           console.log("RETURNS", fName, result);
         return result;
       }
