@@ -1192,7 +1192,7 @@
           if (!enterKey) return;
 
           // Eval
-          let value = globalScope._eval(expr, globalScope);
+          let value = globalScope.eval(expr, globalScope);
 
           // Show results and save in variables for later reuse
           let loadPath = null, loadLine = null;
