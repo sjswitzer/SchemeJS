@@ -39,6 +39,11 @@ export function run(opts = {}) {
   }
   TestFailureError.prototype.name = "TestFailureError";
 
+  //
+  // Builtins tests
+  // Get the builtins sorted before testing any scenarios!
+  //
+
   EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
   EXPECT(` (car '(1 . 2)) `, ` 1 `);
   EXPECT(` (cdr '(1 . 2)) `, 2);
@@ -164,8 +169,9 @@ export function run(opts = {}) {
   EXPECT(` ((? false) 1 2) `, 2);
   EXPECT(` (? true 1) `, isClosure);
   EXPECT(` ((? true 1) 2) `, 1);
+  EXPECT(` ((? true 1) (oops!)) `, 1);
   EXPECT(` (? false 1) `, isClosure);
-  EXPECT(` ((? false 1) 2)`, 2);
+  EXPECT(` ((? false (!oops)) 2)`, 2);
   EXPECT(` (? true 1 2) `, 1);
   EXPECT(` (? false 1 2) `, 2);
   EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
@@ -189,6 +195,8 @@ export function run(opts = {}) {
   EXPECT(` (? false 1 2 (oops!)) `, 2);
   EXPECT(` (? true 1 (oops!)) `, 1);
   EXPECT(` (? false (oops!) 2) `, 2);
+  EXPECT_ERROR(` ((? true (!oops)) 2) `, SchemeEvalError);
+  EXPECT_ERROR(` ((? false 1) (!oops))`, SchemeEvalError);
   EXPECT_ERROR(` (? false 1 (oops!)) `, SchemeEvalError);
   EXPECT_ERROR(` (? true (oops!) 2) `, SchemeEvalError);
   EXPECT_ERROR(` (? (oops!) 1 2) `, SchemeEvalError);
@@ -271,22 +279,6 @@ export function run(opts = {}) {
   // EXPECT(` (eq? '${list1} '${list2}) `, false);
   // EXPECT(` (equal? '${list1} '${list2}) `, false);
 
-  { // Partial application returning closures
-    let savedScope = beginTestScope();
-    EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
-    EXPECT(` mul-by-5 `, isClosure);
-    EXPECT(` (mul-by-5 3) `, 15);
-    EXPECT(` (define (_add a b) (+ a b)) `, ` '_add `);
-    EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
-    EXPECT(` add-4 `, isClosure);
-    EXPECT(` (add-4 3) `, 7);
-    EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
-    EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
-    EXPECT(` increment-by-3 `, isClosure);
-    EXPECT(` (increment-by-3 4) `, 7);
-    endTestScope(savedScope);
-  }
-
   EXPECT(` (&) `, 0);
   EXPECT(` (& 76134) `, isClosure);
   EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
@@ -308,13 +300,13 @@ export function run(opts = {}) {
   EXPECT(` (min 5) `, isClosure);
   EXPECT(` (min 3 7 9 2 4) `, 2);
 
-  EXPECT(` (&&) `, undefined);
+  EXPECT(` (&&) `, true);
   EXPECT(` (&& 1) `, 1);
   EXPECT(` (&& 1 2) `, 2);
   EXPECT(` (&& 1 false 2) `, false);
   EXPECT(` (&& 1 false (oops!)) `, false);  // short-circuits
   EXPECT_ERROR(` (&& 1 true (oops!)) `, SchemeEvalError);
-  EXPECT(` (||) `, undefined);
+  EXPECT(` (||) `, false);
   EXPECT(` (|| 1) `, 1);
   EXPECT(` (|| 1 2) `, 1);
   EXPECT(` (|| nil null (void) false 2 3) `, 2); 
@@ -323,12 +315,21 @@ export function run(opts = {}) {
   EXPECT(` (|| nil null (void) false "" 2 3) `, `""`);
   EXPECT(` (|| 5 (oops!)) `, 5);  // short-circuits
   EXPECT_ERROR(` (|| nil null (void) false (oops!)) `, SchemeEvalError);
+  EXPECT(` (??) `, undefined);
+  EXPECT(` (?? 1) `, 1);
+  EXPECT(` (?? 1 2) `, 1);
+  EXPECT(` (?? null) `, null);
+  EXPECT(` (?? (void)) `, undefined);
+  EXPECT(` (?? null 1) `, 1);
+  EXPECT(` (?? null 1 (oops!)) `, 1);
+  EXPECT(` (?? (void) 1) `, 1);
+  EXPECT(` (?? null (void) nil false 2 3) `, NIL); 
 
-  EXPECT(` (begin) `, undefined);
+  EXPECT(` (begin) `, NIL);
   EXPECT(` (begin 1) `, 1);
   EXPECT(` (begin 1 2 3) `, 3);
   EXPECT(` (begin (+ 3 4) (* 3 4)) `, 12);
-  EXPECT(` (prog1) `, undefined);
+  EXPECT(` (prog1) `, NIL);
   EXPECT(` (prog1 1) `, 1);
   EXPECT(` (prog1 1 2 3) `, 1);
   EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
@@ -436,6 +437,22 @@ export function run(opts = {}) {
   EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3) >)`,
       result => globalScope.apply(globalScope.ge, result));
             
+  { // Partial application returning closures
+    let savedScope = beginTestScope();
+    EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
+    EXPECT(` mul-by-5 `, isClosure);
+    EXPECT(` (mul-by-5 3) `, 15);
+    EXPECT(` (define (_add a b) (+ a b)) `, ` '_add `);
+    EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
+    EXPECT(` add-4 `, isClosure);
+    EXPECT(` (add-4 3) `, 7);
+    EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
+    EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
+    EXPECT(` increment-by-3 `, isClosure);
+    EXPECT(` (increment-by-3 4) `, 7);
+    endTestScope(savedScope);
+  }
+    
   {
     const toJSname = globalScope.toJSname;
     const testToJSname = name => () => toJSname(name);
@@ -447,6 +464,10 @@ export function run(opts = {}) {
     EXPECT(testToJSname("$"), expectString("$cash"));
     EXPECT(testToJSname("?"), expectString("$q"));
   }
+
+  //
+  // Internals tests
+  //
 
   {
     const analyzeJSFunction = globalScope.analyzeJSFunction;
@@ -519,6 +540,10 @@ export function run(opts = {}) {
     //    { name: 'sort', params: [], restParam: undefined, value: undefined,
     //      body: undefined, printBody: ' { [native code] }', native: true });
   }
+
+  //
+  // Scenario tests
+  //
 
   {
     let savedScope = beginTestScope();

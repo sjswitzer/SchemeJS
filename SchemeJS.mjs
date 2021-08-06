@@ -810,8 +810,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("&&", and, { evalArgs: 0, compileHook: and_hook }, "and");
   function and(...forms) {
     let val = true;
-    for (let i = 0, argsLength = forms.length; i < length; ++i) {
-      let val = _eval(forms[i], this);
+    for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
+     val = _eval(forms[i], this);
       if (!isTrue(val)) return val;
     }
     return val;
@@ -840,8 +840,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("||", or, { evalArgs: 0, compileHook: or_hook }, "or");
   function or(...forms) {
     let val = false;
-    for (let i = 0, argsLength = forms.length; i < length; ++i) {
-      let val = _eval(forms[i], this);
+    for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
+      val = _eval(forms[i], this);
       if (isTrue(val)) return val;
     }
     return val;
@@ -852,9 +852,9 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("??", nullish, { evalArgs: 0, compileHook: nullish_hook }, "nullish");
   function nullish(...forms) {
-    let val = null;
-    for (let i = 0, argsLength = forms.length; i < length; ++i) {
-      let val = _eval(forms[i], this);
+    let val = undefined;
+    for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
+      val = _eval(forms[i], this);
       if (val != null) return val;
     }
     return val;
@@ -1137,7 +1137,8 @@ export function createInstance(schemeOpts = {}) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       let val = _eval(forms[i], this);
-      if (i = 0) res = val;
+      if (i === 0)
+        res = val;
     }
     return res;
   }
@@ -2016,8 +2017,10 @@ export function createInstance(schemeOpts = {}) {
         closureParams = closureBody[CAR];
         closureForms = closureBody[CDR];
       }
-      if (argCount < evalCount && evalCount !== MAX_INTEGER) {
+      if (evalCount !== MAX_INTEGER) {
         evalCount -= argCount;
+        if (evalCount < 0)
+          evalCount = 0;
         closure[CAR] = SCLOSURE_ATOM;
         closure[CDR] = cons(closureScope, cons(evalCount, cons(closureParams, closureForms)));
       } else {
