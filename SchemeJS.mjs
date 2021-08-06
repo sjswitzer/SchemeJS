@@ -653,7 +653,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("<", lt, { evalArgs: 2, compileHook: lt_hook }, "lt");
   function lt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
-    for (; ; a = b, b = rest[i++]) {
+    for (;;) {
       if (!(a < b)) return false;
       if (i >= restLength) break;
       a = b;
@@ -691,7 +691,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("<=", le, { evalArgs: 2, compileHook: le_hook }, "le");
   function le(a, b, ...rest) {
     let i = 0, restLength = rest.length;
-    for (; ; a = b, b = rest[i++]) {
+    for (;;) {
       if (!(a <= b)) return false;
       if (i >= restLength) break;
       a = b;
@@ -706,7 +706,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol(">", gt, { evalArgs: 2, compileHook: gt_hook }, "gt");
   function gt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
-    for (; ; a = b, b = rest[i++]) {
+    for (;;) {
       if (!(a > b)) return false;
       if (i >= restLength) break;
       a = b;
@@ -721,7 +721,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol(">=", ge, { evalArgs: 2, compileHook: ge_hook }, "ge");
   function ge(a, b, ...rest) {
     let i = 0, restLength = rest.length;
-    for (; ; a = b, b = rest[i++]) {
+    for (;;) {
       if (!(a >= b)) return false;
       if (i >= restLength) break;
       a = b;
@@ -736,7 +736,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook }, "eqv"); // XXX name
   function eq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
-    for (; ; a = b, b = rest[i++]) {
+    for (;;) {
       if (!(a == b)) return false;
       if (i >= restLength) break;
       a = b;
@@ -751,7 +751,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("===", eeq, { evalArgs: 2, compileHook: eeq_hook }); // XXX name
   function eeq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
-    for (; ; a = b, b = rest[i++]) {
+    for (;;) {
       if (!(a === b)) return false;
       if (i >= restLength) break;
       a = b;
@@ -769,8 +769,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("equal?", (a, b) =>  deep_eq(a, b));
 
   defineGlobalSymbol("!=", ne, { evalArgs: 2, compileHook: ne_hook }, "ne");
-  function ne(a, b, forms) {
-    return !eq.call(this, a, b, forms);
+  function ne(a, b, ...rest) {
+    return !eq.call(this, a, b, ...rest);
   }
   function ne_hook(args, compileScope, tools) {
     let eq = compare_hooks(args, compileScope, tools, '==', 'eq');
@@ -778,8 +778,8 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("!==", ne, { evalArgs: 2, compileHook: ne_hook }, "ne");
-  function ne(a, b, forms) {
-    return !eeq.call(this, a, b, forms);
+  function ne(a, b, ...rest) {
+    return !eeq.call(this, a, b, ...rest);
   }
   function ne_hook(args, compileScope, tools) {
     let eq = compare_hooks(args, compileScope, tools, '==', 'eq');
@@ -1912,26 +1912,32 @@ export function createInstance(schemeOpts = {}) {
 
   // (\ (params) (form1) (form2) ...)
   defineGlobalSymbol(LAMBDA_CHAR, lambda, { evalArgs: 0, dontInline: true }, "\\", "lambda");
-  function lambda(body) {
+  function lambda(...forms) {
+    let body = NIL;
+    for (let i = forms.length; i > 0; --i)
+      body = cons(forms[i-1], body);
     let lambda = cons(LAMBDA_ATOM, body);
     if (!isCons(body)) throwBadLambda(lambda);
-    let params = body[CAR], forms = body[CDR];
+    let params = body[CAR], bodyForms = body[CDR];
     let closureScope = this;
     let schemeClosure = cons(CLOSURE_ATOM, cons(closureScope, body));
-    return makeJsClosure(closureScope, params, lambda, forms, schemeClosure);
+    return makeJsClosure(closureScope, params, lambda, bodyForms, schemeClosure);
   }
 
   // (\\ evalCount (params) (body1) (body2) ...)
   defineGlobalSymbol(LAMBDA_CHAR+LAMBDA_CHAR, special_lambda, { evalArgs: 0, dontInline: true }, "\\\\", "special_lambda");
-  function special_lambda(body) {
+  function special_lambda(...forms) {
+    let body = NIL;
+    for (let i = forms.length; i > 0; --i)
+      body = cons(forms[i-1], body);
     let lambda = cons(LAMBDA_ATOM, body);
     if (!isCons(body)) throwBadLambda(lambda);
     let evalCount = body[CAR], paramsEtc = body[CDR];
     if (!isCons(paramsEtc)) throwBadLambda(lambda);
-    let params = paramsEtc[CAR], forms = paramsEtc[CDR];
+    let params = paramsEtc[CAR], bodyForms = paramsEtc[CDR];
     let closureScope = this;
     let schemeClosure = cons(CLOSURE_ATOM, cons(closureScope, body));
-    return makeJsClosure(closureScope, params, lambda, forms, schemeClosure, evalCount);
+    return makeJsClosure(closureScope, params, lambda, bodyForms, schemeClosure, evalCount);
   }
 
   function makeJsClosure(closureScope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
