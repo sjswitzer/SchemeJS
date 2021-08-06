@@ -432,7 +432,7 @@ export function run(opts = {}) {
   EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
   EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
   EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
-  EXPECT(` (array_map (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
+  EXPECT(` (array-map (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
 
   EXPECT(` (let ((x 10)
                  (y 20))
