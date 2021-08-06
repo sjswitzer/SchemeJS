@@ -134,13 +134,17 @@ All it needs is cons cells, nil, an interpreter, a parser, a "printer", a REPL, 
 and a handful of Lisp primitives. Hence this project. There's no emulation layer because
 there's nothing to emulate (save "set/setq").
 
-I didn't set out to a blazing fast Scheme implementation, but halfway into implementing
+I didn't set out to a surprisingly fast Scheme implementation, but halfway into implementing
 it I realized it inevitably would be, thanks to the JavaScript runtime and its JITs.
 If I could finish it, that is. (And to be fair, the parser could be a _lot_ faster).
+There's still a lot of tuning to do. Creating argument vectors using "push" is almost
+certainly suboptimal but you don't know the length until you traverse the argument list
+and I need to compare the cose ot double-traversal to using "push."
 
 Probably the best way to think about it is that JavaScript was secretly Scheme all along,
-just as Brendan Eich originally intended. Recent improvements in ES6 and beyond have exposed
-more of the underlying Lispyness and this project wouldn't have been attempted without them.
+just as Brendan Eich originally intended. Recent improvements in ES6 and beyond have exposed more of the underlying Lispyness and this project wouldn't have been attempted without them.
+It's as if Scheme and Self had an unlikely affair and decided their lovechild would
+have a vaguely Java-like syntax.
 
 ## Future Work
 

@@ -424,9 +424,14 @@ export function run(opts = {}) {
   EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
   EXPECT(` (array-map (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
 
-  // TODO: let needs a lot more testing, including the partial-application case
+  // TODO: let needs a lot more testing
   EXPECT(` (let ((x 10)
                  (y 20))
+              (+ x y)) `, 30);
+  EXPECT(` (let ((x 10)
+                 (y 20)))`, isClosure);
+  EXPECT(` ((let ((x 10)
+                  (y 20)))
               (+ x y)) `, 30);
 
   EXPECT_ERROR(` (sort) `, TypeError);
@@ -446,6 +451,7 @@ export function run(opts = {}) {
     EXPECT(` mul-by-5 `, isClosure);
     EXPECT(` (mul-by-5 3) `, 15);
     EXPECT(` (define (_add a b) (+ a b)) `, ` '_add `);
+    EXPECT(` (_add 5 6) `, 11);
     EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
     EXPECT(` add-4 `, isClosure);
     EXPECT(` (add-4 3) `, 7);

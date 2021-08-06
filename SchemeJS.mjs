@@ -1505,11 +1505,11 @@ export function createInstance(schemeOpts = {}) {
   // behavior of let and let*, for instance,
   //    (let ((x (something-that-uses-outer-scope-x) ...
   //
-  // Amusingly, "let" can be partially-applied, returning a function that
+  // "letrec" can be partially-applied, returning a function that
   // evaluates its argiments in the let scope!
   //
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0 }, "let", "let*");
-  function letrec(bindings, ...forms) {
+  function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
     for ( ; isCons(bindings); bindings = bindings[CDR]) {
       let binding = bindings[CAR];
@@ -1523,7 +1523,7 @@ export function createInstance(schemeOpts = {}) {
         val = _eval(bindingForms[CAR], scope);
       scope[boundVar] = val;
     }
-    let res = NIL;
+    let res = _eval(form, scope);
     for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
       res = _eval(forms[i], scope);
     return res;
