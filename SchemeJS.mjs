@@ -1155,7 +1155,7 @@ export function createInstance(schemeOpts = {}) {
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
   defineGlobalSymbol("cond", cond, { evalArgs: 0 });
   function cond(...clauses) {
-    for (let i = 0, clausesLength; i < clausesLength; ++i) {
+    for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
       let clause = clauses[i];
       if (!isCons(clause))
         throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
@@ -1499,21 +1499,20 @@ export function createInstance(schemeOpts = {}) {
   // Because of this implementation uses a scope chain instead
   // of an environment, each kind of let is as piwerful as "letrec".
   //
-  // TODO: Reconsider that; it's not too hard to implenement let and let*;
-  // it's just that I think they're bad idead. But it's possible there's existing
-  // SIOD code that depends on the behavior of let and let*.
+  // TODO: Reconsider that; it's easy to implenement let and let*;
+  // it's just that I think they're bad ideas, historically baked-in.
+  // But it's possible there's existing SIOD code that depends on the
+  // behavior of let and let*, for instance,
+  //    (let ((x (something-that-uses-outer-scope-x) ...
   //
-  // TODO: Make a shape-shifting Scope object that mimics a Cons
-  // and transforms into an environment on demand, conversely
-  // functions that take an "env" param should transform it back into
-  // a Scope. That will maintain Scheme API compatibility while
-  // still benefiting from Scopes internally.
+  // Amusingly, "let" can be partially-applied, returning a function that
+  // evaluates its argiments in the let scope!
+  //
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0 }, "let", "let*");
   function letrec(bindings, ...forms) {
-    if (!isCons(forms)) throw new SchemeEvalError(`No bindings`);
     let scope = newScope(this, "letrec-scope");
-    for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
-      let binding = bindings[i];
+    for ( ; isCons(bindings); bindings = bindings[CDR]) {
+      let binding = bindings[CAR];
       if (!isCons(binding))
         throw new SchemeEvalError(`Bad binding ${string(binding)}`);
       let boundVar = binding[CAR], bindingForms = binding[CDR];
@@ -1525,8 +1524,8 @@ export function createInstance(schemeOpts = {}) {
       scope[boundVar] = val;
     }
     let res = NIL;
-    for ( ; isCons(forms); forms = forms[CDR])
-      res = _eval(forms[CAR], scope);
+    for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
+      res = _eval(forms[i], scope);
     return res;
   }
 

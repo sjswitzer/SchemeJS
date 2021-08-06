@@ -41,7 +41,9 @@ export function run(opts = {}) {
 
   //
   // Builtins tests
-  // Get the builtins sorted before testing any scenarios!
+  // Get the fundamentals sorted before testing any scenarios!
+  // Also useful because you can set a breakpoint in a builtin and not have
+  // to skip a lot of tests that use it incidentally.
   //
 
   EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
@@ -422,6 +424,7 @@ export function run(opts = {}) {
   EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
   EXPECT(` (array-map (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
 
+  // TODO: let needs a lot more testing, including the partial-application case
   EXPECT(` (let ((x 10)
                  (y 20))
               (+ x y)) `, 30);
