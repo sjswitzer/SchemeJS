@@ -143,11 +143,11 @@ export function createInstance(schemeOpts = {}) {
   //
   const ATOMS = {};
 
-  const is_atom = obj => typeof obj === 'symbol' && ATOMS[obj.description] === obj;
+  const isAtom = obj => typeof obj === 'symbol' && ATOMS[obj.description] === obj;
 
   function Atom(name) {
     // If they pass in an atom, just return it
-    if (is_atom(name)) return name;
+    if (isAtom(name)) return name;
     if (typeof name !== 'string')
       throw new SchemeEvalError(`Not a string ${name}`);
     let atom = ATOMS[name];
@@ -442,6 +442,7 @@ export function createInstance(schemeOpts = {}) {
   const cddr = a => cdr(cdr(a));
 
   const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[CAR], { evalArgs: 0, dontInline: true }, "quote");
+  
   defineGlobalSymbol("scope", function() { return this });
 
   exportAPI("NIL", NIL);
@@ -807,12 +808,15 @@ export function createInstance(schemeOpts = {}) {
   // Logical & Conditional
 
   defineGlobalSymbol("&&", and, { evalArgs: 0, compileHook: and_hook }, "and");
-  function and(val, forms) {
-    for (; isTrue(val) && isCons(forms); forms = forms[CDR])
-      val = _eval(forms[CAR], this);
+  function and(...forms) {
+    let val = true;
+    for (let i = 0, argsLength = forms.length; i < length; ++i) {
+      let val = _eval(forms[i], this);
+      if (!isTrue(val)) return val;
+    }
     return val;
   }
-  function and_hook(args, compileScope, tools,) {
+  function and_hook(args, compileScope, tools) {
     return and_or_hook(args, compileScope, tools, 'and', 'true', '!isTrue');
   }
 
@@ -833,22 +837,26 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("||", or, { evalArgs: 1, compileHook: or_hook }, "or");
-  function or(val, forms) {
-    for ( ; !isTrue(val) && isCons(forms); forms = forms[CDR])
-      val = _eval(forms[CAR], this);
+  defineGlobalSymbol("||", or, { evalArgs: 0, compileHook: or_hook }, "or");
+  function or(...forms) {
+    let val = false;
+    for (let i = 0, argsLength = forms.length; i < length; ++i) {
+      let val = _eval(forms[i], this);
+      if (isTrue(val)) return val;
+    }
     return val;
   }
   function or_hook(args, compileScope, tools,) {
     return and_or_hook(args, compileScope, tools, 'or', 'true', 'isTrue');
   }
 
-  defineGlobalSymbol("??", nullish, { evalArgs: 1, compileHook: nullish_hook }, "nullish");
-  function nullish(val, forms) {
-    for ( ; val == null && isCons(forms); forms = forms[CDR])
-      val = _eval(forms[CAR], this);
-    if (isCons(forms))
-      return undefined;
+  defineGlobalSymbol("??", nullish, { evalArgs: 0, compileHook: nullish_hook }, "nullish");
+  function nullish(...forms) {
+    let val = null;
+    for (let i = 0, argsLength = forms.length; i < length; ++i) {
+      let val = _eval(forms[i], this);
+      if (val != null) return val;
+    }
     return val;
   }
   function nullish_hook(args, compileScope, tools) {
@@ -868,8 +876,13 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
+  //
+  // "?" can be partially-applied.
+  //    (? true) returns a function that evaluates its first parameter.
+  //    (? false) returns a function that evaluates its second parameter.
+  //
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
-  function ifelse(p, t = true, f = false) {
+  function ifelse(p, t, f) {
     p = isTrue(p);
     if (p)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -877,10 +890,10 @@ export function createInstance(schemeOpts = {}) {
       return isPrimitive(f) ? f : _eval(f, this);
   }
   function ifelse_hook(args, compileScope, tools) {
-    return test_hooks(args, compileScope, tools, 'if', 'isTrue(*)');
+    return conditionalHooks(args, compileScope, tools, 'if', 'isTrue(*)');
   }
 
-  function test_hooks(args, compileScope, tools, name, test) {
+  function conditionalHooks(args, compileScope, tools, name, test) {
     let a = args[0], t = args[1], f = args[2];
     let result = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
     tools.emit(`let ${result};`);
@@ -900,7 +913,12 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook });
+  //
+  // Predicate/conditional functions.
+  // The pattern here is that you can either write
+  //   (? (bigint x) a b) or simply (bigint? x a b)
+  //
+  defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook }, "is_bigint");
   function is_bigint(a, t = true, f = false) {
     if (typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -908,47 +926,220 @@ export function createInstance(schemeOpts = {}) {
       return isPrimitive(f) ? f : _eval(f, this);
   }
   function is_bigint_hook(args, compileScope, tools) {
-    return test_hooks(args, compileScope, tools, 'is_bigint', `typeof * === 'bigint'`);
+    return conditionalHooks(args, compileScope, tools, 'is_bigint', `typeof * === 'bigint'`);
   }
 
-  defineGlobalSymbol("atom?", is_atom, "is-atom");
-  defineGlobalSymbol("undefined?", a => a === undefined), "is-undefined";
-  defineGlobalSymbol("pair?", isCons, "is-cons");
-  defineGlobalSymbol("list?", isList, "is-list");
-  defineGlobalSymbol("null?", a => isNil(a)), "is-null";  // SIOD clained it first. Maybe rethink the naming here.
-  defineGlobalSymbol("jsnull?", a => a === null, "is-jsnull");
-  defineGlobalSymbol("nullish?", a => a == null), "is-nullish";
-  defineGlobalSymbol("boolean?", a => typeof a === 'boolean', "is-boolean");
-  defineGlobalSymbol("number?", a => typeof a === 'number', "is-number");
-  defineGlobalSymbol("numeric?", a => typeof a === 'number' || typeof a === 'bigint', "is-numeric");
-  defineGlobalSymbol("string?", a => typeof a === 'string', "is-string");
-  defineGlobalSymbol("symbol?", a => typeof a === 'symbol', "is-symbol");
-  defineGlobalSymbol("function?", a => typeof a === 'function', "is-function");
-  defineGlobalSymbol("object?", a => a != null && typeof a === 'object', "is-object");
-  defineGlobalSymbol("array?", a => Array.isArray(a), "is-array");
-  defineGlobalSymbol("nan?", isNaN, { schemeOnly: true } , "is-NaN", "NaN?");
-  defineGlobalSymbol("finite?", isFinite, { schemeOnly: true } , "is-finite");
+  defineGlobalSymbol("atom?", is_atom, { evalArgs: 1, compileHook: is_atom_hook }, "is_atom");
+  function is_atom(a, t = true, f = false) {
+    if (isAtom(a))
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_atom_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_atom', `isAtom(*)`);
+  }
+
+  defineGlobalSymbol("undefined?", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook }, "is_undefined")
+  function is_undefined(a, t = true, f = false) {
+    if (a === undefined)
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_undefined_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_undefined', `* === undefined`);
+  }
+
+  defineGlobalSymbol("pair?", isCons, { evalArgs: 1, compileHook: is_pair_hook }, "is-pair", "is-cons");
+  function is_pair(a, t = true, f = false) {
+    if (isCons(a))
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_pair_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_pair', `is_Cons(*)`);
+  }
+
+  defineGlobalSymbol("list?", isList, { evalArgs: 1, compileHook: is_list_hook }, "is-list");
+  function is_list(a, t = true, f = false) {
+    if (isList(a))
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_list_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_list', `isList(*)`);
+  }
+
+  defineGlobalSymbol("null?", is_null, { evalArgs: 1, compileHook: is_null_hook }, "is-null");  // SIOD clained it first. Maybe rethink the naming here.
+  function is_null(a, t = true, f = false) {
+    if (isNil(a))
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_null_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_null', `isNil(*)`);
+  }
+
+  defineGlobalSymbol("jsnull?", is_jsnull, { evalArgs: 1, compileHook: is_jsnull_hook }, "is-jsnull");
+  function is_jsnull(a, t = true, f = false) {
+    if (a === null)
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_jsnull_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_jsnull', `* === null`);
+  }
+
+  defineGlobalSymbol("nullish?", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook }, "is-nullish");
+  function is_nullish(a, t = true, f = false) {
+    if (a == null)
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_nullish_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_nullish', `* == null`);
+  }
+
+  defineGlobalSymbol("boolean?", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook }, "is-boolean");
+  function is_boolean(a, t = true, f = false) {
+    if (typeof a === 'boolean')
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_boolean_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_boolean', `typeof * === 'boolean'`);
+  }
+
+  defineGlobalSymbol("number?", is_number, { evalArgs: 1, compileHook: is_number_hook }, "is-number");
+  function is_number(a, t = true, f = false) {
+    if (typeof a === 'number')
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_number_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_number', `typeof * === 'number'`);
+  }
+
+  defineGlobalSymbol("numeric?", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook }, "is-numeric");
+  function is_numeric(a, t = true, f = false) {
+    if (typeof a === 'number' || typeof a === 'bigint')
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_numeric_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_numeric', `typeof * === 'number' || typeof a == 'bigint`);
+  }
+
+  defineGlobalSymbol("string?", is_string, { evalArgs: 1, compileHook: is_string_hook }, "is-string");
+  function is_string(a, t = true, f = false) {
+    if (typeof a === 'string')
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_string_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_string', `typeof * === 'string'`);
+  }
+
+  defineGlobalSymbol("symbol?", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook }, "is-symbol");
+  function is_symbol(a, t = true, f = false) {
+    if (typeof a === 'symbol')
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_symbol_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_symbol', `typeof * === 'symbol'`);
+  }
+
+  defineGlobalSymbol("function?", is_function, { evalArgs: 1, compileHook: is_function_hook }, "is-function");
+  function is_function(a, t = true, f = false) {
+    if (typeof a === 'function')
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_function_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_function', `typeof * === 'function'`);
+  }
+
+  defineGlobalSymbol("object?", is_object, { evalArgs: 1, compileHook: is_object_hook }, "is-object");
+  function is_object(a, t = true, f = false) {
+    if (a !== null && typeof a === 'object')
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_object_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_object', `* !== null && typeof * === 'object'`);
+  }
+
+  defineGlobalSymbol("array?", is_array, { evalArgs: 1, compileHook: is_array_hook }, "is-array");
+  function is_array(a, t = true, f = false) {
+    if (Array.isArray(a))
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_array_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_array', `Array.isArray(*)`);
+  }
+
+  defineGlobalSymbol("nan?", is_nan, { evalArgs: 1, compileHook: is_nan_hook } , "is-NaN", "NaN?");
+  function is_nan(a, t = true, f = false) {
+    if (isNaN(a))
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_nan_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_nan', `isNaN(*)`);
+  }
+
+  defineGlobalSymbol("finite?", is_finite, { evalArgs: 1, compileHook: is_finite_hook } , "is-finite");
+  function is_finite(a, t = true, f = false) {
+    if (isFinite(a))
+      return isPrimitive(t) ? t : _eval(t, this);
+    else
+      return isPrimitive(f) ? f : _eval(f, this);
+  }
+  function is_finite_hook(args, compileScope, tools) {
+    return conditionalHooks(args, compileScope, tools, 'is_finite', `isFinite(*)`);
+  }
 
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", begin, { evalArgs: 1, compileHook: begin_hook });
-  function begin(res, forms) {
-    for ( ; isCons(forms); forms = forms[CDR])
-      res = _eval(forms[CAR], this);
+  defineGlobalSymbol("begin", begin, { evalArgs: 0, compileHook: begin_hook });
+  function begin(...forms) {
+    let res = NIL;
+    for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
+      res = _eval(forms[i], this);
     return res;
   }
   function begin_hook(args, compileScope, tools) {
     let result = 'NIL';
-    for (let i = 0; i< args.length; ++i)
+    for (let i = 0; i < args.length; ++i)
       result = compileEval(args[i], compileLambda, tools);
     return result;
   }
 
   // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", prog1, { evalArgs: 1 });
-  function prog1(val, forms) {
-    for ( ; isCons(forms); forms = forms[CDR])
-       _eval(forms[CAR], this);
-    return val;
+  defineGlobalSymbol("prog1", prog1, { evalArgs: 0 });
+  function prog1(...forms) {
+    let res = NIL;
+    for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
+      let val = _eval(forms[i], this);
+      if (i = 0) res = val;
+    }
+    return res;
   }
   function prog1_hook(args, compileScope, tools) {
     let result = 'NIL';
@@ -962,9 +1153,9 @@ export function createInstance(schemeOpts = {}) {
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
   defineGlobalSymbol("cond", cond, { evalArgs: 0 });
-  function cond(clauses) {
-    for ( ; isCons(clauses); clauses = clauses[CDR]) {
-      let clause = clauses[CAR];
+  function cond(...clauses) {
+    for (let i = 0, clausesLength; i < clausesLength; ++i) {
+      let clause = clauses[i];
       if (!isCons(clause))
         throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
@@ -1214,7 +1405,7 @@ export function createInstance(schemeOpts = {}) {
     for ( ; scope && scope !== Object; scope = Object.getPrototypeOf(scope)) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
-        if (!is_atom(symbol)) continue;
+        if (!isAtom(symbol)) continue;
         let name = string(symbol);
         if (name.toLowerCase().includes(substring))
           matches = cons(symbol, matches);
@@ -1317,13 +1508,11 @@ export function createInstance(schemeOpts = {}) {
   // a Scope. That will maintain Scheme API compatibility while
   // still benefiting from Scopes internally.
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0 }, "let", "let*");
-  function letrec(forms) {
+  function letrec(bindings, ...forms) {
     if (!isCons(forms)) throw new SchemeEvalError(`No bindings`);
-    let bindings = forms[CAR];
-    forms = forms[CDR];
     let scope = newScope(this, "letrec-scope");
-    for ( ; isCons(bindings); bindings = bindings[CDR]) {
-      let binding = bindings[CAR];
+    for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
+      let binding = bindings[i];
       if (!isCons(binding))
         throw new SchemeEvalError(`Bad binding ${string(binding)}`);
       let boundVar = binding[CAR], bindingForms = binding[CDR];
@@ -1347,7 +1536,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("set'", setq, { evalArgs: 0 }, "setq");
   function setq(symbol, value) { let result = setSym(symbol, _eval(value, this), this); return result; }
 
-  defineGlobalSymbol("set", setq);
+  defineGlobalSymbol("set", set);
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   function setSym(symbol, value, scope) {
@@ -1361,8 +1550,7 @@ export function createInstance(schemeOpts = {}) {
       }
       scope = Object.getPrototypeOf(scope);
     } while (scope && scope !== globalScope);  // I knew I'd use this someday!
-    // XXX TODO: Hmmm, what to do here?
-    globalScope[symbol] = val;
+    throw new EvalError(`set(q), ${string(symbol)} not in scope`)
     return val;
   }
 
@@ -1627,11 +1815,11 @@ export function createInstance(schemeOpts = {}) {
 
   // (*catch tag form ...) -- SIOD style
   defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1 });
-  function schemeCatch(tag, forms) {  // XXX order of args?
+  function schemeCatch(tag, ...forms) {  // XXX order of args?
     let val = NIL;
     try {
-      for ( ; isCons(forms); forms = forms[CDR])
-        val = _eval(forms[CAR], this);
+      for (let i = 0, formsLength = forms.length; i < forms.length; ++i)
+        val = _eval(forms[i], this);
     } catch (e) {
       if (!(e instanceof SchemeJSThrow)) throw e;  // rethrow
       if (e.tag !== tag) throw e;
@@ -1646,7 +1834,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (catch (var [type] forms) forms) -- Java/JavaScript style
   defineGlobalSymbol("catch", js_catch, { evalArgs: 0 });
-  function js_catch(catchClause, forms) {
+  function js_catch(catchClause, ...forms) {
     if (!isCons(catchClause))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
@@ -1661,8 +1849,8 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let val = NIL;
     try {
-      for ( ; isCons(forms); forms = forms[CDR])
-        val = _eval(forms[CAR], this);
+      for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
+        val = _eval(forms[i], this);
     } catch (e) {
       if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
           || e instanceof typeMatch) {
@@ -1785,6 +1973,7 @@ export function createInstance(schemeOpts = {}) {
       // Otherwise, call the function with no arguments. Returning the function is tempting
       // but that would be error-prone and create an asymmetry between functions with zero
       // required parameters, like apropos, and those that have required parameters.
+      // The function itself can decide what to do if it receives "undefined" as its first argument.
       // The other case handled here is that it's a native function and the requiredCount
       // is MAX_INTEGER.
       if (argCount === 0 || requiredCount === MAX_INTEGER) {
@@ -1912,32 +2101,27 @@ export function createInstance(schemeOpts = {}) {
 
   // (\ (params) (form1) (form2) ...)
   defineGlobalSymbol(LAMBDA_CHAR, lambda, { evalArgs: 0, dontInline: true }, "\\", "lambda");
-  function lambda(...forms) {
+  function lambda(params, ...forms) {
     let body = NIL;
     for (let i = forms.length; i > 0; --i)
       body = cons(forms[i-1], body);
-    let lambda = cons(LAMBDA_ATOM, body);
-    if (!isCons(body)) throwBadLambda(lambda);
-    let params = body[CAR], bodyForms = body[CDR];
+    let lambda = cons(LAMBDA_ATOM, cons(params, body));
     let closureScope = this;
-    let schemeClosure = cons(CLOSURE_ATOM, cons(closureScope, body));
-    return makeJsClosure(closureScope, params, lambda, bodyForms, schemeClosure);
+    let schemeClosure = cons(CLOSURE_ATOM, cons(closureScope, lambda[CDR]));
+    return makeJsClosure(closureScope, params, lambda, body, schemeClosure);
   }
 
   // (\\ evalCount (params) (body1) (body2) ...)
   defineGlobalSymbol(LAMBDA_CHAR+LAMBDA_CHAR, special_lambda, { evalArgs: 0, dontInline: true }, "\\\\", "special_lambda");
-  function special_lambda(...forms) {
+  function special_lambda(evalCount, params, ...forms) {
     let body = NIL;
     for (let i = forms.length; i > 0; --i)
       body = cons(forms[i-1], body);
-    let lambda = cons(LAMBDA_ATOM, body);
+    let lambda = cons(SLAMBDA_ATOM, cons(evalCount, cons(params, body)));
     if (!isCons(body)) throwBadLambda(lambda);
-    let evalCount = body[CAR], paramsEtc = body[CDR];
-    if (!isCons(paramsEtc)) throwBadLambda(lambda);
-    let params = paramsEtc[CAR], bodyForms = paramsEtc[CDR];
     let closureScope = this;
-    let schemeClosure = cons(CLOSURE_ATOM, cons(closureScope, body));
-    return makeJsClosure(closureScope, params, lambda, bodyForms, schemeClosure, evalCount);
+    let schemeClosure = cons(SCLOSURE_ATOM, cons(closureScope, lambda[CDR]));
+    return makeJsClosure(closureScope, params, lambda, body, schemeClosure, evalCount);
   }
 
   function makeJsClosure(closureScope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
@@ -2007,15 +2191,17 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function throwBadLambda(lambda, msg) { throw TypeError(`Bad lambda ${lambda}${msg ? `, (${msg})) ` : ''}`) }
-  
   defineGlobalSymbol("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
-  function is_closure(obj, t = true, f = false) {
-    let p = isCons(obj) && (obj[CAR] === CLOSURE_ATOM || obj[CAR] === SCLOSURE_ATOM);
-    if (p) return typeof t === 'boolean' ? t : _eval(t, this);
+  function is_closure(a, t = true, f = false) {
+    if (isClosure(a)) return typeof t === 'boolean' ? t : _eval(t, this);
     else return typeof f === 'boolean' ? f : eval(f, this);
   }
   function closureP_hook(args, compileScope, tools) {
-    return test_hooks(args, compileScope, tools, 'is_closure', `is_closure(*)`);
+    return conditionalHooks(args, compileScope, tools, 'is_closure', `is_closure(*)`);
+  }
+  exportAPI("isClosure", isClosure);
+  function isClosure(obj) {
+    return isCons(obj) && (obj[CAR] === CLOSURE_ATOM || obj[CAR] === SCLOSURE_ATOM);
   }
 
   const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\', '\n': '' };
@@ -2059,7 +2245,7 @@ export function createInstance(schemeOpts = {}) {
           let symStrs = "";
           if (obj !== globalScope) {
             for (let sym of Object.getOwnPropertySymbols(obj)) {
-              if (!is_atom(sym)) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
+              if (!isAtom(sym)) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
               let desc = sym.description;
               let value = string(obj[sym]);
               let descVal = ` ${desc}=${value}`;

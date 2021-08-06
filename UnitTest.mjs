@@ -24,7 +24,7 @@ export function run(opts = {}) {
   const newScope = globalScope.newScope || required();
   const deep_eq = globalScope.deep_eq || required();
   const isCons = globalScope.isCons || required();
-  const is_closure = globalScope.is_closure || required();
+  const isClosure = globalScope.isClosure || required();
   const SchemeEvalError = globalScope.SchemeEvalError || required();
 
   function required() { throw "required" }
@@ -135,7 +135,7 @@ export function run(opts = {}) {
   }
 
   EXPECT(` (+) `, NaN);
-  EXPECT(` (+ 1) `, is_closure);
+  EXPECT(` (+ 1) `, isClosure);
   EXPECT(` (+ 1 2) `, 3);
   EXPECT(` (+ 1 2 3) `, 6);
   EXPECT(` (+ 1n 2n) `, 3n);
@@ -145,7 +145,7 @@ export function run(opts = {}) {
   EXPECT(` (- 3n) `, -3n);
   EXPECT(` (- 100 2 5 10) `, 83);
   EXPECT(` (*) `, NaN);
-  EXPECT(` (* 1) `, is_closure);
+  EXPECT(` (* 1) `, isClosure);
   EXPECT(` (* 1 2) `, 2);
   EXPECT(` (* 1 2 3) `, 6);
   EXPECT(` (* 1 2 3 4) `, 24);
@@ -157,30 +157,34 @@ export function run(opts = {}) {
   EXPECT(' (/ 3 7) ', 3/7);
   EXPECT(' (/ 100000 10 10 10) ', 100);
 
-  EXPECT(` (?) `, false);
-  EXPECT(` (? true) `, true);
-  EXPECT(` (? false) `, false);
-  EXPECT(` (? true 1) `, 1);
-  EXPECT(` (? false 2) `, false);
+  EXPECT(` (?) `, undefined);
+  EXPECT(` (? true) `, isClosure);
+  EXPECT(` ((? true) 1 2) `, 1);
+  EXPECT(` (? false) `, isClosure);
+  EXPECT(` ((? false) 1 2) `, 2);
+  EXPECT(` (? true 1) `, isClosure);
+  EXPECT(` ((? true 1) 2) `, 1);
+  EXPECT(` (? false 1) `, isClosure);
+  EXPECT(` ((? false 1) 2)`, 2);
   EXPECT(` (? true 1 2) `, 1);
   EXPECT(` (? false 1 2) `, 2);
   EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
   EXPECT(` (? (> 3 5) (+ 3 4) (* 3 4)) `, 12);
-  EXPECT(` (? nil) `, false );
-  EXPECT(` (? null) `, false );
-  EXPECT(` (? (void)) `, false );
-  EXPECT(` (? false) `, false );
-  EXPECT(` (? true) `, true );
-  EXPECT(` (? 'a) `, true );
-  EXPECT(` (? 1) `, true );
-  EXPECT(` (? 0) `, true );
-  EXPECT(` (? "str") `, true );
-  EXPECT(` (? "") `, true );
-  EXPECT(` (? cons) `, true );
-  EXPECT(` (? {a: 1}) `, true );
-  EXPECT(` (? {}) `, true );
-  EXPECT(` (? []) `, true );
-  EXPECT(` (? [1 2 3]) `, true );
+  EXPECT(` (? nil true false) `, false );
+  EXPECT(` (? null true false) `, false );
+  EXPECT(` (? (void) true false) `, false );
+  EXPECT(` (? false true false) `, false );
+  EXPECT(` (? true true false) `, true );
+  EXPECT(` (? 'a true false) `, true );
+  EXPECT(` (? 1 true false) `, true );
+  EXPECT(` (? 0 true false) `, true );
+  EXPECT(` (? "str" true false) `, true );
+  EXPECT(` (? "" true false) `, true );
+  EXPECT(` (? cons true false) `, true );
+  EXPECT(` (? {a: 1} true false) `, true );
+  EXPECT(` (? {} true false) `, true );
+  EXPECT(` (? [] true false) `, true );
+  EXPECT(` (? [1 2 3] true false) `, true );
   EXPECT(` (? true 1 2 (oops!)) `, 1);
   EXPECT(` (? false 1 2 (oops!)) `, 2);
   EXPECT(` (? true 1 (oops!)) `, 1);
@@ -198,7 +202,7 @@ export function run(opts = {}) {
   EXPECT(` (bigint? 1 2n 2) `, 2);
 
   EXPECT(` (<) `, false);
-  EXPECT(` (< 5) `, is_closure);
+  EXPECT(` (< 5) `, isClosure);
   EXPECT(` (< 5 3) `, false);
   EXPECT(` (< 3 5) `, true);
   EXPECT(` (< 3 3) `, false);
@@ -209,7 +213,7 @@ export function run(opts = {}) {
   EXPECT(` (< 1 2 3 4 4 5 6 (oops!)) `, false); // Short-circuits on false
   EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false);
   EXPECT(` (<=) `, false);
-  EXPECT(` (<= 5) `, is_closure)
+  EXPECT(` (<= 5) `, isClosure)
   EXPECT(` (<= 5 3) `, false);
   EXPECT(` (<= 3 5) `, true);
   EXPECT(` (<= 3 3) `, true);
@@ -220,7 +224,7 @@ export function run(opts = {}) {
   EXPECT_ERROR(` (<= 1 2 3 4 4 5 6 (oops!)) `, SchemeEvalError);
   EXPECT(` (< 1 2 3 10 4 5 6 (oops!)) `, false); // Short-circuits on false
   EXPECT(` (>) `, false);
-  EXPECT(` (> 5) `, is_closure);
+  EXPECT(` (> 5) `, isClosure);
   EXPECT(` (> 5 3) `, true);
   EXPECT(` (> 3 5) `, false);
   EXPECT(` (> 3 3) `, false);
@@ -231,7 +235,7 @@ export function run(opts = {}) {
   EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
   EXPECT(` (> 6 5 4 10 3 2 1 (oops!)) `, false);
   EXPECT(` (>=) `, false);
-  EXPECT(` (>= 5) `, is_closure);
+  EXPECT(` (>= 5) `, isClosure);
   EXPECT(` (>= 5 3) `, true);
   EXPECT(` (>= 3 5) `, false);
   EXPECT(` (>= 3 3) `, true);
@@ -242,7 +246,7 @@ export function run(opts = {}) {
   EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, SchemeEvalError);
   EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
   EXPECT(` (==) `, true);   // nothing is equal to itself
-  EXPECT(` (== 5) `, is_closure);
+  EXPECT(` (== 5) `, isClosure);
   EXPECT(` (== 5 3) `, false);
   EXPECT(` (== 3 5) `, false);
   EXPECT(` (== 3 3) `, true);
@@ -251,7 +255,7 @@ export function run(opts = {}) {
   EXPECT_ERROR(` (== 3 3 3 3 3 3 (oops!)) `, SchemeEvalError);
   EXPECT(` (== 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
   EXPECT(` (!=) `, false);  // nothing isn't equal to itself
-  EXPECT(` (!= 5) `, is_closure);
+  EXPECT(` (!= 5) `, isClosure);
   EXPECT(` (!= 5 3) `, true);
   EXPECT(` (!= 3 5) `, true);
   EXPECT(` (!= 3 3) `, false);
@@ -270,38 +274,38 @@ export function run(opts = {}) {
   { // Partial application returning closures
     let savedScope = beginTestScope();
     EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
-    EXPECT(` mul-by-5 `, is_closure);
+    EXPECT(` mul-by-5 `, isClosure);
     EXPECT(` (mul-by-5 3) `, 15);
     EXPECT(` (define (_add a b) (+ a b)) `, ` '_add `);
     EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
-    EXPECT(` add-4 `, is_closure);
+    EXPECT(` add-4 `, isClosure);
     EXPECT(` (add-4 3) `, 7);
     EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
     EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
-    EXPECT(` increment-by-3 `, is_closure);
+    EXPECT(` increment-by-3 `, isClosure);
     EXPECT(` (increment-by-3 4) `, 7);
     endTestScope(savedScope);
   }
 
   EXPECT(` (&) `, 0);
-  EXPECT(` (& 76134) `, is_closure);
+  EXPECT(` (& 76134) `, isClosure);
   EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
   EXPECT(` (& 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 & 0b1110101011 & 0b11110111101111);
   EXPECT(` (|) `, 0);
-  EXPECT(` (| 76134) `, is_closure);
+  EXPECT(` (| 76134) `, isClosure);
   EXPECT(` (| 0b1001101011 0b1110101011) `, 0b1001101011 | 0b1110101011);
   EXPECT(` (| 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 | 0b1110101011 | 0b11110111101111);
   EXPECT(` (^) `, 0);
-  EXPECT(` (^ 76134) `, is_closure);
+  EXPECT(` (^ 76134) `, isClosure);
   EXPECT(` (^ 0b1001101011 0b1110101011) `, 0b1001101011 ^ 0b1110101011);
   EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
 
 
   EXPECT(` (max) `, undefined);
-  EXPECT(` (max 5) `, is_closure);
+  EXPECT(` (max 5) `, isClosure);
   EXPECT(` (max 3 7 9 2 4) `, 9);
   EXPECT(` (min) `, undefined);
-  EXPECT(` (min 5) `, is_closure);
+  EXPECT(` (min 5) `, isClosure);
   EXPECT(` (min 3 7 9 2 4) `, 2);
 
   EXPECT(` (&&) `, undefined);
@@ -387,12 +391,12 @@ export function run(opts = {}) {
   EXPECT(` (reverse '(a b c)) `, ` '(c b a) `);
 
   EXPECT(` (memq) `, NIL);
-  EXPECT(` (memq 'a) `, is_closure);
+  EXPECT(` (memq 'a) `, isClosure);
   EXPECT(` (memq 'a 1) `, NIL);
   EXPECT(` (memq 'c '(a b c d e f g)) `, ` '(c d e f g) `);
   EXPECT(` (memq 'z '(a b c d e f g)) `, NIL);
   EXPECT_ERROR(` (nth) `, TypeError);
-  EXPECT(` (nth 'a) `, is_closure);
+  EXPECT(` (nth 'a) `, isClosure);
   EXPECT(` (nth 4 '(a b c d e f g)) `, ` 'e `);
   EXPECT_ERROR(` (nth 4.5 '(a b c d e f g)) `, TypeError);
   EXPECT(` (nth 4 '[a b c d e f g]) `, ` 'e `);
