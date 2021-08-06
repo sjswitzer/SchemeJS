@@ -197,53 +197,6 @@ export function run(opts = {}) {
   EXPECT(` (bigint? 1n 2n 2) `, 2n);
   EXPECT(` (bigint? 1 2n 2) `, 2);
 
-  {
-    let savedScope = beginTestScope();
-    EXPECT(`
-      (define (factoral x)
-        (? (<= x 1) 
-          (? (bigint? x) 1n 1)
-          (* x (factoral (- x (? (bigint? x) 1n 1))))
-      ))`,
-      ` 'factoral `);
-    EXPECT(` (factoral 10) `, 3628800);
-    EXPECT(` (factoral 10n) `, 3628800n);
-    EXPECT(` (factoral 171) `, Infinity);
-    EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
-    endTestScope(savedScope);
-    // Factoral should be undefined now
-    EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
-  }
-
-  { // Partial application returning closures
-    let savedScope = beginTestScope();
-    EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
-    EXPECT(` mul-by-5 `, is_closure);
-    EXPECT(` (mul-by-5 3) `, 15);
-    EXPECT(` (define (_add a b) (+ a b)) `, ` '_add `);
-    EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
-    EXPECT(` add-4 `, is_closure);
-    EXPECT(` (add-4 3) `, 7);
-    EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
-    EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
-    EXPECT(` increment-by-3 `, is_closure);
-    EXPECT(` (increment-by-3 4) `, 7);
-    endTestScope(savedScope);
-  }
-
-  EXPECT(` (&) `, 0);
-  EXPECT(` (& 76134) `, is_closure);
-  EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
-  EXPECT(` (& 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 & 0b1110101011 & 0b11110111101111);
-  EXPECT(` (|) `, 0);
-  EXPECT(` (| 76134) `, is_closure);
-  EXPECT(` (| 0b1001101011 0b1110101011) `, 0b1001101011 | 0b1110101011);
-  EXPECT(` (| 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 | 0b1110101011 | 0b11110111101111);
-  EXPECT(` (^) `, 0);
-  EXPECT(` (^ 76134) `, is_closure);
-  EXPECT(` (^ 0b1001101011 0b1110101011) `, 0b1001101011 ^ 0b1110101011);
-  EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
-
   EXPECT(` (<) `, false);
   EXPECT(` (< 5) `, is_closure);
   EXPECT(` (< 5 3) `, false);
@@ -313,6 +266,36 @@ export function run(opts = {}) {
   // EXPECT(` (equal? '${list1} '${list1}) `, true);
   // EXPECT(` (eq? '${list1} '${list2}) `, false);
   // EXPECT(` (equal? '${list1} '${list2}) `, false);
+
+  { // Partial application returning closures
+    let savedScope = beginTestScope();
+    EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
+    EXPECT(` mul-by-5 `, is_closure);
+    EXPECT(` (mul-by-5 3) `, 15);
+    EXPECT(` (define (_add a b) (+ a b)) `, ` '_add `);
+    EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
+    EXPECT(` add-4 `, is_closure);
+    EXPECT(` (add-4 3) `, 7);
+    EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
+    EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
+    EXPECT(` increment-by-3 `, is_closure);
+    EXPECT(` (increment-by-3 4) `, 7);
+    endTestScope(savedScope);
+  }
+
+  EXPECT(` (&) `, 0);
+  EXPECT(` (& 76134) `, is_closure);
+  EXPECT(` (& 0b1001101011 0b1110101011) `, 0b1001101011 & 0b1110101011);
+  EXPECT(` (& 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 & 0b1110101011 & 0b11110111101111);
+  EXPECT(` (|) `, 0);
+  EXPECT(` (| 76134) `, is_closure);
+  EXPECT(` (| 0b1001101011 0b1110101011) `, 0b1001101011 | 0b1110101011);
+  EXPECT(` (| 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 | 0b1110101011 | 0b11110111101111);
+  EXPECT(` (^) `, 0);
+  EXPECT(` (^ 76134) `, is_closure);
+  EXPECT(` (^ 0b1001101011 0b1110101011) `, 0b1001101011 ^ 0b1110101011);
+  EXPECT(` (^ 0b1001101011 0b1110101011 0b11110111101111) `, 0b1001101011 ^ 0b1110101011 ^ 0b11110111101111);
+
 
   EXPECT(` (max) `, undefined);
   EXPECT(` (max 5) `, is_closure);
@@ -536,6 +519,24 @@ export function run(opts = {}) {
   {
     let savedScope = beginTestScope();
     EXPECT(`
+      (define (factoral x)
+        (? (<= x 1) 
+          (? (bigint? x) 1n 1)
+          (* x (factoral (- x (? (bigint? x) 1n 1))))
+      ))`,
+      ` 'factoral `);
+    EXPECT(` (factoral 10) `, 3628800);
+    EXPECT(` (factoral 10n) `, 3628800n);
+    EXPECT(` (factoral 171) `, Infinity);
+    EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
+    endTestScope(savedScope);
+    // Factoral should be undefined now
+    EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
+  }
+
+  {
+    let savedScope = beginTestScope();
+    EXPECT(`
       (compile (factoral x)
         (? (<= x 1) 
           (? (bigint? x) 1n 1)
@@ -629,7 +630,7 @@ export function run(opts = {}) {
             expected = testScope.eval_string(expected);
           if (error === expected || error instanceof expected) {
             ok = true;
-          } else if (typeof expected === 'function') {
+          } else if (typeof expected === 'function' && !(error instanceof Error)) {
             // Has to come second because an exception is a function
             ok = expected.call(this, error);
           }

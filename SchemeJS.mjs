@@ -651,14 +651,13 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("<", lt, { evalArgs: 2, compileHook: lt_hook }, "lt");
-  function lt(a, b, forms) {
-    if (forms === undefined) return a < b;
-    if (!(a < b)) return false;
-    a = b;
-    for ( ; isCons(forms); forms = forms[CDR]) {
-      let b = _eval(forms[CAR], this);
+  function lt(a, b, ...rest) {
+    let i = 0, restLength = rest.length;
+    for (; ; a = b, b = rest[i++]) {
       if (!(a < b)) return false;
+      if (i >= restLength) break;
       a = b;
+      b = _eval(rest[i++], this);
     }
     return true;
   }
@@ -690,14 +689,13 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("<=", le, { evalArgs: 2, compileHook: le_hook }, "le");
-  function le(a, b, forms) {
-    if (forms === undefined) return a <= b;
-    if (!(a <= b)) return false;
-    a = b;
-    for ( ; isCons(forms); forms = forms[CDR]) {
-      let b = _eval(forms[CAR], this);
+  function le(a, b, ...rest) {
+    let i = 0, restLength = rest.length;
+    for (; ; a = b, b = rest[i++]) {
       if (!(a <= b)) return false;
+      if (i >= restLength) break;
       a = b;
+      b = _eval(rest[i++], this);
     }
     return true;
   }
@@ -706,14 +704,13 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol(">", gt, { evalArgs: 2, compileHook: gt_hook }, "gt");
-  function gt(a, b, forms) {
-    if (forms === undefined) return a > b;
-    if (!(a > b)) return false;
-    a = b;
-    for ( ; isCons(forms); forms = forms[CDR]) {
-      let b = _eval(forms[CAR], this);
+  function gt(a, b, ...rest) {
+    let i = 0, restLength = rest.length;
+    for (; ; a = b, b = rest[i++]) {
       if (!(a > b)) return false;
+      if (i >= restLength) break;
       a = b;
+      b = _eval(rest[i++], this);
     }
     return true;
   }
@@ -722,14 +719,13 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol(">=", ge, { evalArgs: 2, compileHook: ge_hook }, "ge");
-  function ge(a, b, forms) {
-    if (forms === undefined) return a >= b;
-    if (!(a >= b)) return false;
-    a = b;
-    for ( ; isCons(forms); forms = forms[CDR]) {
-      let b = _eval(forms[CAR], this);
+  function ge(a, b, ...rest) {
+    let i = 0, restLength = rest.length;
+    for (; ; a = b, b = rest[i++]) {
       if (!(a >= b)) return false;
+      if (i >= restLength) break;
       a = b;
+      b = _eval(rest[i++], this);
     }
     return true;
   }
@@ -738,13 +734,13 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook }, "eqv"); // XXX name
-  function eq(a, b, forms) {
-    if (forms === undefined) return a == b;   // TODO == or ===?
-    if (!(a == b)) return false;
-    a = b;
-    for ( ; isCons(forms); forms = forms[CDR]) {
-      let b = _eval(forms[CAR], this);
+  function eq(a, b, ...rest) {
+    let i = 0, restLength = rest.length;
+    for (; ; a = b, b = rest[i++]) {
       if (!(a == b)) return false;
+      if (i >= restLength) break;
+      a = b;
+      b = _eval(rest[i++], this);
     }
     return true;
   }
@@ -753,13 +749,13 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("===", eeq, { evalArgs: 2, compileHook: eeq_hook }); // XXX name
-  function eeq(a, b, forms) {
-    if (forms === undefined) return a == b;   // TODO == or ===?
-    if (!(a === b)) return false;
-    a = b;
-    for ( ; isCons(forms); forms = forms[CDR]) {
-      let b = _eval(forms[CAR], this);
+  function eeq(a, b, ...rest) {
+    let i = 0, restLength = rest.length;
+    for (; ; a = b, b = rest[i++]) {
       if (!(a === b)) return false;
+      if (i >= restLength) break;
+      a = b;
+      b = _eval(rest[i++], this);
     }
     return true;
   }
@@ -781,6 +777,14 @@ export function createInstance(schemeOpts = {}) {
     return `(!${eq})`;
   }
 
+  defineGlobalSymbol("!==", ne, { evalArgs: 2, compileHook: ne_hook }, "ne");
+  function ne(a, b, forms) {
+    return !eeq.call(this, a, b, forms);
+  }
+  function ne_hook(args, compileScope, tools) {
+    let eq = compare_hooks(args, compileScope, tools, '==', 'eq');
+    return `(!${eeq})`;
+  }
 
   defineGlobalSymbol("max", max);
   function max(a, b, ...rest) {
@@ -865,7 +869,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
-  function ifelse(p, t = true, f = false, _) {
+  function ifelse(p, t = true, f = false) {
     p = isTrue(p);
     if (p)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -897,7 +901,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook });
-  function is_bigint(a, t = true, f = false, _) {
+  function is_bigint(a, t = true, f = false) {
     if (typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
     else
@@ -1676,7 +1680,7 @@ export function createInstance(schemeOpts = {}) {
   // (define variable value)
   // (define (fn args) forms)
   defineGlobalSymbol("define", define, { evalArgs: 0, dontInline: true });
-  function define(defined, value, _) {
+  function define(defined, value) {
     let scope = this, name = defined;
     if (isCons(defined)) {
       name = defined[CAR];
@@ -1699,7 +1703,7 @@ export function createInstance(schemeOpts = {}) {
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { evalArgs: 0, dontInline: true });
-  function compile(nameAndParams, forms, _) {
+  function compile(nameAndParams, forms) {
     if (!isCons(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
@@ -1738,12 +1742,11 @@ export function createInstance(schemeOpts = {}) {
         fn = _eval(fn, scope);
       if (typeof fn !== 'function') throwBadForm();
       // See makeParameterDescriptor for the truth, but
-      //   parameterDescriptor = (requiredCount << 20) | ((lift & 0xfff) << 8) | (evalCount & 0xff);
-      // ">> n >>> 1" restores MAX_INTEGER to MAX_INTEGER
+      //   parameterDescriptor = (requiredCount << 16) | (evalCount & 0xffff);
+      // ">> 15 >>> 1" restores MAX_INTEGER to MAX_INTEGER
       let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-      let requiredCount = parameterDescriptor >> 19 >>> 1;
-      let lift = parameterDescriptor << 12 >> 19 >>> 1;
-      let evalCount = parameterDescriptor << 24 >> 23 >>> 1;
+      let requiredCount = parameterDescriptor >> 15 >>> 1;
+      let evalCount = parameterDescriptor << 16 >> 15 >>> 1;
       if (fn[CAR] === SCLOSURE_ATOM) {
         let fnCdr = fn[CDR];
         if (!isCons(fnCdr)) throwBadForm();
@@ -1761,19 +1764,12 @@ export function createInstance(schemeOpts = {}) {
       else evaluatedArgs = args;
       args = evaluatedArgs;
       let argv = [];
-      for (let i = 0; i < lift && isCons(args); ++i, args = args[CDR])
+      for (let i = 0; isCons(args); ++i, args = args[CDR])
         argv.push(args[CAR]);
       let jitCompiled = fn[JITCOMPILED];
       if (jitCompiled) fn = jitCompiled;
       argCount = argv.length;
       if (argCount >= requiredCount) {
-        if (evalCount !== MAX_INTEGER) {
-          if (lift === MAX_INTEGER) throw new LogicError('not supposed to happen'); // XXX remove
-          for ( ; argCount < lift; ++argCount)
-            argv.push(undefined);
-          if (evalCount !== MAX_INTEGER)
-            argv.push(args);
-        }
         let fName;
         if (TRACE_INTERPRETER) {
           fName = fn[NAMETAG] ?? fn.name;
@@ -1834,20 +1830,16 @@ export function createInstance(schemeOpts = {}) {
       if (argCount < evalCount && evalCount !== MAX_INTEGER) {
         evalCount -= argCount;
         closure[CAR] = SCLOSURE_ATOM;
-        closure[CDR] = cons(closureScope, cons(evalCount-argCount, cons(closureParams, closureForms)));
+        closure[CDR] = cons(closureScope, cons(evalCount, cons(closureParams, closureForms)));
       } else {
         closure[CAR] = CLOSURE_ATOM;
         closure[CDR] = cons(closureScope, cons(closureParams, closureForms));
       }
       closure[LIST] = closure[PAIR] = true;
       closure[CLOSURE_ATOM] = true; // marks closure for special "printing"
-      // recompute lift and requiredParameters
-      if (lift !== MAX_INTEGER)
-        lift -= argCount;
-      requiredCount -= argCount;  // can't go negative
-      if (requiredCount < 0)
-        requiredCount = 0;
-      closure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift,  evalCount);
+      requiredCount -= argCount;
+      if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
+      closure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
       return closure;
     }
 
@@ -1887,30 +1879,18 @@ export function createInstance(schemeOpts = {}) {
 
   function examineFunctionForParameterDescriptor(fn, evalCount = MAX_INTEGER) {
     //let res = { name, params, restParam, value, body, printBody, printParams, native, requiredCount };
-    let { params, requiredCount, restParam, native } = analyzeJSFunction(fn);
-    let lift = params.length;  // normal functions have all their parameters lifted
-    if (restParam) lift = MAX_INTEGER;
-    if (evalCount !== MAX_INTEGER) {
-      // specially-evaluated functions receive overflow forms in the last parameter,
-      // so lift one fewer
-      lift = params.length-1;
-      if (requiredCount > lift) requiredCount = lift;
-    }
+    let { requiredCount, native } = analyzeJSFunction(fn);
     if (native)
-      evalCount = lift = requiredCount = MAX_INTEGER;
-    return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift, evalCount);
+      requiredCount = 0;
+    return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
   }
 
-  function makeParameterDescriptor(requiredCount, lift, evalCount = MAX_INTEGER55) {
-    if (requiredCount !== MAX_INTEGER && requiredCount >= 0xfff)
+  function makeParameterDescriptor(requiredCount, evalCount = MAX_INTEGER55) {
+    if (requiredCount !== MAX_INTEGER && requiredCount >= 0xffff)
       throw new LogicError(`Too many required paramaters`);
-    if (lift !== MAX_INTEGER && lift >= 0xfff)
-      throw new LogicError(`Too many lifted paramaters`);
-    if (evalCount !== MAX_INTEGER && evalCount >= 0xff)
+    if (evalCount !== MAX_INTEGER && evalCount >= 0xffff)
       throw new LogicError(`Too many evaluated paramaters`);
-    if (evalCount !== MAX_INTEGER && lift === MAX_INTEGER)
-      throw new LogicError(`Special functions must not have "rest" parameters`);
-    return (requiredCount << 20) | ((lift & 0xfff) << 8) | (evalCount & 0xff);
+    return (requiredCount << 16) | (evalCount & 0xffff);
   }
 
   defineGlobalSymbol("apply", apply);
@@ -2012,9 +1992,7 @@ export function createInstance(schemeOpts = {}) {
       return result;
     }
     if (requiredCount === undefined) requiredCount = paramCount;
-    let lift = requiredCount;
-    if (hasRestParam) lift = MAX_INTEGER;
-    jsClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, lift, evalCount);
+    jsClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
     jsClosure[CAR] = schemeClosure[CAR];
     jsClosure[CDR] = schemeClosure[CDR];
     jsClosure[LIST] = jsClosure[PAIR] = true;
@@ -3254,15 +3232,6 @@ function put(str, nobreak) {
           arg = compileEval(tools.use(argList[CAR]), compileScope, tools);
         jsArgs.push(tools.use(arg));
         argList = argList[CDR];
-      }
-      // Create the "rest" param for special forms
-      let lift = evalCount === MAX_INTEGER ? MAX_INTEGER : paramCount-1;
-      if (evalCount !== MAX_INTEGER && !hook) {
-        let rest = tools.newTemp("rest");
-        tools.emit(`let ${rest} = NIL;`);
-        while (jsArgs.length < lift)
-          tools.emit(`${rest} = ${jsArgs.pop()};`);
-        jsArgs.push(rest);
       }
     }
     if (recursionStich || typeof form === 'function' && !form[CLOSURE_ATOM]) { // Scheme functions impose as Cons cells
