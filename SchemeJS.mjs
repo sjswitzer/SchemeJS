@@ -1957,8 +1957,10 @@ export function createInstance(schemeOpts = {}) {
   function makeJsClosure(closureScope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
     // Examine property list and throw any errors now rather than later.
     // In general, do more work here so the closure can do less work when executed.
-    if (typeof lambdaParams === 'symbol') // curry notation; normalize to classic
+    if (typeof lambdaParams === 'symbol') { // curry notation; normalize to classic
       lambdaParams = cons(lambdaParams, NIL);
+      forms = cons(forms, NIL);
+    }
     let params = lambdaParams, paramCount = 0, requiredCount, hasRestParam = false;
     for (params = lambdaParams; isCons(params); params = params[CDR]) {
       let param = params[CAR];
@@ -2075,11 +2077,13 @@ export function createInstance(schemeOpts = {}) {
             for (let sym of Object.getOwnPropertySymbols(obj)) {
               if (!is_atom(sym)) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
               let desc = sym.description;
-              if (symStrs.length + desc.length > 20) {
+              let value = string(obj[sym]);
+              let descVal = ` ${desc}=${value}`;
+              if (symStrs.length + descVal.length > 30) {
                 symStrs += "...";
                 break;
               }
-              symStrs += ` ${desc}`;
+              symStrs += descVal;
             }
           }
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
