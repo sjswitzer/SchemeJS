@@ -430,6 +430,8 @@ export function run(opts = {}) {
               (+ x y)) `, 30);
   EXPECT(` (let ((x 10)
                  (y 20)))`, isClosure);
+  // Partially applying "let" returns a function that evaluates
+  // its arguments in the "let" scope.
   EXPECT(` ((let ((x 10)
                   (y 20)))
               (+ x y)) `, 30);

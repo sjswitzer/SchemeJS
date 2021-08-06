@@ -1871,9 +1871,9 @@ export function createInstance(schemeOpts = {}) {
   function define(defined, value) {
     let scope = this, name = defined;
     if (isCons(defined)) {
-      name = defined[CAR];
-      let args = defined[CDR];
-      value = lambda.call(scope, cons(args, cons(value, NIL)));
+      name = defined[CAR];5
+      let params = defined[CDR];
+      value = lambda.call(scope, params, value);
     } else {
       value = _eval(value, scope);
     }
