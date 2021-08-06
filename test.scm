@@ -35,7 +35,7 @@
 (factoral' 50)
 (factoral' 50n)
 
-(define (opt a b (? c 2)) (list a b c))
+(define (opt a b (? c (+ 2 3))) (list a b c))
 (opt 4 5 6)
 (opt 4 5)
 (opt 4)

@@ -1137,8 +1137,8 @@
 
       function handleInput(enterKey) {
         if (errorElement) {
-            errorElement.remove();
-            errorElement = undefined;
+          errorElement.remove();
+          errorElement = undefined;
         }
         let parseContext = [], assignSyntax = true;
         let inputText = getElementText(inputElement);
@@ -1149,7 +1149,6 @@
         inputElement.normalize();
         try {
           function* characterGenerator() {
-            let alphaReductionFactor = .75;
             let part1 = inputText.substr(0, pos), part2 = inputText.substr(pos);
 
             // Feed parser part up to the cursor
@@ -1157,13 +1156,13 @@
               yield ch;
 
             // Colorize opening grouping symbols
-            let alpha = 1;
+            let alpha = 1, fade = .6;
             for (let i = parseContext.length; i > 0; --i) {
               let tok = parseContext[i-1], pos = tok.position, width = 1;
               if (typeof tok.value === 'string') width = tok.value.length;
               colorizeCharsAt(inputElement, pos, width, 'match-tokens',
                 `background-color: rgba(255, 200, 0, ${alpha}); color: blue`);
-              alpha *= alphaReductionFactor;
+              alpha *= fade;
             }
 
             let depth = parseContext.length;
@@ -1180,7 +1179,7 @@
                   width = tok.endWidth;
                 colorizeCharsAt(inputElement, pos, width, 'match-tokens',
                   `background-color: rgba(255, 200, 0, ${alpha}); color: blue;`);
-                alpha *= alphaReductionFactor;
+                alpha *= fade;
                 depth = parseContext.length;
               }
             }
@@ -1189,7 +1188,9 @@
 
           // Parse
           let expr = globalScope.parseSExpr(characterGenerator(), { parseContext, assignSyntax });
-          if (!enterKey) return;
+
+          if (!(enterKey && pos === inputText.length))
+            return; // TODO: auto-indent the line-break
 
           // Eval
           let value = globalScope.eval(expr, globalScope);

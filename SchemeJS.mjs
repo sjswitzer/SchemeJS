@@ -1966,7 +1966,7 @@ export function createInstance(schemeOpts = {}) {
       let param = params[CAR];
       if (isCons(param)) {
         if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
-          throwBadLambda(lambda, `bad optional parameter ${string(param)}`);
+          throwBadLambda(lambda, `what's this?  ${string(param)}`);
         if (!requiredCount)
           requiredCount = paramCount;
       } else if (typeof param !== 'symbol') {
@@ -2022,7 +2022,7 @@ export function createInstance(schemeOpts = {}) {
     return jsClosure;
   }
 
-  function throwBadLambda(lambda, msg) { throw TypeError(`Bad lambda ${msg ? `(${msg})) ` : ''}${string(lambda)}`) }
+  function throwBadLambda(lambda, msg) { throw TypeError(`Bad lambda ${lambda}${msg ? `, (${msg})) ` : ''}`) }
   
   defineGlobalSymbol("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
   function is_closure(obj, t = true, f = false) {
