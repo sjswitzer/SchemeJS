@@ -67,7 +67,12 @@ export function createInstance(schemeOpts = {}) {
   const isList = obj => obj != null && obj[LIST] === true;
 
   // Objects that "eval" to themselves
-  const isPrimitive = obj => typeof obj !== 'symbol' && typeof obj !== 'object';
+  // I trust the JavaScript runtime and JITs to reduce this to some
+  // tag-bit inspection that they're probably already doing.
+  // (Except for the NIL check, which is last for that reason.)
+  const isPrimitive = obj => obj == null ||
+      (typeof obj !== 'symbol' && typeof obj !== 'object' && typeof obj !== 'function')
+      || obj[NULLSYM] === true;
 
   class Cons {
     [CAR]; [CDR];
@@ -1750,8 +1755,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
         return strCmp(a, b);
       if (a === b)
         return true;
-      // Normally NaNs are not equal to anything, including NaNs, but for
-      // the purposes of this routine they are
+      // Normally NaNs are not equal to anything, including themselves, but for
+      // the purposes of this function they are
       if (typeof a === 'number' && isNaN(a) && isNaN(b))
         return true;
       if (a == null || b == null) { // nullish and we already know thay aren't equal
@@ -1937,18 +1942,21 @@ globalScope._help_ = {};  // For clients that want to implement help.
   //
   // This is where the magic happens
   //
+  // Beware that compileEval closely parallels this function, if you make a change
+  // here you almost certainly need to make a corresponding one there.
+  //
 
   exportAPI("eval", _eval);
   function _eval(form, scope = this) {
-    if (form == null) return form; // get "nullish" out of the way
+    // Can't be called "eval" because "eval", besides being a global definition,
+    // is effectively a keyword in JavaScript.
+    if (isNil(form)) return NIL;  // Normalizes NIL imposters to "the" NIL, for no particular reason
+    if (isPrimitive(form)) return form;
     if (typeof form === 'symbol') { // atom resolution is the most common case
       let val = scope[form];
       if (val === undefined) throw new SchemeEvalError(`undefined ${string(form)}`);
       return val;
     }
-    if (form[NULLSYM] === true) return NIL; // might as well replace imposter nils with the "real" one
-    if (typeof form === 'function' || typeof form !== 'object' )
-      return form;
     if (TRACE_INTERPRETER)
       console.log("EVAL", string(form));
     if (isCons(form)) {
@@ -2085,7 +2093,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
         return res;
       }
     }
-    return form;
+    throw new LogicError(`Shouldn't happen. All cases should be handled above`);
 
     function throwBadForm() {
       throw new SchemeEvalError(`Bad form ${string(form)}`);
@@ -2150,6 +2158,14 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return makeJsClosure(closureScope, params, lambda, body, schemeClosure, evalCount);
   }
 
+  //
+  // Beware that compileClosure closely parallels this function. If you make a change
+  // here, you almost certainly need to make a change there. "string" also
+  // has special handling for "printing" closures. In particular, closures are
+  // decorated with a CLOSURE_ATOM symbol to clue the string function to print
+  // it as a closure. Closures are also decorated with CAR, CDR, LIST and PAIR
+  // so that they look exactly like lists to the SchemeJS runtime.
+  //
   function makeJsClosure(closureScope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
     // Examine property list and throw any errors now rather than later.
     // In general, do more work here so the closure can do less work when executed.
@@ -2238,12 +2254,22 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return res;
   })();
 
+  //
   // Implements "toString()" for SchemeJS objects.
   // We can't just implement toString() because it needs to work for
   // non-Object types too, but Cons.toString() calls this.
   // "string" prints anything interesting to the SchemeJS runtime, so it's super
   // helpful to use it for "watch" expressions in the debugger. For instance when
-  // debugging "_eval", watch "string(form)"
+  // debugging "_eval", watch "string(form)".
+  // I generally refer to what this function does as "printing," which isn't quite
+  // accurate, though it is used when printing things. "Stringifying" sounds silly
+  // and I can't think of a suitable verb that doesn't. So "printing" it is.
+  //
+  // In general, to see the SchemeJS view of an object, invoke (string obj) and
+  // to see the JavaScript view of an obect, invoke (String obj). This is
+  // particularly true of functions (closures) since a SchemeJS closure is
+  // simultaneously a JavaScript function and a SchemeJS closure.
+  //
   exportAPI("string", string);
   function string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
@@ -3393,6 +3419,7 @@ function put(str, nobreak) {
         let compileHook = fn[COMPILE_HOOK];
         let valueTemplate = fn[COMPILE_VALUE_TEMPLATE];
         let bodyTemplate = fn[COMPILE_BODY_TEMPLATE];
+        // Everything you need to know about invoking a JS function is right here
         tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, valueTemplate, bodyTemplate };
         return ssaValue;
       }
@@ -3543,8 +3570,10 @@ function put(str, nobreak) {
     }
   }
 
+  //
   // This function parallels makeJsClosure as closely as possible. If you make a change
   // there, you almost certainly have to make a corresponding change here.
+  //
   function compileLambda(name, lambda, compileScope, tools) {
     let ssaFunction = tools.newTemp(name);
     if (!isCons(lambda)) throwBadCompiledLambda(lambda);
