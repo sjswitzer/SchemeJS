@@ -1927,8 +1927,7 @@ export function createInstance(schemeOpts = {}) {
         if (!isCons(form)) throwBadForm();
         return form[CDR][CAR];
       }
-      if (typeof fn !== 'function')  // Lambdas eval to closures, which _are_ functions
-        fn = _eval(fn, scope);
+      fn = _eval(fn, scope);
       if (typeof fn !== 'function') throwBadForm();
       // See makeParameterDescriptor for the truth, but
       //   parameterDescriptor = (requiredCount << 16) | (evalCount & 0xffff);
@@ -3348,13 +3347,12 @@ function put(str, nobreak) {
       // for now, only bind functions from outside scope
       let scopedVal = tools.scope[sym];
       if (scopedVal && typeof scopedVal === 'function') {
-        ssaValue = tools.bind(scopedVal, sym);
         let fn = scopedVal;
         let name = fn.name ?? fn[NAMETAG] ?? sym.description;
-        let ssaValue = tools.bind(fn, name);
+        ssaValue = tools.bind(fn, name);
         let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-        requiredCount = parameterDescriptor >> 15 >>> 1;
-        evalCount = parameterDescriptor << 16 >> 15 >>> 1;
+        let requiredCount = parameterDescriptor >> 15 >>> 1;
+        let evalCount = parameterDescriptor << 16 >> 15 >>> 1;
         tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name };
         return ssaValue;
       }
@@ -3364,8 +3362,10 @@ function put(str, nobreak) {
       console.log("COMPILE EVAL", string(form));
     if (isCons(form)) {
       let fn = form[CAR];
-      if (fn === QUOTE_ATOM)
+      if (fn === QUOTE_ATOM) {
+        if (!isCons(form)) throwBadForm();
         return tools.bind(form[CDR][CAR], 'quoted');
+      }
       if (isCons(fn)) {
         let ssaFunction;
         let fnCar = fn[CAR];
@@ -3493,6 +3493,10 @@ function put(str, nobreak) {
       }
     }
     throw new SchemeCompileError(`Bad form ${string(form)}`);
+
+    function throwBadForm() {
+      throw new SchemeCompileError(`BadForm ${string(form)}`);
+    }
   }
 
   function compileLambda(name, lambda, compileScope, tools) {
