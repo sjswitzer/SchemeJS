@@ -936,22 +936,26 @@ globalScope._help_ = {};  // For clients that want to implement help.
 
   function conditionalHooks(args, compileScope, tools, name, test) {
     let a = args[0], t = args[1], f = args[2];
-    let result = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
-    tools.emit(`let ${result};`);
+    let ssaResult = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
+    if (t === 'true' && f === 'false') {
+      tools.emit(`${ssaResult} = !!(${test});`);
+      return ssaResult;
+    }
+    tools.emit(`let ${ssaResult};`);
     test = test.replace('*', a);
     tools.emit(`if (${test}) {`);
     let saveIndent = tools.indent;
     tools.indent = saveIndent + "  ";
     let tResult = t === undefined ? 'true' : compileEval(t, compileScope, tools);
-    tools.emit(`${result} = ${tResult};`);
+    tools.emit(`${ssaResult} = ${tResult};`);
     tools.indent = saveIndent;
     tools.emit(`} else {`);
     tools.indent = saveIndent + "  ";
     let fResult = f === undefined ? 'false' : compileEval(f, compileScope, tools);
-    tools.emit(`${result} = ${fResult};`);
+    tools.emit(`${ssaResult} = ${fResult};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
-    return result;
+    return ssaResult;
   }
 
   //
@@ -3470,7 +3474,6 @@ function put(str, nobreak) {
           arg = tools.use(compileEval(arg, compileScope, tools));
         argv.push(arg);
       }
-      let ssaResult = tools.newTemp(fName);
       let argStr = '';
       for (let arg of argv) {
         argStr += `, ${arg}`;
@@ -3484,12 +3487,12 @@ function put(str, nobreak) {
             let valueTemplate = functionDescriptor.valueTemplate;
             let bodyTemplate = functionDescriptor.bodyTemplate;
             if (compileHook) {
-              let ssaRes = compileHook(argv, compileScope, tools);
-              tools.use(ssaRes);
-              tools.emit(`let ${ssaResult} = ${ssaRes};`);
+              let ssaResult = compileHook(argv, compileScope, tools);
+              tools.use(ssaResult);
               return ssaResult;
             }
             if (valueTemplate) {
+              let ssaResult = tools.newTemp(fName);
               tools.emit(`let ${ssaResult}; {`);
               tools.indent = saveIndent + "  ";
               for (let i = 0; i < params.length; ++i) {
@@ -3505,10 +3508,11 @@ function put(str, nobreak) {
               return ssaFunction;
             }
           }
+          let ssaResult = tools.newTemp(fName);
           if (TRACE_COMPILER)
             console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...argv);
           tools.use(ssaFunction);
-          tools.emit(`let ${ssaResult} = ${ssaFunction}.apply(this${argStr});`)
+          tools.emit(`let ${ssaResult} = ${ssaFunction}.call(this${argStr});`)
           return ssaResult;
         }
         // Generate closure (see "_eval", I ain't gonna 'splain it agin)
