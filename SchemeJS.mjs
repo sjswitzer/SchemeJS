@@ -267,6 +267,14 @@ export function createInstance(schemeOpts = {}) {
       globalScope[alias] = value;
   }
 
+// Why are these initialized here, you ask?
+// Because they're indirectly refernced by defineGlobalSymbol is why.
+const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_BODY_TEMPLATE = Symbol("COMPILE-BODY"),
+    COMPILE_VALUE_TEMPLATE = Symbol("COMPILE-VALUE");
+const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
+const analyzedFunctions = new Map();
+globalScope._help_ = {};  // For clients that want to implement help.
+
   //
   // Unlike exportAPI, which exports an API to clients, defineGlobalSymbol
   // defines a symbol for the SchemeJS environment AND exports it as an API.
@@ -275,11 +283,6 @@ export function createInstance(schemeOpts = {}) {
   // Some of the short exported functions are all on one line. This is intentional.
   // Those function's bodies are included in the string representation used for dispay.
   // 
-  const COMPILE_HOOK = Symbol("COMPILE-HOOK");
-  const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
-  const analyzedFunctions = new Map();
-  globalScope._help_ = {};  // For clients that want to implement help.
-
   exportAPI("defineGlobalSymbol", defineGlobalSymbol);
   function defineGlobalSymbol(name, value, ...aliases) {
     let opts = {};
@@ -289,13 +292,8 @@ export function createInstance(schemeOpts = {}) {
     if (typeof value === 'function') {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       examineFunctionForParameterDescriptor(value, evalCount);
-      if (opts.compileHook) value[COMPILE_HOOK] = opts.compileHook;
-      let fnInfo = analyzeJSFunction(value);
-      if (evalCount !== MAX_INTEGER && !opts.compileHook && !opts.dontInline)
-        console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, value);
-      else if (!opts.compileHook && !fnInfo.value && group === 'builtin' && !opts.dontInline &&
-          !fnInfo.native && !(subclassOf(value, Error)))
-        console.log("FUNCTION REQUIRES COMPILE HOOK", name, value);
+      if (!opts.dontInline)
+        examineFunctionForCompilerTemplates(name, value, opts.compileHook, evalCount);
     }
     let atom, atomName;
     ({ atom, atomName, name } = normalize(name));
@@ -338,6 +336,37 @@ export function createInstance(schemeOpts = {}) {
       }
       return false;
     }
+  }
+
+  function examineFunctionForCompilerTemplates(name, fn, hook, evalCount) {
+    if (hook) {
+      fn[COMPILE_HOOK] = hook;
+      return;
+    }
+    // A policy thing, I guess. You wouldnt expect to inline an Error class definition
+    // and it's tedious to mark them all as "dontInline." This would actually be the case
+    // of any "class," but Error classes are the only ones currently defined in the
+    // SchemeJS API and there's no way to truly distinguish a class from a function
+    // in JavaScript.
+    if (fn instanceof Error)
+      return;
+    if (evalCount !== MAX_INTEGER) { // templates are of no use for special evaluation
+      console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
+      return;
+    }
+
+    let fnInfo = analyzeJSFunction(fn);
+    // Can't inline a native function, obviously, but you _could_ hook one
+    if (fnInfo.native)
+      return;
+  
+    if (!fnInfo.value) {
+      console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
+      return;
+    }
+    fn[COMPILE_VALUE_TEMPLATE] = fnInfo.value;
+    if (fnInfo.body)
+      fn[COMPILE_BODY_TEMPLATE] = fnInfo.body;
   }
 
   exportAPI("PAIR_SYMBOL", PAIR);
@@ -1651,7 +1680,8 @@ export function createInstance(schemeOpts = {}) {
       // There's a passing similarity to Timsort here, though Timsort maintains its stack using
       // something like a Fibonacci sequence where this uses powers of two.
       //
-      // It's helpful put a breakpoint right here and "watch" these expressions:
+      // It's instructive--and kinda fun--to put a breakpoint right here, "watch" these
+      // expressions then invoke (apropos), which uses sort internally:
       //     string(list)
       //     string(run)
       //     string(stack[0])
@@ -2211,6 +2241,9 @@ export function createInstance(schemeOpts = {}) {
   // Implements "toString()" for SchemeJS objects.
   // We can't just implement toString() because it needs to work for
   // non-Object types too, but Cons.toString() calls this.
+  // "string" prints anything interesting to the SchemeJS runtime, so it's super
+  // helpful to use it for "watch" expressions in the debugger. For instance when
+  // debugging "_eval", watch "string(form)"
   exportAPI("string", string);
   function string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
@@ -3329,6 +3362,10 @@ function put(str, nobreak) {
     }
   }
 
+  //
+  // This function parallels "_eval" as closely as possible. If you make a change there
+  // you almost certainly have to make a corresponding one here.
+  //
   function compileEval(form, compileScope, tools) {
     if (--tools.evalLimit < 0)
       throw new SchemeCompileError(`Too comlpex ${string(form)}`);
@@ -3353,7 +3390,10 @@ function put(str, nobreak) {
         let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
         let requiredCount = parameterDescriptor >> 15 >>> 1;
         let evalCount = parameterDescriptor << 16 >> 15 >>> 1;
-        tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name };
+        let compileHook = fn[COMPILE_HOOK];
+        let valueTemplate = fn[COMPILE_VALUE_TEMPLATE];
+        let bodyTemplate = fn[COMPILE_BODY_TEMPLATE];
+        tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, valueTemplate, bodyTemplate };
         return ssaValue;
       }
       return `resolveUnbound(${tools.use(tools.bind(sym))})`;
@@ -3366,6 +3406,10 @@ function put(str, nobreak) {
         if (!isCons(form)) throwBadForm();
         return tools.bind(form[CDR][CAR], 'quoted');
       }
+      let ssaFunction = compileEval(fn, compileScope, tools);
+      if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
+        ssaFunction = compileLambda(form, compileScope, tools);
+      fn = compileEval(fn, compileScope, tools);
       if (isCons(fn)) {
         let ssaFunction;
         let fnCar = fn[CAR];
@@ -3499,6 +3543,8 @@ function put(str, nobreak) {
     }
   }
 
+  // This function parallels makeJsClosure as closely as possible. If you make a change
+  // there, you almost certainly have to make a corresponding change here.
   function compileLambda(name, lambda, compileScope, tools) {
     let ssaFunction = tools.newTemp(name);
     if (!isCons(lambda)) throwBadCompiledLambda(lambda);
@@ -3578,8 +3624,10 @@ function put(str, nobreak) {
     let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
     tools.emit(`${ssaClosure}[${_compiled}] = ${tools.use(tools.bind(form, 'compiled'))};`);
     tools.emit(`${ssaClosure}[${_parameter_descriptor}] = ${parameterDescriptor};`);
+    // the function is simultaneously a Scheme closure object
     tools.emit(`${ssaClosure}[${_car}] = ${ssaClosureForm}[CAR];`);
     tools.emit(`${ssaClosure}[${_cdr}] = ${ssaClosureForm}[CDR];`);
+    // Mark object as a list, a pair, and a closure.
     tools.emit(`${ssaClosure}[${_pair}] = ${ssaClosure}[${_list}] = ${ssaClosure}[${_closure_atom}] = true;`);
   }
 
