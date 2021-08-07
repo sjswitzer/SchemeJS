@@ -1949,6 +1949,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let { name: jsName } = normalizeExportToJavaScriptName(name);
     globalScope[jsName] = compiledFunction;
     globalScope[name] = compiledFunction;
+    return name;
   }
 
   //
