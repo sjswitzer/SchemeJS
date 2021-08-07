@@ -320,24 +320,25 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return atom;
 
-    function normalizeExportToJavaScriptName(name) {
-      if (typeof name === 'symbol')
-        name = name.description;
-      let atomName = name;
-      let atom = Atom(name);
-      // Java API name
-      //  (string.replaceAll hasn't made it to every node yet, apparently)
-      let prevName;
-      do {
-        prevName = name;
-        name = name.replace("->", "_to_");
-        name = name.replace("-", "_");
-        name = name.replace("@", "_at_");
-        name = name.replace("*", "_star_");
-        name = name.replace("?", "P");
-      } while (name !== prevName);
-      return { atom, atomName, name };
-    }
+  }
+
+  function normalizeExportToJavaScriptName(name) {
+    if (typeof name === 'symbol')
+      name = name.description;
+    let atomName = name;
+    let atom = Atom(name);
+    // Java API name
+    //  (string.replaceAll hasn't made it to every node yet, apparently)
+    let prevName;
+    do {
+      prevName = name;
+      name = name.replace("->", "_to_");
+      name = name.replace("-", "_");
+      name = name.replace("@", "_at_");
+      name = name.replace("*", "_star_");
+      name = name.replace("?", "P");
+    } while (name !== prevName);
+    return { atom, atomName, name };
   }
 
   function subclassOf(cls, supercls) {
@@ -1927,8 +1928,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
       value[NAMETAG] = name;
     globalScope[name] = value;
     // Make available to JavaScript as well
-    ({ name } = normalizeExportToJavaScriptName(name));
-    globalScope[name] = value;
+    let { name: jsName } = normalizeExportToJavaScriptName(name);
+    globalScope[jsName] = value;
     return name;
   }
 
@@ -1945,8 +1946,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     compiledFunction[NAMETAG] = name;
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
-    ({ name } = normalizeExportToJavaScriptName(name));
-    return name;
+    let { name: jsName } = normalizeExportToJavaScriptName(name);
+    globalScope[jsName] = value;
     globalScope[name] = value;
   }
 
