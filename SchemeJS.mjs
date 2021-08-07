@@ -27,7 +27,8 @@ export function createInstance(schemeOpts = {}) {
   const supplemental = schemeOpts.supplemental ?? false;
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   const jitThreshold = schemeOpts.jitThreshold ?? undefined;
-  const TRACE_INTERPRETER = schemeOpts.traceInterpreter ?? false;
+  const TRACE_INTERPRETER = !!(schemeOpts.traceInterpreter ?? false);
+  const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? true);
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   const reportSystemError = schemeOpts.reportError ?? _reportError;
@@ -1127,7 +1128,7 @@ export function createInstance(schemeOpts = {}) {
   function begin_hook(args, compileScope, tools) {
     let result = 'NIL';
     for (let i = 0; i < args.length; ++i)
-      result = compileEval(args[i], compileLambda, tools);
+      result = compileEval(args[i], compileScope, tools);
     return result;
   }
 
@@ -1145,7 +1146,7 @@ export function createInstance(schemeOpts = {}) {
   function prog1_hook(args, compileScope, tools) {
     let result = 'NIL';
     for (let i = 0; i< args.length; ++i) {
-      let res = compileEval(args[i], compileLambda, tools);
+      let res = compileEval(args[i], compileScope, tools);
       if (i === 0)
         result = res;
     }
@@ -1941,22 +1942,18 @@ export function createInstance(schemeOpts = {}) {
         scope = fnCdr[CAR];
       }
       // Run through the arg list evaluating args
-      let argCount = 0, args = form[CDR];
-      let evaluatedArgs = NIL, last;
-      for ( ; argCount < evalCount && isCons(args) ; ++argCount, args = args[CDR]) {
-        let item = cons(_eval(args[CAR], scope), NIL);
-        if (last) last = last[CDR] = item;
-        else evaluatedArgs = last = item;
+      let  args = form[CDR], argCount = 0;
+      for (let tmp = args; isCons(tmp); tmp = tmp[CDR])
+        ++argCount;
+      let argv = new Array(argCount);
+      for (let i = 0; isCons(args); ++i, args = args[CDR]) {
+        let item = args[CAR];
+        if (i < evalCount)
+          item = _eval(item, scope);
+        argv[i] = item;
       }
-      if (last) last[CDR] = args;
-      else evaluatedArgs = args;
-      args = evaluatedArgs;
-      let argv = [];
-      for (let i = 0; isCons(args); ++i, args = args[CDR])
-        argv.push(args[CAR]);
       let jitCompiled = fn[JITCOMPILED];
       if (jitCompiled) fn = jitCompiled;
-      argCount = argv.length;
       if (argCount >= requiredCount) {
         let fName;
         if (TRACE_INTERPRETER) {
@@ -1997,7 +1994,7 @@ export function createInstance(schemeOpts = {}) {
         let fName;
         if (TRACE_INTERPRETER) {
           fName = fn[NAMETAG] ?? fn.name;
-          let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
+          let logArgs = [ "APPLY (closure)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
         let result = fn.apply(scope, argv);
@@ -2041,10 +2038,8 @@ export function createInstance(schemeOpts = {}) {
     if (form !== null && typeof form === 'object') {
       if (form instanceof Array) {
         let res = [];
-        for (let item of form) {
-          let val = _eval(item, scope);
-          res.push(val);
-        }
+        for (let element of form)
+          res.push(_eval(element, scope));
         return res;
       } else {
         let res = {};
@@ -2147,7 +2142,7 @@ export function createInstance(schemeOpts = {}) {
       paramCount += 1;
     }
     if (typeof params === 'symbol') hasRestParam = true;
-    let jitCount = jitThreshold;
+    let jitCount = jitThreshold ? jitThreshold|0 : undefined;
     function jsClosure(...args) {
       if (jitThreshold !== undefined) {  // Disable by optioning jitThreshold as undefined
         let jitFn = jsClosure[JITCOMPILED];
@@ -2192,7 +2187,8 @@ export function createInstance(schemeOpts = {}) {
     return jsClosure;
   }
 
-  function throwBadLambda(lambda, msg) { throw TypeError(`Bad lambda ${lambda}${msg ? `, (${msg})) ` : ''}`) }
+  function throwBadLambda(lambda, msg) { throw SchemeEvalError(`Bad lambda ${lambda}` + msg ? `, $(msg)` : '') }
+
   defineGlobalSymbol("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
   function is_closure(a, t = true, f = false) {
     if (isClosure(a)) return typeof t === 'boolean' ? t : _eval(t, this);
@@ -3228,52 +3224,61 @@ function put(str, nobreak) {
   }
 
   defineGlobalSymbol("compile-lambda", compile_lambda);
-  function compile_lambda(name, lambda) {
-    let { code, bindSymToObj } = lambda_compiler.call(this, name, lambda);
-    console.log("COMPILED", code, bindSymToObj);
-    let binder = new Function("bound", code);
-    let compiledFunction = binder.call(this, bindSymToObj);
+  function compile_lambda(name, lambdaForm) {
+    let scope = this;
+    let { code, bindSymToObj } = lambda_compiler.call(this, name, lambdaForm);
+    if (TRACE_COMPILER)
+      console.log("COMPILED", name, code, bindSymToObj);
+    let binder = new Function("bound", "resolveUnbound", "invokeUnbould", code);
+    let compiledFunction = binder.call(this, bindSymToObj, resolveUnbound, invokeUnbound);
     return compiledFunction;
+    function resolveUnbound(x) {
+      let val = scope[x];
+      if (val === undefined) throw new SchemeEvalError("Undefined symbol " + string(x));
+      return val;
+    }
+    function invokeUnbound(fn, args) {
+      fn = resolveUnbound(x);
+      let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+      let requiredCount = parameterDescriptor >> 15 >>> 1;
+      let evalCount = parameterDescriptor << 16 >> 15 >>> 1;
+      let argv = [], argCount = 0;
+      for (; isCons(args); ++argCount, args = args[CDR]) {
+        let arg = args[CAR];
+        if (argCount < evalArgs)
+          arg = _eval(arg, scope);
+        argv.push(arg);
+      }
+      return fn.apply(scope, argv);
+    }
   }
 
-  function lambda_compiler(name, lambda) {
+  function lambda_compiler(name, lambdaForm) {
     name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
     let scope = this;
-    let bindSymToObj = {}, useTab = {}, bindObjToSym = new Map(), tempNames = {}, varNum = 0, emitted = [];
-    let tools = { bind, use, boundVal, emit, newTemp, scope, indent: '', evalLimit: 100 };
-
+    let bindSymToObj = {}, bindObjToSym = new Map(), functionDescriptors = {};
+    let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
+    let tools = { bind, use, boundVal, emit, use, newTemp, scope, indent: '', evalLimit: 100, functionDescriptors };
     let compileScope = new Scope();
-    let nameStr = newTemp(name);
-    tools.functionName = nameStr;
-    tools.functionLambda = lambda;
     // Well-known names
-    use(bind(scope, "this_"));
     use(bind(string, "string"));
-    use(bind(SchemeEvalError, "SchemeEvalError"));
     use(bind(NIL, "NIL"));
     use(bind(isTrue, "isTrue"));
     use(bind(cons, "cons"));
     use(bind(car, "car"));
     use(bind(cdr, "cdr"));
-    use(bind(COMPILED, "COMPILED"));
     compileScope[name] = nameStr;
-    compileLambda(nameStr, lambda, compileScope, tools);
-    emit(`return ${nameStr};`);
+    let ssaFunction = compileLambda(name, lambdaForm, compileScope, tools);
+    emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
     emitted = [];
     tools.emit('"use strict";')
-    for (let bindingName of Object.keys(bindSymToObj)) {
-      if (useTab[bindingName])
-      emit(`let ${bindingName} = bound[${string(bindingName)}];`);
-    }
+    for (let bindingName of Object.keys(bindSymToObj))
+      if (usedSsaValues[bindingName])
+        emit(`let ${bindingName} = bound[${string(bindingName)}];`);
     if (tools.usedOutsideScope) {
-      emit(`function outsideScope(x) {`);
-      emit(`  let val = this_[x];`);
-      emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + string(x));`);
-      emit(`  return val;`);
-      emit(`}`);
     }
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
@@ -3301,18 +3306,14 @@ function put(str, nobreak) {
       bindObjToSym.set(obj, name);
       return name;
     }
-    function use(name) {
-      useTab[name] = true;
-      return name
-    }
     function emit(str) {
       emitted.push(tools.indent + str + '\n');
     }
     function boundVal(name) {
-      return typeof name === 'string' && bindSymToObj[name];
+      return bindSymToObj[name];
     }
     function newTemp(name) {
-      if (!name || name === '')
+      if (!name)
         name = 'tmp';
       name = toJSname(name);
       if (tempNames[name]) {
@@ -3327,287 +3328,196 @@ function put(str, nobreak) {
       tempNames[name] = true;
       return name;
     }
+    function use(ssaValue) {
+      usedSsaValues[ssaValue] = true;
+      return ssaValue;
+    }
   }
 
-  function compileEval(form, compileScope, tools, recursionStich) {
+  function compileEval(form, compileScope, tools) {
     if (--tools.evalLimit < 0)
       throw new SchemeCompileError(`Too comlpex ${string(form)}`);
-    let result;
-    if (form === undefined) {
-      result = "undefined";
-    } else if (form === null) {
-      result = "null";
-    } else if (typeof form === 'number' || typeof form === 'bigint' || typeof form === 'string') {
-      result = string(form);
-    } else if (isNil(form)) {
-      result = "NIL";
-    } else if (typeof form === 'symbol') {
+    if (form === null) return "null";
+    if (form === undefined) return "undefined";
+    if (typeof form === 'number' || typeof form === 'bigint' || typeof form === 'string')
+      return string(form);
+    if (form === true) return "true";
+    if (form === false) return "false";
+    if (isNil(form)) return "NIL";
+    if (typeof form === 'symbol') {
       let sym = form;
-      result = compileScope[sym];
-      if (!result) {
-        let scopedVal = tools.scope[sym];
-        if (scopedVal) {
-          result = tools.bind(scopedVal, sym);
-        } else {
-          result = `outsideScope(${tools.use(tools.bind(sym))})`;
-          tools.usedOutsideScope = true;
-        }
+      let ssaValue = compileScope[sym];
+      if (ssaValue)
+        return ssaValue;
+      // for now, only bind functions from outside scope
+      let scopedVal = tools.scope[sym];
+      if (scopedVal && typeof scopedVal === 'function') {
+        ssaValue = tools.bind(scopedVal, sym);
+        let fn = scopedVal;
+        let name = fn.name ?? fn[NAMETAG] ?? sym.description;
+        let ssaValue = tools.bind(fn, name);
+        let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+        requiredCount = parameterDescriptor >> 15 >>> 1;
+        evalCount = parameterDescriptor << 16 >> 15 >>> 1;
+        tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name };
+        return ssaValue;
       }
-    } else if (isCons(form)) {
-      let fn = form[CAR], args = form[CDR];
-      if (fn === QUOTE_ATOM) {
-        result = tools.bind(form[CDR][CAR]);
-      } {
-        if (isCons(fn)) {
-          let fnCar = fn[CAR];
-          if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM)) {
-            ({ result, code } = compileApply(form, compileScope, tools, recursionStich));
-          }
-        } else {
-          let evalResult = compileEval(fn, compileScope, tools);
-          result = compileApply(evalResult, args, compileScope, tools);
-        }
-      }
-    } else {
-      // TODO: handle array and object literals
-      result = tools.bind(form);
+      return `resolveUnbound(${tools.use(tools.bind(sym))})`;
     }
-    return result;
-  }
-  
-  function compileApply(form, args, compileScope, tools, recursionStich) {
-    let evalCount = MAX_INTEGER, paramCount = MAX_INTEGER, requiredCount = 0;
-    let name, params, value, body, hook;
-    let saveIndent = tools.indent;
-    let foundSelf = form === tools.functionName;
-    if (foundSelf) {
-      form = tools.functionLambda;
-    } else {
-      let boundVal = tools.boundVal(form);
-      if (boundVal)
-        form = boundVal;
-      else
-        tools.use(form);
-    }
-    let closureScope;
-    if (isCons(form)) {  // must check this before checking function type because closures are functions too!
-      let opSym = form[CAR];
-      if (opSym === SLAMBDA_ATOM) {
-        evalCount = form[CAR];
-      } else if (opSym === SCLOSURE_ATOM) {
-        if (!isCons(form[CDR])) throw new SchemeCompileError(`Bad form ${string(form)}`);
-        evalCount = form[CDR][CAR];
-      }
-    } else if (recursionStich || typeof form === 'function') { // form equals function :)
-      let fn = form;
-      if (recursionStich) {
-        evalCount = MAX_INTEGER;
-        paramCount = length(recursionStich.params);
-      } else {
-        hook = fn[COMPILE_HOOK];
-        ({ name, params, value, body } = analyzeJSFunction(fn));
-        let functionDescriptor = fn[FUNCTION_DESCRIPTOR_SYMBOL];
-        if (functionDescriptor == null)
-          functionDescriptor = createFunctionDescriptor(fn);
-        evalCount = functionDescriptor >> 23 >>> 1;
-        requiredCount = functionDescriptor << 8 >> 19 >>> 1;
-        paramCount = functionDescriptor << 20 >> 19 >>> 1;
-      }
-    }
-    let jsArgs = [];
-    if (recursionStich) {
-      jsArgs = recursionStich.jsArgs;
-    } else {
-      // Materialize ALL the arguments into an array
-      let argList = args;
-      for (let i = 0; isCons(argList); ++i) {
-        let arg = argList[CAR];
-        if (i < evalCount)
-          arg = compileEval(tools.use(argList[CAR]), compileScope, tools);
-        jsArgs.push(tools.use(arg));
-        argList = argList[CDR];
-      }
-    }
-    if (recursionStich || typeof form === 'function' && !form[CLOSURE_ATOM]) { // Scheme functions impose as Cons cells
-      // JS function case
-      if (jsArgs.length < requiredCount && !hook) {
-        if (requiredCount === 1) {
-          // Can't partially bind a function with less than 2 params, but if it has
-          // one param it needs some value. So we provide "undefined" (see _apply).
-          jsArgs.push('undefined');
-        } else {
-          // We need to return a closure.
-          let result = tools.newTemp(`${name}_closure`);
-          let str = `function ${result}(`, sep = '', closureParams = [];
-          for (let i = jsArgs.length; i < paramCount; ++i) {
-            let closureParam = tools.newTemp("p");
-            closureParams.push(closureParam);
-            str += sep + closureParam;
-            sep = ', ';
-          }
-          str += ') {';
-          tools.emit(str);
-          let fname;
-          if (recursionStich)
-            fname = tools.functionName;
-          else
-            fname = tools.use(tools.bind(form, `${name}_closure`));
-          str = `  return ${fname}.call(this_`;
-          for (let i = 0; i < jsArgs.length; ++i)
-            str += `, ${jsArgs[i]}`;
-          for (let i = 0; i < closureParams.length; ++i)
-            str += `, ${closureParams[i]}`;
-          str += ');';
-          tools.emit(str);
-          tools.emit('}');
-          let closureEvalCount = evalCount - jsArgs.length;
-          if (closureEvalCount < 0) closureEvalCount = MAX_INTEGER;
-          let fnDesc = closureEvalCount << 16 | closureParams.length &0xff;
-          tools.emit(`${fname}[FUNCTION_DESCRIPTOR_SYMBOL] = ${fnDesc};`);
-          return fname;
-        }
-      }
-      let result = tools.newTemp(name);
-      if (hook) {
-        let res = hook(jsArgs, compileScope, tools);
-        tools.emit(`let ${result} = ${res};`)
-        return result;
-      }
-      if (recursionStich || !value) {
-        // No template: going to have to call it after all.
-        let fname, argvStr = '';
-        if (recursionStich)
-          fname = tools.functionName;
+    if (TRACE_COMPILER)
+      console.log("COMPILE EVAL", string(form));
+    if (isCons(form)) {
+      let fn = form[CAR];
+      if (fn === QUOTE_ATOM)
+        return tools.bind(form[CDR][CAR], 'quoted');
+      if (isCons(fn)) {
+        let ssaFunction;
+        let fnCar = fn[CAR];
+        if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
+          ssaFunction = compileLambda(form, compileScope, tools, recursionStich);
         else
-          fname = tools.use(tools.bind(form));
-        for (let arg of jsArgs)
-          argvStr += ', ' + arg;
-        tools.emit(`let ${result} = ${fname}.call(this${argvStr});`);
-        return result;
-      }
-      tools.emit(`let ${result}; {`);
-      tools.indent = saveIndent + "  ";
-      // We have at least as many arguments as parameters;
-      // otherwise we'd have created a closure.
-      for (let i = 0; i < params.length; ++i) {
-        tools.emit(`let ${params[i]} = ${jsArgs[i]};`);
-      }
-      if (body)
-        tools.emit(body); 
-      tools.emit(`${result} = (${value});`);
-      tools.indent = saveIndent;
-      tools.emit(`}`);
-      return result;
-    }
-    if (isCons(form)) {  // Lambda family
-      let opSym = form[CAR];
-      let body = form[CDR];
-      let scope = this;
-      if (!isCons(body)) throw new SchemeCompileError(`Bad form ${string(form)}`);
-      if (opSym === CLOSURE_ATOM) {
-        if (!isCons(body)) throw new SchemeCompileError(`Bad closure ${string(form)}`);
-        scope = body[CAR];
-        body = body[CDR];
-        opSym = LAMBDA_ATOM;
-      }
-      if (opSym === SCLOSURE_ATOM) {
-        if (!isCons(body) || !isCons(body[CDR])) throw new SchemeCompileError(`Bad closure ${string(form)}`);
-        scope = body[CDR][CAR];
-        body = body[CDR][CDR];
-        opSym = SLAMBDA_ATOM;
-      }
-      if (opSym === LAMBDA_ATOM || opSym === SLAMBDA_ATOM) {
-        if (!isCons(body)) throw new SchemeCompileError(`Bad lambda ${string(form)}`);
-        let params = body[CAR];
-        let forms = body[CDR];
-        if (typeof params === 'symbol') { // Curry notation :)
-          params = cons(params, NIL);
-          forms = cons(forms, NIL);
+          ssaFunction = compileEval(fn, compileScope, tools);
+        let args = form[CDR];
+        let functionDescriptor = tools.functionDescriptors[ssaFunction];
+        if (!functionDescriptor) {
+          let ssaResult = newTemp(tools.use(ssaFunction));
+          let ssaArgList = tools.use(tools.bind(args, `${ssaFunction}_args)`));
+          tools.emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList};`);
+          return ssaResult;
         }
-        compileScope = newScope(compileScope, "lambda-scope");
-        let i = 0, originalParams = params;
-        for ( ; isCons(params); params = params[CDR]) {
-          let param = params[CAR], optionalForms;
-          if (isCons(param) && param[CAR] === QUESTION_ATOM && isCons(param[CDR])) {
-            optionalForms = param[CDR][CDR];
-            param = param[CDR][CAR];
-          }
-          if (typeof param !== 'symbol') throw new SchemeCompileError(`Param must be a symbol ${param}`);
-          if (i < jsArgs.length) {
-            compileScope[param] = jsArgs[i];
-          } else if (optionalForms) {
-            let val = 'NIL';
-            for ( ; isCons(optionalForms); optionalForms = optionalForms[CDR])
-              val = compileEval(optionalForms[CAR], compileScope, tools);  // Earler params are in scope!
-            compileScope[param] = val;
-          } else {
-            if (jsArgs.length < paramCount && paramCount !== MAX_INTEGER) {
-              if (paramCount === 1) {
-                // Can't partially bind a function with less than 2 params, but  if it has
-                // one param it needs some value. So we provide "undefined" (see _apply).
-                jsArgs.push('undefined');
-              } else {
-                // We need to return a closure.
-                let result = tools.newTemp(`${name}_closure`);
-                let str = `function ${result}(`, sep = '', closureParams = [];
-                for (i = jsArgs.length; i < paramCount; ++i) {
-                  let closureParam = tools.newTemp("p");
-                  closureParams.push(closureParam);
-                  str += sep + closureParam;
-                  sep = ', ';
-                }
-                str += ') {';
-                tools.emit(str);
-                tools.indent = saveIndent + "  ";
-                tools.emit(`function outsideScope(x) {`);
-                tools.emit(`  let val = ${usedef(scope, 'scope')}[x];`);
-                tools.emit(`  if (val === undefined) throw new SchemeEvalError("Undefined symbol " + ${stringStr}(x));`);
-                tools.emit(`  return val;`);
-                tools.emit(`}`);
-                let closureResult = 'NIL';
-                for ( ; isCons(forms); forms = forms[CDR])
-                  closureResult = compileEval(forms[CAR]);
-                tools.emit(`return ${closureResult};`);
-                tools.indent = saveIndent;
-                tools.emit('};');
-                let closureEvalCount = evalCount - jsArgs.length;
-                if (closureEvalCount < 0) closureEvalCount = MAX_INTEGER;
-                let fnDesc = closureEvalCount << 16 | closureParams.length &0xff;
-                tools.emit(`${result}[FUNCTION_DESCRIPTOR_SYMBOL] = ${fnDesc};`);
-                return result;
+        let requiredCount = functionDescriptor.requiredCount;
+        let evalCount = functionDescriptor.evalCount;
+        let fName = functionDescriptor.name;
+
+        // Run through the arg list evaluating args
+        let argv = [], argCount = 0;
+        for ( ; isCons(args) ; ++argCount, args = args[CDR]) {
+          let arg = args[CAR];
+          if (argCount < evalCount)
+            arg = tools.use(compipleEval(arg, compileScope, tools));
+          argv.push(arg);
+        }
+        let ssaResult = tools.newTemp(fName);
+        let argStr = '';
+        for (arg of argv)
+          argStr += `, $(arg})`;
+        if (argCount >= requiredCount || argCount === 0 || requiredCount === MAX_INTEGER) {
+          let boundFn = tools.boundVal(ssaFunction);
+          if (boundFn) {
+            let hook = boundFn[COMPILE_HOOK];
+            if (hook) {
+              let ssaRes = hook(argv, compileScope, hooks);
+              tools.use(ssaRes);
+              tools.emit(`let ${ssaResult} = ${ssaRes};`);
+              return ssaResult;
+            }
+            let { params, value, body } = analyzeJSFunction(fn);
+            if (value) {
+              tools.emit(`let ${ssaResult}; {`);
+              tools.indent = saveIndent + "  ";
+              for (let i = 0; i < params.length; ++i) {
+                let ssaVal = i < argv.length ? argv[i] : 'undefined';
+                tools.use(ssaVal);
+                tools.emit(`let ${params[i]} = ${ssaVal};`);
               }
+              if (body)
+                tools.emit(body); 
+              tools.emit(`${ssaResult} = (${value});`);
+              tools.indent = saveIndent;
+              tools.emit(`}`);
+              return ssaFunction;
             }
           }
-          i -= 1;
+          if (TRACE_COMPILER)
+            console.log("COMPILE APPLY (eval)", fName, ssaResult, toApply, ...argv);
+          tools.use(ssaFunction);
+          tools.emit(`let ${ssaResult} = ${ssaFunction}.apply(${invokeScope}${argStr});`)
+          return ssaResult;
         }
-        if (typeof params === 'symbol') {  // Neat trick for 'rest' params!
-          let rest = tools.newTemp("rest");
-          tools.emit(`let ${rest} = NIL;`);
-          while (i < jsArgs.length)
-            tools.emit(`${rest} = ${jsArgs.pop()};`);
-          compileScope[params] = rest;
-        } else if (!isNil(params)) {
-          throw new SchemeCompileError(`Bad parameter list ${string(params)}`);
+        // Generate closure (see "_eval", I ain't gonna 'splain it agin)
+        let closureBody = fn[CDR];
+        let closureParams = NIL, closureForms = NIL, closureScope = scope;
+        if (closureBody) {
+          closureScope = closureBody[CAR];
+          if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
+            closureBody = closureBody[CDR];
+          closureParams = closureBody[CAR];
+          closureForms = closureBody[CDR];
         }
-        if (foundSelf)
-          return compileApply(form, NIL, compileScope, tools, { params: originalParams, jsArgs })
-        let lambdaResult = 'NIL';
-        for ( ; isCons(forms); forms = forms[CDR])
-          lambdaResult = compileEval(forms[CAR], compileScope, tools);
-        return lambdaResult;
+        let boundScope;
+        if (closureScope === 'this')
+          boundScope = 'this'
+        else
+          boundScope = tools.use(tools.bind(closureScope, `${fName}_scope`));
+        tools.use(ssaFunction);
+        tools.emit(`${ssaResult} = (...args) => ${ssaFunction}.apply(${boundScope}, ${argStr}, ...args);`);
+        let closureForm = cons();
+        if (evalCount !== MAX_INTEGER) {
+          evalCount -= argCount;
+          if (evalCount < 0)
+            evalCount = 0;
+          closureForm[CAR] = SCLOSURE_ATOM;
+          let dummyScope = newScope(scope, "compiled-closure-scope");
+          closureForm[CDR] = cons(dummyScope, cons(evalCount, cons(closureParams, closureForms)));
+        } else {
+          closureForm[CAR] = CLOSURE_ATOM;
+          closureForm[CDR] = cons(closureScope, cons(closureParams, closureForms));
+        }
+        requiredCount -= argCount;
+        if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
+        decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
+        return ssaResult;
+      }
+      // Special eval for JS arrays and objects
+      if (form !== null && typeof form === 'object') {
+        if (form instanceof Array) {
+          let ssaValue = tools.newTemp("arrayliteral");
+          let evalledSsaValues = [];
+          for (let element of form)
+            evalledSsaValues.push(compileEval(element, compileScope, tools));
+          tools.emit(`let ${ssaValue} = [`);
+          for (let ssaElement of evalledSsaValues)
+            tools.emit(`  ${ssaElement},`);
+          tools.emit(`];`);
+          return ssaValue;
+        }
+        let ssaValue = tools.newTemp("objectliteral");
+        emit(`let ${ssaValue} = {};`);
+        for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
+          let value = form[key];
+          if (value instanceof EvaluateKeyValue) {
+            key = value.key;
+            value = value.value;
+            key = compileEval(key, compileScope, tools);
+          }
+          value = compileEval(value, compileScope, tools);
+          tools.emit(`${ssaValue}[${key}] = ${value};`);
+        }
+        return ssaValue;
       }
     }
-    throw new SchemeCompileError(`Can't apply ${string(form)}`);
+    throw new SchemeCompileError(`Bad form ${string(form)}`);
   }
 
-  function compileLambda(name, form, compileScope, tools) {
-    if (!isCons(form)) throw new SchemeCompileError(`Bad lambda ${string(form)}`);
-    let body = form[CDR];
-    if (!isCons(body)) throw new SchemeCompileError(`Bad lambda ${string(form)}`);
+  function compileLambda(name, lambda, compileScope, tools) {
+    let ssaFunction = tools.newTemp(name);
+    if (!isCons(lambda)) throwBadCompiledLambda(lambda);
+    let body = lambda[CDR];
+    let evalCount = MAX_INTEGER;
+    if (lambda[CAR] === SLAMBDA_ATOM) {
+      if (!isCons(lambda)) throwBadCompiledLambda(lambda);
+      evalCount = body[CAR];
+      if (typeof evalCount !== 'number') throwBadCompiledLambda(lambda);
+      body = body[CDR];
+    }
+    if (!isCons(body)) throwBadCompiledLambda(lambda);
     let params = body[CAR];
+    if (typeof params === 'symbol') {  // Curry notation
+      params = cons(params, NIL);
+    }
+    if (!isCons(params)) throwBadCompiledLambda(lambda);
     let forms = body[CDR];
     let paramv = [];
-    let result;
     compileScope = newScope(compileScope, "compile-lambda-scope");
     if (typeof params === 'symbol') { // Curry notation :)
       let paramVar = tools.newTemp(params);
@@ -3615,44 +3525,66 @@ function put(str, nobreak) {
       compileScope[params] = paramVar;
       forms = cons(forms, NIL);
     }
-    let origFormalParams = params;
-    for ( ; isCons(params); params = params[CDR]) {
-      let param = params[CAR];
-      if (typeof param !== 'symbol') throw new SchemeCompileError(`Param must be a symbol ${param}`);
-      let paramVar = tools.newTemp(param);
-      paramv.push(paramVar);
-      compileScope[param] = paramVar;
+    let paramCount = 0, requiredCount, optionalForms = [];
+    for (let tmp = params; isCons(tmp); tmp = tmp[CDR]) {
+      paramCount += 1;
+      let param = tmp[CAR], ssaParam;
+      if (isCons(param)) {
+        if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
+          throwBadCompiledLambda(lambda, `what's this?  ${string(param)}`);
+        ssaParam = tools.newTemp(param[CDR][CAR]);
+        optionalForms.push(param[CDR][CDR]);
+      } else {
+        ssaParam = tools.newTemp(param);
+        optionslForms.push(undefined);
+      }
+      paramv.push(ssaParam);
+      compileScope[param] = ssaParam;
     }
     if (typeof params === 'symbol') {
-      // Hmmm... 'rest' params? This is probably not quite right.
-      let paramVar = tools.newTemp(params);
-      paramv.push(paramVar);
-      compileScope[params] = paramVar;
+      let ssaParam = tools.newTemp(param);
+      paramv.push(`...${ssaParam})`);
+      compileScope[params] = ssaParam;
     }
-    else if (!isNil(params)) {
-      throw new SchemeCompileError(`Bad parameter list ${string(origFormalParams)}`);
-    }
-    if (name && name !== '')
-      result = name;
-    else
-      result = tools.newTemp();
+    else if (!isNil(params))
+      throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
     let delim = '', paramStr = '', saveIndent = tools.indent;
     for (let param of paramv) {
       paramStr += delim + param;
       delim = ', ';
     }
-    tools.emit(`function ${result}(${paramStr}) {`);
+    tools.emit(`function ${ssaFunction}(${paramStr}) {`);
     tools.indent = saveIndent + "  ";
-    let res = 'NIL';
+    let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
-      res = compileEval(forms[CAR], compileScope, tools);
-    tools.emit(`return ${res};`);
+      ssaResult = compileEval(forms[CAR], compileScope, tools);
+    tools.emit(`return ${ssaResult};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
-    tools.emit(`${result}[COMPILED] = ${tools.use(tools.bind(form, 'compiled'))};`);
+    let _compiled = tools.use(tools.bind(COMPILED, "COMPILED"));
+    tools.emit(`${ssaFunction}[${_compiled}] = ${tools.use(tools.bind(lambda, 'compiled'))};`);
+    decorateCompiledClosure(ssaFunction, closureForm, requiredCount, evalCount, tools);
     return res;
   }
+
+  function throwBadCompiledLambda(lambda, msg) { throw SchemeCompileError(`Bad lambda ${lambda}` + msg ? `, $(msg)` : '') }
   
+  function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCpunt, tools) {
+    let ssaClosureForm = tools.use(tools.bind(closureForm, "closureForm"));
+    let _parameter_descriptor = tools.use(tools.bind(COMPILED, "PARAMETER_DESCRIPTOR"))
+    let _car = tools.use(tools.bind(CAR, "CAR"));
+    let _cdr = tools.use(tools.bind(CDR, "CDR"));
+    let _pair = tools.use(tools.bind(PAIR, "PAIR"));
+    let _list = tools.use(tools.bind(PAIR, "LIST"));
+    let _closure_atom = tools.use(tools.bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
+    let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
+    tools.emit(`${ssaClosure}[${_compiled}] = ${tools.use(tools.bind(form, 'compiled'))};`);
+    tools.emit(`${ssaClosure}[${_parameter_descriptor}] = ${parameterDescriptor};`);
+    tools.emit(`${ssaClosure}[${_car}] = ${ssaClosureForm}[CAR];`);
+    tools.emit(`${ssaClosure}[${_cdr}] = ${ssaClosureForm}[CDR];`);
+    tools.emit(`${ssaClosure}[${_pair}] = ${ssaClosure}[${_list}] = ${ssaClosure}[${_closure_atom}] = true;`);
+  }
+
   const JS_IDENT_REPLACEMENTS  = {
     '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
     '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$dash', '=': '$eq', '<': '$lt',
