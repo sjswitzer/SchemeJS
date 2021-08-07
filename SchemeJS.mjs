@@ -937,10 +937,6 @@ globalScope._help_ = {};  // For clients that want to implement help.
   function conditionalHooks(args, compileScope, tools, name, test) {
     let a = args[0], t = args[1], f = args[2];
     let ssaResult = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
-    if (t === 'true' && f === 'false') {
-      tools.emit(`${ssaResult} = !!(${test});`);
-      return ssaResult;
-    }
     tools.emit(`let ${ssaResult};`);
     test = test.replace('*', a);
     tools.emit(`if (${test}) {`);
