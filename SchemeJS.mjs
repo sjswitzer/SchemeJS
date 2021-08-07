@@ -2187,7 +2187,7 @@ export function createInstance(schemeOpts = {}) {
     return jsClosure;
   }
 
-  function throwBadLambda(lambda, msg) { throw SchemeEvalError(`Bad lambda ${lambda}` + msg ? `, $(msg)` : '') }
+  function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + msg ? `, $(msg)` : '') }
 
   defineGlobalSymbol("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
   function is_closure(a, t = true, f = false) {
@@ -3269,7 +3269,6 @@ function put(str, nobreak) {
     use(bind(cons, "cons"));
     use(bind(car, "car"));
     use(bind(cdr, "cdr"));
-    compileScope[name] = nameStr;
     let ssaFunction = compileLambda(name, lambdaForm, compileScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
@@ -3536,7 +3535,7 @@ function put(str, nobreak) {
         optionalForms.push(param[CDR][CDR]);
       } else {
         ssaParam = tools.newTemp(param);
-        optionslForms.push(undefined);
+        optionalForms.push(undefined);
       }
       paramv.push(ssaParam);
       compileScope[param] = ssaParam;
@@ -3567,7 +3566,7 @@ function put(str, nobreak) {
     return res;
   }
 
-  function throwBadCompiledLambda(lambda, msg) { throw SchemeCompileError(`Bad lambda ${lambda}` + msg ? `, $(msg)` : '') }
+  function throwBadCompiledLambda(lambda, msg) { throw new SchemeCompileError(`Bad lambda ${lambda}` + msg ? `, $(msg)` : '') }
   
   function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCpunt, tools) {
     let ssaClosureForm = tools.use(tools.bind(closureForm, "closureForm"));
