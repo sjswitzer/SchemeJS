@@ -2128,7 +2128,7 @@ export function createInstance(schemeOpts = {}) {
       lambdaParams = cons(lambdaParams, NIL);
       forms = cons(forms, NIL);
     }
-    let params = lambdaParams, paramCount = 0, requiredCount, hasRestParam = false;
+    let params = lambdaParams, paramCount = 0, requiredCount;
     for (params = lambdaParams; isCons(params); params = params[CDR]) {
       let param = params[CAR];
       if (isCons(param)) {
@@ -2141,7 +2141,6 @@ export function createInstance(schemeOpts = {}) {
       }
       paramCount += 1;
     }
-    if (typeof params === 'symbol') hasRestParam = true;
     let jitCount = jitThreshold ? jitThreshold|0 : undefined;
     function jsClosure(...args) {
       if (jitThreshold !== undefined) {  // Disable by optioning jitThreshold as undefined
@@ -3273,12 +3272,10 @@ function put(str, nobreak) {
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
     emitted = [];
-    tools.emit('"use strict";')
+    emit('"use strict";')
     for (let bindingName of Object.keys(bindSymToObj))
       if (usedSsaValues[bindingName])
         emit(`let ${bindingName} = bound[${string(bindingName)}];`);
-    if (tools.usedOutsideScope) {
-    }
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     return { code, bindSymToObj };
@@ -3481,7 +3478,7 @@ function put(str, nobreak) {
           return ssaValue;
         }
         let ssaValue = tools.newTemp("objectliteral");
-        emit(`let ${ssaValue} = {};`);
+        tools.emit(`let ${ssaValue} = {};`);
         for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
           let value = form[key];
           if (value instanceof EvaluateKeyValue) {
@@ -3517,11 +3514,11 @@ function put(str, nobreak) {
     let forms = body[CDR];
     let paramv = [];
     compileScope = newScope(compileScope, "compile-lambda-scope");
-    if (typeof params === 'symbol') // Curry notation :)
+    if (typeof params === 'symbol') // Curry notation
       params = cons(params, NIL);
     let paramCount = 0, requiredCount, optionalForms = [];
-    for (let tmp = params; isCons(tmp); ++paramCount, tmp = tmp[CDR]) {
-      let param = tmp[CAR], ssaParam;
+    for (; isCons(params); ++paramCount, params = params[CDR]) {
+      let param = params[CAR], ssaParam;
       if (isCons(param)) {
         if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
           throwBadCompiledLambda(lambda, `what's this?  ${string(param)}`);
