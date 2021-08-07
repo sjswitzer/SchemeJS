@@ -160,3 +160,7 @@ given it much thought beyond the observation that a non-recursive interpreter wo
 Probably transform the Scheme into a series of continuations and compile those the usual way.
 I imagine this is what JavaScript implementations do at the AST level. At least I have the
 advantage that Scheme code is an AST inherently.
+
+Urgently needed: Generate dynamic source maps to enable debugging!
+https://stackoverflow.com/questions/49463047/source-map-for-a-dynamically-created-function
+https://kybernetikos.github.io/jsSandbox/srcmaps/dynamic.html

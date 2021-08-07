@@ -3402,6 +3402,7 @@ function put(str, nobreak) {
     if (form === true) return "true";
     if (form === false) return "false";
     if (isNil(form)) return "NIL";
+    if (isPrimitive(form)) throw new LogicError(`All primitives should be handled by now`)
     if (typeof form === 'symbol') {
       let sym = form;
       let ssaValue = compileScope[sym];
@@ -3425,7 +3426,7 @@ function put(str, nobreak) {
       }
       return `resolveUnbound(${tools.use(tools.bind(sym))})`;
     }
-    if (TRACE_COMPILER)
+    if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
       console.log("COMPILE EVAL", string(form));
     if (isCons(form)) {
       let fn = form[CAR];
@@ -3433,41 +3434,37 @@ function put(str, nobreak) {
         if (!isCons(form)) throwBadForm();
         return tools.bind(form[CDR][CAR], 'quoted');
       }
-      let ssaFunction = compileEval(fn, compileScope, tools);
+      let ssaFunction;
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
         ssaFunction = compileLambda(form, compileScope, tools);
-      fn = compileEval(fn, compileScope, tools);
-      if (isCons(fn)) {
-        let ssaFunction;
-        let fnCar = fn[CAR];
-        if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
-          ssaFunction = compileLambda(form, compileScope, tools);
-        else
-          ssaFunction = compileEval(fn, compileScope, tools);
-        let args = form[CDR];
-        let functionDescriptor = tools.functionDescriptors[ssaFunction];
-        if (!functionDescriptor) {
-          let ssaResult = newTemp(tools.use(ssaFunction));
-          let ssaArgList = tools.use(tools.bind(args, `${ssaFunction}_args)`));
-          tools.emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList};`);
-          return ssaResult;
-        }
-        let requiredCount = functionDescriptor.requiredCount;
-        let evalCount = functionDescriptor.evalCount;
-        let fName = functionDescriptor.name;
+      else
+        ssaFunction = compileEval(fn, compileScope, tools);
+      let args = form[CDR];
+      let functionDescriptor = tools.functionDescriptors[ssaFunction];
+      if (!functionDescriptor) {
+        let ssaResult = newTemp(tools.use(ssaFunction));
+        let ssaArgList = tools.use(tools.bind(args, `${ssaFunction}_args)`));
+        tools.emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList};`);
+        return ssaResult;
+      }
+      let requiredCount = functionDescriptor.requiredCount;
+      let evalCount = functionDescriptor.evalCount;
+      let fName = functionDescriptor.name;
 
-        // Run through the arg list evaluating args
-        let argv = [], argCount = 0;
-        for ( ; isCons(args) ; ++argCount, args = args[CDR]) {
-          let arg = args[CAR];
-          if (argCount < evalCount)
-            arg = tools.use(compipleEval(arg, compileScope, tools));
-          argv.push(arg);
-        }
-        let ssaResult = tools.newTemp(fName);
-        let argStr = '';
-        for (arg of argv)
-          argStr += `, $(arg})`;
+      // Run through the arg list evaluating args
+      let argv = [], argCount = 0;
+      for ( ; isCons(args) ; ++argCount, args = args[CDR]) {
+        let arg = args[CAR];
+        if (argCount < evalCount)
+          arg = tools.use(compipleEval(arg, compileScope, tools));
+        argv.push(arg);
+      }
+      let ssaResult = tools.newTemp(fName);
+      let argStr = '';
+      for (arg of argv) {
+        argStr += `, $(arg})`;
+        // Cases where we simply invoke the function:
+        // we have more than the required number of parameters
         if (argCount >= requiredCount || argCount === 0 || requiredCount === MAX_INTEGER) {
           let boundFn = tools.boundVal(ssaFunction);
           if (boundFn) {
@@ -3563,7 +3560,7 @@ function put(str, nobreak) {
         return ssaValue;
       }
     }
-    throw new SchemeCompileError(`Bad form ${string(form)}`);
+    throw new LogicError(`Shouldn't happen. All cases should be handled above`);
 
     function throwBadForm() {
       throw new SchemeCompileError(`BadForm ${string(form)}`);
