@@ -1947,8 +1947,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
     let { name: jsName } = normalizeExportToJavaScriptName(name);
-    globalScope[jsName] = value;
-    globalScope[name] = value;
+    globalScope[jsName] = compiledFunction;
+    globalScope[name] = compiledFunction;
   }
 
   //
@@ -3446,7 +3446,7 @@ function put(str, nobreak) {
       }
       let ssaFunction;
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
-        ssaFunction = compileLambda(form, compileScope, tools);
+        ssaFunction = compileLambda(null, form, compileScope, tools);
       else
         ssaFunction = compileEval(fn, compileScope, tools);
       let args = form[CDR];
@@ -3472,7 +3472,7 @@ function put(str, nobreak) {
       let ssaResult = tools.newTemp(fName);
       let argStr = '';
       for (let arg of argv) {
-        argStr += `, $(arg})`;
+        argStr += `, ${arg}`;
         // Cases where we simply invoke the function:
         //  - we have at least required number of arguments
         //  - we have no arguments
@@ -3505,9 +3505,9 @@ function put(str, nobreak) {
             }
           }
           if (TRACE_COMPILER)
-            console.log("COMPILE APPLY (eval)", fName, ssaResult, toApply, ...argv);
+            console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...argv);
           tools.use(ssaFunction);
-          tools.emit(`let ${ssaResult} = ${ssaFunction}.apply(${invokeScope}${argStr});`)
+          tools.emit(`let ${ssaResult} = ${ssaFunction}.apply(this${argStr});`)
           return ssaResult;
         }
         // Generate closure (see "_eval", I ain't gonna 'splain it agin)
@@ -3630,6 +3630,9 @@ function put(str, nobreak) {
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
     if (requiredCount === undefined)
       requiredCount = paramCount;  // count does NOT contain rest param
+    tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name };
+    if (name)
+      compileScope[name] = ssaFunction;
     let delim = '', paramStr = '', saveIndent = tools.indent;
     for (let param of paramv) {
       paramStr += delim + param;
