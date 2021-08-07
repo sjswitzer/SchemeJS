@@ -2187,7 +2187,7 @@ export function createInstance(schemeOpts = {}) {
     return jsClosure;
   }
 
-  function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + msg ? `, $(msg)` : '') }
+  function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
 
   defineGlobalSymbol("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
   function is_closure(a, t = true, f = false) {
@@ -3566,7 +3566,7 @@ function put(str, nobreak) {
     return res;
   }
 
-  function throwBadCompiledLambda(lambda, msg) { throw new SchemeCompileError(`Bad lambda ${lambda}` + msg ? `, $(msg)` : '') }
+  function throwBadCompiledLambda(lambda, msg) { throw new SchemeCompileError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
   
   function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCpunt, tools) {
     let ssaClosureForm = tools.use(tools.bind(closureForm, "closureForm"));
