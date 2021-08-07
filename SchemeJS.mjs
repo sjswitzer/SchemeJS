@@ -333,14 +333,14 @@ globalScope._help_ = {};  // For clients that want to implement help.
       name = name.replace("?", "P");
       return { atom, atomName, name };
     }
+  }
 
-    function subclassOf(cls, supercls) {
-      while (cls.__proto__) {
-        if (cls === supercls) return true;
-        cls = cls.__proto__;
-      }
-      return false;
+  function subclassOf(cls, supercls) {
+    while (cls.__proto__) {
+      if (cls === supercls) return true;
+      cls = cls.__proto__;
     }
+    return false;
   }
 
   function examineFunctionForCompilerTemplates(name, fn, hook, evalCount) {
@@ -353,7 +353,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     // of any "class," but Error classes are the only ones currently defined in the
     // SchemeJS API and there's no way to truly distinguish a class from a function
     // in JavaScript.
-    if (fn instanceof Error)
+    if (subclassOf(fn, Error))
       return;
     if (evalCount !== MAX_INTEGER) { // templates are of no use for special evaluation
       console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
@@ -383,7 +383,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
   exportAPI("SUPERLAZY_SYMBOL", SUPERLAZY);
 
   defineGlobalSymbol("VERSION", VERSION);
-  defineGlobalSymbol("intern", Atom, "Atom");
+  defineGlobalSymbol("intern", Atom, { dontInline: true }, "Atom");
 
   class SchemeError extends Error {};
   SchemeError.prototype.name = "SchemeError";
@@ -512,7 +512,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     for (let name in propDescs) {
       let {value, get} = propDescs[name];
       if (!get && value)
-        defineGlobalSymbol(name, value, { schemeOnly: true, group: "imported" });
+        defineGlobalSymbol(name, value, { schemeOnly: true, dontInline: true, group: "imported" });
     }
 
     // Stuff the whole Math class in there!
@@ -536,7 +536,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       defineGlobalSymbol(obj.name, obj);
   }
 
-  defineGlobalSymbol("eval-string", eval_string);
+  defineGlobalSymbol("eval-string", eval_string, { dontInline: true });
   function eval_string(str, scope = this) {
     let expr = parseSExpr(str);
     return _eval(expr, scope);
@@ -3278,7 +3278,7 @@ function put(str, nobreak) {
     }
   }
 
-  defineGlobalSymbol("compile-lambda", compile_lambda);
+  defineGlobalSymbol("compile-lambda", compile_lambda, { dontInline: true });
   function compile_lambda(name, lambdaForm) {
     let scope = this;
     let { code, bindSymToObj } = lambda_compiler.call(this, name, lambdaForm);
