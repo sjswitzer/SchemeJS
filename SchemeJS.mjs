@@ -301,7 +301,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
         examineFunctionForCompilerTemplates(name, value, opts.compileHook, evalCount);
     }
     let atom, atomName;
-    ({ atom, atomName, name } = normalize(name));
+    ({ atom, atomName, name } = normalizeExportToJavaScriptName(name));
     globalScope[atom] = value;
     if (!opts.schemeOnly)
       globalScope[name] = value;
@@ -310,7 +310,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let names = [ name ];
     globalScope._help_[atom] = { atoms, atomNames, value, group };
     for (let alias of aliases) {
-      ({ atom, atomName, name } = normalize(alias));
+      ({ atom, atomName, name } = normalizeExportToJavaScriptName(alias));
       globalScope[atom] = value;
       atoms.push(atom);
       atomNames.push(atomName);
@@ -320,17 +320,22 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return atom;
 
-    function normalize(name) {
+    function normalizeExportToJavaScriptName(name) {
       if (typeof name === 'symbol')
         name = name.description;
       let atomName = name;
       let atom = Atom(name);
       // Java API name
-      name = name.replace("->", "_to_");
-      name = name.replace("-", "_");
-      name = name.replace("@", "_at_");
-      name = name.replace("*", "_star_");
-      name = name.replace("?", "P");
+      //  (string.replaceAll hasn't made it to every node yet, apparently)
+      let prevName;
+      do {
+        prevName = name;
+        name = name.replace("->", "_to_");
+        name = name.replace("-", "_");
+        name = name.replace("@", "_at_");
+        name = name.replace("*", "_star_");
+        name = name.replace("?", "P");
+      } while (name !== prevName);
       return { atom, atomName, name };
     }
   }
@@ -1921,6 +1926,9 @@ globalScope._help_ = {};  // For clients that want to implement help.
     if (value != null &(typeof value === 'function' || typeof value === 'object'))
       value[NAMETAG] = name;
     globalScope[name] = value;
+    // Make available to JavaScript as well
+    ({ name } = normalizeExportToJavaScriptName(name));
+    globalScope[name] = value;
     return name;
   }
 
@@ -1936,7 +1944,10 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let compiledFunction = compile_lambda.call(this, name, form);
     compiledFunction[NAMETAG] = name;
     globalScope[name] = compiledFunction;
+    // Make available to JavaScript as well
+    ({ name } = normalizeExportToJavaScriptName(name));
     return name;
+    globalScope[name] = value;
   }
 
   //
