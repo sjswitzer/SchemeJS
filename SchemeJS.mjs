@@ -3373,7 +3373,7 @@ function put(str, nobreak) {
         let ssaFunction;
         let fnCar = fn[CAR];
         if (!(fnCar === LAMBDA_ATOM || fnCar === SLAMBDA_ATOM))
-          ssaFunction = compileLambda(form, compileScope, tools, recursionStich);
+          ssaFunction = compileLambda(form, compileScope, tools);
         else
           ssaFunction = compileEval(fn, compileScope, tools);
         let args = form[CDR];
@@ -3511,28 +3511,24 @@ function put(str, nobreak) {
     }
     if (!isCons(body)) throwBadCompiledLambda(lambda);
     let params = body[CAR];
-    if (typeof params === 'symbol') {  // Curry notation
+    if (typeof params === 'symbol')  // Curry notation
       params = cons(params, NIL);
-    }
     if (!isCons(params)) throwBadCompiledLambda(lambda);
     let forms = body[CDR];
     let paramv = [];
     compileScope = newScope(compileScope, "compile-lambda-scope");
-    if (typeof params === 'symbol') { // Curry notation :)
-      let paramVar = tools.newTemp(params);
-      paramv.push(paramVar);
-      compileScope[params] = paramVar;
-      forms = cons(forms, NIL);
-    }
+    if (typeof params === 'symbol') // Curry notation :)
+      params = cons(params, NIL);
     let paramCount = 0, requiredCount, optionalForms = [];
-    for (let tmp = params; isCons(tmp); tmp = tmp[CDR]) {
-      paramCount += 1;
+    for (let tmp = params; isCons(tmp); ++paramCount, tmp = tmp[CDR]) {
       let param = tmp[CAR], ssaParam;
       if (isCons(param)) {
         if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
           throwBadCompiledLambda(lambda, `what's this?  ${string(param)}`);
         ssaParam = tools.newTemp(param[CDR][CAR]);
         optionalForms.push(param[CDR][CDR]);
+        if (requiredCount === undefined)
+          requiredCount = paramCount;
       } else {
         ssaParam = tools.newTemp(param);
         optionalForms.push(undefined);
@@ -3540,13 +3536,15 @@ function put(str, nobreak) {
       paramv.push(ssaParam);
       compileScope[param] = ssaParam;
     }
-    if (typeof params === 'symbol') {
+    if (typeof params === 'symbol') {  // rest param
       let ssaParam = tools.newTemp(param);
       paramv.push(`...${ssaParam})`);
       compileScope[params] = ssaParam;
     }
     else if (!isNil(params))
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
+    if (requiredCount === undefined)
+      requiredCount = paramCount;
     let delim = '', paramStr = '', saveIndent = tools.indent;
     for (let param of paramv) {
       paramStr += delim + param;
