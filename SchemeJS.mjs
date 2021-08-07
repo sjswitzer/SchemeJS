@@ -3653,12 +3653,12 @@ function put(str, nobreak) {
     let _compiled = tools.use(tools.bind(COMPILED, "COMPILED"));
     tools.emit(`${ssaFunction}[${_compiled}] = ${tools.use(tools.bind(lambda, 'compiled'))};`);
     decorateCompiledClosure(ssaFunction, closureForm, requiredCount, evalCount, tools);
-    return res;
+    return ssaFunction;
   }
 
   function throwBadCompiledLambda(lambda, msg) { throw new SchemeCompileError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
   
-  function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCpunt, tools) {
+  function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCount, tools) {
     let ssaClosureForm = tools.use(tools.bind(closureForm, "closureForm"));
     let _parameter_descriptor = tools.use(tools.bind(COMPILED, "PARAMETER_DESCRIPTOR"))
     let _car = tools.use(tools.bind(CAR, "CAR"));
@@ -3667,7 +3667,6 @@ function put(str, nobreak) {
     let _list = tools.use(tools.bind(PAIR, "LIST"));
     let _closure_atom = tools.use(tools.bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
     let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
-    tools.emit(`${ssaClosure}[${_compiled}] = ${tools.use(tools.bind(form, 'compiled'))};`);
     tools.emit(`${ssaClosure}[${_parameter_descriptor}] = ${parameterDescriptor};`);
     // the function is simultaneously a Scheme closure object
     tools.emit(`${ssaClosure}[${_car}] = ${ssaClosureForm}[CAR];`);
