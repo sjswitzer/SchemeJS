@@ -1968,11 +1968,10 @@ globalScope._help_ = {};  // For clients that want to implement help.
       fn = _eval(fn, scope);
       if (typeof fn !== 'function') throwBadForm();
       // See makeParameterDescriptor for the truth, but
-      //   parameterDescriptor = (requiredCount << 16) | (evalCount & 0xffff);
-      // ">> 15 >>> 1" restores MAX_INTEGER to MAX_INTEGER
+      //   parameterDescriptor = (evalCount << 16) | requiredCount
       let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-      let requiredCount = parameterDescriptor >> 15 >>> 1;
-      let evalCount = parameterDescriptor << 16 >> 15 >>> 1;
+      let requiredCount = parameterDescriptor & 0xffff;
+      let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
       if (fn[CAR] === SCLOSURE_ATOM) {
         let fnCdr = fn[CDR];
         if (!isCons(fnCdr)) throwBadForm();
@@ -2008,9 +2007,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       // but that would be error-prone and create an asymmetry between functions with zero
       // required parameters, like apropos, and those that have required parameters.
       // The function itself can decide what to do if it receives "undefined" as its first argument.
-      // The other case handled here is that it's a native function and the requiredCount
-      // is MAX_INTEGER.
-      if (argCount === 0 || requiredCount === MAX_INTEGER) {
+      if (argCount === 0) {
         let fName;
         if (TRACE_INTERPRETER) {
           fName = fn[NAMETAG] ?? fn.name;
@@ -2109,11 +2106,11 @@ globalScope._help_ = {};  // For clients that want to implement help.
   }
 
   function makeParameterDescriptor(requiredCount, evalCount = MAX_INTEGER55) {
-    if (requiredCount !== MAX_INTEGER && requiredCount >= 0xffff)
-      throw new LogicError(`Too many required paramaters`);
-    if (evalCount !== MAX_INTEGER && evalCount >= 0xffff)
+    if (requiredCount < 0 || requiredCount >= 0xffff)
+      throw new LogicError(`RequiredCount out of range`);
+    if (evalCount < 0 || (evalCount !== MAX_INTEGER && evalCount >= 0xffff))
       throw new LogicError(`Too many evaluated paramaters`);
-    return (requiredCount << 16) | (evalCount & 0xffff);
+    return (evalCount << 16) | requiredCount;
   }
 
   defineGlobalSymbol("apply", apply);
@@ -2186,6 +2183,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
       }
       paramCount += 1;
     }
+    if (!requiredCount)
+      requiredCount = paramCount;
     let jitCount = jitThreshold ? jitThreshold|0 : undefined;
     function jsClosure(...args) {
       if (jitThreshold !== undefined) {  // Disable by optioning jitThreshold as undefined
@@ -2222,7 +2221,6 @@ globalScope._help_ = {};  // For clients that want to implement help.
         result = _eval(form, scope);
       return result;
     }
-    if (requiredCount === undefined) requiredCount = paramCount;
     jsClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
     jsClosure[CAR] = schemeClosure[CAR];
     jsClosure[CDR] = schemeClosure[CDR];
@@ -3297,8 +3295,8 @@ function put(str, nobreak) {
     function invokeUnbound(fn, args) {
       fn = resolveUnbound(x);
       let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-      let requiredCount = parameterDescriptor >> 15 >>> 1;
-      let evalCount = parameterDescriptor << 16 >> 15 >>> 1;
+      let requiredCount = parameterDescriptor & 0xffff;
+      let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
       let argv = [], argCount = 0;
       for (; isCons(args); ++argCount, args = args[CDR]) {
         let arg = args[CAR];
@@ -3415,8 +3413,8 @@ function put(str, nobreak) {
         let name = fn.name ?? fn[NAMETAG] ?? sym.description;
         ssaValue = tools.bind(fn, name);
         let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-        let requiredCount = parameterDescriptor >> 15 >>> 1;
-        let evalCount = parameterDescriptor << 16 >> 15 >>> 1;
+        let requiredCount = parameterDescriptor & 0xffff;
+        let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
         let compileHook = fn[COMPILE_HOOK];
         let valueTemplate = fn[COMPILE_VALUE_TEMPLATE];
         let bodyTemplate = fn[COMPILE_BODY_TEMPLATE];
@@ -3464,8 +3462,10 @@ function put(str, nobreak) {
       for (arg of argv) {
         argStr += `, $(arg})`;
         // Cases where we simply invoke the function:
-        // we have more than the required number of parameters
-        if (argCount >= requiredCount || argCount === 0 || requiredCount === MAX_INTEGER) {
+        //  - we have at least required number of arguments
+        //  - we have no arguments
+        // Otherwise, return a closure.
+        if (argCount >= requiredCount || argCount === 0) {
           let boundFn = tools.boundVal(ssaFunction);
           if (boundFn) {
             let hook = boundFn[COMPILE_HOOK];
@@ -3609,7 +3609,7 @@ function put(str, nobreak) {
       paramv.push(ssaParam);
       compileScope[param] = ssaParam;
     }
-    if (typeof params === 'symbol') {  // rest param
+    if (typeof params === 'symbol') {  // rest param (does not increment paramCount)
       let ssaParam = tools.newTemp(param);
       paramv.push(`...${ssaParam})`);
       compileScope[params] = ssaParam;
@@ -3617,7 +3617,7 @@ function put(str, nobreak) {
     else if (!isNil(params))
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
     if (requiredCount === undefined)
-      requiredCount = paramCount;
+      requiredCount = paramCount;  // count does NOT contain rest param
     let delim = '', paramStr = '', saveIndent = tools.indent;
     for (let param of paramv) {
       paramStr += delim + param;
