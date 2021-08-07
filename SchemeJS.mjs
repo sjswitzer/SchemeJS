@@ -3452,7 +3452,7 @@ function put(str, nobreak) {
       let args = form[CDR];
       let functionDescriptor = tools.functionDescriptors[ssaFunction];
       if (!functionDescriptor) {
-        let ssaResult = newTemp(tools.use(ssaFunction));
+        let ssaResult = tools.newTemp(tools.use(ssaFunction));
         let ssaArgList = tools.use(tools.bind(args, `${ssaFunction}_args)`));
         tools.emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList};`);
         return ssaResult;
@@ -3466,29 +3466,29 @@ function put(str, nobreak) {
       for ( ; isCons(args) ; ++argCount, args = args[CDR]) {
         let arg = args[CAR];
         if (argCount < evalCount)
-          arg = tools.use(compipleEval(arg, compileScope, tools));
+          arg = tools.use(compileEval(arg, compileScope, tools));
         argv.push(arg);
       }
       let ssaResult = tools.newTemp(fName);
       let argStr = '';
-      for (arg of argv) {
+      for (let arg of argv) {
         argStr += `, $(arg})`;
         // Cases where we simply invoke the function:
         //  - we have at least required number of arguments
         //  - we have no arguments
         // Otherwise, return a closure.
         if (argCount >= requiredCount || argCount === 0) {
-          let boundFn = tools.boundVal(ssaFunction);
-          if (boundFn) {
-            let hook = boundFn[COMPILE_HOOK];
-            if (hook) {
-              let ssaRes = hook(argv, compileScope, hooks);
+          if (functionDescriptor) {
+            let compileHook = functionDescriptor.compileHook;
+            let valueTemplate = functionDescriptor.valueTemplate;
+            let bodyTemplate = functionDescriptor.bodyTemplate;
+            if (compileHook) {
+              let ssaRes = compileHook(argv, compileScope, tools);
               tools.use(ssaRes);
               tools.emit(`let ${ssaResult} = ${ssaRes};`);
               return ssaResult;
             }
-            let { params, value, body } = analyzeJSFunction(fn);
-            if (value) {
+            if (valueTemplate) {
               tools.emit(`let ${ssaResult}; {`);
               tools.indent = saveIndent + "  ";
               for (let i = 0; i < params.length; ++i) {
@@ -3496,9 +3496,9 @@ function put(str, nobreak) {
                 tools.use(ssaVal);
                 tools.emit(`let ${params[i]} = ${ssaVal};`);
               }
-              if (body)
-                tools.emit(body); 
-              tools.emit(`${ssaResult} = (${value});`);
+              if (bodyTemplate)
+                tools.emit(bodyTemplate); 
+              tools.emit(`${ssaResult} = (${valueTemplate});`);
               tools.indent = saveIndent;
               tools.emit(`}`);
               return ssaFunction;
@@ -3533,7 +3533,7 @@ function put(str, nobreak) {
           if (evalCount < 0)
             evalCount = 0;
           closureForm[CAR] = SCLOSURE_ATOM;
-          let dummyScope = newScope(scope, "compiled-closure-scope");
+          let dummyScope = newScope(tools.scope, "compiled-binding-scope");
           closureForm[CDR] = cons(dummyScope, cons(evalCount, cons(closureParams, closureForms)));
         } else {
           closureForm[CAR] = CLOSURE_ATOM;
@@ -3643,6 +3643,13 @@ function put(str, nobreak) {
     tools.emit(`return ${ssaResult};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
+    let closureAtom = CLOSURE_ATOM;
+    if (evalCount !== MAX_INTEGER) {
+      closureAtom = SCLOSURE_ATOM;
+      body = cons(evalCount, body);
+    }
+    let dummyScope = newScope(tools.scope, "compiled-lambda-scope");
+    let closureForm = cons(closureAtom, cons(dummyScope, body));
     let _compiled = tools.use(tools.bind(COMPILED, "COMPILED"));
     tools.emit(`${ssaFunction}[${_compiled}] = ${tools.use(tools.bind(lambda, 'compiled'))};`);
     decorateCompiledClosure(ssaFunction, closureForm, requiredCount, evalCount, tools);
