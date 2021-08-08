@@ -131,8 +131,18 @@ export function run(opts = {}) {
   EXPECT(` (undefined? (void)) `, true);
   EXPECT(` (void 1 2 3) `, undefined);
   // Args are evaled, but undefined is returned; just like in JavaScript.
-  // This is one way to deliberately materialize an "undefined" value.
+  // This is one way to deliberately manifest an "undefined" value.
   EXPECT_ERROR(` (void 1 2 (xyz q)) `, SchemeEvalError);
+
+  EXPECT(` (to-lower-case "AbCd") `, expectString("abcd"));
+  EXPECT(` (to-lower-case "AbCd" ["en-US"]) `, expectString("abcd"));
+  EXPECT(` (to-lower-case "AbCd" "en-US") `, expectString("abcd"));
+  EXPECT(` (to-upper-case "AbCd") `, expectString("ABCD"));
+  EXPECT(` (to-upper-case "AbCd" ["en-US"]) `, expectString("ABCD"));
+  EXPECT(` (to-upper-case "AbCd" "en-US") `, expectString("ABCD"));
+  // TODO: Make parser accept unicode escapes \uxxxx and \u{xxxxxx},
+  // then test Turkish locale:
+  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/toLocaleLowerCase
 
   {
     let savedScope = beginTestScope();
