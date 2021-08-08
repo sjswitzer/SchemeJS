@@ -583,16 +583,20 @@ globalScope._help_ = {};  // For clients that want to implement help.
 
   defineGlobalSymbol("to-lower-case", to_lower_case);
   function to_lower_case(str, locale = undefined) {
-    if (typeof a !== 'string') throw new TypeError(`${string(a)} is not a string}`);
-    if (locale === undefined) return a.toLowerCase();
-    return a.toLocaleLowerCase(locale);
+    if (typeof str !== 'string') throw new TypeError(`${string(str)} is not a string}`);
+    let result;  // write this way so that it can be a compiler template
+    if (locale === undefined) result = str.toLowerCase();
+    else result = str.toLocaleLowerCase(locale);
+    return result;
   }
 
   defineGlobalSymbol("to-upper-case", to_upper_case);
   function to_upper_case(str, locale = undefined) {
-    if (typeof a !== 'string') throw new TypeError(`${string(a)} is not a string}`);
-    if (locale === undefined) return a.toUpperCase();
-    return a.toLocaleUpperCase(locale);
+    if (typeof str !== 'string') throw new TypeError(`${string(str)} is not a string}`);
+    let result;  // write this way so that it can be a compiler template
+    if (locale === undefined) result = str.toUpperCase();
+    else result = str.toLocaleUpperCase(locale);
+    return result;
   }
 
   //
