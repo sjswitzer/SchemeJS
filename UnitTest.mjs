@@ -42,7 +42,9 @@ export function run(opts = {}) {
   let evalString = str => testScope.eval_string(str);
   let evalTestString = evalString;
 
+  internalsSuite();
   testSuite();
+
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
   console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
   return { succeeded, failed };
@@ -492,11 +494,13 @@ export function run(opts = {}) {
       EXPECT(` (increment-by-3 4) `, 7);
       endTestScope(savedScope);
     }
+  }
 
+  function internalsSuite() {
     //
     // Internals tests
     //
-      
+    
     { // Used by the compiler to convert wild Scheme identifiers into valid JavaScript identifiers
       const toJavaScriptIdentifier = globalScope.toJavaScriptIdentifier;
       const testToJavaScriptIdentifier = name => () => toJavaScriptIdentifier(name);
@@ -509,7 +513,7 @@ export function run(opts = {}) {
       EXPECT(testToJavaScriptIdentifier("?"), expectString("$q"));
     }
 
-    { // Used to determine how to call (and display) JavaScript functions.
+    { // Used to determine how to call (and display) JavaScript functions
       const analyzeJSFunction = globalScope.analyzeJSFunction;
       const testAnalyze = (fn) => () => analyzeJSFunction(fn);
       const trimCompare = (a, b) => a.trim() === b.trim();
