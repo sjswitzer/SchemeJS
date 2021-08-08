@@ -37,12 +37,19 @@ export function run(opts = {}) {
   const isCons = globalScope.isCons ?? required();
   const isClosure = globalScope.isClosure ?? required();
   const SchemeEvalError = globalScope.SchemeEvalError ?? required();
+  const parseSExpr = globalScope.parseSExpr ?? required();
+  const list = globalScope.list ?? required();
   function required() { throw "required" }
 
   let evalString = str => testScope.eval_string(str);
-  let evalTestString = evalString;
 
+  // Test Interpreter
+  let evalTestString = evalString;
   internalsSuite();
+  testSuite();
+
+  // Test Compiler
+  evalTestString = compileThenEvalString;
   testSuite();
 
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
@@ -740,5 +747,12 @@ export function run(opts = {}) {
   // A string is typically evaluated, so this function lets you expect a string result.
   function expectString(expected) {
     return result => result === expected;
+  }
+
+  function compileThenEvalString(str) {
+    let expr = parseSExpr(str);
+    let lambda = list(Atom("lambda"), NIL, expr);
+    let compiled = compile_lambda.call(testScope, lambda);
+    return compiled.call(testScope);
   }
 }
