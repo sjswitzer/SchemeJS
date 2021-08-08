@@ -111,7 +111,10 @@ export function run(opts = {}) {
     EXPECT(` (Number "foo") `, NaN);
     EXPECT(` (BigInt "10") `, 10n);
     EXPECT(` (BigInt 10) `, 10n);
-    EXPECT_ERROR(` (BigInt "foo") `, SyntaxError);  // This is a weird JavaScript thing
+    EXPECT_ERROR(` (BigInt "foo") `, SyntaxError);  // This is a weird JavaScript thing; why not TypeError?
+
+    EXPECT(` (cos 3) `, Math.cos(3));   // Functions imported directly from JavaScript
+    EXPECT(` (atan2 3 4) `, Math.atan2(3, 4));
 
     EXPECT(` (apply + '(1 2)) `, 3);
 
@@ -165,10 +168,20 @@ export function run(opts = {}) {
     // then test Turkish locale:
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/toLocaleLowerCase
 
-    {
+    { // Unbound variables in functions
+      let savedScope = beginTestScope();
+      EXPECT(` (define (a x) (+ x y)) `, ` 'a `);
+      EXPECT_ERROR(` (a 3) `, SchemeEvalError);
+      EXPECT(` (define y 5) `, ` 'y `);
+      EXPECT(` (a 3) `, 8);
+      endTestScope(savedScope);
+    }
+
+    { // Object and array literals
       let savedScope = beginTestScope();
       EXPECT(` (define a 2) `, ` 'a `);
-      EXPECT(` { [a]: 3 } `, ` '{"2": 3} `)
+      EXPECT(` { [a]: 3, "b": 4, "c": a } `, ` '{ "2": 3, "b": 4, "c": 2 } `)
+      EXPECT(` [ a, 3 ] `, ` '[2, 3] `);
       endTestScope(savedScope);
     }
 
