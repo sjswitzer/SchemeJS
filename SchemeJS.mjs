@@ -1570,8 +1570,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
         // and not have to manufacture an iterator.
         for ( ; isCons(list); list = list[CDR]) {
           let item = list[CAR];
-          if (schemeTrue(fn(item))) {
-            item = fn.call(this, item);
+          if (schemeTrue(predicateFn(item))) {
             item = cons(item, NIL);
             if (last) last = last[CDR] = item;
             else result = last = item;
@@ -1580,7 +1579,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       } else {
         if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
-          if(schemeTrue(fn(item))) {
+          if(schemeTrue(predicateFn(item))) {
             item = cons(item, NIL);
             if (last) last = last[CDR] = item;
             else result = last = item;
@@ -2307,8 +2306,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return makeJsClosure(closureScope, params, lambda, body, schemeClosure);
   }
 
-  // (\\ evalCount (params) (body1) (body2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR+LAMBDA_CHAR, special_lambda, { evalArgs: 0, dontInline: true }, "\\\\", "special_lambda");
+  // (\# evalCount (params) (body1) (body2) ...)
+  defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { evalArgs: 0, dontInline: true }, "\\\\", "special_lambda");
   function special_lambda(evalCount, params, ...forms) {
     let body = NIL;
     for (let i = forms.length; i > 0; --i)
@@ -3053,8 +3052,8 @@ function put(str, nobreak) {
       if (_peek.length > 0)
         return ch = _peek.shift();
       if (_done) return ch = '';
-      let next = characterGenerator.next();
-      if (next.done) {
+      let { done, value } = characterGenerator.next();
+      if (done) {
         _done = true;
         return ch = '';
       }
@@ -3066,13 +3065,13 @@ function put(str, nobreak) {
         lineCount += 1;
         lineCharCount = 0;
       }
-      return ch = next.value;
+      return ch = value;
     }
 
     function peekc(n = 0) {
       for (let get = n - _peek.length + 1; get > 0; --get) {
-        let next = characterGenerator.next();
-        if (next.done) {
+        let { done, value } = characterGenerator.next();
+        if (done) {
           _done = true;
           return '';
         }
@@ -3082,7 +3081,7 @@ function put(str, nobreak) {
           lineCount += 1;
           lineCharCount = 0;
         }
-        _peek.push(next.value);
+        _peek.push(value);
       }
       return _peek[n];
     }

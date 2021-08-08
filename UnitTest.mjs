@@ -451,6 +451,7 @@ export function run(opts = {}) {
     EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
     EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
     EXPECT(` (array-map (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
+    EXPECT(` (filter (< 3) '(4 2 6 5 1 7)) `, ` '(4 6 5 7) `);
 
     // TODO: let needs a lot more testing
     EXPECT(` (let ((x 10)
@@ -490,7 +491,24 @@ export function run(opts = {}) {
       EXPECT(` ((opt 1) 8) `, ` '(1 8 5) `);
       endTestScope(savedScope);
     }
-                  
+
+    { // special lambdas
+      let savedScope = beginTestScope();
+      EXPECT(` (define a 1) `, ` 'a `);
+      EXPECT(` (define b 2) `, ` 'b `);
+      EXPECT(` (define c 3) `, ` 'c `);
+      EXPECT(` (define d 4) `, ` 'd `);
+      EXPECT(` (define e 5) `, ` 'e `);
+      // \\ Because of string literal syntax. It's really \#
+      EXPECT(` (define x (\\# 2 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'x `)
+      EXPECT(` (x a b c d e) `, ` '(1 2 c d e) `);
+      EXPECT(` (define y (\\# 1 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'y `)
+      EXPECT(` (y a b c d e) `, ` '(1 b c d e) `);
+      EXPECT(` (define z (\\# 0 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'z `)
+      EXPECT(` (z a b c d e) `, ` '(a b c d e) `);
+      endTestScope(savedScope);
+    }
+
     { // Partial application returning closures
       let savedScope = beginTestScope();
       EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
