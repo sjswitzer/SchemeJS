@@ -276,7 +276,7 @@ export function createInstance(schemeOpts = {}) {
 // Why are these initialized here, you ask?
 // Because they're indirectly refernced by defineGlobalSymbol is why.
 const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_BODY_TEMPLATE = Symbol("COMPILE-BODY"),
-    COMPILE_VALUE_TEMPLATE = Symbol("COMPILE-VALUE"), COMPILE_PARAMS = Symbol("COMPILE_PARAMS");
+    COMPILE_VALUE_TEMPLATE = Symbol("COMPILE-VALUE"), COMPILE_PARAMS = Symbol("COMPILE-PARAMS");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
 const analyzedFunctions = new Map();
 globalScope._help_ = {};  // For clients that want to implement help.
@@ -385,7 +385,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
       return;
     }
-    fn[COMPILE_PARAMS] = fn.params;
+    fn[COMPILE_PARAMS] = fnInfo.params;
     fn[COMPILE_VALUE_TEMPLATE] = fnInfo.value;
     if (fnInfo.body)
       fn[COMPILE_BODY_TEMPLATE] = fnInfo.body;
@@ -3498,9 +3498,11 @@ function put(str, nobreak) {
     use(bind(string, "string"));
     use(bind(NIL, "NIL"));
     use(bind(schemeTrue, "schemeTrue"));
-    use(bind(cons, "cons"));
-    use(bind(car, "car"));
-    use(bind(cdr, "cdr"));
+    use(bind(Cons, "Cons"));
+    use(bind(CAR, "CAR"));
+    use(bind(CDR, "CDR"));
+    use(bind(CAR, "car"));
+    use(bind(CDR, "cdr"));
     let ssaFunction = compileLambda(name, lambdaForm, compileScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
@@ -3672,7 +3674,7 @@ function put(str, nobreak) {
               tools.emit(`${ssaResult} = (${valueTemplate});`);
               tools.indent = saveIndent;
               tools.emit(`}`);
-              return ssaFunction;
+              return ssaResult;
             }
           }
           let ssaResult = tools.newTemp(fName);
