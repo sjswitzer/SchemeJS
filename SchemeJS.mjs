@@ -2111,7 +2111,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
   // here you almost certainly need to make a corresponding one there.
   //
 
-  exportAPI("eval", _eval);
+  exportAPI("eval", _eval, { dontInline: true });
   function _eval(form, scope = this) {
     // Can't be called "eval" because "eval", besides being a global definition,
     // is effectively a keyword in JavaScript.
@@ -2278,7 +2278,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return (evalCount << 16) | requiredCount;
   }
 
-  defineGlobalSymbol("apply", apply);
+  defineGlobalSymbol("apply", apply, { dontInline: true });
   function apply(fn, args, scope = this) {
     let argv = [];
     for ( ;isCons(args); args = args[CDR])
@@ -3642,109 +3642,106 @@ function put(str, nobreak) {
         argv.push(arg);
       }
       let argStr = '';
-      for (let arg of argv) {
+      for (let arg of argv)
         argStr += `, ${arg}`;
-        // Cases where we simply invoke the function:
-        //  - we have at least required number of arguments
-        //  - we have no arguments
-        // Otherwise, return a closure.
-        if (argCount >= requiredCount || argCount === 0) {
-          if (functionDescriptor) {
-            let compileHook = functionDescriptor.compileHook;
-            let valueTemplate = functionDescriptor.valueTemplate;
-            let bodyTemplate = functionDescriptor.bodyTemplate;
-            let params = functionDescriptor.params;
-            if (compileHook) {
-              let ssaResult = compileHook(argv, compileScope, tools);
-              tools.use(ssaResult);
-              return ssaResult;
-            }
-            if (valueTemplate) {
-              let ssaResult = tools.newTemp(fName);
-              tools.emit(`let ${ssaResult}; {`);
-              let saveIndent = tools.indent;
-              tools.indent = saveIndent + "  ";
-              for (let i = 0; i < params.length; ++i) {
-                let ssaVal = i < argv.length ? argv[i] : 'undefined';
-                tools.use(ssaVal);
-                tools.emit(`let ${params[i]} = ${ssaVal};`);
-              }
-              if (bodyTemplate)
-                tools.emit(bodyTemplate); 
-              tools.emit(`${ssaResult} = (${valueTemplate});`);
-              tools.indent = saveIndent;
-              tools.emit(`}`);
-              return ssaResult;
-            }
-          }
-          let ssaResult = tools.newTemp(fName);
-          if (TRACE_COMPILER)
-            console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...argv);
-          tools.use(ssaFunction);
-          tools.emit(`let ${ssaResult} = ${ssaFunction}.call(this${argStr});`)
+      // Cases where we simply invoke the function:
+      //  - we have at least required number of arguments
+      //  - we have no arguments
+      // Otherwise, return a closure.
+      if (argCount >= requiredCount || argCount === 0) {
+        let compileHook = functionDescriptor.compileHook;
+        let valueTemplate = functionDescriptor.valueTemplate;
+        let bodyTemplate = functionDescriptor.bodyTemplate;
+        let params = functionDescriptor.params;
+        if (compileHook) {
+          let ssaResult = compileHook(argv, compileScope, tools);
+          tools.use(ssaResult);
           return ssaResult;
         }
-        // Generate closure (see "_eval", I ain't gonna 'splain it agin)
-        let closureBody = fn[CDR];
-        let closureParams = NIL, closureForms = NIL, closureScope = scope;
-        if (closureBody) {
-          closureScope = closureBody[CAR];
-          if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
-            closureBody = closureBody[CDR];
-          closureParams = closureBody[CAR];
-          closureForms = closureBody[CDR];
+        if (valueTemplate) {
+          let ssaResult = tools.newTemp(fName);
+          tools.emit(`let ${ssaResult}; {`);
+          let saveIndent = tools.indent;
+          tools.indent = saveIndent + "  ";
+          for (let i = 0; i < params.length; ++i) {
+            let ssaVal = i < argv.length ? argv[i] : 'undefined';
+            tools.use(ssaVal);
+            tools.emit(`let ${params[i]} = ${ssaVal};`);
+          }
+          if (bodyTemplate)
+            tools.emit(bodyTemplate); 
+          tools.emit(`${ssaResult} = (${valueTemplate});`);
+          tools.indent = saveIndent;
+          tools.emit(`}`);
+          return ssaResult;
         }
-        let boundScope;
-        if (closureScope === 'this')
-          boundScope = 'this'
-        else
-          boundScope = tools.use(tools.bind(closureScope, `${fName}_scope`));
+        let ssaResult = tools.newTemp(fName);
+        if (TRACE_COMPILER)
+          console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...argv);
         tools.use(ssaFunction);
-        tools.emit(`${ssaResult} = (...args) => ${ssaFunction}.apply(${boundScope}, ${argStr}, ...args);`);
-        let closureForm = cons();
-        if (evalCount !== MAX_INTEGER) {
-          evalCount -= argCount;
-          if (evalCount < 0)
-            evalCount = 0;
-          closureForm[CAR] = SCLOSURE_ATOM;
-          let dummyScope = newScope(tools.scope, "compiled-binding-scope");
-          closureForm[CDR] = cons(dummyScope, cons(evalCount, cons(closureParams, closureForms)));
-        } else {
-          closureForm[CAR] = CLOSURE_ATOM;
-          closureForm[CDR] = cons(closureScope, cons(closureParams, closureForms));
-        }
-        requiredCount -= argCount;
-        if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
-        decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
+        tools.emit(`let ${ssaResult} = ${ssaFunction}.call(this${argStr});`)
         return ssaResult;
       }
-      // Special eval for JS arrays and objects
-      if (form !== null && typeof form === 'object') {
-        if (form instanceof Array) {
-          let ssaValue = tools.newTemp("arrayliteral");
-          let evalledSsaValues = [];
-          for (let element of form)
-            evalledSsaValues.push(compileEval(element, compileScope, tools));
-          tools.emit(`let ${ssaValue} = [`);
-          for (let ssaElement of evalledSsaValues)
-            tools.emit(`  ${ssaElement},`);
-          tools.emit(`];`);
-          return ssaValue;
-        }
-        let ssaValue = tools.newTemp("objectliteral");
-        tools.emit(`let ${ssaValue} = {};`);
-        for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
-          let value = form[key];
-          if (value instanceof EvaluateKeyValue) {
-            key = value.key;
-            value = value.value;
-            key = compileEval(key, compileScope, tools);
-          }
-          value = compileEval(value, compileScope, tools);
-          tools.emit(`${ssaValue}[${key}] = ${value};`);
-        }
+      // Generate closure (see "_eval", I ain't gonna 'splain it agin)
+      let closureBody = fn[CDR];
+      let closureParams = NIL, closureForms = NIL, closureScope = scope;
+      if (closureBody) {
+        closureScope = closureBody[CAR];
+        if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
+          closureBody = closureBody[CDR];
+        closureParams = closureBody[CAR];
+        closureForms = closureBody[CDR];
+      }
+      let ssaBoundScope;
+      if (closureScope === 'this')
+        ssaBoundScope = 'this';
+      else
+        ssaBoundScope = tools.use(tools.bind(closureScope, `${fName}_scope`));
+      tools.use(ssaFunction);
+      tools.emit(`${ssaResult} = (...args) => ${ssaFunction}.apply(${ssaBoundScope}, ${argStr}, ...args);`);
+      let closureForm = cons();
+      if (evalCount !== MAX_INTEGER) {
+        evalCount -= argCount;
+        if (evalCount < 0)
+          evalCount = 0;
+        closureForm[CAR] = SCLOSURE_ATOM;
+        let closureScope = newScope(tools.scope, "compiled-closure-scope");
+        closureForm[CDR] = cons(closureScope, cons(evalCount, cons(closureParams, closureForms)));
+      } else {
+        closureForm[CAR] = CLOSURE_ATOM;
+        closureForm[CDR] = cons(closureScope, cons(closureParams, closureForms));
+      }
+      requiredCount -= argCount;
+      if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
+      decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
+      return ssaResult;
+    }
+    // Special eval for JS arrays and objects
+    if (form !== null && typeof form === 'object') {
+      if (form instanceof Array) {
+        let ssaValue = tools.newTemp("arrayliteral");
+        let evalledSsaValues = [];
+        for (let element of form)
+          evalledSsaValues.push(compileEval(element, compileScope, tools));
+        tools.emit(`let ${ssaValue} = [`);
+        for (let ssaElement of evalledSsaValues)
+          tools.emit(`  ${ssaElement},`);
+        tools.emit(`];`);
         return ssaValue;
       }
+      let ssaValue = tools.newTemp("objectliteral");
+      tools.emit(`let ${ssaValue} = {};`);
+      for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
+        let value = form[key];
+        if (value instanceof EvaluateKeyValue) {
+          key = value.key;
+          value = value.value;
+          key = compileEval(key, compileScope, tools);
+        }
+        value = compileEval(value, compileScope, tools);
+        tools.emit(`${ssaValue}[${key}] = ${value};`);
+      }
+      return ssaValue;
     }
     throw new LogicError(`Shouldn't happen. All cases should be handled above`);
 
@@ -3840,8 +3837,8 @@ function put(str, nobreak) {
       closureAtom = SCLOSURE_ATOM;
       body = cons(evalCount, body);
     }
-    let dummyScope = newScope(tools.scope, "compiled-lambda-scope");
-    let closureForm = cons(closureAtom, cons(dummyScope, body));
+    let lambdaScope = newScope(tools.scope, "compiled-lambda-scope");
+    let closureForm = cons(closureAtom, cons(lambdaScope, body));
     let _compiled = tools.use(tools.bind(COMPILED, "COMPILED"));
     tools.emit(`${ssaFunction}[${_compiled}] = ${tools.use(tools.bind(lambda, 'compiled'))};`);
     decorateCompiledClosure(ssaFunction, closureForm, requiredCount, evalCount, tools);
