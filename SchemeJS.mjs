@@ -168,7 +168,7 @@ export function createInstance(schemeOpts = {}) {
   const SLAMBDA_ATOM = Atom("special-lambda");
   ATOMS["\\\\"] = SLAMBDA_ATOM;
   const CLOSURE_ATOM = Atom("%%closure");
-  const SCLOSURE_ATOM = Atom("%%%closure");
+  const SCLOSURE_ATOM = Atom("%%#closure");
   const QUESTION_ATOM = Atom("?");
 
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
@@ -2210,23 +2210,24 @@ globalScope._help_ = {};  // For clients that want to implement help.
         }
       }
       let scope = newScope(closureScope, "lambda-scope"), params = lambdaParams, i = 0, argLength = args.length;
-      for ( ; i < argLength && isCons(params); ++i, params = params[CDR]) {
-        let param = params[CAR], optionalForms;
+      for ( ; isCons(params); ++i, params = params[CDR]) {
+        let param = params[CAR], optionalForms, arg;
         if (isCons(param) && param[CAR] === QUESTION_ATOM) {
           let paramCdr = param[CDR];
           param = paramCdr[CAR];
           optionalForms = paramCdr[CDR];
         }
-        let arg = args[i];
-        if (arg == undefined) {
+        if (i < argLength) {
+          arg = args[i];
+        } else {
           arg = NIL;
+          if (optionalForms) {
           for ( ; isCons(optionalForms); optionalForms = optionalForms[CDR])
-            arg = eval(optionalForms[CAR], scope);
+            arg = _eval(optionalForms[CAR], scope);
+          }
         }
         scope[param] = arg;
       }
-      for ( ; isCons(params); params = params[CDR])  // fill with NIL
-        scope[params[CAR]] = NIL;
       if (typeof param === 'symbol')  // rest param
         scope[param] = args[i] !== undefined ? args[i] : NIL;
       let result = NIL;
@@ -3605,19 +3606,19 @@ function put(str, nobreak) {
     compileScope = newScope(compileScope, "compile-lambda-scope");
     if (typeof params === 'symbol') // Curry notation
       params = cons(params, NIL);
-    let paramCount = 0, requiredCount, optionalForms = [];
+    let paramCount = 0, requiredCount, optionalFormsVec = [];
     for (; isCons(params); ++paramCount, params = params[CDR]) {
       let param = params[CAR], ssaParam;
       if (isCons(param)) {
         if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
           throwBadCompiledLambda(lambda, `what's this?  ${string(param)}`);
         ssaParam = tools.newTemp(param[CDR][CAR]);
-        optionalForms.push(param[CDR][CDR]);
+        optionalFormsVec.push(param[CDR][CDR]);
         if (requiredCount === undefined)
           requiredCount = paramCount;
       } else {
         ssaParam = tools.newTemp(param);
-        optionalForms.push(undefined);
+        optionalFormsVec.push(undefined);
       }
       paramv.push(ssaParam);
       compileScope[param] = ssaParam;
@@ -3640,6 +3641,21 @@ function put(str, nobreak) {
       delim = ', ';
     }
     tools.emit(`function ${ssaFunction}(${paramStr}) {`);
+    for (let i = 0, optionalFormsVecLength = optionalFormsVec.length; i < optionalFormsVecLength; ++i) {
+      let optionalForms = optionalFormsVec[i];
+      if (optionalForms !== undefined) {
+        let param = paramv[i];
+        tools.emit(`if (${param} === undefined) {`);
+        let saveIndent = tools.indent;
+        tools.indent += '  ';
+        let ssaRes = 'NIL';
+        for (let form of optionalForms)
+          ssaRes = compileEval(form, compileScope, tools);
+        tools.emit(`${param} = ${ssaRes};`);
+        tools.indent = saveIndent;
+        tools.emit('}');
+      }
+    }
     tools.indent = saveIndent + "  ";
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])

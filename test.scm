@@ -5,6 +5,8 @@
      (? (bigint? x) 1n 1)
      (* x (factoral (- x (? (bigint? x) 1n 1))))
   ))
+factoral
+
 (factoral 100)
 (factoral 100n)
 (factoral 171)
@@ -15,6 +17,7 @@
      (bigint? x 1n 1)
      (* x (_factoral (- x (bigint? x 1n 1))))
   ))
+
 (_factoral 50)
 (_factoral 50n)
 
@@ -23,19 +26,21 @@
      (? (bigint? x) 1n 1)
      (* x (factoral (- x (? (bigint? x) 1n 1))))
   ))
+factoral
 
 (factoral 50)
 (factoral 50n)
 
-(compile (factoral' x)
+(compile (_factoral x)
   (? (<= x 1) 
      (bigint? x 1n 1)
      (* x (factoral (- x (bigint? x 1n 1))))
   ))
-(factoral' 50)
-(factoral' 50n)
+(_factoral 50)
+(_factoral 50n)
 
 (define (opt a b (? c (+ 2 3))) (list a b c))
+opt
 (opt 4 5 6)
 (opt 4 5)
 (opt 4)
@@ -51,9 +56,10 @@
 
 ;; (define (increment-by n) (\(x) (+ x n)))
 (define (increment-by n) (\x . (+ x n)))  ;; Curry form is allowed; both styles in
+increment-by
 (define increment-by-3 (increment-by 3))
-(increment-by-3 4)
 increment-by-3
+(increment-by-3 4)
 
 '(1 2 3  345  32 345 3245 235 325 325 325 345 3245 32 53245 325 325 325 325 325 325 35 35 353
     () (a b .c ) (a.b)(a b . (c)) (a.2)
