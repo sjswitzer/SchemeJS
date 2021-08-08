@@ -275,8 +275,7 @@ export function createInstance(schemeOpts = {}) {
 
 // Why are these initialized here, you ask?
 // Because they're indirectly refernced by defineGlobalSymbol is why.
-const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_BODY_TEMPLATE = Symbol("COMPILE-BODY"),
-    COMPILE_VALUE_TEMPLATE = Symbol("COMPILE-VALUE"), COMPILE_PARAMS = Symbol("COMPILE-PARAMS");
+const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_INFO = Symbol("COMPILE-INFO");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
 const analyzedFunctions = new Map();
 globalScope._help_ = {};  // For clients that want to implement help.
@@ -385,10 +384,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
       return;
     }
-    fn[COMPILE_PARAMS] = fnInfo.params;
-    fn[COMPILE_VALUE_TEMPLATE] = fnInfo.value;
-    if (fnInfo.body)
-      fn[COMPILE_BODY_TEMPLATE] = fnInfo.body;
+    fn[COMPILE_INFO] = fnInfo;
   }
 
   exportAPI("PAIR_SYMBOL", PAIR);
@@ -3599,11 +3595,16 @@ function put(str, nobreak) {
         let requiredCount = parameterDescriptor & 0xffff;
         let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
         let compileHook = fn[COMPILE_HOOK];
-        let params = fn[COMPILE_PARAMS];
-        let valueTemplate = fn[COMPILE_VALUE_TEMPLATE];
-        let bodyTemplate = fn[COMPILE_BODY_TEMPLATE];
+        let fnInfo = fn[COMPILE_INFO];
+        let params, restParam, valueTemplate, bodyTemplate;
+        if (fnInfo) {
+          params = fnInfo.params;
+          restParam = fnInfo.restParam;
+          valueTemplate = fnInfo.value;
+          bodyTemplate = fnInfo.body;
+        }
         // Everything you need to know about invoking a JS function is right here
-        tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, params, valueTemplate, bodyTemplate };
+        tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, params, restParam, valueTemplate, bodyTemplate };
         return ssaValue;
       }
       return `resolveUnbound(${tools.use(tools.bind(sym))})`;
@@ -3653,6 +3654,7 @@ function put(str, nobreak) {
         let valueTemplate = functionDescriptor.valueTemplate;
         let bodyTemplate = functionDescriptor.bodyTemplate;
         let params = functionDescriptor.params;
+        let restParam = functionDescriptor.restParam;
         if (compileHook) {
           let ssaResult = compileHook(argv, compileScope, tools);
           tools.use(ssaResult);
@@ -3667,6 +3669,12 @@ function put(str, nobreak) {
             let ssaVal = i < argv.length ? argv[i] : 'undefined';
             tools.use(ssaVal);
             tools.emit(`let ${params[i]} = ${ssaVal};`);
+          }
+          if (restParam) {
+            let str = '';
+            for (let i = params.length, argvLength = argv.length; i < argvLength; ++i)
+              str += `${argv[i]}, `;
+            tools.emit(`let ${restParam} = [${str}];`);
           }
           if (bodyTemplate)
             tools.emit(bodyTemplate); 
