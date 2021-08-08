@@ -28,7 +28,8 @@ export function createInstance(schemeOpts = {}) {
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   const jitThreshold = schemeOpts.jitThreshold ?? undefined;
   const TRACE_INTERPRETER = !!(schemeOpts.traceInterpreter ?? false);
-  const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? true);
+  const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? false);
+  const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? true);
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   const reportSystemError = schemeOpts.reportError ?? _reportError;
@@ -200,7 +201,7 @@ export function createInstance(schemeOpts = {}) {
     NUM2[ch] = ch.codePointAt(0);
   for (let ch of ` \t${VTAB}${FORMFEED}${NBSP}`) WS[ch] = ch.codePointAt(0);
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
-  for (let ch of `()[]{}'.:`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
+  for (let ch of `()[]{}'.:,`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
   for (let ch of `\`"`) QUOTES[ch] = ch.codePointAt(0);
   globalScope.WS = WS;
   globalScope.NL = NL;
@@ -3455,9 +3456,9 @@ function put(str, nobreak) {
   function compile_lambda(name, lambdaForm) {
     let scope = this;
     let { code, bindSymToObj } = lambda_compiler.call(this, name, lambdaForm);
-    if (TRACE_COMPILER)
+    if (TRACE_COMPILER || TRACE_COMPILER_CODE)
       console.log("COMPILED", name, code, bindSymToObj);
-    let binder = new Function("bound", "resolveUnbound", "invokeUnbould", code);
+    let binder = new Function("bound", "resolveUnbound", "invokeUnbound", code);
     let compiledFunction = binder.call(this, bindSymToObj, resolveUnbound, invokeUnbound);
     return compiledFunction;
     function resolveUnbound(x) {
@@ -3466,7 +3467,6 @@ function put(str, nobreak) {
       return val;
     }
     function invokeUnbound(fn, args) {
-      fn = resolveUnbound(x);
       let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
       let requiredCount = parameterDescriptor & 0xffff;
       let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
@@ -3503,6 +3503,7 @@ function put(str, nobreak) {
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
     emitted = [];
+    emit(`// params: bound, resolveUnbound, invokeUnbound`);
     emit('"use strict";')
     for (let bindingName of Object.keys(bindSymToObj))
       if (usedSsaValues[bindingName])
@@ -3625,9 +3626,11 @@ function put(str, nobreak) {
       let args = form[CDR];
       let functionDescriptor = tools.functionDescriptors[ssaFunction];
       if (!functionDescriptor) {
-        let ssaResult = tools.newTemp(tools.use(ssaFunction));
-        let ssaArgList = tools.use(tools.bind(args, `${ssaFunction}_args)`));
-        tools.emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList};`);
+        tools.use(ssaFunction);
+        let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
+        let ssaResult = tools.newTemp(fName);
+        let ssaArgList = tools.use(tools.bind(args, `${fName}_args`));
+        tools.emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
         return ssaResult;
       }
       let requiredCount = functionDescriptor.requiredCount;
