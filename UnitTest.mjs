@@ -457,6 +457,12 @@ export function run(opts = {}) {
                     (y 20)))
                 (+ x y)) `, 30);
 
+    EXPECT(` (*catch "foo" (+ 2 (* 5 (*throw "foo" "ha!")))) `, expectString("ha!"));
+    EXPECT(` (catch (e (+ "thrown: " e))
+               (+ 1 2)
+               (+ 3 (throw "ha ha!"))
+               ) `, expectString("thrown: ha ha!"));
+
     EXPECT_ERROR(` (sort) `, TypeError);
     EXPECT(` (sort '(6 4 5 7 6 8 3)) `, ` '(3 4 5 6 6 7 8) `);
     EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
@@ -500,7 +506,7 @@ export function run(opts = {}) {
     //
     // Internals tests
     //
-    
+
     { // Used by the compiler to convert wild Scheme identifiers into valid JavaScript identifiers
       const toJavaScriptIdentifier = globalScope.toJavaScriptIdentifier;
       const testToJavaScriptIdentifier = name => () => toJavaScriptIdentifier(name);

@@ -137,9 +137,7 @@ there's nothing to emulate (save "set/setq").
 I didn't set out to a surprisingly fast Scheme implementation, but halfway into implementing
 it I realized it inevitably would be, thanks to the JavaScript runtime and its JITs.
 If I could finish it, that is. (And to be fair, the parser could be a _lot_ faster).
-There's still a lot of tuning to do. Creating argument vectors using "push" is almost
-certainly suboptimal but you don't know the length until you traverse the argument list
-and I need to compare the cose ot double-traversal to using "push."
+The interpreter could use some measuring and tuning still.
 
 Probably the best way to think about it is that JavaScript was secretly Scheme all along,
 just as Brendan Eich originally intended. Recent improvements in ES6 and beyond have exposed more of the underlying Lispyness and this project wouldn't have been attempted without them.
@@ -153,7 +151,7 @@ interpretrer and compiler.
 
 Make let, let* and letrec distinct, I think. They're all implemented as letrec currently.
 No good reason to do it except that it could cause some existing SIOD code to break if I don't.
-Three different "let" primitives was a mistake from the outset, IMO; all you need is "letrec."
+Three different "let" primitives was a mistake from the outset, IMO; all you really need is "letrec."
 
 It would be nice to support writing async and generator functions naturally but I haven't
 given it much thought beyond the observation that a non-recursive interpreter would make "yield" pretty straightforward. Compiling it would require a different approach, I suspect.

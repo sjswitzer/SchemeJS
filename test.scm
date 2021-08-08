@@ -87,7 +87,7 @@ increment-by-3
 (*catch "foo" (+ 2 (* 5 (*throw "foo" "ha!"))))
 
 ;; JavaScript style
-(catch (e "string" (+ "thrown: " e))
+(catch (e (+ "thrown: " e))
   (+ 1 2)
   (+ 3 (throw "ha ha!"))
 )

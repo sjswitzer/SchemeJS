@@ -1198,14 +1198,14 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return res;
   }
   function begin_hook(args, compileScope, tools) {
-    let result = 'NIL';
+    let ssaResult = 'NIL';
     for (let i = 0; i < args.length; ++i)
-      result = compileEval(args[i], compileScope, tools);
-    return result;
+      ssaResult = compileEval(args[i], compileScope, tools);
+    return ssaResult;
   }
 
   // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", prog1, { evalArgs: 0 });
+  defineGlobalSymbol("prog1", prog1, { evalArgs: 0, compileHook: prog1_hook });
   function prog1(...forms) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -1216,24 +1216,24 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return res;
   }
   function prog1_hook(args, compileScope, tools) {
-    let result = 'NIL';
+    let ssaResult = 'NIL';
     for (let i = 0; i< args.length; ++i) {
       let res = compileEval(args[i], compileScope, tools);
       if (i === 0)
-        result = res;
+        ssaResult = res;
     }
-    return result;
+    return ssaResult;
   }
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  defineGlobalSymbol("cond", cond, { evalArgs: 0 });
+  defineGlobalSymbol("cond", cond, { evalArgs: 0, compileHook: cond_hook });
   function cond(...clauses) {
     for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
       let clause = clauses[i];
       if (!isCons(clause))
         throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
-      let pe = clause[CAR], forms = clause[CDR];
-      let evaled = _eval(pe, this);
+      let predicateForm = clause[CAR], forms = clause[CDR];
+      let evaled = _eval(predicateForm, this);
       if (schemeTrue(evaled)) {
         let res = NIL;
         for ( ; isCons(forms); forms = forms[CDR])
@@ -1242,6 +1242,32 @@ globalScope._help_ = {};  // For clients that want to implement help.
       }
     }
     return NIL;
+  }
+  function cond_hook(clauses, compileScope, tools) {
+    let ssaResult = tools.newTemp('cond');
+    tools.emit(`let ${ssaResult} = NIL; ${ssaResult}: {`);
+    let saveIndent = tools.indent;
+    tools.indent = tools.indent + '  ';
+    for (clause of clauses) {
+      if (!isCons(clause))
+        throw new SchemeCompileError(`Bad cond clause${string(clause)}`);
+      let predicateForm = clause[CAR], forms = clause[CDR];
+      let ssaPredicateValue = compileEval(predicateForm, compileScope, tools);
+      tools.emit(`if (schemeTrue(${ssaPredicateValue})) {`)
+      let saveIndent = tools.indent;
+      tools.indent = tools.indent + '  ';
+      let ssaValue = 'NIL';
+      for (form of forms) {
+        ssaValue = compileEval(form, compileScope, tools);
+      }
+      tools.emit(`${ssaResult} = ${ssaValue};`);  // Another PHI node
+      tools.emit(`break ${ssaResult};`)
+      tools.indent = saveIndent;
+      tools.emit(`}`);
+    }
+    tools.indent = saveIndent;
+    tools.emit(`}`);
+    return ssaResult;
   }
 
   defineGlobalSymbol("require", require_, { dontInline: true });
@@ -1533,7 +1559,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return res;
   }
 
-  // (mapcar fn list1 list2 ...)
+  // (filter fn list1 list2 ...)
   defineGlobalSymbol("filter", filter, { dontInline: true });
   function filter(predicateFn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
@@ -1569,19 +1595,19 @@ globalScope._help_ = {};  // For clients that want to implement help.
   //     (let ((x 10)
   //           (y 20))
   //       (+ x y))
-  // Because of this implementation uses a scope chain instead
-  // of an environment, each kind of let is as piwerful as "letrec".
+  // Because this implementation uses a scope chain instead
+  // of an environment, each kind of let is as powerful as "letrec".
   //
-  // TODO: Reconsider that; it's easy to implenement let and let*;
+  // TODO: Reconsider that; it's easy to implement let and let*;
   // it's just that I think they're bad ideas, historically baked-in.
   // But it's possible there's existing SIOD code that depends on the
   // behavior of let and let*, for instance,
   //    (let ((x (something-that-uses-outer-scope-x) ...
   //
   // "letrec" can be partially-applied, returning a function that
-  // evaluates its argiments in the let scope!
+  // evaluates its arguments in the let scope!
   //
-  defineGlobalSymbol("letrec", letrec, { evalArgs: 0 }, "let", "let*");
+  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook }, "let", "let*");
   function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
     for ( ; isCons(bindings); bindings = bindings[CDR]) {
@@ -1601,13 +1627,63 @@ globalScope._help_ = {};  // For clients that want to implement help.
       res = _eval(forms[i], scope);
     return res;
   }
+  function letrec_hook(body, compileScope, tools) {
+    let ssaResult = tools.newTemp('letrec');
+    if (!isCons(body))
+      throw new SchemeCompileError(`Bad letrec ${string(body)}`);
+    let bindings = body[CAR], forms = body[CDR];
+    compileScope = newScope(compileScope, 'compile-letrec');
+    tools.emit(`let ${ssaResult} = NIL; {`);
+    let saveIndent = tools.indent;
+    for (binding of bindings) {
+      if (!isCons(binding))
+        throw new SchemeCompileError(`Bad letrec binding ${string(binding)}`);
+      let bound = binding[CAR], boundValueForms = binding[CDR];
+      let ssaBound = tools.newTemp(bound);
+      compileScope[bound] = ssaBound;
+      tools.emit(`let ${ssaBound} = NIL`);
+      for (let boundValForm of boundValueForms) {
+        let ssaVal = compileEval(boundValForm, compileScope, tools);
+        emit(`${ssaBound} = ${ssaVal};`);
+      }
+    }
+    for (form of forms) {
+      let ssaVal = compileEval(form, compileScope, tools);
+      tools.emit(`${ssaResult} = ${ssaVal};`);
+    }
+    tools.indent = saveIndent;
+    tools.emit(`}`);
+    return ssaResult;
+  }
 
   // Something like this would be nice, but it's not quite right
   //  let setSymWithWith = new Function("symbol", "value", "scope",
   //    "with (scope) { return symbol = value }");
 
-  defineGlobalSymbol("set'", setq, { evalArgs: 0 }, "setq");
-  function setq(symbol, value) { let result = setSym(symbol, _eval(value, this), this); return result; }
+  defineGlobalSymbol("set'", setq, { evalArgs: 0, compileHook: setq_hook }, "setq");
+  function setq(symbol, valueForm, ...values) {
+    let value = _eval(valueForm, this);
+    for (let valueForm of values)
+      value = _eval(valueForm, this);
+    let result = setSym(symbol, value, this);
+    return result;
+  }
+  function setq_hook(body, compileScope, tools) {
+    if (!isCons(body))
+      throw new SchemeCompileError(`Bad setq params ${body}`);
+    let varSym = body[CAR], valForms = body[CDR];
+    let ssaValue = 'NIL';
+    for (let form of valForms)
+      ssaValue = compileEval(form, compileScope, tools);
+    let boundVar = compileScope[varSym];
+    if (boundVar) {
+      tools.emit(`${boundVar} = ${ssaValue};`);
+    } else {
+      let ssaSetSym = tools.use(tools.bind(setSym));
+      tools.emit(`${ssaSetSym}.call(this, ${ssaValue});`);
+    }
+    return ssaValue;
+  }
 
   defineGlobalSymbol("set", set);
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
@@ -1888,7 +1964,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
   function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style
-  defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1 });
+  defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1, compileHook: siod_catch_hook });
   function schemeCatch(tag, ...forms) {  // XXX order of args?
     let val = NIL;
     try {
@@ -1901,24 +1977,43 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return val;
   }
+  function siod_catch_hook(body, compileScope, tools) {
+    if (!isCons(body))
+      throw new SchemeCompileError(`Bad catch argument ${string(body)}`);
+    let ssaTag = body[CAR], forms = body[CDR];
+    let ssaResult = tools.newTemp('siod_catch');
+    tools.emit(`let ${ssaResult} = NIL;`);
+    tools.emit(`try {`);
+    let saveIndent = tools.indent;
+    tools.indent = tools.indent + '  ';
+    let ssaValue = 'NIL';
+    for (let form of forms)
+      ssaValue = compileEval(form, compileScope, tools);
+    tools.emit(`${ssaResult} = ${ssaValue};`);
+    tools.indent = saveIndent;
+    emit(`} catch (e) {`);
+    tools.indent = tools.indent + '  ';
+    let ssaSchemeJSThrow = tools.use(tools.bind(SchemeJSThrow));
+    tools.emit(`if (!(e instanceof ${ssaSchemeJSThrow})) throw e;`)
+    tools.emit(`if (e.tag !== ${ssaTag}) throw e;`);
+    tools.emit(`${ssaResult} = e.value`);
+    tools.indent = saveIndent;
+    emit(`}`);
+    return ssaResult;
+  }
 
-  // (throw value) -- Java/JavaScript style
+  // (throw value) -- JavaScript style
   defineGlobalSymbol("throw", js_throw);
   function js_throw(value) { throw value; return undefined; } // "return" lets compiler use template
 
-  // (catch (var [type] forms) forms) -- Java/JavaScript style
-  defineGlobalSymbol("catch", js_catch, { evalArgs: 0 });
+  // (catch (var forms) forms) -- JavaScript style
+  defineGlobalSymbol("catch", js_catch, { evalArgs: 0, compileHook: js_catch_hook });
   function js_catch(catchClause, ...forms) {
     if (!isCons(catchClause))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     if (!isCons(catchForms))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
-    let typeMatch;
-    if (typeof catchForms[CAR] === 'string' || typeof catchForms[CAR] === 'function') {
-      typeMatch = catchForms[CAR];
-      catchForms = catchForms[CDR];
-    }
     if (!isCons(catchForms))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let val = NIL;
@@ -1926,17 +2021,42 @@ globalScope._help_ = {};  // For clients that want to implement help.
       for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
         val = _eval(forms[i], this);
     } catch (e) {
-      if (!typeMatch || (typeof typeMatch === 'string' && typeof e === typeMatch)
-          || e instanceof typeMatch) {
-        let scope = newScope(this, "catch-scope");
-        scope[catchVar] = e;
-        for ( ; isCons(catchForms); catchForms = catchForms[CDR])
-          val = _eval(catchForms[CAR], scope);
-      } else {
-        throw e; // rethrow
-      }
+      let scope = newScope(this, "catch-scope");
+      scope[catchVar] = e;
+      for ( ; isCons(catchForms); catchForms = catchForms[CDR])
+        val = _eval(catchForms[CAR], scope);
     }
     return val;
+  }
+  function js_catch_hook(body, compileScope, tools) {
+    if (!isCons(body))
+      throw new SchemeCompileError(`Bad catch argument ${string(body)}`);
+    let catchClause = body[CAR], orms = body[CDR];
+    if (!isCons(catchClause) && isCons(catchClause[CDR]))
+      throw new SchemeCompileError(`Bad catch clause ${string(catchClause)}`);
+    let catchVar = catchClause[CAR], catchType = catchClause[CDR][CAR], catchForms = catchClause[CDR][CDR];
+    let ssaCatchSym = tools.newTemp(catchVar);
+    let ssaResult = tools.newTemp('js_catch');
+    tools.emit(`let ${ssaResult} = NIL;`);
+    tools.emit(`try {`);
+    let saveIndent = tools.indent;
+    tools.indent = tools.indent + '  ';
+    let ssaValue = 'NIL';
+    for (let form of forms)
+      ssaValue = compileEval(form, compileScope, tools);
+    tools.emit(`${ssaResult} = ${ssaValue};`);
+    tools.indent = saveIndent;
+    emit(`} catch (${ssaCatchSym}) {`);
+    compileScope = newScope(compileScope, "js_catch")
+    compileScope[catchVar] = ssaCatchSym;
+    tools.indent = tools.indent + '  ';
+    let ssaCatchVal = 'NIL';
+    for (form of catchForms)
+      ssaCatchVal = compileEval(forn, compileScope, tools);
+    emit(`${ssaResult} = ${ssaCatchVal};`);
+    tools.indent = saveIndent;
+    emit(`}`);
+    return ssaResult;
   }
 
   // (define variable value)
@@ -3437,6 +3557,10 @@ function put(str, nobreak) {
       tempNames[name] = true;
       return name;
     }
+    // Functions that end up being used as templates are bound because
+    // we don't know in advance whether they'll be used as values.
+    // "use" is called on any bound value that is ultimately used.
+    // This keeps things from being bound unnecessarily at runtime.
     function use(ssaValue) {
       usedSsaValues[ssaValue] = true;
       return ssaValue;
