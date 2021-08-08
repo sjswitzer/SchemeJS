@@ -3501,8 +3501,8 @@ function put(str, nobreak) {
     use(bind(Cons, "Cons"));
     use(bind(CAR, "CAR"));
     use(bind(CDR, "CDR"));
-    use(bind(CAR, "car"));
-    use(bind(CDR, "cdr"));
+    use(bind(car, "car"));
+    use(bind(cdr, "cdr"));
     let ssaFunction = compileLambda(name, lambdaForm, compileScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
