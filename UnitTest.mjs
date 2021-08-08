@@ -446,7 +446,17 @@ export function run(opts = {}) {
       result => globalScope.apply(globalScope.le, result));
   EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3) >)`,
       result => globalScope.apply(globalScope.ge, result));
-            
+
+  { // optional paramaters
+    let savedScope = beginTestScope();
+    EXPECT( ` (define (opt a b (? c (+ 2 3))) (list a b c)) `, ` 'opt `)
+    EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
+    EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
+    EXPECT(` (opt 1) `, isClosure);
+    EXPECT(` ((opt 1) 8) `, ` '(1 8 5) `);
+    endTestScope(savedScope);
+  }
+                
   { // Partial application returning closures
     let savedScope = beginTestScope();
     EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);

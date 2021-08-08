@@ -41,10 +41,10 @@ factoral
 
 (define (opt a b (? c (+ 2 3))) (list a b c))
 opt
-(opt 4 5 6)
-(opt 4 5)
-(opt 4)
-((opt 3) 8)
+(opt 1 2 3)
+(opt 1 2)
+(opt 1)
+((opt 1) 8)
 
 (begin (+ 1 2 3 4) (* 1 2 3 4))
 (prog1 (+ 1 2 3 4) (* 1 2 3 4))
