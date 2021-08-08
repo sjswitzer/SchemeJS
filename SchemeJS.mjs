@@ -329,16 +329,11 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let atomName = name;
     let atom = Atom(name);
     // Java API name
-    //  (string.replaceAll hasn't made it to every node yet, apparently)
-    let prevName;
-    do {
-      prevName = name;
-      name = name.replace("->", "_to_");
-      name = name.replace("-", "_");
-      name = name.replace("@", "_at_");
-      name = name.replace("*", "_star_");
-      name = name.replace("?", "P");
-    } while (name !== prevName);
+      name = replaceAll(name, "->", "_to_");
+      name = replaceAll(name, "-", "_");
+      name = replaceAll(name, "@", "_at_");
+      name = replaceAll(name, "*", "_star_");
+      name = replaceAll(name, "?", "P");
     return { atom, atomName, name };
   }
 
@@ -348,6 +343,20 @@ globalScope._help_ = {};  // For clients that want to implement help.
       cls = cls.__proto__;
     }
     return false;
+  }
+
+  // Substitute for String.prototype.replaceAll until Node.js supports it.
+  // (Maybe I just need to undate Node? Well, I can't be the only one, so...)
+  // This isn't strictly correct since it blows up if newSubstr contains substr,
+  // but it's good enough for our purposes.
+  // Note: A module has no business installing Polyfills, even if they ARE correct.
+  function replaceAll(str, substr, newSubstr) {
+    let prevStr;
+    do {
+      prevStr = str;
+      str = str.replace(substr, newSubstr);
+    } while (str !== prevStr);
+    return str;
   }
 
   function examineFunctionForCompilerTemplates(name, fn, hook, evalCount) {
@@ -461,11 +470,11 @@ globalScope._help_ = {};  // For clients that want to implement help.
   // is just a tag-bit compare in the runtime.
   //
   // I'm likely to revisit this. Differet Schemes and Lisps have different policies
-  // here. What I'd like to do is define isTrue in a way that the JIT can trivially evaluate.
+  // here. What I'd like to do is define schemeTrue in a way that the JIT can trivially evaluate.
   // In particular, treating NIL as false is expensive.
   //
-  const isTrue = a => a === true || (a !== false && a != null && !isNil(a));
-  exportAPI("isTrue", isTrue);
+  const schemeTrue = a => a === true || (a !== false && a != null && !isNil(a));
+  exportAPI("schemeTrue", schemeTrue);
 
   const cons = (car, cdr) => new Cons(car, cdr);
   const car = a => a[CAR];
@@ -552,7 +561,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
   defineGlobalSymbol("globalScope", globalScope);
 
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !isTrue(a), "not");
+  defineGlobalSymbol("!", a => !schemeTrue(a), "not");
   defineGlobalSymbol("~", a => ~a, "bit-not");
   defineGlobalSymbol("**", (a,b) => a ** b, "pow");  // overrides Math.pow
   defineGlobalSymbol("%", (a,b) => a % b, "rem");
@@ -872,12 +881,12 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let val = true;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
      val = _eval(forms[i], this);
-      if (!isTrue(val)) return val;
+      if (!schemeTrue(val)) return val;
     }
     return val;
   }
   function and_hook(args, compileScope, tools) {
-    return and_or_hook(args, compileScope, tools, 'and', 'true', '!isTrue');
+    return and_or_hook(args, compileScope, tools, 'and', 'true', '!schemeTrue');
   }
 
   function and_or_hook(args, compileScope, tools, name, init, test) {
@@ -902,12 +911,12 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let val = false;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       val = _eval(forms[i], this);
-      if (isTrue(val)) return val;
+      if (schemeTrue(val)) return val;
     }
     return val;
   }
   function or_hook(args, compileScope, tools,) {
-    return and_or_hook(args, compileScope, tools, 'or', 'true', 'isTrue');
+    return and_or_hook(args, compileScope, tools, 'or', 'true', 'schemeTrue');
   }
 
   defineGlobalSymbol("??", nullish, { evalArgs: 0, compileHook: nullish_hook }, "nullish");
@@ -943,21 +952,25 @@ globalScope._help_ = {};  // For clients that want to implement help.
   //
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
   function ifelse(p, t, f) {
-    p = isTrue(p);
+    p = schemeTrue(p);
     if (p)
       return isPrimitive(t) ? t : _eval(t, this);
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
   function ifelse_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'if', 'isTrue(*)');
+    return conditionalHooks(args, compileScope, tools, 'if', 'schemeTrue(*)');
   }
 
   function conditionalHooks(args, compileScope, tools, name, test) {
     let a = args[0], t = args[1], f = args[2];
+    test = replaceAll(test, '*', a);
     let ssaResult = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
+    if (t === undefined && f === undefined) {
+      tools.emit(`let ${ssaResult} = !!(${test});`);
+      return ssaResult;
+    }
     tools.emit(`let ${ssaResult};`);
-    test = test.replace('*', a);
     tools.emit(`if (${test}) {`);
     let saveIndent = tools.indent;
     tools.indent = saveIndent + "  ";
@@ -1221,7 +1234,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
         throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
       let pe = clause[CAR], forms = clause[CDR];
       let evaled = _eval(pe, this);
-      if (isTrue(evaled)) {
+      if (schemeTrue(evaled)) {
         let res = NIL;
         for ( ; isCons(forms); forms = forms[CDR])
           res = _eval(forms[CAR], this);
@@ -1234,7 +1247,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
   defineGlobalSymbol("require", require_, { dontInline: true });
   function require_(path) {
     let sym = Atom(`*${path}-loaded*`);
-    if (!isTrue(globalScope[sym])) {
+    if (!schemeTrue(globalScope[sym])) {
       this.load(path);
       globalScope[sym] = true;
       return sym;
@@ -1531,7 +1544,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
         // and not have to manufacture an iterator.
         for ( ; isCons(list); list = list[CDR]) {
           let item = list[CAR];
-          if (isTrue(fn(item))) {
+          if (schemeTrue(fn(item))) {
             item = fn.call(this, item);
             item = cons(item, NIL);
             if (last) last = last[CDR] = item;
@@ -1541,7 +1554,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       } else {
         if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
-          if(isTrue(fn(item))) {
+          if(schemeTrue(fn(item))) {
             item = cons(item, NIL);
             if (last) last = last[CDR] = item;
             else result = last = item;
@@ -3364,7 +3377,7 @@ function put(str, nobreak) {
     // Well-known names
     use(bind(string, "string"));
     use(bind(NIL, "NIL"));
-    use(bind(isTrue, "isTrue"));
+    use(bind(schemeTrue, "schemeTrue"));
     use(bind(cons, "cons"));
     use(bind(car, "car"));
     use(bind(cdr, "cdr"));
