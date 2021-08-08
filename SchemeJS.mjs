@@ -34,7 +34,6 @@ export function createInstance(schemeOpts = {}) {
   const reportSystemError = schemeOpts.reportError ?? _reportError;
   const reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
-  const slambdaStr = schemeOpts.lsambdaStr ?? "\\\\";
 
   // Creating a Cons should be as cheap as possible, so no subclassing
   // or calls to super. But people should be able to be able to define their
@@ -163,10 +162,10 @@ export function createInstance(schemeOpts = {}) {
     return atom;
   }
 
-  const LAMBDA_ATOM = Atom("lambda"), LAMBDA_CHAR = "\u03BB";
-  ATOMS["\\"] = ATOMS[LAMBDA_CHAR] = LAMBDA_ATOM;  // Some aliases for Lambda
-  const SLAMBDA_ATOM = Atom("special-lambda");
-  ATOMS["\\\\"] = SLAMBDA_ATOM;
+  const LAMBDA_ATOM = Atom("lambda"), SLAMBDA_ATOM = Atom("lambda#"), LAMBDA_CHAR = "\u03BB";
+  // Atomic-level aliases for "lambda" and "lambda#"
+  ATOMS["\\"]  = ATOMS[LAMBDA_CHAR]     = ATOMS[lambdaStr]     = LAMBDA_ATOM;
+  ATOMS["\\#"] = ATOMS[LAMBDA_CHAR+"#"] = ATOMS[lambdaStr+"#"] = SLAMBDA_ATOM;
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%#closure");
   const QUESTION_ATOM = Atom("?");
@@ -204,14 +203,14 @@ export function createInstance(schemeOpts = {}) {
   globalScope.WS = WS;
   globalScope.NL = NL;
 
-  // Digs the Unicode character properties out of the RegExp engine
+  // Drag Unicode character properties out of the RegExp engine.
   // This can take a bit of time and a LOT of memory, but people should
   // be able to use their own languages. By default it includes the
   // the Basic Multilingual Plane, but you can option it down to Latin-1
   // or up to include all the supplemental planes.
   // In addition to the memory used by the table I suspect the RegExp engine
   // drags in some libraries dynamically when the "u" flag is specified.
-  // And for that metter using RegExp at all probably drags in a dynammic library
+  // And for that matter using RegExp at all probably drags in a dynammic library
   // so, to reduce memory footprint, don't use it for Latin-1.
 
   // Basic Latin (ASCII)
@@ -2372,7 +2371,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
               }
               let str = '', params = obj[CDR][CAR], forms = obj[CDR][CDR];
               if (objCar === LAMBDA_ATOM) str += lambdaStr;
-              if (objCar === SLAMBDA_ATOM) str += slambdaStr;
+              if (objCar === SLAMBDA_ATOM) str += lambdaStr + '#';
               if (typeof params === 'symbol') {  // curry notation
                 str += `${params.description}.`;
                 put(str);
@@ -2477,7 +2476,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       }
       if (objType === 'symbol') {
         if (obj === LAMBDA_ATOM) return put(lambdaStr);
-        if (obj === SLAMBDA_ATOM) return put(slambdaStr);
+        if (obj === SLAMBDA_ATOM) return put(lambdaStr+"#");
         return put(obj.description);
       }
       if (objType === 'string') {
@@ -2908,7 +2907,9 @@ function put(str, nobreak) {
       }
       charCount += 1;
       lineCharCount += 1;
-      if (NL[ch]) {
+      // Among the [NL] chars, only use '\n' in the line count;
+      // there may still be CRLFs in the wild.
+      if (ch === '\n') {
         lineCount += 1;
         lineCharCount = 0;
       }

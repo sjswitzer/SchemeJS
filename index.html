@@ -850,13 +850,13 @@
       let globalScope, SCHEME_VERSION;
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, NIL, originalLoad;
       let varNo = 0, errorElement, WS, NL;
-      const NBSP = '\u00a0', lambdaStr = "\u03BB", slambdaStr = "\u03BB\u03BB";
+      const NBSP = '\u00a0', lambdaStr = "\u03BB";
 
       onload = importSchemeAndRunREPL();
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
         globalScope = SchemeJS.createInstance(
-          { lambdaStr, slambdaStr, readFile, reportLoadResult, reportSchemeError, reportSystemError });
+          { lambdaStr, readFile, reportLoadResult, reportSchemeError, reportSystemError });
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
