@@ -57,8 +57,10 @@ export function createInstance(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
-  const COMPILED = Symbol('COMPILED'), JITCOMPILED = Symbol("JITCOMPILED");
-  const PARAMETER_DESCRIPTOR = Symbol('PARAMETER_DESCRIPTOR'), NAMETAG = Symbol("NAMETAG");
+  const COMPILED = Symbol('COMPILED'), JITCOMPILED = Symbol("JIT-COMPILED");
+  const NAMETAG = Symbol("NAMETAG");
+  // Since this symbol is tagged on external JS functions,label it as ours as a courtesy.
+  const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
 
   // I trust JITs to inline these
   const isCons = obj => obj != null && obj[PAIR] === true;
@@ -578,6 +580,20 @@ globalScope._help_ = {};  // For clients that want to implement help.
   defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d);
   defineGlobalSymbol("delete", (a, b) => delete a[b]);
   defineGlobalSymbol("void", _ => undefined);
+
+  defineGlobalSymbol("to-lower-case", to_lower_case);
+  function to_lower_case(str, locale = undefined) {
+    if (typeof a !== 'string') throw new TypeError(`${string(a)} is not a string}`);
+    if (locale === undefined) return a.toLowerCase();
+    return a.toLocaleLowerCase(locale);
+  }
+
+  defineGlobalSymbol("to-upper-case", to_upper_case);
+  function to_upper_case(str, locale = undefined) {
+    if (typeof a !== 'string') throw new TypeError(`${string(a)} is not a string}`);
+    if (locale === undefined) return a.toUpperCase();
+    return a.toLocaleUpperCase(locale);
+  }
 
   //
   // Variable args definitions
