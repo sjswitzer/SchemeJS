@@ -8,6 +8,7 @@
 
 import * as SchemeJS from './SchemeJS.mjs';
 
+let string;
 export class TestFailureError extends Error {
   constructor(message, test, result, expected, report) {
     super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
@@ -31,7 +32,7 @@ export function run(opts = {}) {
   let testScope = globalScope;
   const setGlobalScope = globalScope._setGlobalScope_test_hook_ ?? required();
   const NIL = globalScope.NIL ?? required();
-  const string = globalScope.string ?? required();
+  string = globalScope.string ?? required();
   const newScope = globalScope.newScope ?? required();
   const deep_eq = globalScope.deep_eq ?? required();
   const isCons = globalScope.isCons ?? required();
@@ -39,6 +40,8 @@ export function run(opts = {}) {
   const SchemeEvalError = globalScope.SchemeEvalError ?? required();
   const parseSExpr = globalScope.parseSExpr ?? required();
   const list = globalScope.list ?? required();
+  const Atom = globalScope.Atom ?? required();
+  const compile_lambda = globalScope.compile_lambda ?? required();
   function required() { throw "required" }
 
   let evalString = str => testScope.eval_string(str);
@@ -525,6 +528,47 @@ export function run(opts = {}) {
       EXPECT(` (increment-by-3 4) `, 7);
       endTestScope(savedScope);
     }
+
+    //
+    // Scenario tests
+    //
+
+    {
+      let savedScope = beginTestScope();
+      EXPECT(`
+        (define (factoral x)
+          (? (<= x 1) 
+            (? (bigint? x) 1n 1)
+            (* x (factoral (- x (? (bigint? x) 1n 1))))
+        ))`,
+        ` 'factoral `);
+      EXPECT(` (factoral 10) `, 3628800);
+      EXPECT(` (factoral 10n) `, 3628800n);
+      EXPECT(` (factoral 171) `, Infinity);
+      EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
+      endTestScope(savedScope);
+      // Factoral should be undefined now
+      EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
+    }
+
+    {
+      let savedScope = beginTestScope();
+      EXPECT(`
+        (compile (factoral x)
+          (? (<= x 1) 
+            (? (bigint? x) 1n 1)
+            (* x (factoral (- x (? (bigint? x) 1n 1))))
+        ))`,
+        ` 'factoral `);
+      EXPECT(` factoral `, obj => typeof obj === 'function');
+      EXPECT(` (factoral 10) `, 3628800);
+      EXPECT(` (factoral 10n) `, 3628800n);
+      EXPECT(` (factoral 171) `, Infinity);
+      EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
+      endTestScope(savedScope);
+      // Factoral should be undefined now
+      EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
+    }
   }
 
   function internalsSuite() {
@@ -614,47 +658,6 @@ export function run(opts = {}) {
       //  EXPECT(testAnalyze([].sort),
       //    { name: 'sort', params: [], restParam: undefined, value: undefined,
       //      body: undefined, printBody: ' { [native code] }', native: true });
-    }
-
-    //
-    // Scenario tests
-    //
-
-    {
-      let savedScope = beginTestScope();
-      EXPECT(`
-        (define (factoral x)
-          (? (<= x 1) 
-            (? (bigint? x) 1n 1)
-            (* x (factoral (- x (? (bigint? x) 1n 1))))
-        ))`,
-        ` 'factoral `);
-      EXPECT(` (factoral 10) `, 3628800);
-      EXPECT(` (factoral 10n) `, 3628800n);
-      EXPECT(` (factoral 171) `, Infinity);
-      EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
-      endTestScope(savedScope);
-      // Factoral should be undefined now
-      EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
-    }
-
-    {
-      let savedScope = beginTestScope();
-      EXPECT(`
-        (compile (factoral x)
-          (? (<= x 1) 
-            (? (bigint? x) 1n 1)
-            (* x (factoral (- x (? (bigint? x) 1n 1))))
-        ))`,
-        ` 'factoral `);
-      EXPECT(` factoral `, obj => typeof obj === 'function');
-      EXPECT(` (factoral 10) `, 3628800);
-      EXPECT(` (factoral 10n) `, 3628800n);
-      EXPECT(` (factoral 171) `, Infinity);
-      EXPECT(` (factoral 171n) `, 1241018070217667823424840524103103992616605577501693185388951803611996075221691752992751978120487585576464959501670387052809889858690710767331242032218484364310473577889968548278290754541561964852153468318044293239598173696899657235903947616152278558180061176365108428800000000000000000000000000000000000000000n);
-      endTestScope(savedScope);
-      // Factoral should be undefined now
-      EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
     }
   }
 
@@ -768,9 +771,9 @@ export function run(opts = {}) {
   }
 
   function compileThenEvalString(str) {
-    let expr = parseSExpr(str);
+    let expr = parseSExpr.call(testScope, str);
     let lambda = list(Atom("lambda"), NIL, expr);
-    let compiled = compile_lambda.call(testScope, lambda);
+    let compiled = compile_lambda.call(testScope, 'testcase', lambda);
     return compiled.call(testScope);
   }
 }
