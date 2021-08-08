@@ -2762,7 +2762,7 @@ function put(str, nobreak) {
           nextc();
         parseContext.currentToken = { type: 'endcomment', value: ';', endPosition: charCount-1, endWidth: 1, line, lineChar };
         parseContext.pop();
-        yield { type: (ch ? 'newline': 'end'), position, line, lineChar };
+        yield { type: (ch ? 'newline': 'newline'), position, line, lineChar };
         continue;
       }
 
@@ -3008,24 +3008,30 @@ function put(str, nobreak) {
         consumeToken();
         return parseListBody();
         function parseListBody() {
-          if (token().type === ')') {
-            parseContext.pop();
-            consumeToken();
-            return NIL;
-          } else if (token().type === '.') {
-            consumeToken();
-            let val = parseExpr();
-            parseContext.pop();
-            if (token().type !== ')') throwSyntaxError();
-            consumeToken();
-            return val;
+          let head = NIL, tail;
+          for (;;) {
+            if (token().type === ')') {
+              parseContext.pop();
+              consumeToken();
+              return head;
+            } else if (token().type === '.') {
+              consumeToken();
+              let val = parseExpr();
+              parseContext.pop();
+              if (token().type !== ')') throwSyntaxError();
+              consumeToken();
+              if (tail) tail[CDR] = val;
+              else head = val;
+              return head;
+            }
+            if (token().type === 'end' || token().type === 'partial')
+              throw new SchemeParseIncompleteError(path, token(), parseContext);
+            if (token().type === 'garbage') throwSyntaxError();
+            let item = parseExpr();
+            item = cons(item, NIL);
+            if (tail) tail = tail[CDR] = item;
+            else head = tail = item;
           }
-          if (token().type === 'end' || token().type === 'partial')
-            throw new SchemeParseIncompleteError(path, token(), parseContext);
-          if (token().type === 'garbage') throwSyntaxError();
-          let first = parseExpr();
-          let rest = parseListBody();
-          return cons(first, rest);
         }
       }
 
@@ -3104,6 +3110,9 @@ function put(str, nobreak) {
         let quoted = parseExpr();
         return cons(QUOTE_ATOM, cons(quoted, NIL));
       }
+      if (token().type === 'end')
+        return null;
+      throwSyntaxError();
     }
 
     function token(n = 0, initialNewlineOK) {
@@ -3777,7 +3786,7 @@ function put(str, nobreak) {
     while (!quitRepl) {
       try {
         let expr = parseSExpr(charStream, opts);
-        if (!expr) continue;
+        if (!expr) break;
         let evaluated = _eval(expr, scope);
         print(evaluated);
       } catch (error) {
