@@ -276,7 +276,7 @@ export function createInstance(schemeOpts = {}) {
 // Why are these initialized here, you ask?
 // Because they're indirectly refernced by defineGlobalSymbol is why.
 const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_BODY_TEMPLATE = Symbol("COMPILE-BODY"),
-    COMPILE_VALUE_TEMPLATE = Symbol("COMPILE-VALUE");
+    COMPILE_VALUE_TEMPLATE = Symbol("COMPILE-VALUE"), COMPILE_PARAMS = Symbol("COMPILE_PARAMS");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
 const analyzedFunctions = new Map();
 globalScope._help_ = {};  // For clients that want to implement help.
@@ -385,6 +385,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
       return;
     }
+    fn[COMPILE_PARAMS] = fn.params;
     fn[COMPILE_VALUE_TEMPLATE] = fnInfo.value;
     if (fnInfo.body)
       fn[COMPILE_BODY_TEMPLATE] = fnInfo.body;
@@ -3596,10 +3597,11 @@ function put(str, nobreak) {
         let requiredCount = parameterDescriptor & 0xffff;
         let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
         let compileHook = fn[COMPILE_HOOK];
+        let params = fn[COMPILE_PARAMS];
         let valueTemplate = fn[COMPILE_VALUE_TEMPLATE];
         let bodyTemplate = fn[COMPILE_BODY_TEMPLATE];
         // Everything you need to know about invoking a JS function is right here
-        tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, valueTemplate, bodyTemplate };
+        tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, params, valueTemplate, bodyTemplate };
         return ssaValue;
       }
       return `resolveUnbound(${tools.use(tools.bind(sym))})`;
@@ -3649,6 +3651,7 @@ function put(str, nobreak) {
             let compileHook = functionDescriptor.compileHook;
             let valueTemplate = functionDescriptor.valueTemplate;
             let bodyTemplate = functionDescriptor.bodyTemplate;
+            let params = functionDescriptor.params;
             if (compileHook) {
               let ssaResult = compileHook(argv, compileScope, tools);
               tools.use(ssaResult);
@@ -3657,6 +3660,7 @@ function put(str, nobreak) {
             if (valueTemplate) {
               let ssaResult = tools.newTemp(fName);
               tools.emit(`let ${ssaResult}; {`);
+              let saveIndent = tools.indent;
               tools.indent = saveIndent + "  ";
               for (let i = 0; i < params.length; ++i) {
                 let ssaVal = i < argv.length ? argv[i] : 'undefined';
@@ -3766,7 +3770,7 @@ function put(str, nobreak) {
     let params = body[CAR];
     if (typeof params === 'symbol')  // Curry notation
       params = cons(params, NIL);
-    if (!isCons(params)) throwBadCompiledLambda(lambda);
+    if (!isList(params)) throwBadCompiledLambda(lambda);
     let forms = body[CDR];
     let paramv = [];
     compileScope = newScope(compileScope, "compile-lambda-scope");
