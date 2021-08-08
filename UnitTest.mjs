@@ -8,6 +8,17 @@
 
 import * as SchemeJS from './SchemeJS.mjs';
 
+export class TestFailureError extends Error {
+  constructor(message, test, result, expected, report) {
+    super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
+    this.test = test;
+    this.result = result;
+    this.expected = expected;
+    this.report = report;
+  }
+}
+TestFailureError.prototype.name = "TestFailureError";
+
 export function run(opts = {}) {
   let throwOnError = opts.throwOnError ?? true;
   let reportTestFailed = opts.reportTestFailed ?? ((message, test, result, expected, report) =>
@@ -26,18 +37,10 @@ export function run(opts = {}) {
   const isCons = globalScope.isCons ?? required();
   const isClosure = globalScope.isClosure ?? required();
   const SchemeEvalError = globalScope.SchemeEvalError ?? required();
-
   function required() { throw "required" }
-  class TestFailureError extends Error {
-    constructor(message, test, result, expected, report) {
-      super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
-      this.test = test;
-      this.result = result;
-      this.expected = expected;
-      this.report = report;
-    }
-  }
-  TestFailureError.prototype.name = "TestFailureError";
+
+  let evalString = str => testScope.eval_string(str);
+  let evalTestString = evalString;
 
   testSuite();
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
@@ -644,7 +647,7 @@ export function run(opts = {}) {
       if (typeof test === 'function')
         result = test.call(testScope);
       else if (typeof test === 'string')
-        result = testScope.eval_string(test);
+        result = evalTestString(test);
       else
         testFailed("test is neither function nor string", test, undefined, expected, report);
       try {
@@ -652,7 +655,7 @@ export function run(opts = {}) {
           ok = expected.call(testScope, result);
         } else {
           if (typeof expected === 'string')
-            expected = testScope.eval_string(expected);
+            expected = evalString(expected);
           ok = deep_eq(result, expected, 100, report);
         }
       } catch (error) {
@@ -684,13 +687,13 @@ export function run(opts = {}) {
         if (typeof test === 'function') {
           result = test.call(testScope);
         } else if (typeof test === 'string') {
-          result = testScope.eval_string(test);
+          result = evalTestString(test);
         }
         testFailed("expected exception", test, result, expected, report);
       } catch (error) {
         try {
           if (typeof expected === 'string')
-            expected = testScope.eval_string(expected);
+            expected = evalString(expected);
           if (error === expected || error instanceof expected) {
             ok = true;
           } else if (typeof expected === 'function' && !(error instanceof Error)) {
