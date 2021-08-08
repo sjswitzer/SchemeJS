@@ -3645,9 +3645,13 @@ function put(str, nobreak) {
           arg = tools.use(compileEval(arg, compileScope, tools));
         argv.push(arg);
       }
-      let argStr = '';
-      for (let arg of argv)
+      let argStr = '', argNo = 0;
+      for (let arg of argv) {
+        if (argNo >= evalCount)
+          arg = tools.use(tools.bind(arg, `arg_${argNo}`));
         argStr += `, ${arg}`;
+        argNo += 1;
+      }
       // Cases where we simply invoke the function:
       //  - we have at least required number of arguments
       //  - we have no arguments
