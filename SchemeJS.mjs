@@ -3411,7 +3411,7 @@ function put(str, nobreak) {
     function newTemp(name) {
       if (!name)
         name = 'tmp';
-      name = toJSname(name);
+      name = toJavaScriptIdentifier(name);
       if (tempNames[name]) {
         for (;;) {
           let nameVariation = `${name}${varNum++}`;
@@ -3731,8 +3731,8 @@ function put(str, nobreak) {
     '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
   };
 
-  exportAPI("toJSname", toJSname);
-  function toJSname(name) {
+  exportAPI("toJavaScriptIdentifier", toJavaScriptIdentifier);
+  function toJavaScriptIdentifier(name) {
     if (typeof name === 'symbol')
       name = name.description;
     let newName = "", fragment = "";

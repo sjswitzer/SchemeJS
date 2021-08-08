@@ -492,24 +492,24 @@ export function run(opts = {}) {
       EXPECT(` (increment-by-3 4) `, 7);
       endTestScope(savedScope);
     }
-      
-    {
-      const toJSname = globalScope.toJSname;
-      const testToJSname = name => () => toJSname(name);
-      EXPECT(testToJSname("aNormal_name0234"), expectString("_aNormal_name0234"));
-      EXPECT(testToJSname("aname%with&/specialChars?"), expectString("_aname$pct_with$and$stroke_specialChars$q"));
-      EXPECT(testToJSname("_begins_with_underscore"), expectString("__begins_with_underscore"));
-      EXPECT(testToJSname("number?"), expectString("_number$q"));
-      EXPECT(testToJSname("&&"), expectString("$and$and"));
-      EXPECT(testToJSname("$"), expectString("$cash"));
-      EXPECT(testToJSname("?"), expectString("$q"));
-    }
 
     //
     // Internals tests
     //
+      
+    { // Used by the compiler to convert wild Scheme identifiers into valid JavaScript identifiers
+      const toJavaScriptIdentifier = globalScope.toJavaScriptIdentifier;
+      const testToJavaScriptIdentifier = name => () => toJavaScriptIdentifier(name);
+      EXPECT(testToJavaScriptIdentifier("aNormal_name0234"), expectString("_aNormal_name0234"));
+      EXPECT(testToJavaScriptIdentifier("aname%with&/specialChars?"), expectString("_aname$pct_with$and$stroke_specialChars$q"));
+      EXPECT(testToJavaScriptIdentifier("_begins_with_underscore"), expectString("__begins_with_underscore"));
+      EXPECT(testToJavaScriptIdentifier("number?"), expectString("_number$q"));
+      EXPECT(testToJavaScriptIdentifier("&&"), expectString("$and$and"));
+      EXPECT(testToJavaScriptIdentifier("$"), expectString("$cash"));
+      EXPECT(testToJavaScriptIdentifier("?"), expectString("$q"));
+    }
 
-    {
+    { // Used to determine how to call (and display) JavaScript functions.
       const analyzeJSFunction = globalScope.analyzeJSFunction;
       const testAnalyze = (fn) => () => analyzeJSFunction(fn);
       const trimCompare = (a, b) => a.trim() === b.trim();
