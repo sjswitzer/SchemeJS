@@ -174,6 +174,10 @@ export function run(opts = {}) {
       EXPECT_ERROR(` (a 3) `, SchemeEvalError);
       EXPECT(` (define y 5) `, ` 'y `);
       EXPECT(` (a 3) `, 8);
+      EXPECT(` (define (a x y) (plus* x y)) `, ` 'a `);
+      EXPECT_ERROR(` (plus 4 5) `, SchemeEvalError);
+      EXPECT(` (define plus* +) `, ` 'plus* `);
+      EXPECT(` (plus* 4 5) `, 9)
       endTestScope(savedScope);
     }
 

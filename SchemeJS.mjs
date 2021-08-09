@@ -362,26 +362,25 @@ globalScope._help_ = {};  // For clients that want to implement help.
   function examineFunctionForCompilerTemplates(name, fn, hook, evalCount) {
     if (hook) {
       fn[COMPILE_HOOK] = hook;
-      return;
+    } else {
+      // A policy thing, I guess. You wouldnt expect to inline an Error class definition
+      // and it's tedious to mark them all as "dontInline." This would actually be the case
+      // of any "class," but Error classes are the only ones currently defined in the
+      // SchemeJS API and there's no way to truly distinguish a class from a function
+      // in JavaScript.
+      if (subclassOf(fn, Error))
+        return;
+      if (evalCount !== MAX_INTEGER) { // templates are of no use for special evaluation
+        console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
+        return;
+      }
     }
-    // A policy thing, I guess. You wouldnt expect to inline an Error class definition
-    // and it's tedious to mark them all as "dontInline." This would actually be the case
-    // of any "class," but Error classes are the only ones currently defined in the
-    // SchemeJS API and there's no way to truly distinguish a class from a function
-    // in JavaScript.
-    if (subclassOf(fn, Error))
-      return;
-    if (evalCount !== MAX_INTEGER) { // templates are of no use for special evaluation
-      console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
-      return;
-    }
-
     let fnInfo = analyzeJSFunction(fn);
     // Can't inline a native function, obviously, but you _could_ hook one
     if (fnInfo.native)
       return;
   
-    if (!fnInfo.value) {
+    if (!fnInfo.value && !hook) {
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
       return;
     }
@@ -616,7 +615,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       a += b;
     return a;
   }
-  function add_hook(args, compileScope, tools) {
+  function add_hook(args, ssaScope, tools) {
     if (args.length === 0) return 'NaN';
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
@@ -632,7 +631,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       a -= b;
     return a;
   }
-  function sub_hook(args, compileScope, tools) {
+  function sub_hook(args, ssaScope, tools) {
     if (args.length === 0) return 'NaN';
     if (args.length === 1)
       return `(-${args[0]})`;
@@ -650,7 +649,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       a *= b;
     return a;
   }
-  function mul_hook(args, compileScope, tools) {
+  function mul_hook(args, ssaScope, tools) {
     if (args.length === 0) return 'NaN';
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
@@ -666,7 +665,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       a /= b;
     return a;
   }
-  function div_hook(args, compileScope, tools) {
+  function div_hook(args, ssaScope, tools) {
     if (args.length === 0) return 'NaN';
     if (args.length === 1)
       return `(1 / ${args[0]})`;
@@ -684,7 +683,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       a &= b;
     return a;
   }
-  function bit_and_hook(args, compileScope, tools) {
+  function bit_and_hook(args, ssaScope, tools) {
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` & ${args[i]}`;
@@ -699,7 +698,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       a |= b;
     return a;
   }
-  function bit_or_hook(args, compileScope, tools) {
+  function bit_or_hook(args, ssaScope, tools) {
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` | ${args[i]}`;
@@ -714,7 +713,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       a ^= b;
     return a;
   }
-  function bit_xor_hook(args, compileScope, tools) {
+  function bit_xor_hook(args, ssaScope, tools) {
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` ^ ${args[i]}`;
@@ -733,11 +732,11 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return true;
   }
-  function lt_hook(args, compileScope, tools) {
-    return compare_hooks(args, compileScope, tools, '<', 'lt');
+  function lt_hook(args, ssaScope, tools) {
+    return compare_hooks(args, ssaScope, tools, '<', 'lt');
   }
 
-  function compare_hooks(args, compileScope, tools, op, name) {
+  function compare_hooks(args, ssaScope, tools, op, name) {
     if (args.length < 2)
       return 'false';
     if (args.length === 2)
@@ -745,12 +744,12 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let result = tools.newTemp(name);
     tools.emit(`let ${result} = false; ${result}: {`);
     let saveIndent = tools.indent;
-    tools.indent = saveIndent + "  ";
+    tools.indent += '  ';
     tools.emit(`let a = ${args[0]}, b = ${args[1]};`);
     tools.emit(`if (!(a ${op} b)) break ${result};`);
     for (let i = 2; i < args.length; ++i) {
       tools.emit(`a = b;`);
-      let b = compileEval(args[i], compileScope, tools, tools.newTemp);
+      let b = compileEval(args[i], ssaScope, tools, tools.newTemp);
       tools.emit(`b = ${b};`);
       tools.emit(`if (!(a ${op} b)) break ${result};`);
     }
@@ -771,8 +770,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return true;
   }
-  function le_hook(args, compileScope, tools) {
-    return compare_hooks(args, compileScope, tools, '<=', 'le');
+  function le_hook(args, ssaScope, tools) {
+    return compare_hooks(args, ssaScope, tools, '<=', 'le');
   }
 
   defineGlobalSymbol(">", gt, { evalArgs: 2, compileHook: gt_hook }, "gt");
@@ -786,8 +785,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return true;
   }
-  function gt_hook(args, compileScope, tools) {
-    return compare_hooks(args, compileScope, tools, '>', 'gt');
+  function gt_hook(args, ssaScope, tools) {
+    return compare_hooks(args, ssaScope, tools, '>', 'gt');
   }
 
   defineGlobalSymbol(">=", ge, { evalArgs: 2, compileHook: ge_hook }, "ge");
@@ -801,8 +800,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return true;
   }
-  function ge_hook(args, compileScope, tools) {
-    return compare_hooks(args, compileScope, tools, '>=', 'ge');
+  function ge_hook(args, ssaScope, tools) {
+    return compare_hooks(args, ssaScope, tools, '>=', 'ge');
   }
 
   defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook }, "eqv"); // XXX name
@@ -816,8 +815,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return true;
   }
-  function eq_hook(args, compileScope, tools) {
-    return compare_hooks(args, compileScope, tools, '==', 'eq');
+  function eq_hook(args, ssaScope, tools) {
+    return compare_hooks(args, ssaScope, tools, '==', 'eq');
   }
 
   defineGlobalSymbol("===", eeq, { evalArgs: 2, compileHook: eeq_hook }); // XXX name
@@ -831,8 +830,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return true;
   }
-  function eeq_hook(args, compileScope, tools) {
-    return compare_hooks(args, compileScope, tools, '===', 'eeq');
+  function eeq_hook(args, ssaScope, tools) {
+    return compare_hooks(args, ssaScope, tools, '===', 'eeq');
   }
 
   // XXX is SIOD equal? really a deep compare? 
@@ -844,8 +843,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
   function ne(a, b, ...rest) {
     return !eq.call(this, a, b, ...rest);
   }
-  function ne_hook(args, compileScope, tools) {
-    let eq = compare_hooks(args, compileScope, tools, '==', 'eq');
+  function ne_hook(args, ssaScope, tools) {
+    let eq = compare_hooks(args, ssaScope, tools, '==', 'eq');
     return `(!${eq})`;
   }
 
@@ -853,8 +852,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
   function ne(a, b, ...rest) {
     return !eeq.call(this, a, b, ...rest);
   }
-  function ne_hook(args, compileScope, tools) {
-    let eq = compare_hooks(args, compileScope, tools, '==', 'eq');
+  function ne_hook(args, ssaScope, tools) {
+    let eq = compare_hooks(args, ssaScope, tools, '==', 'eq');
     return `(!${eeq})`;
   }
 
@@ -887,21 +886,21 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return val;
   }
-  function and_hook(args, compileScope, tools) {
-    return and_or_hook(args, compileScope, tools, 'and', 'true', '!schemeTrue');
+  function and_hook(args, ssaScope, tools) {
+    return and_or_hook(args, ssaScope, tools, 'and', 'true', '!schemeTrue');
   }
 
-  function and_or_hook(args, compileScope, tools, name, init, test) {
+  function and_or_hook(args, ssaScope, tools, name, init, test) {
     if (args.length < 1)
       return `"${test}"`;
     if (args.length == 1)
-      return compileEval(args[0], compileScope, tools);
+      return compileEval(args[0], ssaScope, tools);
     let result = newTemp(name), saveIndent = tools.indent;
     tools.indent += '  ';
-    tools.emit(`let ${result} = ${compileEval(args[0], compileScope, tools)}; ${result}: {`);
+    tools.emit(`let ${result} = ${compileEval(args[0], ssaScope, tools)}; ${result}: {`);
     for (let i = 1; i < args.length; ++i) {
       tools.emit(`if (${test}(${result})) break $result;`);
-      tools.emit(`${result} = ${compileEval(args[i], compileScope, tools)};`);
+      tools.emit(`${result} = ${compileEval(args[i], ssaScope, tools)};`);
     }
     tools.indent = saveIndent;
     tools.emit('}');
@@ -917,8 +916,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return val;
   }
-  function or_hook(args, compileScope, tools,) {
-    return and_or_hook(args, compileScope, tools, 'or', 'true', 'schemeTrue');
+  function or_hook(args, ssaScope, tools,) {
+    return and_or_hook(args, ssaScope, tools, 'or', 'true', 'schemeTrue');
   }
 
   defineGlobalSymbol("??", nullish, { evalArgs: 0, compileHook: nullish_hook }, "nullish");
@@ -930,17 +929,17 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return val;
   }
-  function nullish_hook(args, compileScope, tools) {
+  function nullish_hook(args, ssaScope, tools) {
     if (args.length < 1)
       return `"undefined"`;
     if (args.length == 1)
-      return compileEval(args[0], compileScope, tools);
+      return compileEval(args[0], ssaScope, tools);
     let result = newTemp(name), saveIndent = tools.indent;
     tools.indent += '  ';
-    tools.emit(`let ${result} = ${compileEval(args[0], compileScope, tools)}; ${result}: {`);
+    tools.emit(`let ${result} = ${compileEval(args[0], ssaScope, tools)}; ${result}: {`);
     for (let i = 1; i < args.length; ++i) {
       tools.emit(`if ((${result}) == null) { ${result} = undefined; break $result; }`);
-      tools.emit(`${result} = ${compileEval(args[i], compileScope, tools)};`);
+      tools.emit(`${result} = ${compileEval(args[i], ssaScope, tools)};`);
     }
     tools.indent = saveIndent;
     tools.emit('}');
@@ -960,11 +959,11 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function ifelse_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'if', 'schemeTrue(*)');
+  function ifelse_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'if', 'schemeTrue(*)');
   }
 
-  function conditionalHooks(args, compileScope, tools, name, test) {
+  function conditionalHooks(args, ssaScope, tools, name, test) {
     let a = args[0], t = args[1], f = args[2];
     test = replaceAll(test, '*', a);
     let ssaResult = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
@@ -975,13 +974,13 @@ globalScope._help_ = {};  // For clients that want to implement help.
     tools.emit(`let ${ssaResult};`);
     tools.emit(`if (${test}) {`);
     let saveIndent = tools.indent;
-    tools.indent = saveIndent + "  ";
-    let tResult = t === undefined ? 'true' : compileEval(t, compileScope, tools);
+    tools.indent += '  ';
+    let tResult = t === undefined ? 'true' : compileEval(t, ssaScope, tools);
     tools.emit(`${ssaResult} = ${tResult};`);
     tools.indent = saveIndent;
     tools.emit(`} else {`);
-    tools.indent = saveIndent + "  ";
-    let fResult = f === undefined ? 'false' : compileEval(f, compileScope, tools);
+    tools.indent += '  ';
+    let fResult = f === undefined ? 'false' : compileEval(f, ssaScope, tools);
     tools.emit(`${ssaResult} = ${fResult};`);
     tools.indent = saveIndent;
     tools.emit(`}`);
@@ -1000,8 +999,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_bigint_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_bigint', `typeof * === 'bigint'`);
+  function is_bigint_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_bigint', `typeof * === 'bigint'`);
   }
 
   defineGlobalSymbol("atom?", is_atom, { evalArgs: 1, compileHook: is_atom_hook }, "is_atom");
@@ -1011,8 +1010,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_atom_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_atom', `isAtom(*)`);
+  function is_atom_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_atom', `isAtom(*)`);
   }
 
   defineGlobalSymbol("undefined?", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook }, "is_undefined")
@@ -1022,8 +1021,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_undefined_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_undefined', `* === undefined`);
+  function is_undefined_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_undefined', `* === undefined`);
   }
 
   defineGlobalSymbol("pair?", isCons, { evalArgs: 1, compileHook: is_pair_hook }, "is-pair", "is-cons");
@@ -1033,8 +1032,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_pair_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_pair', `is_Cons(*)`);
+  function is_pair_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_pair', `is_Cons(*)`);
   }
 
   defineGlobalSymbol("list?", isList, { evalArgs: 1, compileHook: is_list_hook }, "is-list");
@@ -1044,8 +1043,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_list_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_list', `isList(*)`);
+  function is_list_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_list', `isList(*)`);
   }
 
   defineGlobalSymbol("null?", is_null, { evalArgs: 1, compileHook: is_null_hook }, "is-null");  // SIOD clained it first. Maybe rethink the naming here.
@@ -1055,8 +1054,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_null_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_null', `isNil(*)`);
+  function is_null_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_null', `isNil(*)`);
   }
 
   defineGlobalSymbol("jsnull?", is_jsnull, { evalArgs: 1, compileHook: is_jsnull_hook }, "is-jsnull");
@@ -1066,8 +1065,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_jsnull_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_jsnull', `* === null`);
+  function is_jsnull_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_jsnull', `* === null`);
   }
 
   defineGlobalSymbol("nullish?", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook }, "is-nullish");
@@ -1077,8 +1076,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_nullish_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_nullish', `* == null`);
+  function is_nullish_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_nullish', `* == null`);
   }
 
   defineGlobalSymbol("boolean?", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook }, "is-boolean");
@@ -1088,8 +1087,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_boolean_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_boolean', `typeof * === 'boolean'`);
+  function is_boolean_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_boolean', `typeof * === 'boolean'`);
   }
 
   defineGlobalSymbol("number?", is_number, { evalArgs: 1, compileHook: is_number_hook }, "is-number");
@@ -1099,8 +1098,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_number_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_number', `typeof * === 'number'`);
+  function is_number_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_number', `typeof * === 'number'`);
   }
 
   defineGlobalSymbol("numeric?", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook }, "is-numeric");
@@ -1110,8 +1109,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_numeric_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_numeric', `typeof * === 'number' || typeof a == 'bigint`);
+  function is_numeric_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_numeric', `typeof * === 'number' || typeof a == 'bigint`);
   }
 
   defineGlobalSymbol("string?", is_string, { evalArgs: 1, compileHook: is_string_hook }, "is-string");
@@ -1121,8 +1120,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_string_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_string', `typeof * === 'string'`);
+  function is_string_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_string', `typeof * === 'string'`);
   }
 
   defineGlobalSymbol("symbol?", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook }, "is-symbol");
@@ -1132,8 +1131,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_symbol_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_symbol', `typeof * === 'symbol'`);
+  function is_symbol_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_symbol', `typeof * === 'symbol'`);
   }
 
   defineGlobalSymbol("function?", is_function, { evalArgs: 1, compileHook: is_function_hook }, "is-function");
@@ -1143,8 +1142,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_function_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_function', `typeof * === 'function'`);
+  function is_function_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_function', `typeof * === 'function'`);
   }
 
   defineGlobalSymbol("object?", is_object, { evalArgs: 1, compileHook: is_object_hook }, "is-object");
@@ -1154,8 +1153,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_object_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_object', `* !== null && typeof * === 'object'`);
+  function is_object_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_object', `* !== null && typeof * === 'object'`);
   }
 
   defineGlobalSymbol("array?", is_array, { evalArgs: 1, compileHook: is_array_hook }, "is-array");
@@ -1165,8 +1164,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_array_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_array', `Array.isArray(*)`);
+  function is_array_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_array', `Array.isArray(*)`);
   }
 
   defineGlobalSymbol("nan?", is_nan, { evalArgs: 1, compileHook: is_nan_hook } , "is-NaN", "NaN?");
@@ -1176,8 +1175,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_nan_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_nan', `isNaN(*)`);
+  function is_nan_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_nan', `isNaN(*)`);
   }
 
   defineGlobalSymbol("finite?", is_finite, { evalArgs: 1, compileHook: is_finite_hook } , "is-finite");
@@ -1187,8 +1186,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     else
       return isPrimitive(f) ? f : _eval(f, this);
   }
-  function is_finite_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_finite', `isFinite(*)`);
+  function is_finite_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_finite', `isFinite(*)`);
   }
 
   // (begin form1 form2 ...)
@@ -1199,10 +1198,10 @@ globalScope._help_ = {};  // For clients that want to implement help.
       res = _eval(forms[i], this);
     return res;
   }
-  function begin_hook(args, compileScope, tools) {
+  function begin_hook(args, ssaScope, tools) {
     let ssaResult = 'NIL';
     for (let i = 0; i < args.length; ++i)
-      ssaResult = compileEval(args[i], compileScope, tools);
+      ssaResult = compileEval(args[i], ssaScope, tools);
     return ssaResult;
   }
 
@@ -1217,10 +1216,10 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return res;
   }
-  function prog1_hook(args, compileScope, tools) {
+  function prog1_hook(args, ssaScope, tools) {
     let ssaResult = 'NIL';
     for (let i = 0; i< args.length; ++i) {
-      let res = compileEval(args[i], compileScope, tools);
+      let res = compileEval(args[i], ssaScope, tools);
       if (i === 0)
         ssaResult = res;
     }
@@ -1245,22 +1244,22 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return NIL;
   }
-  function cond_hook(clauses, compileScope, tools) {
+  function cond_hook(clauses, ssaScope, tools) {
     let ssaResult = tools.newTemp('cond');
     tools.emit(`let ${ssaResult} = NIL; ${ssaResult}: {`);
     let saveIndent = tools.indent;
-    tools.indent = tools.indent + '  ';
+    tools.indent += '  ';
     for (clause of clauses) {
       if (!isCons(clause))
         throw new SchemeCompileError(`Bad cond clause${string(clause)}`);
       let predicateForm = clause[CAR], forms = clause[CDR];
-      let ssaPredicateValue = compileEval(predicateForm, compileScope, tools);
+      let ssaPredicateValue = compileEval(predicateForm, ssaScope, tools);
       tools.emit(`if (schemeTrue(${ssaPredicateValue})) {`)
       let saveIndent = tools.indent;
-      tools.indent = tools.indent + '  ';
+      tools.indent += '  ';
       let ssaValue = 'NIL';
       for (form of forms) {
-        ssaValue = compileEval(form, compileScope, tools);
+        ssaValue = compileEval(form, ssaScope, tools);
       }
       tools.emit(`${ssaResult} = ${ssaValue};`);  // Another PHI node
       tools.emit(`break ${ssaResult};`)
@@ -1628,12 +1627,12 @@ globalScope._help_ = {};  // For clients that want to implement help.
       res = _eval(forms[i], scope);
     return res;
   }
-  function letrec_hook(body, compileScope, tools) {
+  function letrec_hook(body, ssaScope, tools) {
     let ssaResult = tools.newTemp('letrec');
     if (!isCons(body))
       throw new SchemeCompileError(`Bad letrec ${string(body)}`);
     let bindings = body[CAR], forms = body[CDR];
-    compileScope = newScope(compileScope, 'compile-letrec');
+    ssaScope = newScope(ssaScope, 'compile-letrec');
     tools.emit(`let ${ssaResult} = NIL; {`);
     let saveIndent = tools.indent;
     for (binding of bindings) {
@@ -1641,15 +1640,15 @@ globalScope._help_ = {};  // For clients that want to implement help.
         throw new SchemeCompileError(`Bad letrec binding ${string(binding)}`);
       let bound = binding[CAR], boundValueForms = binding[CDR];
       let ssaBound = tools.newTemp(bound);
-      compileScope[bound] = ssaBound;
+      ssaScope[bound] = ssaBound;
       tools.emit(`let ${ssaBound} = NIL`);
       for (let boundValForm of boundValueForms) {
-        let ssaVal = compileEval(boundValForm, compileScope, tools);
+        let ssaVal = compileEval(boundValForm, ssaScope, tools);
         emit(`${ssaBound} = ${ssaVal};`);
       }
     }
     for (form of forms) {
-      let ssaVal = compileEval(form, compileScope, tools);
+      let ssaVal = compileEval(form, ssaScope, tools);
       tools.emit(`${ssaResult} = ${ssaVal};`);
     }
     tools.indent = saveIndent;
@@ -1669,14 +1668,14 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let result = setSym(symbol, value, this);
     return result;
   }
-  function setq_hook(body, compileScope, tools) {
+  function setq_hook(body, ssaScope, tools) {
     if (!isCons(body))
       throw new SchemeCompileError(`Bad setq params ${body}`);
     let varSym = body[CAR], valForms = body[CDR];
     let ssaValue = 'NIL';
     for (let form of valForms)
-      ssaValue = compileEval(form, compileScope, tools);
-    let boundVar = compileScope[varSym];
+      ssaValue = compileEval(form, ssaScope, tools);
+    let boundVar = ssaScope[varSym];
     if (boundVar) {
       tools.emit(`${boundVar} = ${ssaValue};`);
     } else {
@@ -1978,7 +1977,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return val;
   }
-  function siod_catch_hook(body, compileScope, tools) {
+  function siod_catch_hook(body, ssaScope, tools) {
     if (!isCons(body))
       throw new SchemeCompileError(`Bad catch argument ${string(body)}`);
     let ssaTag = body[CAR], forms = body[CDR];
@@ -1986,14 +1985,14 @@ globalScope._help_ = {};  // For clients that want to implement help.
     tools.emit(`let ${ssaResult} = NIL;`);
     tools.emit(`try {`);
     let saveIndent = tools.indent;
-    tools.indent = tools.indent + '  ';
+    tools.indent += '  ';
     let ssaValue = 'NIL';
     for (let form of forms)
-      ssaValue = compileEval(form, compileScope, tools);
+      ssaValue = compileEval(form, ssaScope, tools);
     tools.emit(`${ssaResult} = ${ssaValue};`);
     tools.indent = saveIndent;
     emit(`} catch (e) {`);
-    tools.indent = tools.indent + '  ';
+    tools.indent += '  ';
     let ssaSchemeJSThrow = tools.use(tools.bind(SchemeJSThrow));
     tools.emit(`if (!(e instanceof ${ssaSchemeJSThrow})) throw e;`)
     tools.emit(`if (e.tag !== ${ssaTag}) throw e;`);
@@ -2029,7 +2028,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     return val;
   }
-  function js_catch_hook(body, compileScope, tools) {
+  function js_catch_hook(body, ssaScope, tools) {
     if (!isCons(body))
       throw new SchemeCompileError(`Bad catch argument ${string(body)}`);
     let catchClause = body[CAR], orms = body[CDR];
@@ -2041,19 +2040,19 @@ globalScope._help_ = {};  // For clients that want to implement help.
     tools.emit(`let ${ssaResult} = NIL;`);
     tools.emit(`try {`);
     let saveIndent = tools.indent;
-    tools.indent = tools.indent + '  ';
+    tools.indent += '  ';
     let ssaValue = 'NIL';
     for (let form of forms)
-      ssaValue = compileEval(form, compileScope, tools);
+      ssaValue = compileEval(form, ssaScope, tools);
     tools.emit(`${ssaResult} = ${ssaValue};`);
     tools.indent = saveIndent;
     emit(`} catch (${ssaCatchSym}) {`);
-    compileScope = newScope(compileScope, "js_catch")
-    compileScope[catchVar] = ssaCatchSym;
-    tools.indent = tools.indent + '  ';
+    ssaScope = newScope(ssaScope, "js_catch")
+    ssaScope[catchVar] = ssaCatchSym;
+    tools.indent += '  ';
     let ssaCatchVal = 'NIL';
     for (form of catchForms)
-      ssaCatchVal = compileEval(forn, compileScope, tools);
+      ssaCatchVal = compileEval(forn, ssaScope, tools);
     emit(`${ssaResult} = ${ssaCatchVal};`);
     tools.indent = saveIndent;
     emit(`}`);
@@ -2205,9 +2204,9 @@ globalScope._help_ = {};  // For clients that want to implement help.
       // A closure function leads a double life: as a closure function but also a closure form!
       // Dig out the original function's closure, if it had one.
       let closureBody = fn[CDR];
-      let closureParams = NIL, closureForms = NIL, closureScope = scope;
+      let closureParams = NIL, closureForms = NIL;
       if (closureBody) {
-        closureScope = closureBody[CAR];
+        scope = closureBody[CAR];
         if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
           closureBody = closureBody[CDR];
         closureParams = closureBody[CAR];
@@ -2218,10 +2217,10 @@ globalScope._help_ = {};  // For clients that want to implement help.
         if (evalCount < 0)
           evalCount = 0;
         closure[CAR] = SCLOSURE_ATOM;
-        closure[CDR] = cons(closureScope, cons(evalCount, cons(closureParams, closureForms)));
+        closure[CDR] = cons(scope, cons(evalCount, cons(closureParams, closureForms)));
       } else {
         closure[CAR] = CLOSURE_ATOM;
-        closure[CDR] = cons(closureScope, cons(closureParams, closureForms));
+        closure[CDR] = cons(scope, cons(closureParams, closureForms));
       }
       closure[LIST] = closure[PAIR] = true;
       closure[CLOSURE_ATOM] = true; // marks closure for special "printing"
@@ -2303,9 +2302,9 @@ globalScope._help_ = {};  // For clients that want to implement help.
     for (let i = forms.length; i > 0; --i)
       body = cons(forms[i-1], body);
     let lambda = cons(LAMBDA_ATOM, cons(params, body));
-    let closureScope = this;
-    let schemeClosure = cons(CLOSURE_ATOM, cons(closureScope, lambda[CDR]));
-    return makeJsClosure(closureScope, params, lambda, body, schemeClosure);
+    let scope = this;
+    let schemeClosure = cons(CLOSURE_ATOM, cons(scope, lambda[CDR]));
+    return makeJsClosure(scope, params, lambda, body, schemeClosure);
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
@@ -2316,9 +2315,9 @@ globalScope._help_ = {};  // For clients that want to implement help.
       body = cons(forms[i-1], body);
     let lambda = cons(SLAMBDA_ATOM, cons(evalCount, cons(params, body)));
     if (!isCons(body)) throwBadLambda(lambda);
-    let closureScope = this;
-    let schemeClosure = cons(SCLOSURE_ATOM, cons(closureScope, lambda[CDR]));
-    return makeJsClosure(closureScope, params, lambda, body, schemeClosure, evalCount);
+    let scope = this;
+    let schemeClosure = cons(SCLOSURE_ATOM, cons(scope, lambda[CDR]));
+    return makeJsClosure(scope, params, lambda, body, schemeClosure, evalCount);
   }
 
   //
@@ -2329,7 +2328,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
   // it as a closure. Closures are also decorated with CAR, CDR, LIST and PAIR
   // so that they look exactly like lists to the SchemeJS runtime.
   //
-  function makeJsClosure(closureScope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
+  function makeJsClosure(scope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
     // Examine property list and throw any errors now rather than later.
     // In general, do more work here so the closure can do less work when executed.
     if (typeof lambdaParams === 'symbol') { // curry notation; normalize to classic
@@ -2358,11 +2357,15 @@ globalScope._help_ = {};  // For clients that want to implement help.
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
         if (jitFn)
           return jitFn.apply(this, args);
+        // TODO: the JIT-ed function needs a guard function that tests if the bound
+        // functions have changed then bails back to the interpreter if so.
+        // Until that happens, the JIT shouldn't be enabled.
         if (--jitCount < 0) {
           jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
         }
       }
-      let scope = newScope(closureScope, "lambda-scope"), params = lambdaParams, i = 0, argLength = args.length;
+      scope = newScope(scope, "lambda-scope");
+      let params = lambdaParams, i = 0, argLength = args.length;
       for ( ; isCons(params); ++i, params = params[CDR]) {
         let param = params[CAR], optionalForms, arg;
         if (isCons(param) && param[CAR] === QUESTION_ATOM) {
@@ -2403,8 +2406,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     if (isClosure(a)) return typeof t === 'boolean' ? t : _eval(t, this);
     else return typeof f === 'boolean' ? f : eval(f, this);
   }
-  function closureP_hook(args, compileScope, tools) {
-    return conditionalHooks(args, compileScope, tools, 'is_closure', `is_closure(*)`);
+  function closureP_hook(args, ssaScope, tools) {
+    return conditionalHooks(args, ssaScope, tools, 'is_closure', `is_closure(*)`);
   }
   exportAPI("isClosure", isClosure);
   function isClosure(obj) {
@@ -2470,7 +2473,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
               let value = string(obj[sym]);
               let descVal = ` ${desc}=${value}`;
               if (symStrs.length + descVal.length > 30) {
-                symStrs += "...";
+                symStrs += "...";  // ... signifies more to this list but maxed out
                 break;
               }
               symStrs += descVal;
@@ -2482,7 +2485,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
           put("(");
           sep = "";
           if (obj[LAZYCAR])
-            put("..")
+            put("..");  // .. signifies a lazy car
           else
             toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
           sep = " ";
@@ -2538,7 +2541,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
           }
           while (isCons(obj)) {
             if (obj[LAZYCAR])
-              put("..");
+              put("..");  // .. signifies a lazy car
             else
               toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
             sep = " ";
@@ -3473,7 +3476,7 @@ function put(str, nobreak) {
       let argv = [], argCount = 0;
       for (; isCons(args); ++argCount, args = args[CDR]) {
         let arg = args[CAR];
-        if (argCount < evalArgs)
+        if (argCount < evalCount)
           arg = _eval(arg, scope);
         argv.push(arg);
       }
@@ -3489,7 +3492,7 @@ function put(str, nobreak) {
     let bindSymToObj = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
     let tools = { bind, use, boundVal, emit, use, newTemp, scope, indent: '', evalLimit: 100, functionDescriptors };
-    let compileScope = new Scope();
+    let ssaScope = new Scope();
     // Well-known names
     use(bind(string, "string"));
     use(bind(NIL, "NIL"));
@@ -3499,7 +3502,8 @@ function put(str, nobreak) {
     use(bind(CDR, "CDR"));
     use(bind(car, "car"));
     use(bind(cdr, "cdr"));
-    let ssaFunction = compileLambda(name, lambdaForm, compileScope, tools);
+    use(bind(Atom, "Atom"));
+    let ssaFunction = compileLambda(name, lambdaForm, ssaScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
     emitted = [];
@@ -3512,6 +3516,7 @@ function put(str, nobreak) {
     let code = emitted.join('');
     return { code, bindSymToObj };
 
+    // Binds a JavaScript object into the closure
     function bind(obj, name) {
       if (obj === undefined) return "undefined";
       if (obj === null) return "null";
@@ -3521,6 +3526,7 @@ function put(str, nobreak) {
       if (obj === false) return "false";
       if (isNil(obj)) return "NIL";
       if (obj === null) return "null";
+      if (isAtom(obj)) return `Atom(${string(obj.description)})`;
       let boundSym = bindObjToSym.get(obj);
       if (boundSym) return boundSym;
       if (name) {
@@ -3564,7 +3570,7 @@ function put(str, nobreak) {
     }
     // Functions that end up being used as templates are bound because
     // we don't know in advance whether they'll be used as values.
-    // "use" is called on any bound value that is ultimately used.
+    // "use" is called on any bound value that is ultimately used for its value.
     // This keeps things from being bound unnecessarily at runtime.
     function use(ssaValue) {
       usedSsaValues[ssaValue] = true;
@@ -3576,7 +3582,8 @@ function put(str, nobreak) {
   // This function parallels "_eval" as closely as possible. If you make a change there
   // you almost certainly have to make a corresponding one here.
   //
-  function compileEval(form, compileScope, tools) {
+  function compileEval(form, ssaScope, tools) {
+    let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
     if (--tools.evalLimit < 0)
       throw new SchemeCompileError(`Too comlpex ${string(form)}`);
     if (form === undefined) return "undefined";
@@ -3589,15 +3596,15 @@ function put(str, nobreak) {
     if (isPrimitive(form)) throw new LogicError(`All primitives should be handled by now`)
     if (typeof form === 'symbol') {
       let sym = form;
-      let ssaValue = compileScope[sym];
+      let ssaValue = ssaScope[sym];
       if (ssaValue)
         return ssaValue;
       // for now, only bind functions from outside scope
-      let scopedVal = tools.scope[sym];
+      let scopedVal = scope[sym];
       if (scopedVal && typeof scopedVal === 'function') {
         let fn = scopedVal;
         let name = fn.name ?? fn[NAMETAG] ?? sym.description;
-        ssaValue = tools.bind(fn, name);
+        ssaValue = bind(fn, name);
         let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
         let requiredCount = parameterDescriptor & 0xffff;
         let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
@@ -3614,7 +3621,7 @@ function put(str, nobreak) {
         tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, params, restParam, valueTemplate, bodyTemplate };
         return ssaValue;
       }
-      return `resolveUnbound(${tools.use(tools.bind(sym))})`;
+      return `resolveUnbound(${use(bind(sym))})`;
     }
     if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
       console.log("COMPILE EVAL", string(form));
@@ -3622,115 +3629,141 @@ function put(str, nobreak) {
       let fn = form[CAR];
       if (fn === QUOTE_ATOM) {
         if (!isCons(form)) throwBadForm();
-        return tools.bind(form[CDR][CAR], 'quoted');
+        return bind(form[CDR][CAR], 'quoted');
       }
       let ssaFunction;
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
-        ssaFunction = compileLambda(null, form, compileScope, tools);
+        ssaFunction = compileLambda(null, form, ssaScope, tools);
       else
-        ssaFunction = compileEval(fn, compileScope, tools);
+        ssaFunction = compileEval(fn, ssaScope, tools);
       let args = form[CDR];
       let functionDescriptor = tools.functionDescriptors[ssaFunction];
       if (!functionDescriptor) {
-        tools.use(ssaFunction);
+        use(ssaFunction);
         let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
-        let ssaResult = tools.newTemp(fName);
-        let ssaArgList = tools.use(tools.bind(args, `${fName}_args`));
-        tools.emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
+        let ssaResult = newTemp(fName);
+        let ssaArgList = use(bind(args, `${fName}_args`));
+        emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
         return ssaResult;
       }
       let requiredCount = functionDescriptor.requiredCount;
       let evalCount = functionDescriptor.evalCount;
       let fName = functionDescriptor.name;
+      let params = functionDescriptor.params;
+      let restParam = functionDescriptor.restParam;
+      let compileHook = functionDescriptor.compileHook;
+      let valueTemplate = functionDescriptor.valueTemplate;
+      let bodyTemplate = functionDescriptor.bodyTemplate;
 
       // Run through the arg list evaluating args
-      let argv = [], argCount = 0;
+      let ssaArgv = [], ssaArgStr = '', argCount = 0;
       for ( ; isCons(args) ; ++argCount, args = args[CDR]) {
-        let arg = args[CAR];
+        let arg = args[CAR], ssaArg;
         if (argCount < evalCount)
-          arg = tools.use(compileEval(arg, compileScope, tools));
-        argv.push(arg);
-      }
-      let argStr = '', argNo = 0;
-      for (let arg of argv) {
-        if (argNo >= evalCount)
-          arg = tools.use(tools.bind(arg, `arg_${argNo}`));
-        argStr += `, ${arg}`;
-        argNo += 1;
+          arg = ssaArg  = use(compileEval(arg, ssaScope, tools));
+        else if (!compileHook)  // hooks get unbound unevaluated args
+          arg = ssaArg = use(bind(arg, `arg_${argCount}`));
+        ssaArgv.push(arg);
+        ssaArgStr += `, ${arg}`;  // Bogus if there's a hook but it isn't used in that case
       }
       // Cases where we simply invoke the function:
       //  - we have at least required number of arguments
       //  - we have no arguments
       // Otherwise, return a closure.
       if (argCount >= requiredCount || argCount === 0) {
-        let compileHook = functionDescriptor.compileHook;
-        let valueTemplate = functionDescriptor.valueTemplate;
-        let bodyTemplate = functionDescriptor.bodyTemplate;
-        let params = functionDescriptor.params;
-        let restParam = functionDescriptor.restParam;
         if (compileHook) {
-          let ssaResult = compileHook(argv, compileScope, tools);
-          tools.use(ssaResult);
+          let ssaResult = compileHook(ssaArgv, ssaScope, tools);
+          use(ssaResult);
           return ssaResult;
         }
         if (valueTemplate) {
-          let ssaResult = tools.newTemp(fName);
-          tools.emit(`let ${ssaResult}; {`);
+          let ssaResult = newTemp(fName);
+          emit(`let ${ssaResult}; {`);
           let saveIndent = tools.indent;
-          tools.indent = saveIndent + "  ";
+          tools.indent += '  ';
           for (let i = 0; i < params.length; ++i) {
-            let ssaVal = i < argv.length ? argv[i] : 'undefined';
-            tools.use(ssaVal);
-            tools.emit(`let ${params[i]} = ${ssaVal};`);
+            let ssaVal = i < ssaArgv.length ? ssaArgv[i] : 'undefined';
+            emit(`let ${params[i]} = ${ssaVal};`);
           }
           if (restParam) {
             let str = '';
-            for (let i = params.length, argvLength = argv.length; i < argvLength; ++i)
-              str += `${argv[i]}, `;
-            tools.emit(`let ${restParam} = [${str}];`);
+            for (let i = params.length; i < ssaArgv.length; ++i)
+              str += `${ssaArgv[i]}, `;
+            emit(`let ${restParam} = [${str}];`);
           }
           if (bodyTemplate)
-            tools.emit(bodyTemplate); 
-          tools.emit(`${ssaResult} = (${valueTemplate});`);
+            emit(bodyTemplate); 
+          emit(`${ssaResult} = (${valueTemplate});`);
           tools.indent = saveIndent;
-          tools.emit(`}`);
+          emit(`}`);
           return ssaResult;
         }
-        let ssaResult = tools.newTemp(fName);
+        // TODO: Inline SchemeJS functions? Or just trust the JavaScript JIT to do it?
+        let ssaResult = newTemp(fName);
         if (TRACE_COMPILER)
-          console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...argv);
-        tools.use(ssaFunction);
-        tools.emit(`let ${ssaResult} = ${ssaFunction}.call(this${argStr});`)
+          console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
+        use(ssaFunction);
+        emit(`let ${ssaResult} = ${ssaFunction}.call(this${ssaArgStr});`)
         return ssaResult;
       }
-      // Generate closure (see "_eval", I ain't gonna 'splain it agin)
-      let ssaResult = tools.newTemp(fName);
-      let closureBody = fn[CDR];
-      let closureParams = NIL, closureForms = NIL, closureScope = tools.scope;
-      if (closureBody) {
-        closureScope = closureBody[CAR];
+      // Generate closure (see "_eval", I ain't gonna splain it agin)
+      let ssaResult = newTemp(fName);
+      // First, cons up the closure S-expr.
+      let closureBody;
+      let closureParams = NIL, closureForms = NIL;
+      if (fn[CAR] === CLOSURE_ATOM || fn[CAR] === SCLOSURE_ATOM) {  // Case where we're dealing with a SchemeJS function
+        scope = newScope(closureBody[CAR], "compiled-closure");
+        closureBody = fn[CDR];
         if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
           closureBody = closureBody[CDR];
         closureParams = closureBody[CAR];
         closureForms = closureBody[CDR];
+      } else {
+        scope = newScope(scope, "compiled-closure");
+        closureParams = NIL;
+        if (restParam)
+          closureParams = Atom(restParam);
+        for (let i = params.length; i > 0; --i)
+          closureParams = cons(Atom(params[i-1]), closureParams);
+        closureBody = cons(fn, closureParams);
       }
-      let ssaBoundScope;
-      if (closureScope === tools.scope)
-        ssaBoundScope = 'this';
-      else
-        ssaBoundScope = tools.use(tools.bind(closureScope, `${fName}_scope`));
-      tools.emit(`let ${ssaResult} = (...args) => ${ssaFunction}.apply(${ssaBoundScope}${argStr}, ...args);`);
+      // Now go through the arguments, matching to parameters, adding to both the ssaScope
+      // and to the scope
+      ssaScope = newScope(ssaScope, "ssa-closure-scope");
+      let paramStr = '', sep = '';
+      for (let i = 0; i < ssaArgv.length; ++i) {
+        let arg = ssaArgv[i];
+        if (isCons(params)) {
+          let param = param[CAR];
+          let ssaParam = newTemp(param);
+          paramStr += sep + ssaParam;
+          sep = ', ';
+          let ssaBoundParam = bind(param);
+          emit()
+          
+          params = params[CDR];
+          scope[param] = arg;
+          ssaScope[params[i]] = ssaParam;
+        }
+      }
+
+      use(ssaFunction);
+      let saveIndent = tools.indent;
+      tools.indent += '  ';
+      emit(`${ssaResult} = (...args) => ${ssaFunction}.apply(scope${ssaArgStr}, ...args);`);
+      tools.indent = saveIndent;
+      emit(`}`);
       let closureForm = cons();
+      // closureParams is wrong here; shuld be remaining params
       if (evalCount !== MAX_INTEGER) {
         evalCount -= argCount;
         if (evalCount < 0)
           evalCount = 0;
         closureForm[CAR] = SCLOSURE_ATOM;
-        let closureScope = newScope(tools.scope, "compiled-closure-scope");
-        closureForm[CDR] = cons(closureScope, cons(evalCount, cons(closureParams, closureForms)));
+        closureForm[CDR] = cons(scope, cons(evalCount, cons(closureParams, closureForms)));
       } else {
         closureForm[CAR] = CLOSURE_ATOM;
-        closureForm[CDR] = cons(closureScope, cons(closureParams, closureForms));
+        closureForm[CDR] = cons(scope, cons(closureParams, closureForms));
       }
       requiredCount -= argCount;
       if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
@@ -3740,34 +3773,34 @@ function put(str, nobreak) {
     // Special eval for JS Arrays and Objects
     if (form !== null && typeof form === 'object') {
       if (form instanceof Array) {
-        let ssaArrayLiteral = tools.newTemp("arrayliteral");
+        let ssaArrayLiteral = newTemp("arrayliteral");
         let evalledSsaValues = [];
         for (let element of form) {
-          let ssaValue = compileEval(element, compileScope, tools);
-          tools.use(ssaValue);
+          let ssaValue = compileEval(element, ssaScope, tools);
+          use(ssaValue);
           evalledSsaValues.push(ssaValue);
         }
-        tools.emit(`let ${ssaArrayLiteral} = [`);
+        emit(`let ${ssaArrayLiteral} = [`);
         for (let ssaElement of evalledSsaValues)
-          tools.emit(`  ${ssaElement},`);
-        tools.emit(`];`);
+          emit(`  ${ssaElement},`);
+        emit(`];`);
         return ssaArrayLiteral;
       }
-      let ssaObjectLiteral = tools.newTemp("objectliteral");
-      tools.emit(`let ${ssaObjectLiteral} = {};`);
+      let ssaObjectLiteral = newTemp("objectliteral");
+      emit(`let ${ssaObjectLiteral} = {};`);
       for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
         let value = form[key];
         let ssaKey;
         if (value instanceof EvaluateKeyValue) {
-          ssaKey = compileEval(value.key, compileScope, tools);
+          ssaKey = compileEval(value.key, ssaScope, tools);
           value = value.value;
         } else {
-          ssaKey = tools.bind(key)
+          ssaKey = bind(key)
         }
-        let ssaValue = compileEval(value, compileScope, tools);
-        tools.use(ssaKey);
-        tools.use(ssaValue);
-        tools.emit(`${ssaObjectLiteral}[${ssaKey}] = ${ssaValue};`);
+        let ssaValue = compileEval(value, ssaScope, tools);
+        use(ssaKey);
+        use(ssaValue);
+        emit(`${ssaObjectLiteral}[${ssaKey}] = ${ssaValue};`);
       }
       return ssaObjectLiteral;
     }
@@ -3782,8 +3815,9 @@ function put(str, nobreak) {
   // This function parallels makeJsClosure as closely as possible. If you make a change
   // there, you almost certainly have to make a corresponding change here.
   //
-  function compileLambda(name, lambda, compileScope, tools) {
-    let ssaFunction = tools.newTemp(name);
+  function compileLambda(name, lambda, ssaScope, tools) {
+    let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
+    let ssaFunction = newTemp(name);
     if (!isCons(lambda)) throwBadCompiledLambda(lambda);
     let body = lambda[CDR];
     let evalCount = MAX_INTEGER;
@@ -3800,7 +3834,7 @@ function put(str, nobreak) {
     if (!isList(params)) throwBadCompiledLambda(lambda);
     let forms = body[CDR];
     let paramv = [];
-    compileScope = newScope(compileScope, "compile-lambda-scope");
+    ssaScope = newScope(ssaScope, "compile-lambda-scope");
     if (typeof params === 'symbol') // Curry notation
       params = cons(params, NIL);
     let paramCount = 0, requiredCount, optionalFormsVec = [];
@@ -3808,64 +3842,66 @@ function put(str, nobreak) {
       let param = params[CAR], ssaParam;
       if (isCons(param)) {
         if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
-          throwBadCompiledLambda(lambda, `what's this?  ${string(param)}`);
-        ssaParam = tools.newTemp(param[CDR][CAR]);
+          throwBadCompiledLambda(lambda, `Bad param ${string(param)}`);
+        ssaParam = newTemp(param[CDR][CAR]);
         optionalFormsVec.push(param[CDR][CDR]);
         if (requiredCount === undefined)
           requiredCount = paramCount;
       } else {
-        ssaParam = tools.newTemp(param);
+        ssaParam = newTemp(param);
         optionalFormsVec.push(undefined);
       }
       paramv.push(ssaParam);
-      compileScope[param] = ssaParam;
+      ssaScope[param] = ssaParam;
     }
     if (typeof params === 'symbol') {  // rest param (does not increment paramCount)
-      let ssaParam = tools.newTemp(param);
+      let ssaParam = newTemp(param);
       paramv.push(`...${ssaParam})`);
-      compileScope[params] = ssaParam;
+      ssaScope[params] = ssaParam;
     }
     else if (!isNil(params))
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
     if (requiredCount === undefined)
-      requiredCount = paramCount;  // count does NOT contain rest param
+      requiredCount = paramCount;  // paramCount does NOT contain rest param
     tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name };
     if (name)
-      compileScope[name] = ssaFunction;
-    let delim = '', paramStr = '', saveIndent = tools.indent;
+      ssaScope[name] = ssaFunction;
+    let delim = '', paramStr = '';
     for (let param of paramv) {
       paramStr += delim + param;
       delim = ', ';
     }
-    tools.emit(`function ${ssaFunction}(${paramStr}) {`);
+    emit(`function ${ssaFunction}(${paramStr}) {`);
+    let saveIndent = tools.indent;
+    tools.indent += '  ';
     for (let i = 0, optionalFormsVecLength = optionalFormsVec.length; i < optionalFormsVecLength; ++i) {
       let optionalForms = optionalFormsVec[i];
       if (optionalForms !== undefined) {
         let param = paramv[i];
-        tools.emit(`if (${param} === undefined) {`);
+        emit(`if (${param} === undefined) {`);
         let saveIndent = tools.indent;
         tools.indent += '  ';
         let ssaRes = 'NIL';
         for (let form of optionalForms)
-          ssaRes = compileEval(form, compileScope, tools);
-        tools.emit(`${param} = ${ssaRes};`);
+          ssaRes = compileEval(form, ssaScope, tools);
+        emit(`${param} = ${ssaRes};`);
         tools.indent = saveIndent;
-        tools.emit('}');
+        emit('}');
       }
     }
-    tools.indent = saveIndent + "  ";
+    tools.indent += '  ';
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
-      ssaResult = compileEval(forms[CAR], compileScope, tools);
-    tools.emit(`return ${ssaResult};`);
+      ssaResult = compileEval(forms[CAR], ssaScope, tools);
+    emit(`return ${ssaResult};`);
     tools.indent = saveIndent;
-    tools.emit(`}`);
+    emit(`}`);
     let closureAtom = CLOSURE_ATOM;
     if (evalCount !== MAX_INTEGER) {
       closureAtom = SCLOSURE_ATOM;
       body = cons(evalCount, body);
     }
-    let lambdaScope = newScope(tools.scope, "compiled-lambda-scope");
+    let lambdaScope = newScope(scope, "compiled-lambda-scope");
     let closureForm = cons(closureAtom, cons(lambdaScope, body));
     decorateCompiledClosure(ssaFunction, closureForm, requiredCount, evalCount, tools);
     return ssaFunction;
@@ -3874,20 +3910,25 @@ function put(str, nobreak) {
   function throwBadCompiledLambda(lambda, msg) { throw new SchemeCompileError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
   
   function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCount, tools) {
-    let ssaClosureForm = tools.use(tools.bind(closureForm, "closureForm"));
-    let _parameter_descriptor = tools.use(tools.bind(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR"))
-    let _car = tools.use(tools.bind(CAR, "CAR"));
-    let _cdr = tools.use(tools.bind(CDR, "CDR"));
-    let _pair = tools.use(tools.bind(PAIR, "PAIR"));
-    let _list = tools.use(tools.bind(PAIR, "LIST"));
-    let _closure_atom = tools.use(tools.bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
+    let emit = tools.emit, use = tools.use, bind = tools.bind;
+    let ssaClosureForm = use(bind(closureForm, "closureForm"));
+    let _parameter_descriptor = use(bind(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR"))
+    let _car = use(bind(CAR, "CAR"));
+    let _cdr = use(bind(CDR, "CDR"));
+    let _pair = use(bind(PAIR, "PAIR"));
+    let _list = use(bind(PAIR, "LIST"));
+    let _closure_atom = use(bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
     let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
-    tools.emit(`${ssaClosure}[${_parameter_descriptor}] = ${parameterDescriptor};`);
-    // the function is simultaneously a Scheme closure object
-    tools.emit(`${ssaClosure}[${_car}] = ${ssaClosureForm}[CAR];`);
-    tools.emit(`${ssaClosure}[${_cdr}] = ${ssaClosureForm}[CDR];`);
+    emit(`// evalCount: ${evalCount}, requiredCount: ${requiredCount}`)
+    emit(`${ssaClosure}[${_parameter_descriptor}] = ${parameterDescriptor};`);
+    // The function is simultaneously a Scheme closure object
+    let closureStr = string(closureForm);
+    for (let str of closureStr.split('\n'))
+      emit(`// ${str}`);
+    emit(`${ssaClosure}[${_car}] = ${ssaClosureForm}[CAR];`);
+    emit(`${ssaClosure}[${_cdr}] = ${ssaClosureForm}[CDR];`);
     // Mark object as a list, a pair, and a closure.
-    tools.emit(`${ssaClosure}[${_pair}] = ${ssaClosure}[${_list}] = ${ssaClosure}[${_closure_atom}] = true;`);
+    emit(`${ssaClosure}[${_pair}] = ${ssaClosure}[${_list}] = ${ssaClosure}[${_closure_atom}] = true;`);
   }
 
   const JS_IDENT_REPLACEMENTS  = {
