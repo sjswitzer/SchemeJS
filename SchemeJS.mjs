@@ -3785,7 +3785,7 @@ function put(str, nobreak) {
       if (typeof innerParams === 'symbol')
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
-      emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.apply(scope${closedArgStr}, ${paramStr});`);
+      emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr});`);
       decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;
       emit(`}`);
