@@ -3710,63 +3710,71 @@ function put(str, nobreak) {
       let ssaResult = newTemp(fName);
       // First, cons up the closure S-expr.
       let closureBody;
-      let closureParams = NIL, closureForms = NIL;
-      if (fn[CAR] === CLOSURE_ATOM || fn[CAR] === SCLOSURE_ATOM) {  // Case where we're dealing with a SchemeJS function
+      let innerParams = NIL, innerForms = NIL;
+      requiredCount -= argCount;
+      if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
+      if (fn[CAR] === CLOSURE_ATOM || fn[CAR] === SCLOSURE_ATOM) {
         scope = newScope(closureBody[CAR], "compiled-closure");
         closureBody = fn[CDR];
         if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
           closureBody = closureBody[CDR];
-        closureParams = closureBody[CAR];
-        closureForms = closureBody[CDR];
+        innerParams = closureBody[CAR];
+        innerForms = closureBody[CDR];
       } else {
-        scope = newScope(scope, "compiled-closure");
-        closureParams = NIL;
+        scope = newScope(scope, "compiled-closure-scope");
         if (restParam)
-          closureParams = Atom(restParam);
+          innerParams = Atom(restParam);
         for (let i = params.length; i > 0; --i)
-          closureParams = cons(Atom(params[i-1]), closureParams);
-        closureBody = cons(fn, closureParams);
+          innerParams = cons(Atom(params[i-1]), innerParams);
+        innerForms = cons(cons(fn, innerParams), NIL);
       }
-      // Now go through the arguments, matching to parameters, adding to both the ssaScope
-      // and to the scope
-      ssaScope = newScope(ssaScope, "ssa-closure-scope");
-      let paramStr = '', sep = '';
-      for (let i = 0; i < ssaArgv.length; ++i) {
-        let arg = ssaArgv[i];
-        if (isCons(params)) {
-          let param = param[CAR];
-          let ssaParam = newTemp(param);
-          paramStr += sep + ssaParam;
-          sep = ', ';
-          let ssaBoundParam = bind(param);
-          emit()
-          
-          params = params[CDR];
-          scope[param] = arg;
-          ssaScope[params[i]] = ssaParam;
-        }
+      // Peel off the number of parameters we have arguments for
+      let capturedParams = NIL, last;
+      for (let i = argCount; i > 0; --i, innerParams = innerParams[CDR]) {
+        if (!isCons(innerParams))
+          throw new LogicError(`There should be enough params`);
+        let item = cons(innerParams[CAR], NIL);
+        if (last) last = last[CDR] = item;
+        else capturedParams = last = item;
       }
-
-      use(ssaFunction);
-      let saveIndent = tools.indent;
-      tools.indent += '  ';
-      emit(`${ssaResult} = (...args) => ${ssaFunction}.apply(scope${ssaArgStr}, ...args);`);
-      tools.indent = saveIndent;
-      emit(`}`);
+      if (!last) throw new LogicError(`There should be at least one param`);
+      closureBody = cons(innerParams, innerForms);
       let closureForm = cons();
-      // closureParams is wrong here; shuld be remaining params
       if (evalCount !== MAX_INTEGER) {
         evalCount -= argCount;
         if (evalCount < 0)
           evalCount = 0;
         closureForm[CAR] = SCLOSURE_ATOM;
-        closureForm[CDR] = cons(scope, cons(evalCount, cons(closureParams, closureForms)));
+        closureForm[CDR] = cons(scope, cons(evalCount, cons(closureParams, innerForms)));
       } else {
         closureForm[CAR] = CLOSURE_ATOM;
-        closureForm[CDR] = cons(scope, cons(closureParams, closureForms));
+        closureForm[CDR] = cons(scope, closureBody);
       }
-      requiredCount -= argCount;
-      if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
+      // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
+      // and to the scope
+      ssaScope = newScope(ssaScope, "ssa-closure-scope");
+      let paramStr = '', sep = '', ssaParams = [];
+      for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR]) {
+        let arg = ssaArgv[i];
+        if (isCons(tmp)) {
+          let param = tmp[CAR];
+          let ssaParam = newTemp(param);
+          ssaScope[params[i]] = ssaParam;
+          ssaParams.push(ssaParam);
+          paramStr += sep + ssaParam;
+          sep = ', ';
+        }
+      }
+      use(ssaFunction);
+      emit(`function ${ssaResult}(${paramStr}, ...rest) {`);
+      let saveIndent = tools.indent;
+      tools.indent += '  ';
+      emit(`let scope = ${ssaResult}[CDR][CAR];`);
+      for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR])
+        emit(`scope[Atom(${string(tmp[CAR].description)})] = ${ssaParams[i]};`);
+      emit(`return ${ssaFunction}.apply(scope, ${paramStr}, ...rest);`);
+      tools.indent = saveIndent;
+      emit(`}`);
       decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
       return ssaResult;
     }
@@ -3889,7 +3897,6 @@ function put(str, nobreak) {
         emit('}');
       }
     }
-    tools.indent += '  ';
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
       ssaResult = compileEval(forms[CAR], ssaScope, tools);
@@ -3919,7 +3926,8 @@ function put(str, nobreak) {
     let _list = use(bind(PAIR, "LIST"));
     let _closure_atom = use(bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
     let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
-    emit(`// evalCount: ${evalCount}, requiredCount: ${requiredCount}`)
+    let evalCountStr = evalCount === MAX_INTEGER ? "MAX_INTEGER" : String(evalCount);
+    emit(`// evalCount: ${evalCountStr}, requiredCount: ${requiredCount}`)
     emit(`${ssaClosure}[${_parameter_descriptor}] = ${parameterDescriptor};`);
     // The function is simultaneously a Scheme closure object
     let closureStr = string(closureForm);
