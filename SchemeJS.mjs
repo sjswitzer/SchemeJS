@@ -58,7 +58,7 @@ export function createInstance(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
-  const JITCOMPILED = Symbol("JIT-COMPILED");
+  const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JIT-COMPILED");
   const NAMETAG = Symbol("NAMETAG");
   // Since this symbol is tagged on external JS functions,label it as ours as a courtesy.
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
@@ -2515,7 +2515,9 @@ globalScope._help_ = {};  // For clients that want to implement help.
                       toString(evalCount, maxCarDepth, maxCdrDepth-1);
                       sep = " ";
                     }
-                    toString(objCar, maxCarDepth-1, maxCdrDepth);  // %%closure or %%%closure
+                    let str = string(objCar);  // %%closure or %%%closure
+                    if (obj[COMPILED]) str += "-compiled";
+                    put(str);
                     sep = " ";
                     toString(scopeCons[CAR], maxCarDepth-1, maxCdrDepth-2);  // scope
                     sep = " ";
@@ -2540,10 +2542,13 @@ globalScope._help_ = {};  // For clients that want to implement help.
             }
           }
           while (isCons(obj)) {
-            if (obj[LAZYCAR])
+            if (obj[LAZYCAR]) {
               put("..");  // .. signifies a lazy car
-            else
+            } else if (obj[COMPILED]) {
+              put(string(obj[CAR]) + "-compiled");
+            } else {
               toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
+            }
             sep = " ";
             if (obj[LAZYCDR])
               return put("...)", true);
@@ -3506,6 +3511,7 @@ function put(str, nobreak) {
     use(bind(CDR, "CDR"));
     use(bind(PAIR, "PAIR"));
     use(bind(LIST, "LIST"));
+    use(bind(COMPILED, "COMPILED"));
     let ssaFunction = compileLambda(name, lambdaForm, ssaScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
@@ -3944,9 +3950,9 @@ function put(str, nobreak) {
     emit(`${ssaClosure}[CAR] = ${ssaClosureForm}[CAR];`);
     emit(`${ssaClosure}[CDR] = new Cons(scope, ${ssaClosureForm}[CDR][CDR]);`);
     // Mark object as a list, a pair, and a closure.
-    emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
+    emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = ${ssaClosure}[COMPILED] = true;`);
   }
-
+  
   const JS_IDENT_REPLACEMENTS  = {
     '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
     '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$dash', '=': '$eq', '<': '$lt',
