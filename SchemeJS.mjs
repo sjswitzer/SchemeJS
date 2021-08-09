@@ -3516,7 +3516,7 @@ function put(str, nobreak) {
     for (let bindingName of Object.keys(bindSymToObj))
       if (usedSsaValues[bindingName])
         emit(`let ${bindingName} = bound[${string(bindingName)}];`);
-    emit(`let CLOSURE_ATOM = Atom("CLOSURE_ATOM");`)
+    emit(`let CLOSURE_ATOM = Atom(${string(CLOSURE_ATOM.description)});`)
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     return { code, bindSymToObj };
