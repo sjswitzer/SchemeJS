@@ -3787,7 +3787,6 @@ function put(str, nobreak) {
       use(ssaFunction);
       emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.apply(scope${closedArgStr}, ${paramStr});`);
       decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
-      emit(`${ssaResult}[CDR][CAR] = scope;`);
       tools.indent = saveIndent;
       emit(`}`);
       return ssaResult;
@@ -3943,8 +3942,7 @@ function put(str, nobreak) {
     for (let str of closureStr.split('\n'))
       emit(`// ${str}`);
     emit(`${ssaClosure}[CAR] = ${ssaClosureForm}[CAR];`);
-    // So that the scope element can be patched
-    emit(`${ssaClosure}[CDR] = new Cons(${ssaClosureForm}[CDR][CAR], ${ssaClosureForm}[CDR][CDR]);`);
+    emit(`${ssaClosure}[CDR] = new Cons(scope, ${ssaClosureForm}[CDR][CDR]);`);
     // Mark object as a list, a pair, and a closure.
     emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
   }
