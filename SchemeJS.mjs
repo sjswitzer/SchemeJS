@@ -58,7 +58,7 @@ export function createInstance(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
-  const COMPILED = Symbol('COMPILED'), JITCOMPILED = Symbol("JIT-COMPILED");
+  const JITCOMPILED = Symbol("JIT-COMPILED");
   const NAMETAG = Symbol("NAMETAG");
   // Since this symbol is tagged on external JS functions,label it as ours as a courtesy.
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
@@ -2621,10 +2621,6 @@ globalScope._help_ = {};  // For clients that want to implement help.
         if (printBody && (printBody.length > 80 || printBody.includes('\n')))
           printBody = '';
         put(`{function ${name}${params}${printBody}`);
-        if (obj[COMPILED]) {
-          sep = " ";
-          toString(obj[COMPILED], maxCarDepth, maxCdrDepth);
-        }
         sep = "";
         return put("}", true);
       }
@@ -3871,8 +3867,6 @@ function put(str, nobreak) {
     }
     let lambdaScope = newScope(tools.scope, "compiled-lambda-scope");
     let closureForm = cons(closureAtom, cons(lambdaScope, body));
-    let _compiled = tools.use(tools.bind(COMPILED, "COMPILED"));
-    tools.emit(`${ssaFunction}[${_compiled}] = ${tools.use(tools.bind(lambda, 'compiled'))};`);
     decorateCompiledClosure(ssaFunction, closureForm, requiredCount, evalCount, tools);
     return ssaFunction;
   }
@@ -3881,7 +3875,7 @@ function put(str, nobreak) {
   
   function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCount, tools) {
     let ssaClosureForm = tools.use(tools.bind(closureForm, "closureForm"));
-    let _parameter_descriptor = tools.use(tools.bind(COMPILED, "PARAMETER_DESCRIPTOR"))
+    let _parameter_descriptor = tools.use(tools.bind(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR"))
     let _car = tools.use(tools.bind(CAR, "CAR"));
     let _cdr = tools.use(tools.bind(CDR, "CDR"));
     let _pair = tools.use(tools.bind(PAIR, "PAIR"));
