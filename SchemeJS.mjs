@@ -28,7 +28,7 @@ export function createInstance(schemeOpts = {}) {
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   const jitThreshold = schemeOpts.jitThreshold ?? undefined;
   const TRACE_INTERPRETER = !!(schemeOpts.traceInterpreter ?? false);
-  const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? false);
+  const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? true);
   const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? true);
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
@@ -617,6 +617,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return a;
   }
   function add_hook(args, compileScope, tools) {
+    if (args.length === 0) return 'NaN';
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` + ${args[i]}`;
@@ -632,6 +633,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return a;
   }
   function sub_hook(args, compileScope, tools) {
+    if (args.length === 0) return 'NaN';
     if (args.length === 1)
       return `(-${args[0]})`;
     let str = `(${args[0]}`;
@@ -649,6 +651,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return a;
   }
   function mul_hook(args, compileScope, tools) {
+    if (args.length === 0) return 'NaN';
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` * ${args[i]}`;
@@ -664,6 +667,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     return a;
   }
   function div_hook(args, compileScope, tools) {
+    if (args.length === 0) return 'NaN';
     if (args.length === 1)
       return `(1 / ${args[0]})`;
     let str = `(${args[0]}`;
@@ -3704,8 +3708,9 @@ function put(str, nobreak) {
         return ssaResult;
       }
       // Generate closure (see "_eval", I ain't gonna 'splain it agin)
+      let ssaResult = tools.newTemp(fName);
       let closureBody = fn[CDR];
-      let closureParams = NIL, closureForms = NIL, closureScope = scope;
+      let closureParams = NIL, closureForms = NIL, closureScope = tools.scope;
       if (closureBody) {
         closureScope = closureBody[CAR];
         if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
@@ -3714,12 +3719,11 @@ function put(str, nobreak) {
         closureForms = closureBody[CDR];
       }
       let ssaBoundScope;
-      if (closureScope === 'this')
+      if (closureScope === tools.scope)
         ssaBoundScope = 'this';
       else
         ssaBoundScope = tools.use(tools.bind(closureScope, `${fName}_scope`));
-      tools.use(ssaFunction);
-      tools.emit(`${ssaResult} = (...args) => ${ssaFunction}.apply(${ssaBoundScope}, ${argStr}, ...args);`);
+      tools.emit(`let ${ssaResult} = (...args) => ${ssaFunction}.apply(${ssaBoundScope}${argStr}, ...args);`);
       let closureForm = cons();
       if (evalCount !== MAX_INTEGER) {
         evalCount -= argCount;

@@ -187,6 +187,7 @@ export function run(opts = {}) {
 
     EXPECT(` (+) `, NaN);  // Sure. Why not?
     EXPECT(` (+ 1) `, isClosure);
+    EXPECT(` ((+ 1) 2) `, 3);
     EXPECT(` (+ 1 2) `, 3);
     EXPECT(` (+ 1 2 3) `, 6);
     EXPECT(` (+ 1n 2n) `, 3n);
