@@ -698,7 +698,7 @@ export function run(opts = {}) {
   function EXPECT(test, expected, report = {}) {
     let result, ok = false, savedScope;
     if (testScope === globalScope)
-      savedScope = beginTestScope();
+      savedScope = beginTestScope();``
     try {
       if (typeof test === 'function')
         result = test.call(testScope);

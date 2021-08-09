@@ -3498,20 +3498,25 @@ function put(str, nobreak) {
     use(bind(NIL, "NIL"));
     use(bind(schemeTrue, "schemeTrue"));
     use(bind(Cons, "Cons"));
-    use(bind(CAR, "CAR"));
-    use(bind(CDR, "CDR"));
     use(bind(car, "car"));
     use(bind(cdr, "cdr"));
     use(bind(Atom, "Atom"));
+    use(bind(newScope, "newScope"));
+    use(bind(CAR, "CAR"));
+    use(bind(CDR, "CDR"));
+    use(bind(PAIR, "PAIR"));
+    use(bind(LIST, "LIST"));
     let ssaFunction = compileLambda(name, lambdaForm, ssaScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
     emitted = [];
     emit(`// params: bound, resolveUnbound, invokeUnbound`);
     emit('"use strict";')
+    emit(`let scope = this;`);
     for (let bindingName of Object.keys(bindSymToObj))
       if (usedSsaValues[bindingName])
         emit(`let ${bindingName} = bound[${string(bindingName)}];`);
+    emit(`let CLOSURE_ATOM = Atom("CLOSURE_ATOM");`)
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     return { code, bindSymToObj };
@@ -3707,7 +3712,12 @@ function put(str, nobreak) {
         return ssaResult;
       }
       // Generate closure (see "_eval", I ain't gonna splain it agin)
-      let ssaResult = newTemp(fName);
+      let ssaResult = newTemp(fName), closureScope = newTemp("closure_scope")
+      emit(`let ${closureScope} = newScope(scope, "closure-scope");`);
+      emit(`let ${ssaResult}; {`);
+      let saveIndent = tools.indent;
+      tools.indent += '  ';
+      emit(`let scope = ${closureScope};`);
       // First, cons up the closure S-expr.
       let closureBody;
       let innerParams = NIL, innerForms = NIL;
@@ -3745,37 +3755,41 @@ function put(str, nobreak) {
         if (evalCount < 0)
           evalCount = 0;
         closureForm[CAR] = SCLOSURE_ATOM;
-        closureForm[CDR] = cons(scope, cons(evalCount, cons(closureParams, innerForms)));
+        closureForm[CDR] = cons(scope, cons(evalCount, closureBody));
       } else {
         closureForm[CAR] = CLOSURE_ATOM;
         closureForm[CDR] = cons(scope, closureBody);
       }
+      let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
       // and to the scope
       ssaScope = newScope(ssaScope, "ssa-closure-scope");
-      let paramStr = '', sep = '', ssaParams = [];
+      let closedArgStr = '';
       for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR]) {
         let arg = ssaArgv[i];
         if (isCons(tmp)) {
           let param = tmp[CAR];
           let ssaParam = newTemp(param);
           ssaScope[params[i]] = ssaParam;
-          ssaParams.push(ssaParam);
-          paramStr += sep + ssaParam;
-          sep = ', ';
+          emit(`let ${ssaParam} = scope[Atom(${string(param.description)})] = ${arg};`)
+          closedArgStr += `, ${ssaParam}`;
         }
       }
+      let paramStr = '', sep = '';
+      for (; isCons(innerParams); innerParams = innerParams[CDR]) {
+        let param = innerParams[CAR];
+        let ssaParam = newTemp(param);
+        paramStr += sep + ssaParam;
+        sep = ', ';
+      }
+      if (typeof innerParams === 'symbol')
+        paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
-      emit(`function ${ssaResult}(${paramStr}, ...rest) {`);
-      let saveIndent = tools.indent;
-      tools.indent += '  ';
-      emit(`let scope = ${ssaResult}[CDR][CAR];`);
-      for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR])
-        emit(`scope[Atom(${string(tmp[CAR].description)})] = ${ssaParams[i]};`);
-      emit(`return ${ssaFunction}.apply(scope, ${paramStr}, ...rest);`);
+      emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.apply(scope${closedArgStr}, ${paramStr});`);
+      decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
+      emit(`${ssaResult}[CDR][CAR] = scope;`);
       tools.indent = saveIndent;
       emit(`}`);
-      decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
       return ssaResult;
     }
     // Special eval for JS Arrays and Objects
@@ -3920,11 +3934,6 @@ function put(str, nobreak) {
     let emit = tools.emit, use = tools.use, bind = tools.bind;
     let ssaClosureForm = use(bind(closureForm, "closureForm"));
     let _parameter_descriptor = use(bind(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR"))
-    let _car = use(bind(CAR, "CAR"));
-    let _cdr = use(bind(CDR, "CDR"));
-    let _pair = use(bind(PAIR, "PAIR"));
-    let _list = use(bind(PAIR, "LIST"));
-    let _closure_atom = use(bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
     let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
     let evalCountStr = evalCount === MAX_INTEGER ? "MAX_INTEGER" : String(evalCount);
     emit(`// evalCount: ${evalCountStr}, requiredCount: ${requiredCount}`)
@@ -3933,10 +3942,11 @@ function put(str, nobreak) {
     let closureStr = string(closureForm);
     for (let str of closureStr.split('\n'))
       emit(`// ${str}`);
-    emit(`${ssaClosure}[${_car}] = ${ssaClosureForm}[CAR];`);
-    emit(`${ssaClosure}[${_cdr}] = ${ssaClosureForm}[CDR];`);
+    emit(`${ssaClosure}[CAR] = ${ssaClosureForm}[CAR];`);
+    // So that the scope element can be patched
+    emit(`${ssaClosure}[CDR] = new Cons(${ssaClosureForm}[CDR][CAR], ${ssaClosureForm}[CDR][CDR]);`);
     // Mark object as a list, a pair, and a closure.
-    emit(`${ssaClosure}[${_pair}] = ${ssaClosure}[${_list}] = ${ssaClosure}[${_closure_atom}] = true;`);
+    emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
   }
 
   const JS_IDENT_REPLACEMENTS  = {
