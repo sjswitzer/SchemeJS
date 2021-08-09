@@ -177,7 +177,7 @@ export function run(opts = {}) {
       endTestScope(savedScope);
     }
 
-    { // Object and array literals
+    { // Object and Array literals
       let savedScope = beginTestScope();
       EXPECT(` (define a 2) `, ` 'a `);
       EXPECT(` { [a]: 3, "b": 4, "c": a } `, ` '{ "2": 3, "b": 4, "c": 2 } `)

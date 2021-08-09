@@ -3515,6 +3515,12 @@ function put(str, nobreak) {
     function bind(obj, name) {
       if (obj === undefined) return "undefined";
       if (obj === null) return "null";
+      if (typeof obj === 'number' || typeof obj === 'bigint' || typeof obj === 'string')
+        return string(obj);
+      if (obj === true) return "true";
+      if (obj === false) return "false";
+      if (isNil(obj)) return "NIL";
+      if (obj === null) return "null";
       let boundSym = bindObjToSym.get(obj);
       if (boundSym) return boundSym;
       if (name) {
@@ -3573,8 +3579,8 @@ function put(str, nobreak) {
   function compileEval(form, compileScope, tools) {
     if (--tools.evalLimit < 0)
       throw new SchemeCompileError(`Too comlpex ${string(form)}`);
-    if (form === null) return "null";
     if (form === undefined) return "undefined";
+    if (form === null) return "null";
     if (typeof form === 'number' || typeof form === 'bigint' || typeof form === 'string')
       return string(form);
     if (form === true) return "true";
@@ -3731,32 +3737,39 @@ function put(str, nobreak) {
       decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
       return ssaResult;
     }
-    // Special eval for JS arrays and objects
+    // Special eval for JS Arrays and Objects
     if (form !== null && typeof form === 'object') {
       if (form instanceof Array) {
-        let ssaValue = tools.newTemp("arrayliteral");
+        let ssaArrayLiteral = tools.newTemp("arrayliteral");
         let evalledSsaValues = [];
-        for (let element of form)
-          evalledSsaValues.push(compileEval(element, compileScope, tools));
-        tools.emit(`let ${ssaValue} = [`);
+        for (let element of form) {
+          let ssaValue = compileEval(element, compileScope, tools);
+          tools.use(ssaValue);
+          evalledSsaValues.push(ssaValue);
+        }
+        tools.emit(`let ${ssaArrayLiteral} = [`);
         for (let ssaElement of evalledSsaValues)
           tools.emit(`  ${ssaElement},`);
         tools.emit(`];`);
-        return ssaValue;
+        return ssaArrayLiteral;
       }
-      let ssaValue = tools.newTemp("objectliteral");
-      tools.emit(`let ${ssaValue} = {};`);
+      let ssaObjectLiteral = tools.newTemp("objectliteral");
+      tools.emit(`let ${ssaObjectLiteral} = {};`);
       for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
         let value = form[key];
+        let ssaKey;
         if (value instanceof EvaluateKeyValue) {
-          key = value.key;
+          ssaKey = compileEval(value.key, compileScope, tools);
           value = value.value;
-          key = compileEval(key, compileScope, tools);
+        } else {
+          ssaKey = tools.bind(key)
         }
-        value = compileEval(value, compileScope, tools);
-        tools.emit(`${ssaValue}[${key}] = ${value};`);
+        let ssaValue = compileEval(value, compileScope, tools);
+        tools.use(ssaKey);
+        tools.use(ssaValue);
+        tools.emit(`${ssaObjectLiteral}[${ssaKey}] = ${ssaValue};`);
       }
-      return ssaValue;
+      return ssaObjectLiteral;
     }
     throw new LogicError(`Shouldn't happen. All cases should be handled above`);
 
