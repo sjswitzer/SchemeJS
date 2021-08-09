@@ -252,6 +252,7 @@ export function run(opts = {}) {
     EXPECT_ERROR(` (? true (oops!) 2) `, SchemeEvalError);
     EXPECT_ERROR(` (? (oops!) 1 2) `, SchemeEvalError);
 
+    EXPECT(` (bigint?) `, false);
     EXPECT(` (bigint? 1n) `, true);
     EXPECT(` (bigint? 1) `, false);
     EXPECT(` (bigint? "str") `, false);

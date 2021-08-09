@@ -960,6 +960,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
       return isPrimitive(f) ? f : _eval(f, this);
   }
   function ifelse_hook(args, ssaScope, tools) {
+    if (args[0] === undefined && args[1] === undefined && args[2] === undefined)
+      return 'undefined';
     return conditionalHooks(args, ssaScope, tools, 'if', 'schemeTrue(*)');
   }
 
