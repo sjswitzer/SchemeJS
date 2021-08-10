@@ -3038,7 +3038,7 @@ function put(str, nobreak) {
           if (value !== undefined) {
             // Consume all the characters that we peeked and succeed
             while (pos-- > 0) nextc();
-            yield { type: 'number', value, position, line, lineChar };
+            yield { type: 'literal', value, position, line, lineChar };
             continue;
           }
         }
@@ -3052,7 +3052,16 @@ function put(str, nobreak) {
             break;
           str += ch, nextc();
         }
-        yield { type: 'atom', value: Atom(str), position, line, lineChar };
+        if (str === 'true')
+          yield { type: 'literal', value: true, position, line, lineChar };
+        else if (str === 'false')
+          yield { type: 'literal', value: false, position, line, lineChar };
+        else if (str === 'undefined')
+          yield { type: 'literal', value: undefined, position, line, lineChar };
+        else if (str === 'null')
+          yield { type: 'literal', value: null, position, line, lineChar };
+        else
+          yield { type: 'atom', value: Atom(str), position, line, lineChar };
         continue;
       }
 
@@ -3144,7 +3153,7 @@ function put(str, nobreak) {
     throwSyntaxError();
 
     function parseExpr() {
-      if (token().type === 'string' || token().type === 'number') {
+      if (token().type === 'string' || token().type === 'literal') {
         let thisToken = consumeToken();
         return thisToken.value;
       }
@@ -3217,7 +3226,7 @@ function put(str, nobreak) {
           }
           let gotIt = false;
           if (token().type === 'atom' || token().type === 'string'
-                || token().type === 'number' || token().type === '[') {
+                || token().type === 'literal' || token().type === '[') {
             let evaluatedKey = false, sym;
             if (token().type === '[') {
               parseContext.push(token());
@@ -3728,9 +3737,8 @@ function put(str, nobreak) {
       //
       if (compileHook) {
         // If there were compile hooks, ssaArgv is a lie after evalCount. Rectify that.
-        for (let i = 0; i < ssaArgv; ++i)
-          if (i >= evalCount)
-            ssaArgv[i] = compileEval(ssaArgv[i], ssaScope, tools);
+        for (let i = evalCount; i < ssaArgv; ++i)
+          ssaArgv[i] = use(bind(ssaArgv[i], ssaScope, tools));
       }
       let ssaResult = newTemp(fName), closureScope = newTemp("closure_scope")
       emit(`let ${closureScope} = newScope(scope, "closure-scope");`);
