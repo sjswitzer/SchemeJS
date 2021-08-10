@@ -3676,7 +3676,7 @@ function put(str, nobreak) {
       }
       let ssaFunction;
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
-        ssaFunction = compileLambda(null, form, ssaScope, tools);
+        return compileLambda(null, form, ssaScope, tools);
       else
         ssaFunction = compileEval(fn, ssaScope, tools);
       let args = form[CDR];
@@ -3893,7 +3893,8 @@ function put(str, nobreak) {
   //
   function compileLambda(name, lambda, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
-    let ssaFunction = newTemp(name ? name : 'lambda');
+    let displayName = typeof name === 'symbol' ? name.description : name ? name : 'lambda';
+    let ssaFunction = newTemp(displayName);
     if (!isCons(lambda)) throwBadCompiledLambda(lambda);
     let body = lambda[CDR];
     let evalCount = MAX_INTEGER;
@@ -3939,7 +3940,7 @@ function put(str, nobreak) {
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
     if (requiredCount === undefined)
       requiredCount = paramCount;  // paramCount does NOT contain rest param
-    tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name };
+    tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name: displayName };
     if (name)
       ssaScope[name] = ssaFunction;
     let delim = '', paramStr = '';
