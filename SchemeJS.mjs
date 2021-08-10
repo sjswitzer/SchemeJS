@@ -3569,12 +3569,11 @@ function put(str, nobreak) {
       if (obj === true) return "true";
       if (obj === false) return "false";
       if (obj === null) return "null";
-      if (typeof obj === 'symbol' && !name) name = `${name}_atom`;
       let boundSym = bindObjToSym.get(obj);
       if (boundSym) return boundSym;
       if (name) {
         if (typeof name === 'symbol')
-          name = newTemp(name.description);
+          name = newTemp(name.description+'_atom');
         if (bindSymToObj[name])  // collision
           name = newTemp(name);
       } else {
@@ -3744,7 +3743,7 @@ function put(str, nobreak) {
           return ssaResult;
         }
         // TODO: Inline SchemeJS functions? Or just trust the JavaScript JIT to do it?
-        let ssaResult = newTemp(fName);
+        let ssaResult = newTemp(fName.description+'_result');
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
@@ -3951,7 +3950,7 @@ function put(str, nobreak) {
     let saveIndent = tools.indent;
     tools.indent += '  ';
     emit(`let scope = ${ssaLambdaScope};`)
-    for (let i = 0, optionalFormsVecLength = optionalFormsVec.length; i < optionalFormsVecLength; ++i) {
+    for (let i = 0; i < paramCount; ++i) {
       let ssaParam = ssaParamv[i];
       let optionalForms = optionalFormsVec[i];
       if (optionalForms !== undefined) {
@@ -3963,10 +3962,10 @@ function put(str, nobreak) {
           ssaParam = compileEval(form, ssaScope, tools);
         tools.indent = saveIndent;
         emit('}');
-        let ssaParamName = use(bind(param));
-        emit(`scope[${ssaParamName}] = ${ssaParam};`)
       }
-    }
+      let ssaParamName = use(bind(paramv[i]));
+      emit(`scope[${ssaParamName}] = ${ssaParam};`)
+  }
     if (restParam) {
       let ssaParamName = use(bind(restParam));
       emit(`scope[(${ssaParamName}] = ${ssaParamv[ssaParamv.length-1]};`);
