@@ -946,16 +946,16 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       return 'undefined';
     if (args.length == 1)
       return compileEval(args[0], ssaScope, tools);
-    let result = newTemp(name), saveIndent = tools.indent;
+    let ssaResult = tools.newTemp('nullish'), saveIndent = tools.indent;
     tools.indent += '  ';
-    tools.emit(`let ${result} = ${compileEval(args[0], ssaScope, tools)}; ${result}: {`);
+    tools.emit(`let ${ssaResult} = ${compileEval(args[0], ssaScope, tools)}; ${ssaResult}: {`);
     for (let i = 1; i < args.length; ++i) {
-      tools.emit(`if ((${result}) == null) { ${result} = undefined; break $result; }`);
-      tools.emit(`${result} = ${compileEval(args[i], ssaScope, tools)};`);
+      tools.emit(`if ((${ssaResult}) != null) break ${ssaResult};`);
+      tools.emit(`${ssaResult} = ${compileEval(args[i], ssaScope, tools)};`);
     }
     tools.indent = saveIndent;
     tools.emit('}');
-    return result;
+    return ssaResult;
   }
 
   //
