@@ -1133,16 +1133,16 @@
               if (!dd)
                 dd = textElement('dd', `TBD defn-${atoms[0].description}`);
               helpElement.appendChild(dd);
-              if (jsNames) {
-                let jsNamesElement = textElement('div', '', 'js-names');
-                dd.appendChild(jsNamesElement);
-                for (let jsName of jsNames)
-                  jsNamesElement.appendChild(textElement('span', jsName, 'js-name'));
-              }
               if (typeof value === 'function') {
                 dd.appendChild(textElement('p', string(value), 'impl'));
               } else {
                 dd.appendChild(textElement('p', string(value), 'value'));
+              }
+              if (jsNames) {
+                let jsNamesElement = textElement('p', '', 'js-names');
+                dd.appendChild(jsNamesElement);
+                for (let jsName of jsNames)
+                  jsNamesElement.appendChild(textElement('span', jsName, 'js-name'));
               }
             }
           }

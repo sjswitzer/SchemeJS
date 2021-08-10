@@ -188,13 +188,14 @@ export function createInstance(schemeOpts = {}) {
   //
   const NBSP = '\u00a0', VTAB = '\u000b', FORMFEED = '\u000c', ELIPSIS = '\u0085';
   const MUL = '\u00d7', DIV = '\u00f7';
-  const NL = {}, SINGLE_CHAR_TOKENS = {}, QUOTES = {}, DIGITS = {}, NUM1 = {}, NUM2 = {}, JSIDENT = {};
+  const NL = {}, SINGLE_CHAR_TOKENS = {}, QUOTES = {}, DIGITS = {}, NUM1 = {}, NUM2 = {};
+  const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1);
   // IDENT2 includes IDENT1 by inheritence, as does WSNL WS.
   const IDENT1 = {}, IDENT2 = Object.create(IDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
-    JSIDENT[ch] = ch.codePointAt(0);
+    JSIDENT1[ch] = ch.codePointAt(0);
   for (let ch of `0123456789`)
-    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT[ch] = ch.codePointAt(0);
+    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT2[ch] = ch.codePointAt(0);
   for (let ch of `+-.`)
     NUM1[ch] = NUM2[ch] = ch.codePointAt(0);
   for (let ch of `eEoOxXbBn`)
@@ -279,7 +280,7 @@ export function createInstance(schemeOpts = {}) {
 const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_INFO = Symbol("COMPILE-INFO");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
 const analyzedFunctions = new Map();
-globalScope._help_ = {};  // For clients that want to implement help.
+let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to implement help.
 
   //
   // Unlike exportAPI, which exports an API to clients, defineGlobalSymbol
@@ -303,20 +304,19 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     let { atom, atomName, jsName } = normalizeExportToJavaScriptName(name);
     globalScope[atom] = value;
-    if (!opts.schemeOnly)
+    helpGroups[atom] = group;
+    if (jsName & !opts.schemeOnly) {
       globalScope[jsName] = value;
-    let atoms = [ atom ];
-    let atomNames = [ atomName ];  // this is in service of lambda which has atom-level aliases.
-    let jsNames = [ jsName ];
-    let help = globalScope._help_[atom] = { atoms, atomNames, jsNames, value, group };
+      helpGroups[jsName] = group;
+    }
     for (let alias of aliases) {
       ({ atom, atomName, jsName } = normalizeExportToJavaScriptName(alias));
       globalScope[atom] = value;
-      atoms.push(atom);
-      atomNames.push(atomName);
-      jsNames.push(jsName);
-      if (!opts.schemeOnly) 
+      helpGroups[atom] = group;
+      if (jsName && !opts.schemeOnly) {
         globalScope[jsName] = value;
+        helpGroups[jsName] = group;
+      }
     }
     return atom;
   }
@@ -332,6 +332,8 @@ globalScope._help_ = {};  // For clients that want to implement help.
     jsName = replaceAll(jsName, "@", "_at_");
     jsName = replaceAll(jsName, "*", "_star_");
     jsName = replaceAll(jsName, "?", "P");
+    if (!JSIDENT1[jsName[0]])
+      jsName = undefined;
     return { atom, atomName, jsName };
   }
 
@@ -493,9 +495,9 @@ globalScope._help_ = {};  // For clients that want to implement help.
 
   exportAPI("NIL", NIL);
   defineGlobalSymbol("nil", NIL);
-  defineGlobalSymbol("null", null);
-  defineGlobalSymbol("true", true, "t", "#t"); // SIOD: t, MIT Scheme: #t
-  defineGlobalSymbol("false", false);
+  defineGlobalSymbol("null", null, { schemeOnly: true });
+  defineGlobalSymbol("true", true, { schemeOnly: true }, "t", "#t"); // SIOD: t, MIT Scheme: #t
+  defineGlobalSymbol("false", false, { schemeOnly: true });
   defineGlobalSymbol("cons", cons);
   defineGlobalSymbol("car", car, "first");
   defineGlobalSymbol("cdr", cdr, "rest");
@@ -511,11 +513,11 @@ globalScope._help_ = {};  // For clients that want to implement help.
   defineGlobalSymbol("cddar", cddar);
   defineGlobalSymbol("cdddr", cdddr);
   defineGlobalSymbol("cddr", cddr);
-  defineGlobalSymbol("typeof", a => typeof a);
+  defineGlobalSymbol("typeof", a => typeof a, { schemeOnly: true });
 
   // Hoist a bunch of JavaScript definitions into the global scope
-  defineGlobalSymbol("NaN", NaN);
-  defineGlobalSymbol("Infinity", Infinity);
+  defineGlobalSymbol("NaN", NaN, { schemeOnly: true });
+  defineGlobalSymbol("Infinity", Infinity, { schemeOnly: true });
 
   { // (Local scope so we don't hang onto the property descriptors)
     // Import global JavaScript symbols
@@ -549,9 +551,9 @@ globalScope._help_ = {};  // For clients that want to implement help.
     }
     defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
     // This is redundant but I want them defined in the "builtin" group.
-    defineGlobalSymbol("globalThis", globalThis);
+    defineGlobalSymbol("globalThis", globalThis, { schemeOnly: true });
     for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
-      defineGlobalSymbol(obj.name, obj);
+      defineGlobalSymbol(obj.name, obj, { schemeOnly: true });
   }
 
   defineGlobalSymbol("eval-string", eval_string, { dontInline: true });
@@ -2863,8 +2865,8 @@ function put(str, nobreak) {
     return new LazyIteratorList(iterator, a => fn(a))
   }
 
-  // Can't be "string" directly because that has an optional parameter and
-  // calling to-string with one parameter would result in a closure.
+  // TODO: lazy-filter
+
   defineGlobalSymbol("to-string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
 
   // Turns iterable objects like lists into arrays, recursively to "depth"
@@ -3046,7 +3048,7 @@ function put(str, nobreak) {
         let str = '';
         while (ch && IDENT2[ch]) {
           // lambda symbols are special so we can parse \x as \ x
-          if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && JSIDENT[ch])
+          if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && IDENT1[ch])
             break;
           str += ch, nextc();
         }
@@ -3436,10 +3438,10 @@ function put(str, nobreak) {
       if (pos >= str.length) return token = '';
       let ch = str[pos]; // ch is always str[pos]
       while (WSNL[ch]) ch = str[++pos];
-      if (JSIDENT[ch]) {
+      if (JSIDENT1[ch]) {
         let tok = ch;
         ch = str[++pos];
-        while (JSIDENT[ch]) {
+        while (JSIDENT2[ch]) {
           tok += ch;
           ch = str[++pos];
         }
@@ -3981,7 +3983,7 @@ function put(str, nobreak) {
       if (JS_IDENT_REPLACEMENTS[ch]) {
         newName += fragment + JS_IDENT_REPLACEMENTS[ch];
         fragment = "";
-      } else if (JSIDENT[ch]) {
+      } else if (JSIDENT2[ch]) {
         if (!fragment) fragment = "_";
         fragment += ch;
       } else {
