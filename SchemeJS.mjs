@@ -3740,7 +3740,8 @@ function put(str, nobreak) {
         for (let i = evalCount; i < ssaArgv; ++i)
           ssaArgv[i] = use(bind(ssaArgv[i], ssaScope, tools));
       }
-      let ssaResult = newTemp(fName), closureScope = newTemp("closure_scope")
+      let name = fName + '_closure';
+      let ssaResult = newTemp(name), closureScope = newTemp("closure_scope")
       emit(`let ${closureScope} = newScope(scope, "closure-scope");`);
       emit(`let ${ssaResult}; {`);
       let saveIndent = tools.indent;
@@ -3817,6 +3818,7 @@ function put(str, nobreak) {
       decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;
       emit(`}`);
+      tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name };
       return ssaResult;
     }
     // Special eval for JS Arrays and Objects
@@ -3961,11 +3963,11 @@ function put(str, nobreak) {
   function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCount, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind;
     let ssaClosureForm = use(bind(closureForm, "closureForm"));
-    let _parameter_descriptor = use(bind(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR"))
+    let ssaParameter_descriptor = use(bind(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR"))
     let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
     let evalCountStr = evalCount === MAX_INTEGER ? "MAX_INTEGER" : String(evalCount);
     emit(`// evalCount: ${evalCountStr}, requiredCount: ${requiredCount}`)
-    emit(`${ssaClosure}[${_parameter_descriptor}] = ${parameterDescriptor};`);
+    emit(`${ssaClosure}[${ssaParameter_descriptor}] = ${parameterDescriptor};`);
     // The function is simultaneously a Scheme closure object
     let closureStr = string(closureForm);
     for (let str of closureStr.split('\n'))
