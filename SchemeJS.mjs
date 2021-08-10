@@ -1648,7 +1648,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
   function letrec_hook(args, ssaScope, tools) {
-    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind;
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (args.length < 2) throw new SchemeCompileError(`Bad letrec`);
     let bindings = args[0];
     ssaScope = newScope(ssaScope, "compiler-letrec-scope");
@@ -1670,7 +1670,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         let ssaVal = compileEval(bindingForms[CAR], ssaScope, tools);
         emit(`${ssaBoundVar} = ${ssaVal};`);
       }
-      let paramAtom = bind(boundVar);
+      let paramAtom = use(bind(boundVar));
       ssaScope[boundVar] = ssaBoundVar;
       emit(`scope[${paramAtom}] = ${ssaBoundVar};`);
     }
@@ -1700,6 +1700,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return result;
   }
   function setq_hook(body, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (!isCons(body))
       throw new SchemeCompileError(`Bad setq params ${body}`);
     let varSym = body[CAR], valForms = body[CDR];
@@ -1708,10 +1709,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       ssaValue = compileEval(form, ssaScope, tools);
     let boundVar = ssaScope[varSym];
     if (boundVar) {
-      tools.emit(`${boundVar} = ${ssaValue};`);
+      emit(`${boundVar} = ${ssaValue};`);
     } else {
-      let ssaSetSym = tools.use(tools.bind(setSym));
-      tools.emit(`${ssaSetSym}.call(this, ${ssaValue});`);
+      let ssaSetSym = use(bind(setSym));
+      emit(`${ssaSetSym}.call(this, ${ssaValue});`);
     }
     return ssaValue;
   }
@@ -2009,25 +2010,26 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return val;
   }
   function siod_catch_hook(body, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (!isCons(body))
       throw new SchemeCompileError(`Bad catch argument ${string(body)}`);
     let ssaTag = body[CAR], forms = body[CDR];
-    let ssaResult = tools.newTemp('siod_catch');
-    tools.emit(`let ${ssaResult} = NIL;`);
-    tools.emit(`try {`);
-    let saveIndent = tools.indent;
+    let ssaResult = newTemp('siod_catch');
+    emit(`let ${ssaResult} = NIL;`);
+    emit(`try {`);
+    let saveIndent = indent;
     tools.indent += '  ';
     let ssaValue = 'NIL';
     for (let form of forms)
       ssaValue = compileEval(form, ssaScope, tools);
-    tools.emit(`${ssaResult} = ${ssaValue};`);
+    emit(`${ssaResult} = ${ssaValue};`);
     tools.indent = saveIndent;
     emit(`} catch (e) {`);
     tools.indent += '  ';
-    let ssaSchemeJSThrow = tools.use(tools.bind(SchemeJSThrow));
-    tools.emit(`if (!(e instanceof ${ssaSchemeJSThrow})) throw e;`)
-    tools.emit(`if (e.tag !== ${ssaTag}) throw e;`);
-    tools.emit(`${ssaResult} = e.value`);
+    let ssaSchemeJSThrow = use(bind(SchemeJSThrow));
+    emit(`if (!(e instanceof ${ssaSchemeJSThrow})) throw e;`)
+    emit(`if (e.tag !== ${ssaTag}) throw e;`);
+    emit(`${ssaResult} = e.value`);
     tools.indent = saveIndent;
     emit(`}`);
     return ssaResult;
