@@ -3048,7 +3048,7 @@ function put(str, nobreak) {
         let str = '';
         while (ch && IDENT2[ch]) {
           // lambda symbols are special so we can parse \x as \ x
-          if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && IDENT1[ch])
+          if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && IDENT1[ch] && ch !== '#')
             break;
           str += ch, nextc();
         }
