@@ -1339,7 +1339,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return result;
   }
 
-  defineGlobalSymbol("append", append);
+  // Can be inlined (if isList, isIterator, isCons, etc. are bound), but doesn't seem wise
+  defineGlobalSymbol("append", append, { dontInline: true });
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
@@ -1381,7 +1382,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("butlast", butlast);
+  defineGlobalSymbol("butlast", butlast, { dontInline: true });
   function butlast(list) {
     let res = NIL, last;
     if (isList(list)) {
@@ -3544,7 +3545,6 @@ function put(str, nobreak) {
     use(bind(isList, "isList"));
     use(bind(isCons, "isCons"));
     use(bind(cons, "cons"));
-    use(bind(isIterable, "isIterable"));
     let ssaFunction = compileLambda(name, lambdaForm, ssaScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
