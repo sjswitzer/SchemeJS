@@ -45,7 +45,7 @@ export function run(opts = {}) {
   const compile_lambda = globalScope.compile_lambda ?? required();
   function required() { throw "required" }
 
-  function isCompileOrEvalError(e) { return (e instanceof SchemeCompileError) || (e instanceof SchemeEvalError) }
+  const isCompileOrEvalError = e => (e instanceof SchemeCompileError) || (e instanceof SchemeEvalError);
   const evalString = str => testScope.eval_string(str);
 
   // Test Interpreter
@@ -393,7 +393,7 @@ export function run(opts = {}) {
     EXPECT_ERROR(` (cond a) `, isCompileOrEvalError);
     EXPECT_ERROR(` (cond 1) `, isCompileOrEvalError);
     EXPECT_ERROR(` (cond ()) `, isCompileOrEvalError);
-    EXPECT(` (cond (true) 1) `, NIL);
+    EXPECT_ERROR(` (cond (true) 1) `, isCompileOrEvalError);
     EXPECT(` (cond ((< 4 5) (+ 5 6))) `, 11);
     EXPECT(` (cond ((< 4 5) (+ 5 6) (* 5 6))) `, 30);
     EXPECT(` (cond ((> 4 5) (+ 5 6) (* 5 6))

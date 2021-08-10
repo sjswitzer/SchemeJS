@@ -1243,10 +1243,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
   defineGlobalSymbol("cond", cond, { evalArgs: 0, compileHook: cond_hook });
   function cond(...clauses) {
+    // Prescan for errors; the compiler needs to do it so the interpreter should too
     for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
       let clause = clauses[i];
       if (!isCons(clause))
         throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
+    }
+    for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
+      let clause = clauses[i];
       let predicateForm = clause[CAR], forms = clause[CDR];
       let evaled = _eval(predicateForm, this);
       if (schemeTrue(evaled)) {
@@ -1258,13 +1262,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     return NIL;
   }
-  function cond_hook(clauses, ssaScope, tools) {
+  function cond_hook(args, ssaScope, tools) {
+    let clauses = args;
     let ssaResult = tools.newTemp('cond');
     tools.emit(`let ${ssaResult} = NIL; ${ssaResult}: {`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
     for (let clause of clauses) {
-      if (!isCons(clause))
+      if (!isList(clause))
         throw new SchemeCompileError(`Bad cond clause${string(clause)}`);
       let predicateForm = clause[CAR], forms = clause[CDR];
       let ssaPredicateValue = compileEval(predicateForm, ssaScope, tools);
