@@ -1277,7 +1277,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let saveIndent = tools.indent;
       tools.indent += '  ';
       let ssaValue = 'NIL';
-      for (form of forms) {
+      for (let form of forms) {
         ssaValue = compileEval(form, ssaScope, tools);
       }
       tools.emit(`${ssaResult} = ${ssaValue};`);  // Another PHI node
@@ -3540,6 +3540,11 @@ function put(str, nobreak) {
     use(bind(PAIR, "PAIR"));
     use(bind(LIST, "LIST"));
     use(bind(COMPILED, "COMPILED"));
+    // For template bodies
+    use(bind(isList, "isList"));
+    use(bind(isCons, "isCons"));
+    use(bind(cons, "cons"));
+    use(bind(isIterable, "isIterable"));
     let ssaFunction = compileLambda(name, lambdaForm, ssaScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
