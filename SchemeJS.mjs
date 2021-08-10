@@ -1263,7 +1263,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     tools.emit(`let ${ssaResult} = NIL; ${ssaResult}: {`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    for (clause of clauses) {
+    for (let clause of clauses) {
       if (!isCons(clause))
         throw new SchemeCompileError(`Bad cond clause${string(clause)}`);
       let predicateForm = clause[CAR], forms = clause[CDR];

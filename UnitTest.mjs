@@ -38,13 +38,15 @@ export function run(opts = {}) {
   const isCons = globalScope.isCons ?? required();
   const isClosure = globalScope.isClosure ?? required();
   const SchemeEvalError = globalScope.SchemeEvalError ?? required();
+  const SchemeCompileError = globalScope.SchemeCompileError ?? required();
   const parseSExpr = globalScope.parseSExpr ?? required();
   const list = globalScope.list ?? required();
   const Atom = globalScope.Atom ?? required();
   const compile_lambda = globalScope.compile_lambda ?? required();
   function required() { throw "required" }
 
-  let evalString = str => testScope.eval_string(str);
+  function isCompileOrEvalError(e) { return (e instanceof SchemeCompileError) || (e instanceof SchemeEvalError) }
+  const evalString = str => testScope.eval_string(str);
 
   // Test Interpreter
   let evalTestString = evalString;
@@ -388,9 +390,9 @@ export function run(opts = {}) {
     EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
 
     EXPECT(` (cond) `, NIL);
-    EXPECT_ERROR(` (cond a) `, SchemeEvalError);
-    EXPECT_ERROR(` (cond 1) `, SchemeEvalError);
-    EXPECT_ERROR(` (cond ()) `, SchemeEvalError);
+    EXPECT_ERROR(` (cond a) `, isCompileOrEvalError);
+    EXPECT_ERROR(` (cond 1) `, isCompileOrEvalError);
+    EXPECT_ERROR(` (cond ()) `, isCompileOrEvalError);
     EXPECT(` (cond (true) 1) `, NIL);
     EXPECT(` (cond ((< 4 5) (+ 5 6))) `, 11);
     EXPECT(` (cond ((< 4 5) (+ 5 6) (* 5 6))) `, 30);
@@ -752,9 +754,10 @@ export function run(opts = {}) {
         try {
           if (typeof expected === 'string')
             expected = evalString(expected);
-          if (error === expected || error instanceof expected) {
-            ok = true;
-          } else if (typeof expected === 'function' && !(error instanceof Error)) {
+          if (subclassOf(expected, Error)) {
+            if (error instanceof expected)
+              ok = true;
+          } else if (typeof expected === 'function') {
             // Has to come second because an exception is a function
             ok = expected.call(this, error);
           }
@@ -771,6 +774,14 @@ export function run(opts = {}) {
           endTestScope(savedScope);
       }
     }
+  }
+
+  function subclassOf(cls, supercls) {
+    while (cls.__proto__) {
+      if (cls === supercls) return true;
+      cls = cls.__proto__;
+    }
+    return false;
   }
 
   // For test isolation and grouping sets not isolated from each other
