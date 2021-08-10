@@ -1651,7 +1651,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind;
     if (args.length < 2) throw new SchemeCompileError(`Bad letrec`);
     let bindings = args[0];
-    ssaScope = newScope(ssaScope, "compile-letrec-scope");
+    ssaScope = newScope(ssaScope, "compiler-letrec-scope");
     let ssaTmpScope = newTemp("scope_tmp");
     emit(`let ${ssaTmpScope} = scope; { // letrec`);
     let saveIndent = tools.indent;
@@ -2052,7 +2052,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
         val = _eval(forms[i], this);
     } catch (e) {
-      let scope = newScope(this, "catch-scope");
+      let scope = newScope(this, "js-catch-scope");
       scope[catchVar] = e;
       for ( ; isCons(catchForms); catchForms = catchForms[CDR])
         val = _eval(catchForms[CAR], scope);
@@ -2078,7 +2078,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     tools.emit(`${ssaResult} = ${ssaValue};`);
     tools.indent = saveIndent;
     emit(`} catch (${ssaCatchSym}) {`);
-    ssaScope = newScope(ssaScope, "js_catch")
+    ssaScope = newScope(ssaScope, "compiled-js-catch-scope")
     ssaScope[catchVar] = ssaCatchSym;
     tools.indent += '  ';
     let ssaCatchVal = 'NIL';
@@ -3788,14 +3788,12 @@ function put(str, nobreak) {
       requiredCount -= argCount;
       if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
       if (fn[CAR] === CLOSURE_ATOM || fn[CAR] === SCLOSURE_ATOM) {
-        scope = newScope(closureBody[CAR], "compiled-closure");
         closureBody = fn[CDR];
         if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
           closureBody = closureBody[CDR];
         innerParams = closureBody[CAR];
         innerForms = closureBody[CDR];
       } else {
-        scope = newScope(scope, "compiled-closure-scope");
         if (restParam)
           innerParams = Atom(restParam);
         for (let i = params.length; i > 0; --i)
@@ -3819,15 +3817,15 @@ function put(str, nobreak) {
         if (evalCount < 0)
           evalCount = 0;
         closureForm[CAR] = SCLOSURE_ATOM;
-        closureForm[CDR] = cons(scope, cons(evalCount, closureBody));
+        closureForm[CDR] = cons(undefined, cons(evalCount, closureBody));
       } else {
         closureForm[CAR] = CLOSURE_ATOM;
-        closureForm[CDR] = cons(scope, closureBody);
+        closureForm[CDR] = cons(undefined, closureBody);
       }
       let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
       // and to the scope.
-      ssaScope = newScope(ssaScope, "ssa-closure-scope");
+      ssaScope = newScope(ssaScope, "compiler-closure-scope");
       let closedArgStr = '';
       for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR]) {
         let arg = ssaArgv[i];
@@ -3922,7 +3920,7 @@ function put(str, nobreak) {
     if (!isList(params)) throwBadCompiledLambda(lambda);
     let forms = body[CDR];
     let ssaParamv = [], paramv = [], restParam;
-    ssaScope = newScope(ssaScope, "compile-lambda-scope");
+    ssaScope = newScope(ssaScope, "compiler-lambda-scope");
     let paramCount = 0, requiredCount, optionalFormsVec = [];
     for (; isCons(params); ++paramCount, params = params[CDR]) {
       let param = params[CAR], ssaParam;
