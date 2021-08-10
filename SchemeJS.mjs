@@ -3949,12 +3949,12 @@ function put(str, nobreak) {
       delim = ', ';
     }
     let nameStr = name ? `  // ${name.description}` : '';
-    let ssaLambdaScope = newTemp("lambda_scope");
-    emit(`let ${ssaLambdaScope} = newScope(scope, "compiled-lambda-scope");`);
+    let ssaScopeTmp = newTemp("tmp_scope");
+    emit(`let ${ssaScopeTmp} = scope;`);
     emit(`function ${ssaFunction}(${paramStr}) {${nameStr}`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    emit(`let scope = ${ssaLambdaScope};`)
+    emit(`let scope = newScope(${ssaScopeTmp}, "compiled-lambda-scope");`)
     for (let i = 0; i < paramCount; ++i) {
       let ssaParam = ssaParamv[i];
       let optionalForms = optionalFormsVec[i];
