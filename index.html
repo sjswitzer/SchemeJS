@@ -152,6 +152,12 @@
       .help dl p.value {
         color: #555;
       }
+      .help .impl:before { content: "Impl: " }
+      .help .value:before { content: "Value: " }
+      .help .js-names:before { content: "JavaScript: " }
+      .help .impl, .help .value, .help .js-names { display: none }
+      div[data-show-impl="true"] .impl, .help[data-show-impl] .value { display: block; }
+      div[data-show-javascript="true"] .js-names { display: block; }
 
       #helpgroup-imported dl {
         display: block;
@@ -442,10 +448,16 @@
       <close-button onclick="showHelp(null)"></close-button>
       <div>
         <h2> Built-In Functions and Constants </h2>
-          <dl class="definitions" id="helpgroup-builtin">
-            <dt class="heading"> Symbol
-            <dd class="heading"> Description
-            <!-- definitions inserted here when SchemeJS module is loaded -->
+        <input type="checkbox" name="impl"
+          onchange="parentElement.setAttribute('data-show-impl', String(event.currentTarget.checked))">
+        <label for="javascript">Show Implementations</label>,
+        <input type="checkbox" name="javascript"
+          onchange="parentElement.setAttribute('data-show-javascript', String(event.currentTarget.checked))">
+        <label for="javascript">Show JavaScript API</label>
+        <dl class="definitions" id="helpgroup-builtin">
+          <dt class="heading"> Symbol
+          <dd class="heading"> Description
+          <!-- definitions inserted here when SchemeJS module is loaded -->
          </dl>
          <h2> Functions and Constants Imported from JavaScript </h2>
          <dl class="definitions" id="helpgroup-imported">
@@ -1065,49 +1077,82 @@
 
       function buildBuiltinHelp(globalScope) {
         const string = globalScope.string;
-        let groups = {}, helpHelper = globalScope._help_;
-        let syms = Object.getOwnPropertySymbols(helpHelper);
-        for (let sym of syms) {
-          let helper = helpHelper[sym], group = helper.group;
-          if (!groups[group]) groups[group] = [];
-          let symtab = groups[group];
-          symtab.push({ key: keyFor(sym), ...helpHelper[sym] });
+        let helpGroups = globalScope._helpgroups_, groups = {};
+        // Invert by group on atom value
+        for (let atom of Object.getOwnPropertySymbols(helpGroups)) {
+          let value = globalScope[atom], helpGroup = helpGroups[atom];
+          if (value === undefined) continue;
+          let groupMap = groups[helpGroup];
+          if (!groupMap)
+            groupMap = groups[helpGroup] = new Map();
+          let valueObj = groupMap.get(value);
+          if (!valueObj)
+            groupMap.set(value, valueObj = { atoms: [], jsNames: [] });
+          valueObj.atoms.push(atom);
         }
-        for (let group in groups) {
-          let symtab = groups[group];
-          let helpElement = document.getElementById(`helpgroup-${group}`);
-          if (!helpHelper) {
-            console.error("Missing help group", group);
-            continue;
+        // Add JavaScript names
+        for (let jsName of Object.getOwnPropertyNames(helpGroups)) {
+          let value = globalScope[jsName], helpGroup = helpGroups[jsName];
+          if (value === undefined) continue;
+          let groupMap = groups[helpGroup];
+          if (!groupMap) continue;
+          let valueObj = groupMap.get(value);
+          if (!valueObj) continue
+          valueObj.jsNames.push(jsName);
+        }
+        // Organize into a symbol table by group then sort on a transformation of the first
+        // atom defined. "groups" is now: groups[groupName] = (sorted)[{ key, atoms: [], jsNames: [] }];
+        for (let helpGroup in groups) {
+          let groupMap = groups[helpGroup];
+          let symtab = [];
+          for (let [map_key_which_is_the_value, valueObj] of groupMap.entries()) {
+            valueObj.key = keyFor(valueObj.atoms[0]);
+            valueObj.value = map_key_which_is_the_value;
+            symtab.push(valueObj);
           }
           symtab.sort((a, b) => a.key < b.key ? -1 : 1);
-          for (let { atomNames, value } of symtab) {
-            for (let atomName of atomNames)
-              helpElement.appendChild(textElement('dt', atomName));
-            if (group !== "imported") {
+          groups[helpGroup] = symtab;
+        }
+        for (let helpGroup in groups) {
+          let symtab = groups[helpGroup];
+          let helpElement = document.getElementById(`helpgroup-${helpGroup}`);
+          if (!helpElement) {
+            console.error("Missing help group", helpGroup);
+            continue;
+          }
+          for (let { atoms, jsNames, value } of symtab) {
+            for (let atom of atoms)
+              helpElement.appendChild(textElement('dt', atom.description));
+            if (helpGroup !== "imported") {
               let dd;
-              for (let name of atomNames) {
-                let elementId = "defn-" + name;
+              for (let atom of atoms) {
+                let elementId = "defn-" + atom.description;
                 dd = document.getElementById(elementId);
                 if (dd) break;
               }
               if (!dd)
-                dd = textElement('dd', 'TBD');
+                dd = textElement('dd', `TBD defn-${atoms[0].description}`);
               helpElement.appendChild(dd);
+              if (jsNames) {
+                let jsNamesElement = textElement('div', '', 'js-names');
+                dd.appendChild(jsNamesElement);
+                for (let jsName of jsNames)
+                  jsNamesElement.appendChild(textElement('span', jsName, 'js-name'));
+              }
               if (typeof value === 'function') {
-                dd.appendChild(textElement('p', `Impl: ${string(value)}`, 'impl'));
+                dd.appendChild(textElement('p', string(value), 'impl'));
               } else {
-                dd.appendChild(textElement('p', `Value: ${string(value)}`, 'value'));
+                dd.appendChild(textElement('p', string(value), 'value'));
               }
             }
           }
         }
 
         function keyFor(atom) {
-          let key = atom.description, alpha = "abcdefghijklmnopqrstuvwyyz", syms = "*#!?";
+          let key = atom.description, alpha = "abcdefghijklmnopqrstuvwxyz", stripPrefixSyms = "*#!?";
           key = key.toLowerCase();
           // Strip certain special symbols before alpha (mostly for *catch and *throw)
-          if (syms.includes(key[0]) && alpha.includes(key[1]))
+          if (stripPrefixSyms.includes(key[0]) && alpha.includes(key[1]))
             key = key.substr(1);
           // Anything that doesn't begin with an alpha gets sorted to the top (space sorts lowest)
           if (!alpha.includes(key[0]))
