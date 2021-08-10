@@ -852,6 +852,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return !eq.call(this, a, b, ...rest);
   }
   function neq_hook(args, ssaScope, tools) {
+    if (args.length < 2) return 'false';
     let eq = compare_hooks(args, ssaScope, tools, '==', 'eq');
     return `(!${eq})`;
   }

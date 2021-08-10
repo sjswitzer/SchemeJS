@@ -305,7 +305,7 @@ export function run(opts = {}) {
     EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, SchemeEvalError);
     EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, SchemeEvalError);
     EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (==) `, true);   // nothing is equal to itself
+    EXPECT(` (==) `, true);   // "nothing" is equal to itself
     EXPECT(` (== 5) `, isClosure);
     EXPECT(` (== 5 3) `, false);
     EXPECT(` (== 3 5) `, false);
