@@ -295,6 +295,7 @@
       }
       #output .tag {
         position: absolute;  /* parent div must be position: relative */
+        opacity: .4;
         top: 0;
         right: 0;
         margin: 0.3em 0.3em 0 0;
@@ -306,8 +307,11 @@
       }
       #output .input-scroller, #output .result-scroller {
         overflow: scroll;
-        max-height: 10em;
+        max-height: 20em;
         min-height: 2em;
+      }
+      #output .result-scroller {
+        max-height: 50em;
       }
       #output .result-scroller { padding: .5em .5em .5em .5em }
       #output .error-box { padding: .5em .5em .5em .5em }
@@ -457,12 +461,14 @@
             Evaluates the forms until one of them calls
             <code>(*throw "tag" value)</code>.
             Returns "value" if the tags match; otherwise the exception propagates.
+      </dd>
       <dd id="defn-*throw">
         (*throw "tag" value)
         <p> SIOD-style throw.
             Throws the value with the given tag.
             An enclosing <code>(*catch "tag" form ...)</code> will
             return "value" if the tags match; otherwise the exception propagates.
+      </dd>
       <dd id="defn-catch">
         (catch catch-clause forms)
         <p> where <i>catch-clause</i> is:</p>
@@ -475,6 +481,7 @@
             If <i>type</i> is an object, the catch matches if the object is an instance
             of that object; it <i>type</i> is a string, the catch matches if it is the JavaScript
             "typeof" the thrown object.
+      </dd>
       <dd id="defn-throw">
         (throw "tag" value)
         <p> Java/JavaScript-style-style throw.
@@ -487,107 +494,140 @@
             &nbsp;&nbsp; (+ 1 2)<br>
             &nbsp;&nbsp;  (+ 3 (throw "ha ha!"))<br>
             )
+      </dd>
       <dd id="defn-*e*">
         Euler's constant and the base of natural logarithms
+      </dd>
       <dd id="defn-*ln10*">
         Natural logarithm of 10
       <dd id="defn-*log10e*">
         Base-10 logarithm of Euler's constant
+      </dd>
       <dd id="defn-*log2e*">
         Base-2 logarithm of Euler's constant
+      </dd>
       <dd id="defn-*pi*">
         Ratio of the a circle's circumference to its diameter (&pi;)
       <dd id="defn-*sqrt1_2*">
         Square root of 1/2
+      </dd>
       <dd id="defn-*sqrt2*">
         Square root of 2
+      </dd>
       <dd id="defn-*ln2*">
         Natural logarithm of 2
       <dd id="defn-abs">
         (abs x)
-        <p> Absolute value of x.
+        <p> Absolute value of <i>x</i>; <i>x</i> can be a number or a bigint.
+      </dd>
       <dd id="defn-acos">
         (acos x)
         <p> Arccosine of x in radians.
+      </dd>
       <dd id="defn-acosh">
         (acosh x)
         <p> Hyperbolic arccosine of x in radians.
+      </dd>
       <dd id="defn-asin">
         (asin x)
         <p> Arcsine of x in radians.
+      </dd>
       <dd id="defn-asinh">
         (asinh x)
         <p> Hyperbolic arcsine of x in radians.
+      </dd>
       <dd id="defn-atan">
         (atan x)
         <p> Arctangent of x in radians.
+      </dd>
       <dd id="defn-atanh">
         (atanh x)
         <p> Hyperbolic arctangent of x in radians.
+      </dd>
       <dd id="defn-atan2">
         (atan2 y x)
         <p> Angle in radians from the positive x axis and the ray to the point (x, y).
             Does not suffer from divide-by-zero issues as <i>tan</i> would.
+      </dd>
       <dd id="defn-sqrt">
         (sqrt x)
         <p> Square root of x.
+      </dd>
       <dd id="defn-cbrt"><div>
         (cbrt x)
         <p> Cube root of x.
+      </dd>
       <dd id="defn-clz32">
         (clz32 x)
         <p> Number of leading zeros in the binary representation of x
             considered as a 32-bit integer.
+      </dd>
       <dd id="defn-cos">
         (cos x)
         <p> Cosine of x in radians.
+      </dd>
       <dd id="defn-cosh">
         (cosh x)
         <p> Hyperbolic cosine of x in radians.
+      </dd>
       <dd id="defn-expm1">
         (expm1 x)
         <p> The value <code>(- (exp x) 1)</code>, avoiding numerical anomalies.
+      </dd>
       <dd id="defn-exp">
         (exp x)
         <p> Euler's number to the power x.
+      </dd>
       <dd id="defn-floor">
         (floor x)
         <p> The largest integer less than or equal to x.
+      </dd>
       <dd id="defn-ceil">
         (ceil x)
         <p>The smallest integer greater than or equal to x.
+      </dd>
       <dd id="defn-fround">
         (fround x)
         <p> The closest single precision floating point representation of x.
+      </dd>
       <dd id="defn-hypot">
         (hypot value ...)
         <p> The square root of the sum of the squares of the arguments.
+      </dd>
       <dd id="defn-imul">
         (imul x y)
         <p> Result of the multiplication of x and y considered as 32-bit integers.
+      </dd>
       <dd id="defn-log">
         (log x)
         <p> The natural logarithm of x.
+      </dd>
       <dd id="defn-add">
         (+ value value ...)
         <p> Adds the values.
+      </dd>
       <dd id="defn-sub">
         (- value ...)
         <p> Subtracts a series of values from the first value.
             If there is only one argument, negates the value.
+      </dd>
       <dd id="defn-mul">
         (* value value ...)
         <p> Multiplies a series of values.
+      </dd>
       <dd id="defn-div">
         (/ value ...)
         <p> Divides a series of values from the first value.
             If there is only one argument, returns the reciprocal.
+      </dd>
       <dd id="defn-rem">
         (% value value)
         <p> Remainder of the first value divided by the second.
+      </dd>
       <dd id="defn-pow">
         (** value value)
         <p> Exponentiates the first value by the second.
+      </dd>
       <dd id="defn-and">
         (&& value value ...)
         <p> Evaluates its arguments until one of them is false.
@@ -597,6 +637,7 @@
             <code>false</code>, <code>nil</code>, <code>undefined</code> and
             <code>null</code>; unlike JavaScript,
             zero, NaN and "" are <i>not</i> false.
+      </dd>
       <dd id="defn-or">
         (|| value value ...)
         <p> Evaluates its arguments until one of them is true.
@@ -607,41 +648,52 @@
           <code>null</code>; unlike JavaScript,
           zero, NaN and "" are <i>not</i> considered false.
           Everything else is "true."
+      </dd>
       <dd id="defn-bit-and">
         (& value value ...)
         <p> Bitwise "and" of the values considered as 32-bit integers.
+      </dd>
       <dd id="defn-bit-or">
         (| value value ...)
         <p> Bitwise "or" of the values considered as 32-bit integers.
+      </dd>
       <dd id="defn-bit-xor">
         (^ value value ...)
         <p> Bitwise exclusive "or" of the values considered as 32-bit integers.
+      </dd>
       <dd id="defn-bit-not">
         (~ value)
         <p> Bitwise not of the value considered as a 32-bit integer.
+      </dd>
       <dd id="defn-bit-shl">
         (&lt;&lt; value shift)
         <p> <i>Value</i> left-shifted "shift" bits, bith considered as 32-bit integers.
+      </dd>
       <dd id="defn-bit-shr">
         (&gt;&gt; value shift)
         <p> <i>Value</i> arithmetcally right-shifted "shift" bits, bith considered as 32-bit integers.
             The sign bit fills from the left.
+      </dd>
       <dd id="defn-bit-ushr">
         (&gt;&gt;&gt; value shift)
         <p> <i>Value</i> logically right-shifted "shift" bits, bith considered as 32-bit integers.
           Zero bits fill from the left.
+      </dd>
       <dd id="defn-ash">
         (ash value shift)
         <p> Shifts left if <i>shift</i> is positive.
             Shifts arithmetcally right if <i>shift</i> is negative;
             sign bits fill from the left.
+      </dd>
       <dd id="defn-append">
         (append list ...)
         <p> Appends the specified lists or iterable JavaScript objects, forming a new list.
+      </dd>
       <dd id="defn-apply">
         (apply function args [scope])
         <p> Applies the function to the arguments in the given scope.
             "scope" is optional; the default is the current scope.
+      </dd>
       <dd id="defn-begin">
         (begin form ...)
         <p> Evaluates the forms sequentially, returning the value of the last form.
@@ -836,9 +888,9 @@
         (> a b ...)
         <p> Returns true if each value is greater than or equal the previous.
             Evaluation ends as soon as this this is not the case.
-              <dd id="defn-xxx">
-          xxx
-          <p> xxx
+      <dd id="defn-xxx">
+        xxx
+        <p> xxx
                                                                                         </div>
     <script type="module" src="./CloseButton.mjs"></script>
     <script type="text/javascript">

@@ -301,26 +301,24 @@ globalScope._help_ = {};  // For clients that want to implement help.
       if (!opts.dontInline)
         examineFunctionForCompilerTemplates(name, value, opts.compileHook, evalCount);
     }
-    let atom, atomName;
-    ({ atom, atomName, name } = normalizeExportToJavaScriptName(name));
+    let { atom, atomName, jsName } = normalizeExportToJavaScriptName(name);
     globalScope[atom] = value;
     if (!opts.schemeOnly)
-      globalScope[name] = value;
+      globalScope[jsName] = value;
     let atoms = [ atom ];
     let atomNames = [ atomName ];  // this is in service of lambda which has atom-level aliases.
-    let names = [ name ];
-    globalScope._help_[atom] = { atoms, atomNames, value, group };
+    let jsNames = [ jsName ];
+    let help = globalScope._help_[atom] = { atoms, atomNames, jsNames, value, group };
     for (let alias of aliases) {
-      ({ atom, atomName, name } = normalizeExportToJavaScriptName(alias));
+      ({ atom, atomName, jsName } = normalizeExportToJavaScriptName(alias));
       globalScope[atom] = value;
       atoms.push(atom);
       atomNames.push(atomName);
-      names.push(name);
+      jsNames.push(jsName);
       if (!opts.schemeOnly) 
-        globalScope[name] = value;
+        globalScope[jsName] = value;
     }
     return atom;
-
   }
 
   function normalizeExportToJavaScriptName(name) {
@@ -329,12 +327,12 @@ globalScope._help_ = {};  // For clients that want to implement help.
     let atomName = name;
     let atom = Atom(name);
     // Java API name
-      name = replaceAll(name, "->", "_to_");
-      name = replaceAll(name, "-", "_");
-      name = replaceAll(name, "@", "_at_");
-      name = replaceAll(name, "*", "_star_");
-      name = replaceAll(name, "?", "P");
-    return { atom, atomName, name };
+    let jsName = replaceAll(name, "->", "_to_");
+    jsName = replaceAll(jsName, "-", "_");
+    jsName = replaceAll(jsName, "@", "_at_");
+    jsName = replaceAll(jsName, "*", "_star_");
+    jsName = replaceAll(jsName, "?", "P");
+    return { atom, atomName, jsName };
   }
 
   function subclassOf(cls, supercls) {
@@ -528,18 +526,25 @@ globalScope._help_ = {};  // For clients that want to implement help.
         defineGlobalSymbol(name, value, { schemeOnly: true, dontInline: true, group: "imported" });
     }
 
+    // Object static methods
+    propDescs = Object.getOwnPropertyDescriptors(Object);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (!get && typeof value === 'function')
+        defineGlobalSymbol(`Object-${name}`, value, { schemeOnly: true, dontInline: true, group: "imported" });
+    }
+
     // Stuff the whole Math class in there!
-    defineGlobalSymbol("Math", Math, { schemeOnly: true });
     propDescs = Object.getOwnPropertyDescriptors(Math);
     for (let name in propDescs) {
       let {value, get} = propDescs[name];
       if (!get && value) {
         // SIOD defines *pi* so I'll just define them all like that
         if (typeof value === 'number')
-          defineGlobalSymbol(`*${name.toLowerCase()}*`, value, { schemeOnly: true });
+          defineGlobalSymbol(`*${name.toLowerCase()}*`, value, { schemeOnly: true }, `Math-${name}`);
         // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
         if (typeof value === 'function')
-          defineGlobalSymbol(name, value, { schemeOnly: true });
+          defineGlobalSymbol(name, value, { schemeOnly: true }, `Math-${name}`);
       }
     }
     defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
@@ -839,20 +844,20 @@ globalScope._help_ = {};  // For clients that want to implement help.
   // Sorry, "equal?"" does not get the variadic treatment at this time
   defineGlobalSymbol("equal?", (a, b) =>  deep_eq(a, b));
 
-  defineGlobalSymbol("!=", ne, { evalArgs: 2, compileHook: ne_hook }, "ne");
-  function ne(a, b, ...rest) {
+  defineGlobalSymbol("!=", neq, { evalArgs: 2, compileHook: neq_hook }, "ne");
+  function neq(a, b, ...rest) {
     return !eq.call(this, a, b, ...rest);
   }
-  function ne_hook(args, ssaScope, tools) {
+  function neq_hook(args, ssaScope, tools) {
     let eq = compare_hooks(args, ssaScope, tools, '==', 'eq');
     return `(!${eq})`;
   }
 
-  defineGlobalSymbol("!==", ne, { evalArgs: 2, compileHook: ne_hook }, "ne");
-  function ne(a, b, ...rest) {
+  defineGlobalSymbol("!==", neeq, { evalArgs: 2, compileHook: neeq });
+  function neeq(a, b, ...rest) {
     return !eeq.call(this, a, b, ...rest);
   }
-  function ne_hook(args, ssaScope, tools) {
+  function neeq(args, ssaScope, tools) {
     let eq = compare_hooks(args, ssaScope, tools, '==', 'eq');
     return `(!${eeq})`;
   }
@@ -1514,7 +1519,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
           matches = cons(symbol, matches);
       }
     }
-    return this.sort(matches,
+    return this.nsort(matches,
       (a,b) => a.description.toLowerCase() < b.description.toLowerCase());
   }
 
@@ -2082,7 +2087,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
       value[NAMETAG] = name;
     globalScope[name] = value;
     // Make available to JavaScript as well
-    let { name: jsName } = normalizeExportToJavaScriptName(name);
+    let { jsName } = normalizeExportToJavaScriptName(name);
     globalScope[jsName] = value;
     return name;
   }
@@ -2100,7 +2105,7 @@ globalScope._help_ = {};  // For clients that want to implement help.
     compiledFunction[NAMETAG] = name;
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
-    let { name: jsName } = normalizeExportToJavaScriptName(name);
+    let { jsName } = normalizeExportToJavaScriptName(name);
     globalScope[jsName] = compiledFunction;
     globalScope[name] = compiledFunction;
     return name;
