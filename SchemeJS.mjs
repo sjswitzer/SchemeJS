@@ -744,8 +744,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   function compare_hooks(args, ssaScope, tools, op, name) {
-    if (args.length < 2)
-      return 'false';
+    if (args.length < 2) return 'false'; // individual invokers need to override this
     if (args.length === 2)
       return `(${args[0]} ${op} ${args[1]})`;
     let result = tools.newTemp(name);
@@ -823,6 +822,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return true;
   }
   function eq_hook(args, ssaScope, tools) {
+    if (args.length < 2) return 'true';
     return compare_hooks(args, ssaScope, tools, '==', 'eq');
   }
 
@@ -838,6 +838,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return true;
   }
   function eeq_hook(args, ssaScope, tools) {
+    if (args.length < 2) return 'true';
     return compare_hooks(args, ssaScope, tools, '===', 'eeq');
   }
 
