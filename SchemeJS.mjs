@@ -1647,38 +1647,49 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       res = _eval(forms[i], scope);
     return res;
   }
-  function letrec_hook(body, ssaScope, tools) {
-    let ssaResult = tools.newTemp('letrec');
-    if (!isCons(body))
-      throw new SchemeCompileError(`Bad letrec ${string(body)}`);
-    let bindings = body[CAR], forms = body[CDR];
-    ssaScope = newScope(ssaScope, 'compile-letrec');
-    tools.emit(`let ${ssaResult} = NIL; {`);
+  function letrec_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind;
+    if (args.length < 2) throw new SchemeCompileError(`Bad letrec`);
+    let bindings = args[0];
+    ssaScope = newScope(ssaScope, "compile-letrec-scope");
+    let ssaTmpScope = newTemp("scope_tmp");
+    emit(`let ${ssaTmpScope} = scope; { // letrec`);
     let saveIndent = tools.indent;
-    for (binding of bindings) {
+    tools.indent += '  ';
+    emit(`let scope = newScope(${ssaTmpScope}, "compiled-letrec-scope");`);
+    for( ; isCons(bindings); bindings = bindings[CDR]) {
+      let binding = bindings[CAR];
       if (!isCons(binding))
-        throw new SchemeCompileError(`Bad letrec binding ${string(binding)}`);
-      let bound = binding[CAR], boundValueForms = binding[CDR];
-      let ssaBound = tools.newTemp(bound);
-      ssaScope[bound] = ssaBound;
-      tools.emit(`let ${ssaBound} = NIL`);
-      for (let boundValForm of boundValueForms) {
-        let ssaVal = compileEval(boundValForm, ssaScope, tools);
-        emit(`${ssaBound} = ${ssaVal};`);
+        throw new SchemeCompileError(`Bad binding ${string(binding)}`)
+      let boundVar = binding[CAR], bindingForms = binding[CDR];
+      if (typeof boundVar !== 'symbol')
+        throw new SchemeEvalError(`Bad binding ${string(binding)}`);
+      let ssaBoundVar = newTemp(boundVar);
+      emit(`let ${ssaBoundVar} = NIL;`);
+      for ( ; isCons(bindingForms); bindingForms = bindingForms[CDR]) {
+        let ssaVal = compileEval(bindingForms[CAR], ssaScope, tools);
+        emit(`${ssaBoundVar} = ${ssaVal};`);
       }
+      let paramAtom = bind(boundVar);
+      ssaScope[boundVar] = ssaBoundVar;
+      emit(`scope[${paramAtom}] = ${ssaBoundVar};`);
     }
-    for (form of forms) {
-      let ssaVal = compileEval(form, ssaScope, tools);
-      tools.emit(`${ssaResult} = ${ssaVal};`);
+    let ssaResult = newTemp("letrec");
+    emit(`let ${ssaResult} = NIL;`);
+    for (let i = 1; i < args.length; ++i) {
+      let ssaVal = compileEval(args[i], ssaScope, tools);
+      emit(`${ssaResult} = ${ssaVal};`);
     }
     tools.indent = saveIndent;
-    tools.emit(`}`);
+    emit(`}`);
     return ssaResult;
   }
 
   // Something like this would be nice, but it's not quite right
   //  let setSymWithWith = new Function("symbol", "value", "scope",
   //    "with (scope) { return symbol = value }");
+  // The point is that the JavaScript runtime HAS a suitable primitive; I just don't
+  // think you can get at it directly from user code.
 
   defineGlobalSymbol("set'", setq, { evalArgs: 0, compileHook: setq_hook }, "setq");
   function setq(symbol, valueForm, ...values) {
@@ -3765,12 +3776,12 @@ function put(str, nobreak) {
         }
       }
       let name = fName + '_closure';
-      let ssaResult = newTemp(name), closureScope = newTemp("closure_scope")
-      emit(`let ${closureScope} = newScope(scope, "closure-scope");`);
+      let ssaResult = newTemp(name), ssaTmpScope = newTemp("tmp_scope")
+      emit(`let ${ssaTmpScope} = scope;`);
       emit(`let ${ssaResult}; {`);
       let saveIndent = tools.indent;
       tools.indent += '  ';
-      emit(`let scope = ${closureScope};`);
+      emit(`let scope = newScope(${ssaTmpScope}, "compiled-closure-scope");`);
       // First, cons up the closure S-expr.
       let closureBody;
       let innerParams = NIL, innerForms = NIL;
