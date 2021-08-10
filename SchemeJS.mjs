@@ -3657,6 +3657,10 @@ function put(str, nobreak) {
           restParam = fnInfo.restParam;
           valueTemplate = fnInfo.value;
           bodyTemplate = fnInfo.body;
+        } else {  // Still need param info for closures, but don't use for templates
+          fnInfo = analyzeJSFunction(fn);
+          params = fnInfo.params;
+          restParam = fnInfo.restParam;
         }
         // Everything you need to know about invoking a JS function is right here
         tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, params, restParam, valueTemplate, bodyTemplate };
