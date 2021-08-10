@@ -3573,12 +3573,12 @@ function put(str, nobreak) {
       if (boundSym) return boundSym;
       if (name) {
         if (typeof name === 'symbol')
-          name = newTemp(name.description+'_atom');
+          name = newTemp(name.description);
         if (bindSymToObj[name])  // collision
           name = newTemp(name);
       } else {
         if (typeof obj === 'symbol')
-          name = newTemp(obj.description);
+          name = newTemp(obj.description+'_atom');
         else if (typeof obj === 'function')
           name = newTemp(obj.name);
         else
