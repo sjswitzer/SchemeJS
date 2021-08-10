@@ -62,7 +62,7 @@ async function handleFetch(event) {
 //
 
 let prefetchURLs = [
-  "test.scm",
+  "demo.scm",
 ];
 
 onactivate = event => handleActivate(event);
