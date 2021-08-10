@@ -3716,7 +3716,15 @@ function put(str, nobreak) {
         emit(`let ${ssaResult} = ${ssaFunction}.call(this${ssaArgStr});`)
         return ssaResult;
       }
+      //
       // Generate closure (see "_eval", I ain't gonna splain it agin)
+      //
+      if (compileHook) {
+        // If there were compile hooks, ssaArgv is a lie after evalCount. Rectify that.
+        for (let i = 0; i < ssaArgv; ++i)
+          if (i >= evalCount)
+            ssaArgv[i] = compileEval(ssaArgv[i], ssaScope, tools);
+      }
       let ssaResult = newTemp(fName), closureScope = newTemp("closure_scope")
       emit(`let ${closureScope} = newScope(scope, "closure-scope");`);
       emit(`let ${ssaResult}; {`);
