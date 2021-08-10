@@ -943,7 +943,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function nullish_hook(args, ssaScope, tools) {
     if (args.length < 1)
-      return `"undefined"`;
+      return 'undefined';
     if (args.length == 1)
       return compileEval(args[0], ssaScope, tools);
     let result = newTemp(name), saveIndent = tools.indent;
@@ -3695,7 +3695,8 @@ function put(str, nobreak) {
         else if (!compileHook)  // hooks get unbound unevaluated args
           arg = ssaArg = use(bind(arg, `arg_${argCount}`));
         ssaArgv.push(arg);
-        ssaArgStr += `, ${arg}`;  // Bogus if there's a hook but it isn't used in that case
+        if (ssaArg)
+          ssaArgStr += `, ${ssaArg}`;
       }
       // Cases where we simply invoke the function:
       //  - we have at least required number of arguments
@@ -3742,8 +3743,10 @@ function put(str, nobreak) {
       //
       if (compileHook) {
         // If there were compile hooks, ssaArgv is a lie after evalCount. Rectify that.
-        for (let i = evalCount; i < ssaArgv.length; ++i)
+        for (let i = evalCount; i < ssaArgv.length; ++i) {
           ssaArgv[i] = use(bind(ssaArgv[i]));
+          ssaArgStr += `, ${ssaArgv[i]}`;
+        }
       }
       let name = fName + '_closure';
       let ssaResult = newTemp(name), closureScope = newTemp("closure_scope")
