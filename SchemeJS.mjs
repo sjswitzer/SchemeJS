@@ -3545,6 +3545,7 @@ function put(str, nobreak) {
     for (let bindingName of Object.keys(bindSymToObj))
       if (usedSsaValues[bindingName])
         emit(`let ${bindingName} = bound[${string(bindingName)}];`);
+    // Atoms don't bind; they return "Atom('atomName'"
     emit(`let CLOSURE_ATOM = Atom(${string(CLOSURE_ATOM.description)});`)
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
@@ -3558,7 +3559,6 @@ function put(str, nobreak) {
         return string(obj);
       if (obj === true) return "true";
       if (obj === false) return "false";
-      if (isNil(obj)) return "NIL";
       if (obj === null) return "null";
       if (isAtom(obj)) return `Atom(${string(obj.description)})`;
       let boundSym = bindObjToSym.get(obj);
