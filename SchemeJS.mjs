@@ -3697,6 +3697,10 @@ function put(str, nobreak) {
       let compileHook = functionDescriptor.compileHook;
       let valueTemplate = functionDescriptor.valueTemplate;
       let bodyTemplate = functionDescriptor.bodyTemplate;
+      if (typeof fName === 'symbol')
+        fName = fName.description;
+      if (!fName)
+        fName = 'anon';
 
       // Run through the arg list evaluating args
       let ssaArgv = [], ssaArgStr = '', argCount = 0;
@@ -3743,7 +3747,7 @@ function put(str, nobreak) {
           return ssaResult;
         }
         // TODO: Inline SchemeJS functions? Or just trust the JavaScript JIT to do it?
-        let ssaResult = newTemp(fName.description+'_result');
+        let ssaResult = newTemp(fName+'_result');
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
