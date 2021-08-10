@@ -907,16 +907,16 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       return init;
     if (args.length == 1)
       return compileEval(args[0], ssaScope, tools);
-    let result = newTemp(name), saveIndent = tools.indent;
+    let ssaResult = tools.newTemp(name), saveIndent = tools.indent;
     tools.indent += '  ';
-    tools.emit(`let ${result} = ${compileEval(args[0], ssaScope, tools)}; ${result}: {`);
+    tools.emit(`let ${ssaResult} = ${compileEval(args[0], ssaScope, tools)}; ${ssaResult}: {`);
     for (let i = 1; i < args.length; ++i) {
-      tools.emit(`if (${test}(${result})) break $result;`);
-      tools.emit(`${result} = ${compileEval(args[i], ssaScope, tools)};`);
+      tools.emit(`if (${test}(${ssaResult})) break ${ssaResult};`);
+      tools.emit(`${ssaResult} = ${compileEval(args[i], ssaScope, tools)};`);
     }
     tools.indent = saveIndent;
     tools.emit('}');
-    return result;
+    return ssaResult;
   }
 
   defineGlobalSymbol("||", or, { evalArgs: 0, compileHook: or_hook }, "or");
@@ -929,7 +929,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return val;
   }
   function or_hook(args, ssaScope, tools,) {
-    return and_or_hook(args, ssaScope, tools, 'or', 'true', 'schemeTrue');
+    return and_or_hook(args, ssaScope, tools, 'or', 'false', 'schemeTrue');
   }
 
   defineGlobalSymbol("??", nullish, { evalArgs: 0, compileHook: nullish_hook }, "nullish");
