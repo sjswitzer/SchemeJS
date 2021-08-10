@@ -3686,7 +3686,7 @@ function put(str, nobreak) {
       if (!functionDescriptor) {
         use(ssaFunction);
         let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
-        let ssaResult = newTemp(fName);
+        let ssaResult = newTemp(fName+'_result');
         let ssaArgList = use(bind(args, `${fName}_args`));
         emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
         return ssaResult;
@@ -3723,7 +3723,7 @@ function put(str, nobreak) {
           return ssaResult;
         }
         if (valueTemplate) {
-          let ssaResult = newTemp(fName);
+          let ssaResult = newTemp(fName+'_result');
           emit(`let ${ssaResult}; {`);
           let saveIndent = tools.indent;
           tools.indent += '  ';
@@ -3749,7 +3749,7 @@ function put(str, nobreak) {
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
-        emit(`let ${ssaResult} = ${ssaFunction}.call(this${ssaArgStr});`)
+        emit(`let ${ssaResult} = ${ssaFunction}.call(scope${ssaArgStr});`)
         return ssaResult;
       }
       //
@@ -3890,7 +3890,7 @@ function put(str, nobreak) {
   //
   function compileLambda(name, lambda, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
-    let ssaFunction = newTemp(name);
+    let ssaFunction = newTemp(name ? name : 'lambda');
     if (!isCons(lambda)) throwBadCompiledLambda(lambda);
     let body = lambda[CDR];
     let evalCount = MAX_INTEGER;
@@ -3906,10 +3906,8 @@ function put(str, nobreak) {
       params = cons(params, NIL);
     if (!isList(params)) throwBadCompiledLambda(lambda);
     let forms = body[CDR];
-    let paramv = [];
+    let ssaParamv = [], paramv = [], restParam;
     ssaScope = newScope(ssaScope, "compile-lambda-scope");
-    if (typeof params === 'symbol') // Curry notation
-      params = cons(params, NIL);
     let paramCount = 0, requiredCount, optionalFormsVec = [];
     for (; isCons(params); ++paramCount, params = params[CDR]) {
       let param = params[CAR], ssaParam;
@@ -3924,13 +3922,15 @@ function put(str, nobreak) {
         ssaParam = newTemp(param);
         optionalFormsVec.push(undefined);
       }
-      paramv.push(ssaParam);
+      ssaParamv.push(ssaParam);
       ssaScope[param] = ssaParam;
+      paramv.push(param);
     }
     if (typeof params === 'symbol') {  // rest param (does not increment paramCount)
       let ssaParam = newTemp(param);
-      paramv.push(`...${ssaParam})`);
+      ssaParamv.push(`...${ssaParam})`);
       ssaScope[params] = ssaParam;
+      restParam = params;
     }
     else if (!isNil(params))
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
@@ -3940,29 +3940,34 @@ function put(str, nobreak) {
     if (name)
       ssaScope[name] = ssaFunction;
     let delim = '', paramStr = '';
-    for (let param of paramv) {
+    for (let param of ssaParamv) {
       paramStr += delim + param;
       delim = ', ';
     }
     let nameStr = name ? `  // ${name.description}` : '';
+    let ssaLambdaScope = newTemp("lambda_scope");
+    emit(`let ${ssaLambdaScope} = newScope(scope, "compiled-lambda-scope");`);
     emit(`function ${ssaFunction}(${paramStr}) {${nameStr}`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
+    emit(`let scope = ${ssaLambdaScope};`)
     for (let i = 0, optionalFormsVecLength = optionalFormsVec.length; i < optionalFormsVecLength; ++i) {
+      let ssaParam = ssaParamv[i];
       let optionalForms = optionalFormsVec[i];
       if (optionalForms !== undefined) {
-        let param = paramv[i];
-        emit(`if (${param} === undefined) {`);
+        emit(`if (${ssaParam} === undefined) {`);
         let saveIndent = tools.indent;
         tools.indent += '  ';
-        let ssaRes = 'NIL';
+        let ssaParam = 'NIL';
         for (let form of optionalForms)
-          ssaRes = compileEval(form, ssaScope, tools);
-        emit(`${param} = ${ssaRes};`);
+          ssaParam = compileEval(form, ssaScope, tools);
         tools.indent = saveIndent;
         emit('}');
+        emit(`scope[Atom(${string(param)})] = ${ssaParam};`)
       }
     }
+    if (restParam)
+      emit(`scope[Atom(${string(restParam)})] = ${ssaParamv[ssaParamv.length-1]};`)
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
       ssaResult = compileEval(forms[CAR], ssaScope, tools);
@@ -3974,8 +3979,7 @@ function put(str, nobreak) {
       closureAtom = SCLOSURE_ATOM;
       body = cons(evalCount, body);
     }
-    let lambdaScope = newScope(scope, "compiled-lambda-scope");
-    let closureForm = cons(closureAtom, cons(lambdaScope, body));
+    let closureForm = cons(closureAtom, cons(undefined, body));
     decorateCompiledClosure(ssaFunction, closureForm, requiredCount, evalCount, tools);
     return ssaFunction;
   }

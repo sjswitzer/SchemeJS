@@ -470,7 +470,7 @@ export function run(opts = {}) {
     EXPECT_ERROR(` (nth 7 '[a b c d e f g]) `, RangeError);
     EXPECT_ERROR(` (nth 7 "abcdefg") `, RangeError);
 
-    EXPECT(` (apropos "c") `, isCons);  // weak test but gets coverage
+    EXPECT(` (apropos "c") `, isCons);  // weak test but gets some coverage
     EXPECT(` (mapcar) `, NIL);
     EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
     EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
