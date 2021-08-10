@@ -3545,6 +3545,7 @@ function put(str, nobreak) {
     use(bind(isList, "isList"));
     use(bind(isCons, "isCons"));
     use(bind(cons, "cons"));
+    use(bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
     let ssaFunction = compileLambda(name, lambdaForm, ssaScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
@@ -3555,8 +3556,6 @@ function put(str, nobreak) {
     for (let bindingName of Object.keys(bindSymToObj))
       if (usedSsaValues[bindingName])
         emit(`let ${bindingName} = bound[${string(bindingName)}];`);
-    // Atoms don't bind; they return "Atom('atomName'"
-    emit(`let CLOSURE_ATOM = Atom(${string(CLOSURE_ATOM.description)});`)
     emitted = emitted.concat(saveEmitted);
     let code = emitted.join('');
     return { code, bindSymToObj };
@@ -3570,7 +3569,7 @@ function put(str, nobreak) {
       if (obj === true) return "true";
       if (obj === false) return "false";
       if (obj === null) return "null";
-      if (isAtom(obj)) return `Atom(${string(obj.description)})`;
+      if (typeof obj === 'symbol' && !name) name = `${name}_atom`;
       let boundSym = bindObjToSym.get(obj);
       if (boundSym) return boundSym;
       if (name) {
@@ -3822,7 +3821,8 @@ function put(str, nobreak) {
           let param = tmp[CAR];
           let ssaParam = newTemp(param);
           ssaScope[params[i]] = ssaParam;
-          emit(`let ${ssaParam} = scope[Atom(${string(param.description)})] = ${arg};`)
+          let ssaParamName = use(bind((param)));
+          emit(`let ${ssaParam} = scope[${ssaParamName}] = ${arg};`)
           closedArgStr += `, ${ssaParam}`;
         }
       }
@@ -3963,11 +3963,14 @@ function put(str, nobreak) {
           ssaParam = compileEval(form, ssaScope, tools);
         tools.indent = saveIndent;
         emit('}');
-        emit(`scope[Atom(${string(param)})] = ${ssaParam};`)
+        let ssaParamName = use(bind(param));
+        emit(`scope[${ssaParamName}] = ${ssaParam};`)
       }
     }
-    if (restParam)
-      emit(`scope[Atom(${string(restParam)})] = ${ssaParamv[ssaParamv.length-1]};`)
+    if (restParam) {
+      let ssaParamName = use(bind(restParam));
+      emit(`scope[(${ssaParamName}] = ${ssaParamv[ssaParamv.length-1]};`);
+    }
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
       ssaResult = compileEval(forms[CAR], ssaScope, tools);
