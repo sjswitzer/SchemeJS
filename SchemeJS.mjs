@@ -3737,8 +3737,8 @@ function put(str, nobreak) {
       //
       if (compileHook) {
         // If there were compile hooks, ssaArgv is a lie after evalCount. Rectify that.
-        for (let i = evalCount; i < ssaArgv; ++i)
-          ssaArgv[i] = use(bind(ssaArgv[i], ssaScope, tools));
+        for (let i = evalCount; i < ssaArgv.length; ++i)
+          ssaArgv[i] = use(bind(ssaArgv[i]));
       }
       let name = fName + '_closure';
       let ssaResult = newTemp(name), closureScope = newTemp("closure_scope")
