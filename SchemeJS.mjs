@@ -305,7 +305,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let { atom, atomName, jsName } = normalizeExportToJavaScriptName(name);
     globalScope[atom] = value;
     helpGroups[atom] = group;
-    if (jsName & !opts.schemeOnly) {
+    if (jsName && !opts.schemeOnly) {
       globalScope[jsName] = value;
       helpGroups[jsName] = group;
     }
