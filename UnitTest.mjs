@@ -222,7 +222,7 @@ export function run(opts = {}) {
     EXPECT(` ((? true 1) 2) `, 1);
     EXPECT(` ((? true 1) (oops!)) `, 1);
     EXPECT(` (? false 1) `, isClosure);
-    EXPECT(` ((? false (!oops)) 2)`, 2);
+    EXPECT(` ((? false (oops!)) 2)`, 2);
     EXPECT(` (? true 1 2) `, 1);
     EXPECT(` (? false 1 2) `, 2);
     EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);

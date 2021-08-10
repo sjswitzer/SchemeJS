@@ -170,7 +170,7 @@ export function createInstance(schemeOpts = {}) {
   ATOMS["\\"]  = ATOMS[LAMBDA_CHAR]     = ATOMS[lambdaStr]     = LAMBDA_ATOM;
   ATOMS["\\#"] = ATOMS[LAMBDA_CHAR+"#"] = ATOMS[lambdaStr+"#"] = SLAMBDA_ATOM;
   const CLOSURE_ATOM = Atom("%%closure");
-  const SCLOSURE_ATOM = Atom("%%#closure");
+  const SCLOSURE_ATOM = Atom("%%closure#");
   const QUESTION_ATOM = Atom("?");
 
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
@@ -3498,7 +3498,7 @@ function put(str, nobreak) {
     let scope = this;
     let bindSymToObj = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
-    let tools = { bind, use, boundVal, emit, use, newTemp, scope, indent: '', evalLimit: 100, functionDescriptors };
+    let tools = { emit, bind, use, newTemp, scope, indent: '', evalLimit: 100, functionDescriptors };
     let ssaScope = new Scope();
     // Well-known names
     use(bind(string, "string"));
@@ -3561,9 +3561,6 @@ function put(str, nobreak) {
     }
     function emit(str) {
       emitted.push(tools.indent + str + '\n');
-    }
-    function boundVal(name) {
-      return bindSymToObj[name];
     }
     function newTemp(name) {
       if (!name)
@@ -3770,7 +3767,7 @@ function put(str, nobreak) {
       }
       let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
-      // and to the scope
+      // and to the scope.
       ssaScope = newScope(ssaScope, "ssa-closure-scope");
       let closedArgStr = '';
       for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR]) {
