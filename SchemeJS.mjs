@@ -1651,9 +1651,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (args.length < 2) throw new SchemeCompileError(`Bad letrec`);
     let bindings = args[0];
+    let ssaResult = newTemp("letrec");
     ssaScope = newScope(ssaScope, "compiler-letrec-scope");
     let ssaTmpScope = newTemp("scope_tmp");
-    emit(`let ${ssaTmpScope} = scope; { // letrec`);
+    emit(`let ${ssaTmpScope} = scope;`);
+    emit(`let ${ssaResult} = NIL; { // letrec`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
     emit(`let scope = newScope(${ssaTmpScope}, "compiled-letrec-scope");`);
@@ -1674,8 +1676,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       ssaScope[boundVar] = ssaBoundVar;
       emit(`scope[${paramAtom}] = ${ssaBoundVar};`);
     }
-    let ssaResult = newTemp("letrec");
-    emit(`let ${ssaResult} = NIL;`);
     for (let i = 1; i < args.length; ++i) {
       let ssaVal = compileEval(args[i], ssaScope, tools);
       emit(`${ssaResult} = ${ssaVal};`);
