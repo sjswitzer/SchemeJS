@@ -691,6 +691,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return a;
   }
   function bit_and_hook(args, ssaScope, tools) {
+    if (args.length < 2) return 0;
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` & ${args[i]}`;
@@ -706,6 +707,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return a;
   }
   function bit_or_hook(args, ssaScope, tools) {
+    if (args.length < 2) return 0;
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` | ${args[i]}`;
@@ -721,6 +723,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return a;
   }
   function bit_xor_hook(args, ssaScope, tools) {
+    if (args.length < 2) return 0;
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` ^ ${args[i]}`;
@@ -901,7 +904,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   function and_or_hook(args, ssaScope, tools, name, init, test) {
     if (args.length < 1)
-      return `"${test}"`;
+      return init;
     if (args.length == 1)
       return compileEval(args[0], ssaScope, tools);
     let result = newTemp(name), saveIndent = tools.indent;
