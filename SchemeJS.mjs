@@ -28,8 +28,8 @@ export function createInstance(schemeOpts = {}) {
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   const jitThreshold = schemeOpts.jitThreshold ?? undefined;
   const TRACE_INTERPRETER = !!(schemeOpts.traceInterpreter ?? false);
-  const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? true);
-  const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? true);
+  const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? false);
+  const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? false);
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   const reportSystemError = schemeOpts.reportError ?? _reportError;
@@ -3905,7 +3905,8 @@ function put(str, nobreak) {
       paramStr += delim + param;
       delim = ', ';
     }
-    emit(`function ${ssaFunction}(${paramStr}) {`);
+    let nameStr = name ? `  // ${name.description}` : '';
+    emit(`function ${ssaFunction}(${paramStr}) {${nameStr}`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
     for (let i = 0, optionalFormsVecLength = optionalFormsVec.length; i < optionalFormsVecLength; ++i) {

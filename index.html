@@ -850,12 +850,13 @@
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, NIL, originalLoad;
       let varNo = 0, errorElement, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
+      let traceCompilerCode = true;
 
       onload = importSchemeAndRunREPL();
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
         globalScope = SchemeJS.createInstance(
-          { lambdaStr, readFile, reportLoadResult, reportSchemeError, reportSystemError });
+          { lambdaStr, readFile, reportLoadResult, reportSchemeError, reportSystemError, traceCompilerCode });
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
@@ -1447,8 +1448,9 @@
       function runUnitTests() {
         runTests();
         async function runTests() {
+          let traceCompilerCode = true;
           let UnitTest = await(import("./UnitTest.mjs"));
-          UnitTest.run({ throwOnError: false });
+          UnitTest.run({ throwOnError: false, traceCompilerCode });
         }
       }
 
