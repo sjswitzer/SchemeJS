@@ -105,7 +105,7 @@
         font-size: 160%;
         color: black;
       }
-      div.help > div {
+      div.help > .help-content {
         overflow-y: auto;
         height: 100%;
       }
@@ -363,7 +363,7 @@
     </div>
     <div class="help" id="help-about">
       <close-button onclick="showHelp(null)"></close-button>
-      <div>
+      <div class="help-content">
         <h2> SchemeJS: Scheme in JavaScript </h2>
         <p> JavaScript has dynamic typing, functions, closures, and a JIT with
             a small army of crack programmers optimizing its performance.
@@ -383,7 +383,7 @@
     </div>
     <div class="help" id="help-details">
       <close-button onclick="showHelp(null)"></close-button>
-      <div>
+      <div class="help-content">
         <h2> Implementation Details </h2>
         <p>
         <h3> Key Features </h3>
@@ -446,23 +446,25 @@
     </div>
     <div class="help" id="help-builtin">
       <close-button onclick="showHelp(null)"></close-button>
-      <div>
-        <h2> Built-In Functions and Constants </h2>
+      <div style="padding-bottom: .5em;">
+        <h2 style="margin-bottom:.25em"> Built-In Functions and Constants </h2>
         <input type="checkbox" name="impl"
-          onchange="parentElement.setAttribute('data-show-impl', String(event.currentTarget.checked))">
+          onchange="parentElement.parentElement.setAttribute('data-show-impl', String(event.currentTarget.checked))">
         <label for="javascript">Show Implementations</label>,
         <input type="checkbox" name="javascript"
-          onchange="parentElement.setAttribute('data-show-javascript', String(event.currentTarget.checked))">
+          onchange="parentElement.parentElement.setAttribute('data-show-javascript', String(event.currentTarget.checked))">
         <label for="javascript">Show JavaScript API</label>
+      </div>
+      <div class="help-content">
         <dl class="definitions" id="helpgroup-builtin">
           <dt class="heading"> Symbol
-          <dd class="heading"> Description
+            <dd class="heading"> Description
           <!-- definitions inserted here when SchemeJS module is loaded -->
-         </dl>
-         <h2> Functions and Constants Imported from JavaScript </h2>
-         <dl class="definitions" id="helpgroup-imported">
-           <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
+        <h2> Functions and Constants Imported from JavaScript </h2>
+        <dl class="definitions" id="helpgroup-imported">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+      </dl>
      </div>
     </div>
     <!-- These definitions get moved into the help section at startup -->
