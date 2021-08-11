@@ -3715,8 +3715,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (scopedVal && typeof scopedVal === 'function') {
         if (!tools.functionDescriptors[ssaValue]) {
           let fn = scopedVal;
-          let name = fn.name ?? fn[NAMETAG] ?? sym.description;
-          ssaValue = bind(fn, name);
+          let name = fn[NAMETAG] ?? fn.name ?? sym.description;
+          ssaValue = bind(fn, newTemp(name));
           let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
           let requiredCount = parameterDescriptor & 0xffff;
           let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
@@ -3745,7 +3745,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           }
           if (native || isClosure(fn))
             noScope = true;
-          if (noScope) console.log("NOSCOPE", name);
+          if (noScope && TRACE_COMPILER) console.log("NOSCOPE", name);
           // Everything you need to know about invoking a JS function is right here
           tools.functionDescriptors[ssaValue] = {
             requiredCount, evalCount, name, compileHook, params, restParam,
@@ -4083,6 +4083,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       ssaResult = compileEval(forms[CAR], ssaScope, tools);
     if (!ssaScope.used)
       tools.deleteEmitted(scopeLines);
+    use(ssaResult);
     emit(`return ${ssaResult};`);
     tools.indent = saveIndent;
     emit(`}`);
