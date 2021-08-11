@@ -34,6 +34,7 @@ export function createInstance(schemeOpts = {}) {
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   const reportSystemError = schemeOpts.reportError ?? _reportError;
   const reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
+  const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
 
   // Creating a Cons should be as cheap as possible, so no subclassing
@@ -1337,6 +1338,19 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
     }
     return result;
+  }
+
+  // Provisional but useful
+  defineGlobalSymbol("println", println);
+  function println(...lines) {
+    let str = ''
+    for (let line of lines) {
+      if (typeof line !== 'string')
+        line = string(line);
+      str += line + '\n'
+    }
+    linePrinter(str);
+    return true;
   }
 
   // Can be inlined (if isList, isIterator, isCons, etc. are bound), but doesn't seem wise
@@ -3692,27 +3706,34 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // for now, only bind functions from outside scope
       let scopedVal = scope[sym];
       if (scopedVal && typeof scopedVal === 'function') {
-        let fn = scopedVal;
-        let name = fn.name ?? fn[NAMETAG] ?? sym.description;
-        ssaValue = bind(fn, name);
-        let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-        let requiredCount = parameterDescriptor & 0xffff;
-        let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-        let compileHook = fn[COMPILE_HOOK];
-        let fnInfo = fn[COMPILE_INFO];
-        let params, restParam, valueTemplate, bodyTemplate;
-        if (fnInfo) {
-          params = fnInfo.params;
-          restParam = fnInfo.restParam;
-          valueTemplate = fnInfo.value;
-          bodyTemplate = fnInfo.body;
-        } else {  // Still need param info for closures, but don't use for templates
-          fnInfo = analyzeJSFunction(fn);
-          params = fnInfo.params;
-          restParam = fnInfo.restParam;
+        if (!tools.functionDescriptors[ssaValue]) {
+          let fn = scopedVal;
+          let name = fn.name ?? fn[NAMETAG] ?? sym.description;
+          ssaValue = bind(fn, name);
+          let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+          let requiredCount = parameterDescriptor & 0xffff;
+          let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+          let compileHook = fn[COMPILE_HOOK];
+          let fnInfo = fn[COMPILE_INFO];
+          let params, restParam, valueTemplate, bodyTemplate, native;
+          if (fnInfo) {
+            params = fnInfo.params;
+            restParam = fnInfo.restParam;
+            valueTemplate = fnInfo.value;
+            bodyTemplate = fnInfo.body;
+            native = fnInfo.native;
+          } else {  // Still need param info for closures, but don't use for templates
+            fnInfo = analyzeJSFunction(fn);
+            params = fnInfo.params;
+            restParam = fnInfo.restParam;
+            native = fnInfo.native;
+          }
+          // Everything you need to know about invoking a JS function is right here
+          tools.functionDescriptors[ssaValue] = {
+            requiredCount, evalCount, name, compileHook, params, restParam,
+            valueTemplate, bodyTemplate, noScope: native || isClosure(scopedVal)
+          };
         }
-        // Everything you need to know about invoking a JS function is right here
-        tools.functionDescriptors[ssaValue] = { requiredCount, evalCount, name, compileHook, params, restParam, valueTemplate, bodyTemplate };
         return ssaValue;
       }
       return `resolveUnbound(${use(bind(sym))})`;
@@ -3748,13 +3769,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let compileHook = functionDescriptor.compileHook;
       let valueTemplate = functionDescriptor.valueTemplate;
       let bodyTemplate = functionDescriptor.bodyTemplate;
+      let noScope = functionDescriptor.noScope;
       if (typeof fName === 'symbol')
         fName = fName.description;
       if (!fName)
         fName = 'anon';
 
       // Run through the arg list evaluating args
-      let ssaArgv = [], ssaArgStr = '', argCount = 0;
+      let ssaArgv = [], ssaArgStr = '', sep = '', argCount = 0;
       for ( ; isCons(args) ; ++argCount, args = args[CDR]) {
         let arg = args[CAR], ssaArg;
         if (argCount < evalCount)
@@ -3762,8 +3784,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         else if (!compileHook)  // hooks get unbound unevaluated args
           arg = ssaArg = use(bind(arg, `arg_${argCount}`));
         ssaArgv.push(arg);
-        if (ssaArg)
-          ssaArgStr += `, ${ssaArg}`;
+        if (ssaArg) {
+          ssaArgStr += `${sep}${ssaArg}`;
+          sep = ', ';
+        }
       }
       // Cases where we simply invoke the function:
       //  - we have at least required number of arguments
@@ -3802,8 +3826,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
-        ssaScope.used = true;
-        emit(`let ${ssaResult} = ${ssaFunction}.call(scope${ssaArgStr});`)
+        if (noScope) { // Closures don't need a "this" scope
+          emit(`let ${ssaResult} = ${ssaFunction}(${ssaArgStr});`)
+        } else {
+          ssaScope.used = true;
+          emit(`let ${ssaResult} = ${ssaFunction}.call(scope, ${ssaArgStr});`)
+        }
         return ssaResult;
       }
       //
@@ -3879,7 +3907,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           closedArgStr += `, ${ssaParam}`;
         }
       }
-      let paramStr = '', sep = '';
+      let paramStr = '';
+      sep = '';
       for (; isCons(innerParams); innerParams = innerParams[CDR]) {
         let param = innerParams[CAR];
         let ssaParam = newTemp(param);
@@ -3889,13 +3918,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (typeof innerParams === 'symbol')
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
-      ssaScope.used = true;
-      emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr});`);
+      if (noScope) {  // Closures don't need a "this" scope
+        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr});`);
+      } else {
+        ssaScope.used = true;
+        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr});`);
+      }
       let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;
       emit(`}`);
-      tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name };
+      tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name, isClosure: true };
       return ssaResult;
     }
     // Special eval for JS Arrays and Objects
@@ -3992,7 +4025,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
     if (requiredCount === undefined)
       requiredCount = paramCount;  // paramCount does NOT contain rest param
-    tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name: displayName };
+    tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name: displayName, isClosure: true };
     if (nameAtom)
       ssaScope[nameAtom] = ssaFunction;
     let delim = '', paramStr = '';

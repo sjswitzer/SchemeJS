@@ -299,7 +299,7 @@
         border: .1em solid;
         border-radius: .5em;
       }
-      #output .input-box, #output .result-box, #output .error-box {
+      #output .input-box, #output .result-box, #output .print-box, #output .error-box {
         position: relative;  /* so that the "tag"" can be positioned absolutely */
         justify-self: end;
         margin-top: 0.25em;
@@ -324,17 +324,18 @@
         min-height: 2em;
       }
       #output .result-scroller {
-        max-height: 50em;
+        max-height: 25.em;
       }
       #output .result-scroller { padding: .5em .5em .5em .5em }
       #output .error-box { padding: .5em .5em .5em .5em }
       #output .input-scroller { padding: 0 0 .5em 0 }
       #output .input-scroller .text { margin: 0 .5em 0 .5em }
       #output .input-scroller .text:first-child { margin-top: .5em }
-      #output { background-color: #dddddd }
-      #output .error-box { background-color: #ffbbbb }
-      #output .input-box { background-color: #f8f8f8 }
-      #output .result-box { margin-left: 1em; background-color: #eeeeee }
+      #output { background-color: #eeeeee }
+      #output .input-box { background-color: #ffffff }
+      #output .result-box { margin-left: 1em; background-color: #f8f8f8 }
+      #output .error-box { margin-left: 1em; background-color: #ffbbbb }
+      #output .print-box { margin-left: 1em; background-color: #ffffcc }
       #output .load-path {
         margin-bottom: .5em;
         padding: .25em;
@@ -351,7 +352,7 @@
         width: 100%;
         border: .1em solid;
         border-radius: .5em;
-        background-color: #f8f8f8;
+        background-color: #ffffff;
       }
       #input .match-tokens {
         border-radius: .5em;
@@ -925,7 +926,7 @@
       const outputElement = document.getElementById('output');
       let globalScope, SCHEME_VERSION;
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, NIL, originalLoad;
-      let varNo = 0, errorElement, WS, NL;
+      let varNo = 0, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
       let traceCompilerCode = true;
 
@@ -933,7 +934,7 @@
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
         globalScope = SchemeJS.createInstance(
-          { lambdaStr, readFile, reportLoadResult, reportSchemeError, reportSystemError, traceCompilerCode });
+          { lambdaStr, readFile, reportLoadResult, reportSchemeError, reportSystemError, linePrinter, traceCompilerCode });
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
@@ -1252,10 +1253,6 @@
       });
 
       function handleInput(enterKey) {
-        if (errorElement) {
-          errorElement.remove();
-          errorElement = undefined;
-        }
         let parseContext = [], assignSyntax = true;
         let inputText = getElementText(inputElement);
         // console.log("TEXT", inputText);
@@ -1308,15 +1305,16 @@
           if (!(enterKey && pos === inputText.length))
             return; // TODO: auto-indent the line-break
 
+          let loadPath = null, loadLine = null;
+          inputElement.textContent = '';
+          showInput(inputText, loadPath, loadLine, expr, varNo);
+
           // Eval
           let value = globalScope.eval(expr, globalScope);
 
           // Show results and save in variables for later reuse
-          let loadPath = null, loadLine = null;
-          showInput(inputText, loadPath, loadLine, expr, varNo);
           showResult(value, varNo);
           ++varNo;
-          inputElement.textContent = '';
         } catch (error) {
           if (error instanceof SchemeParseError) {
             if (!(error instanceof SchemeParseIncompleteError))
@@ -1330,9 +1328,6 @@
               indent =  NBSP.repeat(parseContext[parseContext.length-1].lineChar + 2);
             insertTextAndSetCursorAfter(inputElement, pos, indent);
           } else {
-            inputText = trimEndNewlines(inputText);
-            inputElement.textContent = inputText;
-            insertTextAndSetCursorAfter(inputElement, inputText.length, '');
             showError(error);
           }
         }
@@ -1386,7 +1381,19 @@
         let innerDiv = document.createElement('div');
         innerDiv.setAttribute('class', 'result-scroller');
         let evaluatedString = globalScope.string(value);
-        for (let pgf of convertToHTMLContent(evaluatedString, 'result-text'))
+        for (let pgf of convertToHTMLContent(evaluatedString, 'text'))
+          innerDiv.appendChild(pgf);
+        div.appendChild(innerDiv);
+        outputElement.appendChild(div);
+        div.scrollIntoView();
+      }
+
+      function linePrinter(line) {
+        let div = document.createElement('div');
+        div.setAttribute('class', 'print-box');
+        let innerDiv = document.createElement('div');
+        innerDiv.setAttribute('class', 'result-scroller');
+        for (let pgf of convertToHTMLContent(line, 'text'))
           innerDiv.appendChild(pgf);
         div.appendChild(innerDiv);
         outputElement.appendChild(div);
@@ -1395,7 +1402,7 @@
 
       function showError(error) {
         console.error("Error", error);
-        errorElement = document.createElement('div');
+        let errorElement = document.createElement('div');
         errorElement.setAttribute('class', 'error-box');
         errorElement.textContent = String(error)
         outputElement.appendChild(errorElement)

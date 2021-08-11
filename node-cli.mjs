@@ -65,6 +65,9 @@ try {
       line = line.substr(0, line.length-1);
       return line;
     }
+    function linePrinter(lines) {
+      process.stdout.write(lines);
+    }
     // getLine("Attach debugger and hit return! ");  // Uncomment to do what it says
 
     // For "load" and "require"
@@ -75,7 +78,7 @@ try {
     }
 
     let endTest = (line => line === ".");  // end on a "."
-    let globalScope = SchemeJS.createInstance({ readFile, endTest });
+    let globalScope = SchemeJS.createInstance({ readFile, endTest, linePrinter });
     globalScope[globalScope.Atom('*argv*')] = globalScope.to_list(argv);
     globalScope[globalScope.Atom('*env*')] = process.env;
     for (let file of loadFiles)
