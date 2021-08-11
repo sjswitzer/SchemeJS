@@ -65,11 +65,13 @@ try {
       line = line.substr(0, line.length-1);
       return line;
     }
-    function linePrinter(lines) {
-      process.stdout.write(lines);
-    }
+
     // getLine("Attach debugger and hit return! ");  // Uncomment to do what it says
 
+    function linePrinter(line) {
+      process.stdout.write(line+'\n');
+    }
+    
     // For "load" and "require"
     function readFile(path) {
       let fileContent = fs.readFileSync(path);

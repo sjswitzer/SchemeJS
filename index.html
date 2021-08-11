@@ -1255,6 +1255,8 @@
           showHelp(null);
       });
 
+      let printBoxElement;
+
       function handleInput(enterKey) {
         let parseContext = [], assignSyntax = true;
         let inputText = getElementText(inputElement);
@@ -1371,6 +1373,8 @@
       }
 
       function showResult(value, varNo) {
+        if (printBoxElement)
+          printBoxElement = undefined;
         let div = document.createElement('div');
         div.setAttribute('class', 'result-box');
         if (varNo != null) {
@@ -1392,15 +1396,17 @@
       }
 
       function linePrinter(line) {
-        let div = document.createElement('div');
-        div.setAttribute('class', 'print-box');
+        if (!printBoxElement) {
+          printBoxElement = document.createElement('div');
+          printBoxElement.setAttribute('class', 'print-box');
+        }
         let innerDiv = document.createElement('div');
         innerDiv.setAttribute('class', 'print-scroller');
-        for (let pgf of convertToHTMLContent(line, 'text'))
+        for (let pgf of convertToHTMLContent(line+'\n', 'text'))
           innerDiv.appendChild(pgf);
-        div.appendChild(innerDiv);
-        outputElement.appendChild(div);
-        div.scrollIntoView();
+        printBoxElement.appendChild(innerDiv);
+        outputElement.appendChild(printBoxElement);
+        printBoxElement.scrollIntoView();
       }
 
       function showError(error) {

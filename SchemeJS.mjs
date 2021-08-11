@@ -1344,14 +1344,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // Provisional but useful
   defineGlobalSymbol("println", println);
-  function println(...lines) {
-    let str = ''
-    for (let line of lines) {
-      if (typeof line !== 'string')
-        line = string(line);
-      str += line + '\n'
-    }
-    linePrinter(str);
+  function println(line, ...lines) {
+    linePrinter(line);
+    for (let line of lines)
+      linePrinter(line);
     return true;
   }
 
