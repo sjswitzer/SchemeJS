@@ -507,9 +507,16 @@ export function run(opts = {}) {
     EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3) >)`,
         result => globalScope.apply(globalScope.ge, result));
 
+    { // "Rest" parameters
+      let savedScope = beginTestScope();
+      EXPECT(` (define (foo a b . c) c) `, ` 'foo `)
+      EXPECT(` (foo 1 2 3 (+ 2 2) 5) `, ` '(3 4 5) `);
+      endTestScope(savedScope);
+    }
+
     { // optional paramaters
       let savedScope = beginTestScope();
-      EXPECT( ` (define (opt a b (? c (+ 2 3))) (list a b c)) `, ` 'opt `)
+      EXPECT(` (define (opt a b (? c (+ 2 3))) (list a b c)) `, ` 'opt `)
       EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
       EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
       EXPECT(` (opt 1) `, isClosure);
@@ -544,7 +551,8 @@ export function run(opts = {}) {
       EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
       EXPECT(` add-4 `, isClosure);
       EXPECT(` (add-4 3) `, 7);
-      EXPECT(` (define (increment-by n) (lambda x . (+ x n))) `, ` 'increment-by `); // Curry form
+      // While we're at it, test notation
+      EXPECT(` (define (increment-by n) (\\x.(+ x n))) `, ` 'increment-by `);
       EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
       EXPECT(` increment-by-3 `, isClosure);
       EXPECT(` (increment-by-3 4) `, 7);

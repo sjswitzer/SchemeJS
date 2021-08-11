@@ -2101,7 +2101,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function define(defined, value) {
     let scope = this, name = defined;
     if (isCons(defined)) {
-      name = defined[CAR];5
+      name = defined[CAR];
       let params = defined[CDR];
       value = lambda.call(scope, params, value);
     } else {
@@ -2420,8 +2420,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         }
         scope[param] = arg;
       }
-      if (typeof param === 'symbol')  // rest param
-        scope[param] = args[i] !== undefined ? args[i] : NIL;
+      if (typeof params === 'symbol') {  // rest param
+        let rest = NIL;
+        for (let j = argLength; j > i; --j)
+          rest = cons(args[j-1], rest);
+        scope[params] = rest;
+      }
       let result = NIL;
       for (let form of forms)
         result = _eval(form, scope);
