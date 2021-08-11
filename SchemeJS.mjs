@@ -3567,7 +3567,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let scope = this;
     let bindSymToObj = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
-    let tools = { emit, bind, use, newTemp, scope, indent: '', evalLimit: 100, functionDescriptors };
+    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 100, functionDescriptors };
     let ssaScope = new Scope();
     // Well-known names
     use(bind(string, "string"));
@@ -3602,7 +3602,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (usedSsaValues[bindingName])
         emit(`let ${bindingName} = bound[${string(bindingName)}];`);
     emitted = emitted.concat(saveEmitted);
-    let code = emitted.join('');
+    let code = '';
+    for (let emittedLine of emitted)
+      if (emittedLine)
+        code += emittedLine;
     return { code, bindSymToObj };
 
     // Binds a JavaScript object into the closure
@@ -3635,6 +3638,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     function emit(str) {
       emitted.push(tools.indent + str + '\n');
+      return emitted.length-1;
+    }
+    function deleteEmitted(lines) {
+      for (let line of lines)
+        emitted[line] = undefined;
     }
     function newTemp(name) {
       if (!name)
@@ -3796,6 +3804,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
+        ssaScope.used = true;
         emit(`let ${ssaResult} = ${ssaFunction}.call(scope${ssaArgStr});`)
         return ssaResult;
       }
@@ -3882,6 +3891,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (typeof innerParams === 'symbol')
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
+      ssaScope.used = true;
       emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr});`);
       let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
@@ -3993,12 +4003,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       delim = ', ';
     }
     let nameStr = nameAtom ? `  // ${nameAtom.description}` : '';
-    let ssaScopeTmp = newTemp("tmp_scope");
-    emit(`let ${ssaScopeTmp} = scope;`);
+    let ssaScopeTmp = newTemp("tmp_scope"), scopeLines = [];
+    scopeLines.push(emit(`let ${ssaScopeTmp} = scope;`));
     emit(`function ${ssaFunction}(${paramStr}) {${nameStr}`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    emit(`let scope = newScope(${ssaScopeTmp}, "compiled-lambda-scope");`)
+    scopeLines.push(emit(`let scope = newScope(${ssaScopeTmp}, "compiled-lambda-scope");`));
     for (let i = 0; i < paramCount; ++i) {
       let ssaParam = ssaParamv[i];
       let optionalForms = optionalFormsVec[i];
@@ -4013,15 +4023,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         emit('}');
       }
       let ssaParamName = use(bind(paramv[i]));
-      emit(`scope[${ssaParamName}] = ${ssaParam};`)
+      scopeLines.push(emit(`scope[${ssaParamName}] = ${ssaParam};`));
   }
     if (restParam) {
       let ssaParamName = use(bind(restParam));
-      emit(`scope[(${ssaParamName}] = ${ssaParamv[ssaParamv.length-1]};`);
+      scopeLines.push(emit(`scope[(${ssaParamName}] = ${ssaParamv[ssaParamv.length-1]};`));
     }
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
       ssaResult = compileEval(forms[CAR], ssaScope, tools);
+    if (!ssaScope.used)
+      tools.deleteEmitted(scopeLines);
     emit(`return ${ssaResult};`);
     tools.indent = saveIndent;
     emit(`}`);
