@@ -565,34 +565,34 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("globalScope", globalScope);
 
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !schemeTrue(a), "not");
-  defineGlobalSymbol("~", a => ~a, "bit-not");
-  defineGlobalSymbol("**", (a,b) => a ** b, "pow");  // overrides Math.pow
-  defineGlobalSymbol("%", (a,b) => a % b, "rem");
-  defineGlobalSymbol("<<", (a,b) => a << b, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, "bit-shr");
-  defineGlobalSymbol(">>>", (a,b) => a >>> b, "bit-ushr");
-  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b);  // SIOD
-  defineGlobalSymbol("in", (a,b) => a in b);
-  defineGlobalSymbol("new", (cls, ...args) => new cls(...args));
-  defineGlobalSymbol("instanceof", (a,b) => a instanceof b);
-  defineGlobalSymbol("@", (a, b) => a[b], "aref");  // indexing and member access (SIOD: aref)
-  defineGlobalSymbol("@@", (a, b, c) => a[b][c]);
-  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d]);
+  defineGlobalSymbol("!", a => !schemeTrue(a), { schemeOnly: true }, "not");
+  defineGlobalSymbol("~", a => ~a, { schemeOnly: true }, "bit-not");
+  defineGlobalSymbol("**", (a,b) => a ** b, { schemeOnly: true }, "pow");  // overrides Math.pow
+  defineGlobalSymbol("%", (a,b) => a % b, { schemeOnly: true }, "rem");
+  defineGlobalSymbol("<<", (a,b) => a << b, { schemeOnly: true }, "bit-shl");
+  defineGlobalSymbol(">>", (a,b) => a >> b, { schemeOnly: true }, "bit-shr");
+  defineGlobalSymbol(">>>", (a,b) => a >>> b, { schemeOnly: true }, "bit-ushr");
+  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true });  // SIOD
+  defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true });
+  defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true });
+  defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true });
+  defineGlobalSymbol("@", (a, b) => a[b], { schemeOnly: true }, "aref");  // indexing and member access (SIOD: aref)
+  defineGlobalSymbol("@@", (a, b, c) => a[b][c], { schemeOnly: true });
+  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d], { schemeOnly: true });
   defineGlobalSymbol("@?", (a, b) => a?.[b]);  // conditional indexing and member access
-  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c]);
-  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d]);
-  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), "js-call");
-  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params));
-  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params));
-  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), "js-call?");
-  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params));
-  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params));
-  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, "js-assign");
-  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d);
-  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d);
-  defineGlobalSymbol("delete", (a, b) => delete a[b]);
-  defineGlobalSymbol("void", _ => undefined);
+  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { schemeOnly: true });
+  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { schemeOnly: true });
+  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { schemeOnly: true }, "js-call");
+  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { schemeOnly: true });
+  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { schemeOnly: true });
+  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { schemeOnly: true }, "js-call?");
+  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { schemeOnly: true });
+  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { schemeOnly: true });
+  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { schemeOnly: true }, "js-assign");
+  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d), { schemeOnly: true };
+  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { schemeOnly: true });
+  defineGlobalSymbol("delete", (a, b) => delete a[b]), { schemeOnly: true };
+  defineGlobalSymbol("void", _ => undefined, { schemeOnly: true });
 
   defineGlobalSymbol("to-lower-case", to_lower_case);
   function to_lower_case(str, locale = undefined) {
@@ -2189,12 +2189,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           item = _eval(item, scope);
         argv[i] = item;
       }
+      let fName = fn[NAMETAG] ?? fn.name;
       let jitCompiled = fn[JITCOMPILED];
       if (jitCompiled) fn = jitCompiled;
       if (argCount >= requiredCount) {
-        let fName;
         if (TRACE_INTERPRETER) {
-          fName = fn[NAMETAG] ?? fn.name;
           let logArgs = [ "APPLY (eval)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
@@ -2209,9 +2208,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // required parameters, like apropos, and those that have required parameters.
       // The function itself can decide what to do if it receives "undefined" as its first argument.
       if (argCount === 0) {
-        let fName;
         if (TRACE_INTERPRETER) {
-          fName = fn[NAMETAG] ?? fn.name;
           let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
@@ -2226,9 +2223,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       const boundArgv = argv;
       let closure = (...args) => {
         let argv = boundArgv.concat(args);
-        let fName;
         if (TRACE_INTERPRETER) {
-          fName = fn[NAMETAG] ?? fn.name;
           let logArgs = [ "APPLY (closure)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
@@ -2240,13 +2235,38 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // A closure function leads a double life: as a closure function but also a closure form!
       // Dig out the original function's closure, if it had one.
       let closureBody = fn[CDR];
-      let closureParams = NIL, closureForms = NIL;
+      let closureParams = NIL, closureForms;
       if (closureBody) {
         scope = closureBody[CAR];
-        if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
-          closureBody = closureBody[CDR];
-        closureParams = closureBody[CAR];
-        closureForms = closureBody[CDR];
+        scope = newScope(scope, "closure-scope");
+        let lambdaBody = closureBody[CDR];
+        if (fn[CAR] === SCLOSURE_ATOM)  // Skip the evalCount param
+          lambdaBody = lambdaBody[CDR];
+        closureParams = lambdaBody[CAR];
+        closureForms = lambdaBody[CDR];
+        for (let i = 0; i < argCount; ++i, closureParams = closureParams[CDR]) {
+          if (!isCons(closureParams)) throw new LogicError(`Shouldn't happen`);
+          let param = closureParams[CAR];
+          if (isCons(param) && param[CAR] === QUESTION_ATOM && isCons(param[CDR]))
+            param = param[CDR][CAR];
+          if (typeof param !== 'symbol') throw new LogicError(`Shouldn't happen`);
+          scope[param] = argv[i];
+        }
+      } else {
+        scope = newScope(scope, "closure-scope");
+        let fnInfo = analyzeJSFunction(fn);
+        let params = fnInfo.params, restParam = fnInfo.restParam, paramStr = '', sep = '';
+        for (let i = 0, lng = params.length; i < lng; ++i)
+          paramStr += sep + params[i], sep = ", ";
+        if (restParam)
+          paramStr += `${sep}...${restParam}`;
+        closureForms = Atom(`{*js-function-${fName}(${paramStr})*}`);
+        if (restParam)
+          closureParams = Atom(restParam);
+        for (let i = params.length; i > argCount; --i)
+          closureParams = cons(Atom(params[i-1]), closureParams);
+        for (let i = 0; i < argCount; ++i)
+          scope[Atom(params[i])] = argv[i];
       }
       if (evalCount !== MAX_INTEGER) {
         evalCount -= argCount;
@@ -2372,7 +2392,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       forms = cons(forms, NIL);
     }
     let params = lambdaParams, paramCount = 0, requiredCount;
-    for (params = lambdaParams; isCons(params); params = params[CDR]) {
+    for ( ; isCons(params); params = params[CDR]) {
       let param = params[CAR];
       if (isCons(param)) {
         if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
@@ -2555,9 +2575,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
                       toString(evalCount, maxCarDepth, maxCdrDepth-1);
                       sep = " ";
                     }
-                    let str = string(objCar);  // %%closure or %%%closure
-                    if (obj[COMPILED]) str += "-compiled";
-                    put(str);
+                    toString(objCar);  // %%closure or %%%closure
+                    sep = " ";
+                    if (obj[COMPILED]) put(`{*compiled-${obj[COMPLIED]}*}`);
                     sep = " ";
                     toString(scopeCons[CAR], maxCarDepth-1, maxCdrDepth-2);  // scope
                     sep = " ";
@@ -2585,7 +2605,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             if (obj[LAZYCAR]) {
               put("..");  // .. signifies a lazy car
             } else if (obj[COMPILED]) {
-              put(string(obj[CAR]) + "-compiled");
+              toString(obj[CAR])
+              sep = " ";
+              put(`{*compiled-${obj[COMPILED]}*}`);
+              sep = " ";
             } else {
               toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
             }
@@ -2699,7 +2722,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       return put(String(obj));
     }
-function put(str, nobreak) {
+    function put(str, nobreak) {
       if (!nobreak && line.length > 0 && line.length + str.length > stringWrap) {
         line += sep;
         lines.push(line);
@@ -3538,10 +3561,9 @@ function put(str, nobreak) {
     }
   }
 
-  function lambda_compiler(name, lambdaForm) {
-    name = Atom(name);
+  function lambda_compiler(nameAtom, lambdaForm) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
-    if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
+    if (nameAtom === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
     let scope = this;
     let bindSymToObj = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
@@ -3566,13 +3588,16 @@ function put(str, nobreak) {
     use(bind(isCons, "isCons"));
     use(bind(cons, "cons"));
     use(bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
-    let ssaFunction = compileLambda(name, lambdaForm, ssaScope, tools);
+    let ssaFunction = compileLambda(nameAtom, lambdaForm, ssaScope, tools);
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
     emitted = [];
-    emit(`// params: bound, resolveUnbound, invokeUnbound`);
+    emit(`// COMPILED ${nameAtom ? nameAtom.description+' ' : ''}`);
+    let lambdaStrs = string(lambdaForm).split('\n');
+    for (let str of lambdaStrs) emit(`//   ${str}`);
     emit('"use strict";')
-    emit(`let scope = this;`);
+    emit(`// params: (bound, resolveUnbound, invokeUnbound)`);
+    emit(`let scope = this;  `);
     for (let bindingName of Object.keys(bindSymToObj))
       if (usedSsaValues[bindingName])
         emit(`let ${bindingName} = bound[${string(bindingName)}];`);
@@ -3630,7 +3655,7 @@ function put(str, nobreak) {
     // Functions that end up being used as templates are bound because
     // we don't know in advance whether they'll be used as values.
     // "use" is called on any bound value that is ultimately used for its value.
-    // This keeps things from being bound unnecessarily at runtime.
+    // This keeps compileed templates from being bound unnecessarily at runtime.
     function use(ssaValue) {
       usedSsaValues[ssaValue] = true;
       return ssaValue;
@@ -3826,10 +3851,10 @@ function put(str, nobreak) {
         if (evalCount < 0)
           evalCount = 0;
         closureForm[CAR] = SCLOSURE_ATOM;
-        closureForm[CDR] = cons(undefined, cons(evalCount, closureBody));
+        closureForm[CDR] = cons("PATCH", cons(evalCount, closureBody));
       } else {
         closureForm[CAR] = CLOSURE_ATOM;
-        closureForm[CDR] = cons(undefined, closureBody);
+        closureForm[CDR] = cons("PATCH", closureBody);
       }
       let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
@@ -3858,7 +3883,8 @@ function put(str, nobreak) {
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
       emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr});`);
-      decorateCompiledClosure(ssaResult, closureForm, requiredCount, evalCount, tools);
+      let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
+      decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;
       emit(`}`);
       tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name };
@@ -3909,10 +3935,8 @@ function put(str, nobreak) {
   // This function parallels makeJsClosure as closely as possible. If you make a change
   // there, you almost certainly have to make a corresponding change here.
   //
-  function compileLambda(name, lambda, ssaScope, tools) {
+  function compileLambda(nameAtom, lambda, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
-    let displayName = typeof name === 'symbol' ? name.description : name ? name : 'lambda';
-    let ssaFunction = newTemp(displayName);
     if (!isCons(lambda)) throwBadCompiledLambda(lambda);
     let body = lambda[CDR];
     let evalCount = MAX_INTEGER;
@@ -3922,6 +3946,8 @@ function put(str, nobreak) {
       if (typeof evalCount !== 'number') throwBadCompiledLambda(lambda);
       body = body[CDR];
     }
+    let displayName = nameAtom ? nameAtom.description : evalCount === MAX_INTEGER ? `lambda` : `slambda#${evalCount}`;
+    let ssaFunction = newTemp(displayName);
     if (!isCons(body)) throwBadCompiledLambda(lambda);
     let params = body[CAR];
     if (typeof params === 'symbol')  // Curry notation
@@ -3959,14 +3985,14 @@ function put(str, nobreak) {
     if (requiredCount === undefined)
       requiredCount = paramCount;  // paramCount does NOT contain rest param
     tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name: displayName };
-    if (name)
-      ssaScope[name] = ssaFunction;
+    if (nameAtom)
+      ssaScope[nameAtom] = ssaFunction;
     let delim = '', paramStr = '';
     for (let param of ssaParamv) {
       paramStr += delim + param;
       delim = ', ';
     }
-    let nameStr = name ? `  // ${name.description}` : '';
+    let nameStr = nameAtom ? `  // ${nameAtom.description}` : '';
     let ssaScopeTmp = newTemp("tmp_scope");
     emit(`let ${ssaScopeTmp} = scope;`);
     emit(`function ${ssaFunction}(${paramStr}) {${nameStr}`);
@@ -4004,14 +4030,14 @@ function put(str, nobreak) {
       closureAtom = SCLOSURE_ATOM;
       body = cons(evalCount, body);
     }
-    let closureForm = cons(closureAtom, cons(undefined, body));
-    decorateCompiledClosure(ssaFunction, closureForm, requiredCount, evalCount, tools);
+    let closureForm = cons(closureAtom, cons("PATCH", body));
+    decorateCompiledClosure(ssaFunction, displayName, closureForm, requiredCount, evalCount, tools);
     return ssaFunction;
   }
 
   function throwBadCompiledLambda(lambda, msg) { throw new SchemeCompileError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
   
-  function decorateCompiledClosure(ssaClosure, closureForm, requiredCount, evalCount, tools) {
+  function decorateCompiledClosure(ssaClosure, displayName, closureForm, requiredCount, evalCount, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind;
     let ssaClosureForm = use(bind(closureForm, "closureForm"));
     let ssaParameter_descriptor = use(bind(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR"))
@@ -4025,8 +4051,9 @@ function put(str, nobreak) {
       emit(`// ${str}`);
     emit(`${ssaClosure}[CAR] = ${ssaClosureForm}[CAR];`);
     emit(`${ssaClosure}[CDR] = new Cons(scope, ${ssaClosureForm}[CDR][CDR]);`);
+    emit(`${ssaClosure}[COMPILED] = ${string(displayName)}`);
     // Mark object as a list, a pair, and a closure.
-    emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = ${ssaClosure}[COMPILED] = true;`);
+    emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
   }
   
   const JS_IDENT_REPLACEMENTS  = {

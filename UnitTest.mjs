@@ -812,7 +812,7 @@ export function run(opts = {}) {
   function compileThenEvalString(str) {
     let expr = parseSExpr.call(testScope, str);
     let lambda = list(Atom("lambda"), NIL, expr);
-    let compiled = compile_lambda.call(testScope, 'testcase', lambda);
+    let compiled = compile_lambda.call(testScope, Atom('testcase'), lambda);
     return compiled.call(testScope);
   }
 }
