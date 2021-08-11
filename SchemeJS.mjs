@@ -4034,8 +4034,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       paramv.push(param);
     }
     if (typeof params === 'symbol') {  // rest param (does not increment paramCount)
-      let ssaParam = newTemp(param);
-      ssaParamv.push(`...${ssaParam})`);
+      let ssaParam = newTemp(params);
+      ssaParamv.push(`...${ssaParam}`);
       ssaScope[params] = ssaParam;
       restParam = params;
     }
