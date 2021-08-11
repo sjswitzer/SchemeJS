@@ -30,6 +30,9 @@ factoral
   ))
 factoral
 
+// JavaScript's String function shows JavaScript's view of the object
+(String factoral)
+
 (factoral 50)
 (factoral 50n)
 
