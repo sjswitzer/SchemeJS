@@ -2113,7 +2113,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (typeof name !== 'symbol')
       throw new TypeError(`Must define symbol or string ${string(defined)}`);
     if (value != null &(typeof value === 'function' || typeof value === 'object'))
-      value[NAMETAG] = name;
+      value[NAMETAG] = name.description;
     globalScope[name] = value;
     // Make available to JavaScript as well
     let { jsName } = normalizeExportToJavaScriptName(name);
@@ -2683,8 +2683,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           name = obj[NAMETAG];
         else
           name = fnDesc.name ?? '';
-        if (typeof name === 'symbol')
-          name = name.description;
         let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
         if (fnDesc.value && !fnDesc.body && !printBody)
