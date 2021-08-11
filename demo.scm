@@ -88,7 +88,7 @@ b
 b
 
 // (define (increment-by n) (\(x) (+ x n)))
-(define (increment-by n) (\x . (+ x n)))  // Curry syntax is allowed for a single parameter
+(define (increment-by n) (\x.(+ x n)))  // Curry notation is allowed for a single parameter
 increment-by
 (define increment-by-3 (increment-by 3))
 increment-by-3
@@ -120,10 +120,10 @@ increment-by-3
   (- a b)
   (* a b))  ;; results last value
 
-// SIOD style throw/catch
+// SIOD-style throw/catch
 (*catch "foo" (+ 2 (* 5 (*throw "foo" "ha!"))))
 
-// JavaScript style throw/catch
+// JavaScript-style throw/catch
 (catch (e (+ "thrown: " e))
   (+ 1 2)
   (+ 3 (throw "ha ha!"))
