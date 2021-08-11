@@ -2012,7 +2012,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function siod_catch_hook(args, ssaScope, tools) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    if (args.length < 2) throw new SchemeCompileError(`Bad catch`);
+    if (args.length < 2) throw new LogicError(`Bad catch`);
     let ssaTag = args[0];
     let ssaResult = newTemp('siod_catch'), ssaValue = 'NIL';
     emit(`let ${ssaResult};`);
@@ -2039,7 +2039,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // (catch (var forms) forms) -- JavaScript style
   defineGlobalSymbol("catch", js_catch, { evalArgs: 0, compileHook: js_catch_hook });
-  function js_catch(catchClause, ...forms) {
+  function js_catch(catchClause, form, ...forms) {
     if (!isCons(catchClause))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
@@ -2047,8 +2047,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     if (!isCons(catchForms))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
-    let val = NIL;
+    let val;
     try {
+      val = _eval(form, this);
       for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
         val = _eval(forms[i], this);
     } catch (e) {
@@ -2059,31 +2060,35 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     return val;
   }
-  function js_catch_hook(body, ssaScope, tools) {
-    if (!isCons(body))
-      throw new SchemeCompileError(`Bad catch argument ${string(body)}`);
-    let catchClause = body[CAR], orms = body[CDR];
+  function js_catch_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    if (args.length < 2) throw new LogicError(`Bad js_catch`);
+    let catchClause = args[0];
     if (!isCons(catchClause) && isCons(catchClause[CDR]))
       throw new SchemeCompileError(`Bad catch clause ${string(catchClause)}`);
-    let catchVar = catchClause[CAR], catchType = catchClause[CDR][CAR], catchForms = catchClause[CDR][CDR];
-    let ssaCatchSym = tools.newTemp(catchVar);
-    let ssaResult = tools.newTemp('js_catch');
-    tools.emit(`let ${ssaResult} = NIL;`);
-    tools.emit(`try {`);
+    let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
+    let ssaCatchSym = newTemp(catchVar);
+    let ssaResult = newTemp('js_catch'), ssaValue = 'NIL';
+    let ssaTmpScope = newTemp('tmp_scope');
+    emit(`let ${ssaTmpScope} = scope;`);
+    emit(`let ${ssaResult};`);
+    emit(`try {`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    let ssaValue = 'NIL';
-    for (let form of forms)
-      ssaValue = compileEval(form, ssaScope, tools);
-    tools.emit(`${ssaResult} = ${ssaValue};`);
+    for (let i = 1; i < args.length; ++i)
+      ssaValue = compileEval(args[i], ssaScope, tools);
+    emit(`${ssaResult} = ${ssaValue};`);
     tools.indent = saveIndent;
     emit(`} catch (${ssaCatchSym}) {`);
+    tools.indent += '  ';
     ssaScope = newScope(ssaScope, "compiled-js-catch-scope")
     ssaScope[catchVar] = ssaCatchSym;
-    tools.indent += '  ';
+    emit(`let scope = newScope(${ssaTmpScope}, "compiled-js-catch-scope");`);
+    let ssaCatchAtom = use(bind(catchVar));
+    emit(`scope[${ssaCatchAtom}] = ${ssaCatchSym};`);
     let ssaCatchVal = 'NIL';
-    for (form of catchForms)
-      ssaCatchVal = compileEval(forn, ssaScope, tools);
+    for (let form of catchForms)
+      ssaCatchVal = compileEval(form, ssaScope, tools);
     emit(`${ssaResult} = ${ssaCatchVal};`);
     tools.indent = saveIndent;
     emit(`}`);
