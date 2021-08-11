@@ -159,6 +159,15 @@ Probably transform the Scheme into a series of continuations and compile those t
 I imagine this is what JavaScript implementations do at the AST level. At least I have the
 advantage that Scheme code is an AST inherently.
 
+I may revisit "rest" parameters. I like the current notation, but there's no good way
+to have a lambda with just a rest parameter(yes, it technically encroaches on Curry notation
+but that would not be a good notation anyway),
+On the other hand,
+I've found it useful to always have at least two required parameters since then
+you leave open the possibility of creating a partial application closure. So maybe
+it isn't so useful after all. On the other other hand, some of the builtins do have just a rest
+parameter. So it's an open question.
+
 Urgently needed: Generate dynamic source maps to enable debugging!
 https://stackoverflow.com/questions/49463047/source-map-for-a-dynamically-created-function
 https://kybernetikos.github.io/jsSandbox/srcmaps/dynamic.html
