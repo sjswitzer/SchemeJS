@@ -28,7 +28,12 @@ factoral
      (? (bigint? x) 1n 1)
      (* x (factoral (- x (? (bigint? x) 1n 1))))
   ))
+
+// What it looks like to SchemeJS
 factoral
+
+// What it looks like to JavaScript
+(println (String factoral))
 
 // JavaScript's String function shows JavaScript's view of the object
 (String factoral)
@@ -42,6 +47,14 @@ factoral
      (bigint? x 1n 1)
      (* x (factoral (- x (bigint? x 1n 1))))
   ))
+
+// What it looks like to SchemeJS
+_factoral
+
+// What it looks like to JavaScript
+(println (String _factoral))
+
+
 (_factoral 50)
 (_factoral 50n)
 

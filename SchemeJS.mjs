@@ -33,7 +33,8 @@ export function createInstance(schemeOpts = {}) {
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   const reportSystemError = schemeOpts.reportError ?? _reportError;
-  const reportLoadResult = schemeOpts.reportLoadResult ?? (result => console.log(string(result)));
+  const reportLoadInput = schemeOpts.reportLoadInput ?? (expr => undefined);
+  const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
 
@@ -1323,6 +1324,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       try {
         expr = parseSExpr(characterGenerator, { path });
         if (!expr) break;
+        reportLoadInput(expr);
         if (noEval) {
           if (last) last = last[CDR] = cons(expr, NIL);
           else result = last = cons(expr, NIL);

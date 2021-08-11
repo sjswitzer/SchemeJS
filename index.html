@@ -318,14 +318,12 @@
         border-radius: .5em;
         background-color: #ddd;
       }
-      #output .input-scroller, #output .result-scroller {
+      #output .input-scroller, #output .result-scroller, #output .print-scroller {
         overflow: scroll;
-        max-height: 20em;
         min-height: 2em;
       }
-      #output .result-scroller {
-        max-height: 25.em;
-      }
+      #output .result-scroller {  max-height: 20em; }
+      #output .print-scroller {  max-height: 100em; }
       #output .result-scroller { padding: .5em .5em .5em .5em }
       #output .error-box { padding: .5em .5em .5em .5em }
       #output .input-scroller { padding: 0 0 .5em 0 }
@@ -933,8 +931,10 @@
       onload = importSchemeAndRunREPL();
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
-        globalScope = SchemeJS.createInstance(
-          { lambdaStr, readFile, reportLoadResult, reportSchemeError, reportSystemError, linePrinter, traceCompilerCode });
+        globalScope = SchemeJS.createInstance({
+          lambdaStr, readFile, linePrinter, traceCompilerCode,
+          reportLoadResult, reportLoadInput, reportSchemeError, reportSystemError
+        });
         SCHEME_VERSION = globalScope.VERSION;
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
@@ -1039,11 +1039,14 @@
         }
       }
 
-      function reportLoadResult(value, expr) {
-        showInput(capturedInput, loadPath, loadLine, value, varNo);
-        capturedInput = '';
-        showResult(value, varNo);
+      function reportLoadInput(expr) {
         varNo += 1;
+        showInput(capturedInput, loadPath, loadLine, expr, varNo);
+        capturedInput = '';
+      }
+
+      function reportLoadResult(result, expr) {
+        showResult(result, varNo);
       }
 
       function reportSchemeError(error, expr) {
@@ -1307,6 +1310,7 @@
 
           let loadPath = null, loadLine = null;
           inputElement.textContent = '';
+          ++varNo;
           showInput(inputText, loadPath, loadLine, expr, varNo);
 
           // Eval
@@ -1314,7 +1318,6 @@
 
           // Show results and save in variables for later reuse
           showResult(value, varNo);
-          ++varNo;
         } catch (error) {
           if (error instanceof SchemeParseError) {
             if (!(error instanceof SchemeParseIncompleteError))
@@ -1392,7 +1395,7 @@
         let div = document.createElement('div');
         div.setAttribute('class', 'print-box');
         let innerDiv = document.createElement('div');
-        innerDiv.setAttribute('class', 'result-scroller');
+        innerDiv.setAttribute('class', 'print-scroller');
         for (let pgf of convertToHTMLContent(line, 'text'))
           innerDiv.appendChild(pgf);
         div.appendChild(innerDiv);
