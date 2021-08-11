@@ -12,7 +12,7 @@ factoral
 (factoral 171)
 (factoral 171n)
 
-// Simpler using conditional predicate notation
+// Simpler version using conditional predicate notation
 (define (_factoral x)
   (? (<= x 1) 
      (bigint? x 1n 1)
