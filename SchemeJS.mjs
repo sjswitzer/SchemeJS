@@ -279,7 +279,7 @@ export function createInstance(schemeOpts = {}) {
 
 // Why are these initialized here, you ask?
 // Because they're indirectly refernced by defineGlobalSymbol is why.
-const COMPILE_HOOK = Symbol("COMPILE-HOOK"), BUILTIN_COMPILE_INFO = Symbol("BUILTIN-COMPILE-INFO");
+const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_INFO = Symbol("BUILTIN-COMPILE-INFO");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
 const analyzedFunctions = new Map();
 let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to implement help.
@@ -386,7 +386,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
       return;
     }
-    fn[BUILTIN_COMPILE_INFO] = fnInfo;
+    fn[COMPILE_INFO] = fnInfo;
   }
 
   exportAPI("PAIR_SYMBOL", PAIR);
@@ -2404,6 +2404,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       forms = cons(forms, NIL);
     }
     let params = lambdaParams, paramCount = 0, requiredCount;
+    let paramv = [], restParam;
     for ( ; isCons(params); params = params[CDR]) {
       let param = params[CAR];
       if (isCons(param)) {
@@ -2411,11 +2412,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           throwBadLambda(lambda, `what's this?  ${string(param)}`);
         if (!requiredCount)
           requiredCount = paramCount;
+        param = param[CDR][CAR];
       } else if (typeof param !== 'symbol') {
         throwBadLambda(lambda, `parameter ${string(param)} not an atom`);
       }
       paramCount += 1;
+      paramv.push(param.description);
     }
+    if (typeof params === 'symbol')
+      restParam = params.description;
+    else if (!isNil(params))
+      throwBadLambda(`bad "rest" parameter ${string(params)}`);
     if (!requiredCount)
       requiredCount = paramCount;
     let jitCount = jitThreshold ? jitThreshold|0 : undefined;
@@ -2441,9 +2448,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           param = paramCdr[CAR];
           optionalForms = paramCdr[CDR];
         }
-        if (i < argLength) {
-          arg = args[i];
-        } else {
+        arg = args[i];  // undefined if i >= length OR if deliberately undefined
+        if (arg === undefined) {
           arg = NIL;
           if (optionalForms) {
           for ( ; isCons(optionalForms); optionalForms = optionalForms[CDR])
@@ -2468,6 +2474,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     jsClosure[CDR] = schemeClosure[CDR];
     jsClosure[LIST] = jsClosure[PAIR] = true;
     jsClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
+    // Because the closure has a generic (...args) parameter, the compiker needs more info
+    // to be able to create binding closures over it.
+    jsClosure[COMPILE_INFO] = { params: paramv, restParam };
     return jsClosure;
   }
 
@@ -3712,10 +3721,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           let requiredCount = parameterDescriptor & 0xffff;
           let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
           let compileHook = fn[COMPILE_HOOK];
-          let fnInfo = fn[BUILTIN_COMPILE_INFO];
+          let fnInfo = fn[COMPILE_INFO];
           let noScope = false;
           let params, restParam, valueTemplate, bodyTemplate, native;
-          if (fnInfo) {  // this is a built-in
+          if (fnInfo) {  // this is a built-in OR a jsClosure
             params = fnInfo.params;
             restParam = fnInfo.restParam;
             valueTemplate = fnInfo.value;
