@@ -279,7 +279,7 @@ export function createInstance(schemeOpts = {}) {
 
 // Why are these initialized here, you ask?
 // Because they're indirectly refernced by defineGlobalSymbol is why.
-const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_INFO = Symbol("COMPILE-INFO");
+const COMPILE_HOOK = Symbol("COMPILE-HOOK"), BUILTIN_COMPILE_INFO = Symbol("BUILTIN-COMPILE-INFO");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
 const analyzedFunctions = new Map();
 let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to implement help.
@@ -386,7 +386,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
       return;
     }
-    fn[COMPILE_INFO] = fnInfo;
+    fn[BUILTIN_COMPILE_INFO] = fnInfo;
   }
 
   exportAPI("PAIR_SYMBOL", PAIR);
@@ -3712,15 +3712,22 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           let requiredCount = parameterDescriptor & 0xffff;
           let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
           let compileHook = fn[COMPILE_HOOK];
-          let fnInfo = fn[COMPILE_INFO];
+          let fnInfo = fn[BUILTIN_COMPILE_INFO];
           let noScope = false;
           let params, restParam, valueTemplate, bodyTemplate, native;
-          if (fnInfo) {
+          if (fnInfo) {  // this is a built-in
             params = fnInfo.params;
             restParam = fnInfo.restParam;
             valueTemplate = fnInfo.value;
             bodyTemplate = fnInfo.body;
             native = fnInfo.native;
+            if (valueTemplate) { // Crude but effective
+              noScope = true;
+              if (valueTemplate.includes("this"))
+                noScope = false;
+              else if (bodyTemplate && bodyTemplate.includes("this"))
+                noScope = false;
+            }
           } else {  // Still need param info for closures, but don't use for templates
             fnInfo = analyzeJSFunction(fn);
             params = fnInfo.params;
@@ -3729,6 +3736,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           }
           if (native || isClosure(fn))
             noScope = true;
+          if (noScope) console.log("NOSCOPE", name);
           // Everything you need to know about invoking a JS function is right here
           tools.functionDescriptors[ssaValue] = {
             requiredCount, evalCount, name, compileHook, params, restParam,
@@ -3771,6 +3779,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let valueTemplate = functionDescriptor.valueTemplate;
       let bodyTemplate = functionDescriptor.bodyTemplate;
       let noScope = functionDescriptor.noScope;
+      if (!noScope)
+        ssaScope.used = true;
       if (typeof fName === 'symbol')
         fName = fName.description;
       if (!fName)
@@ -3827,12 +3837,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
-        if (noScope) { // Closures don't need a "this" scope
+        if (noScope)
           emit(`let ${ssaResult} = ${ssaFunction}(${ssaArgStr});`)
-        } else {
-          ssaScope.used = true;
+        else
           emit(`let ${ssaResult} = ${ssaFunction}.call(scope, ${ssaArgStr});`)
-        }
         return ssaResult;
       }
       //
@@ -3897,6 +3905,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // and to the scope.
       ssaScope = newScope(ssaScope, "compiler-closure-scope");
       let closedArgStr = '';
+      sep = '';
       for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR]) {
         let arg = ssaArgv[i];
         if (isCons(tmp)) {
@@ -3905,7 +3914,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           ssaScope[params[i]] = ssaParam;
           let ssaParamName = use(bind((param)));
           emit(`let ${ssaParam} = scope[${ssaParamName}] = ${arg};`)
-          closedArgStr += `, ${ssaParam}`;
+          closedArgStr += `${sep}${ssaParam}`;
+          sep = ', ';
         }
       }
       let paramStr = '';
@@ -3919,12 +3929,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (typeof innerParams === 'symbol')
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
-      if (noScope) {  // Closures don't need a "this" scope
+      if (noScope)
         emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr});`);
-      } else {
-        ssaScope.used = true;
-        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr});`);
-      }
+      else
+        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
       let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;

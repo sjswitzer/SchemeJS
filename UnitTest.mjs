@@ -48,9 +48,11 @@ export function run(opts = {}) {
   const isCompileOrEvalError = e => (e instanceof SchemeCompileError) || (e instanceof SchemeEvalError);
   const evalString = str => testScope.eval_string(str);
 
+  // Test Internals
+  internalsSuite();
+
   // Test Interpreter
   let evalTestString = evalString;
-  internalsSuite();
   testSuite();
 
   // Test Compiler
