@@ -3715,6 +3715,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
           let compileHook = fn[COMPILE_HOOK];
           let fnInfo = fn[COMPILE_INFO];
+          let noScope = false;
           let params, restParam, valueTemplate, bodyTemplate, native;
           if (fnInfo) {
             params = fnInfo.params;
@@ -3728,10 +3729,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             restParam = fnInfo.restParam;
             native = fnInfo.native;
           }
+          if (native || isClosure(fn))
+            noScope = true;
           // Everything you need to know about invoking a JS function is right here
           tools.functionDescriptors[ssaValue] = {
             requiredCount, evalCount, name, compileHook, params, restParam,
-            valueTemplate, bodyTemplate, noScope: native || isClosure(scopedVal)
+            valueTemplate, bodyTemplate, noScope
           };
         }
         return ssaValue;
@@ -3928,7 +3931,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;
       emit(`}`);
-      tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name, isClosure: true };
+      tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name, noScope: true };
       return ssaResult;
     }
     // Special eval for JS Arrays and Objects
@@ -4025,7 +4028,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
     if (requiredCount === undefined)
       requiredCount = paramCount;  // paramCount does NOT contain rest param
-    tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name: displayName, isClosure: true };
+    tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name: displayName, noScope: true };
     if (nameAtom)
       ssaScope[nameAtom] = ssaFunction;
     let delim = '', paramStr = '';
