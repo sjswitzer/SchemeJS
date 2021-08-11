@@ -1023,7 +1023,7 @@
             // Eat up initial whitespace and newlines so the reported line
             // isn't at the head of whitespace
             if (capturedInput === '') {
-              if (NL[ch]) {
+              if (ch === '\n') {
                 loadLineCount += 1;
                 continue;
               }
