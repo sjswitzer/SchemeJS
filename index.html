@@ -1124,8 +1124,14 @@
           }
           for (let { atoms, jsNames, value } of symtab) {
             for (let atom of atoms)
+            if (helpGroup === "imported") {
+              let anchor = textElement('a', atom.description)
+              anchor.setAttribute('href', `https://developer.mozilla.org/docs/Web/API/${atom.description}`);
+              let dt = document.createElement('dt');
+              dt.appendChild(anchor);
+              helpElement.appendChild(dt);
+            } else {
               helpElement.appendChild(textElement('dt', atom.description));
-            if (helpGroup !== "imported") {
               let dd;
               for (let atom of atoms) {
                 let elementId = "defn-" + atom.description;
