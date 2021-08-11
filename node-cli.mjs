@@ -53,8 +53,6 @@ try {
     }
   }
   if (inputFd !== undefined) {
-    console.log(`SchemeJS ${SchemeJS.VERSION} REPL. Type "." to exit.`);
-
     // For the REPL
     let buffer = Buffer.alloc(2000);
     function getLine(prompt) {
@@ -85,6 +83,8 @@ try {
     globalScope[globalScope.Atom('*env*')] = process.env;
     for (let file of loadFiles)
       globalScope.load(file);
+
+    console.log(`SchemeJS ${SchemeJS.VERSION} REPL. Type "." to exit.`);
 
     if (runREPL) {
       let assignSyntax = true;
