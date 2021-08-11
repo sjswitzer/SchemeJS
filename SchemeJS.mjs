@@ -1997,9 +1997,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // (*catch tag form ...) -- SIOD style
   defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1, compileHook: siod_catch_hook });
-  function schemeCatch(tag, ...forms) {  // XXX order of args?
-    let val = NIL;
+  function schemeCatch(tag, form, ...forms) {  // XXX order of args?
+    let val;
     try {
+      val = _eval(form, this);
       for (let i = 0, formsLength = forms.length; i < forms.length; ++i)
         val = _eval(forms[i], this);
     } catch (e) {
@@ -2009,27 +2010,24 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     return val;
   }
-  function siod_catch_hook(body, ssaScope, tools) {
+  function siod_catch_hook(args, ssaScope, tools) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    if (!isCons(body))
-      throw new SchemeCompileError(`Bad catch argument ${string(body)}`);
-    let ssaTag = body[CAR], forms = body[CDR];
-    let ssaResult = newTemp('siod_catch');
-    emit(`let ${ssaResult} = NIL;`);
+    if (args.length < 2) throw new SchemeCompileError(`Bad catch`);
+    let ssaTag = args[0];
+    let ssaResult = newTemp('siod_catch'), ssaValue = 'NIL';
+    emit(`let ${ssaResult};`);
     emit(`try {`);
-    let saveIndent = indent;
+    let saveIndent = tools.indent;
     tools.indent += '  ';
-    let ssaValue = 'NIL';
-    for (let form of forms)
-      ssaValue = compileEval(form, ssaScope, tools);
+    for (let i = 1; i < args.length; ++i)
+      ssaValue = compileEval(args[i], ssaScope, tools);
     emit(`${ssaResult} = ${ssaValue};`);
     tools.indent = saveIndent;
     emit(`} catch (e) {`);
     tools.indent += '  ';
     let ssaSchemeJSThrow = use(bind(SchemeJSThrow));
-    emit(`if (!(e instanceof ${ssaSchemeJSThrow})) throw e;`)
-    emit(`if (e.tag !== ${ssaTag}) throw e;`);
-    emit(`${ssaResult} = e.value`);
+    emit(`if (!(e instanceof ${ssaSchemeJSThrow}) || e.tag !== ${ssaTag}) throw e;`)
+    emit(`${ssaResult} = e.value;`);
     tools.indent = saveIndent;
     emit(`}`);
     return ssaResult;
