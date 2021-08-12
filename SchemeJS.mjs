@@ -297,7 +297,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let opts = {};
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
-    let group = opts.group ?? "builtin";
+    let group = opts.group ?? "default";
     if (typeof value === 'function') {
       let evalCount = opts.evalArgs ?? MAX_INTEGER;
       examineFunctionForParameterDescriptor(value, evalCount);
@@ -567,14 +567,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("globalScope", globalScope);
 
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !schemeTrue(a), { schemeOnly: true, group: "bin-op" }, "not");
-  defineGlobalSymbol("~", a => ~a, { schemeOnly: true, group: "bin-op" }, "bit-not");
-  defineGlobalSymbol("**", (a,b) => a ** b, { schemeOnly: true, group: "bin-op" }, "pow");  // overrides Math.pow
-  defineGlobalSymbol("%", (a,b) => a % b, { schemeOnly: true, group: "bin-op" }, "rem");
-  defineGlobalSymbol("<<", (a,b) => a << b, { schemeOnly: true, group: "bin-op" }, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, { schemeOnly: true, group: "bin-op" }, "bit-shr");
-  defineGlobalSymbol(">>>", (a,b) => a >>> b, { schemeOnly: true, group: "bin-op" }, "bit-ushr");
-  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "bin-op" });  // SIOD
+  defineGlobalSymbol("!", a => !schemeTrue(a), { schemeOnly: true, group: "logical-op" }, "not");
+  defineGlobalSymbol("~", a => ~a, { schemeOnly: true, group: "binary-op" }, "bit-not");
+  defineGlobalSymbol("**", (a,b) => a ** b, { schemeOnly: true, group: "binary-op" }, "pow");  // overrides Math.pow
+  defineGlobalSymbol("%", (a,b) => a % b, { schemeOnly: true, group: "binary-op" }, "rem");
+  defineGlobalSymbol("<<", (a,b) => a << b, { schemeOnly: true, group: "binary-op" }, "bit-shl");
+  defineGlobalSymbol(">>", (a,b) => a >> b, { schemeOnly: true, group: "binary-op" }, "bit-shr");
+  defineGlobalSymbol(">>>", (a,b) => a >>> b, { schemeOnly: true, group: "binary-op" }, "bit-ushr");
+  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "binary-op" });  // SIOD
   defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true, group: "js-op" });
   defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true, group: "js-op" });
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true, group: "js-op" });
@@ -965,7 +965,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //    (? true) returns a function that evaluates its first parameter.
   //    (? false) returns a function that evaluates its second parameter.
   //
-  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook }, "if");
+  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook, group: "core" }, "if");
   function ifelse(p, t, f) {
     p = schemeTrue(p);
     if (p)
@@ -1207,7 +1207,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", begin, { evalArgs: 0, compileHook: begin_hook });
+  defineGlobalSymbol("begin", begin, { evalArgs: 0, compileHook: begin_hook, group: "core" });
   function begin(...forms) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
@@ -1222,7 +1222,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", prog1, { evalArgs: 0, compileHook: prog1_hook });
+  defineGlobalSymbol("prog1", prog1, { evalArgs: 0, compileHook: prog1_hook, group: "core" });
   function prog1(...forms) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -1243,7 +1243,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  defineGlobalSymbol("cond", cond, { evalArgs: 0, compileHook: cond_hook });
+  defineGlobalSymbol("cond", cond, { evalArgs: 0, compileHook: cond_hook, group: "core" });
   function cond(...clauses) {
     // Prescan for errors; the compiler needs to do it so the interpreter should too
     for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
@@ -1625,7 +1625,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // TODO: lazy-filter?
 
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
-  defineGlobalSymbol("to-list", to_list, { dontInline: true, group: "list_op" });
+  defineGlobalSymbol("to-list", to_list, { dontInline: true, group: "list-op" });
   function to_list(obj, depth = 1) {
     if (depth <= 0) return obj;
     if (isNil(obj) || isCons(obj)) return obj;
@@ -1645,7 +1645,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // Turns iterable objects like lists into arrays, recursively to "depth"
-  defineGlobalSymbol("to-array", to_array, { dontInline: true, group: "list_op" });
+  defineGlobalSymbol("to-array", to_array, { dontInline: true, group: "list-op" });
   function to_array(obj, depth = 1) {
     if (depth <= 0) return obj;
     res = [];
@@ -1673,7 +1673,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // "letrec" can be partially-applied, returning a function that
   // evaluates its arguments in the let scope!
   //
-  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook }, "let", "let*");
+  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook, group: "core" }, "let", "let*");
   function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
     for ( ; isCons(bindings); bindings = bindings[CDR]) {
@@ -1737,7 +1737,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // The point is that the JavaScript runtime HAS a suitable primitive; I just don't
   // think you can get at it directly from user code.
 
-  defineGlobalSymbol("set'", setq, { evalArgs: 0, compileHook: setq_hook }, "setq");
+  defineGlobalSymbol("set'", setq, { evalArgs: 0, compileHook: setq_hook, group: "core" }, "setq");
   function setq(symbol, valueForm, ...values) {
     let value = _eval(valueForm, this);
     for (let valueForm of values)
@@ -1763,7 +1763,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return ssaValue;
   }
 
-  defineGlobalSymbol("set", set);
+  defineGlobalSymbol("set", set, {group: "core" });
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   function setSym(symbol, value, scope) {
@@ -2944,7 +2944,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   LazyIteratorList.prototype[LAZYCDR] = true;
   LazyIteratorList.prototype[LIST] = true;
 
-  defineGlobalSymbol("list-view", list_view, { dontInline: true, group: "list_op" });
+  defineGlobalSymbol("list-view", list_view, { dontInline: true, group: "list-op" });
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator);

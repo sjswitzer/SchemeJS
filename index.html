@@ -163,8 +163,15 @@
       .help .value:before { content: "Value: " }
       .help .js-names:before { content: "JavaScript: " }
       .help .impl, .help .value, .help .js-names { display: none }
-      div[data-show-impl="true"] .impl, .help[data-show-impl] .value { display: block; }
+      div[data-show-impl="true"] .impl, div[data-show-impl="true"] .value { display: block; }
       div[data-show-javascript="true"] .js-names { display: block; }
+
+      dl#helpgroup-js-op dd .tbd {
+        display: none;
+      }
+      dl#helpgroup-js-op dd .impl {
+        display: inline !important;
+      }
 
       #helpgroup-imported dl {
         display: block;
@@ -497,16 +504,58 @@
         <label for="javascript">JavaScript API</label>
       </div>
       <div class="help-content">
-        <dl class="definitions" id="helpgroup-builtin">
+        <h3> Core Operations</h3>
+        <dl class="definitions" id="helpgroup-core">
           <dt class="heading"> Symbol
             <dd class="heading"> Description
+
           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h3> Binary Operations </h3>
+        <dl class="definitions" id="helpgroup-binary-op">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h3> N-Ary Operations </h3>
+        <dl class="definitions" id="helpgroup-var-op">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h3> Comparison Operations </h3>
+        <p> These operations take an arbitrary number of arguments and return false,
+            ending evaluation, as soon as the relation fails to hold between successive elements.
+        <dl class="definitions" id="helpgroup-compare-op">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h3> Logical Operations </h3>
+        <dl class="definitions" id="helpgroup-logical-op">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h2> List Operations </h2>
+        <dl class="definitions" id="helpgroup-list-op">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h2> Predicate Conditional Operations </h2>
+        <p> These operations can function as simple predicates, returning <code>true</code> or
+            <code>false</code>, or as conditional operations, evaluating the second argument
+            if true and the third if false. You were probably going to us it for a condition anyway.
+            (Actually, it <i>always</i> evaluates and returns the second or third argument; it's just that
+            their default values are <code>true</code> and <code>false</code>.)
+        <dl class="definitions" id="helpgroup-pred-op">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h2> JavaScript-Related Operations </h2>
+        <p> The implementations should explain what they do well enough.
+        <dl class="definitions" id="helpgroup-js-op">
+          <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h2> Sundry </h2>
+        <dl class="definitions" id="helpgroup-default">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
         <h2> Functions and Constants Imported from JavaScript </h2>
         <dl class="definitions" id="helpgroup-imported">
            <!-- definitions inserted here when SchemeJS module is loaded -->
-      </dl>
-     </div>
+        </dl>
+      </div>
     </div>
     <!-- These definitions get moved into the help section at startup -->
     <div style="display: none !important">
@@ -1027,19 +1076,19 @@
         <p> Evaluates the series of forms, returning the first which is neither null or undefined.
             Evaluation ends as soon as a value is returned.
       </dd>
-      <dd id="defn-defn-@?!"> See implementation. </dd>
-      <dd id="defn-@@"> See implementation. </dd>
-      <dd id="defn-@?!"> See implementation. </dd>
-      <dd id="defn-@@!"> See implementation. </dd>
-      <dd id="defn-@@="> See implementation. </dd>
-      <dd id="defn-@@?"> See implementation. </dd>
-      <dd id="defn-@@?!"> See implementation. </dd>
-      <dd id="defn-@@@"> See implementation. </dd>
-      <dd id="defn-@@@!"> See implementation. </dd>
-      <dd id="defn-@@@="> See implementation. </dd>
-      <dd id="defn-@@@?"> See implementation. </dd>
-      <dd id="defn-@@@?!"> See implementation. </dd>
-      <dd id="defn-in"> See implementation. </dd>
+      <dd id="defn-defn-@?!"></dd>
+      <dd id="defn-@@"></dd>
+      <dd id="defn-@?!"></dd>
+      <dd id="defn-@@!"></dd>
+      <dd id="defn-@@="></dd>
+      <dd id="defn-@@?"></dd>
+      <dd id="defn-@@?!"></dd>
+      <dd id="defn-@@@"></dd>
+      <dd id="defn-@@@!"></dd>
+      <dd id="defn-@@@="></dd>
+      <dd id="defn-@@@?"></dd>
+      <dd id="defn-@@@?!"></dd>
+      <dd id="defn-in"></dd>
       <dd id="defn-Array"> Array <p> The JavaScript Array class. </dd>
       <dd id="defn-Boolean"> Boolean <p> The JavaScript Boolean class. </dd>
       <dd id="defn-Number"> Number <p> The JavaScript Number class. </dd>
@@ -1360,8 +1409,10 @@
               dd = document.getElementById(elementId);
               if (dd) break;
             }
-            if (!dd)
-              dd = textElement('dd', `TBD defn-${atoms[0].description}`);
+            if (!dd) {
+              dd = textElement('dd');
+              dd.appendChild(textElement('span', `TBD defn-${atoms[0].description}`, 'tbd' ));
+            }
             helpElement.appendChild(dd);
             if (typeof value === 'function') {
               dd.appendChild(textElement('p', string(value), 'impl'));
@@ -1391,7 +1442,8 @@
 
         function textElement(type, text, cls) {
           let element = document.createElement(type);
-          element.textContent = text;
+          if (text)
+            element.textContent = text;
           if (cls)
             element.setAttribute('class', cls);
           return element;
