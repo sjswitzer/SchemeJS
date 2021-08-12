@@ -473,10 +473,10 @@ export function run(opts = {}) {
     EXPECT_ERROR(` (nth 7 "abcdefg") `, RangeError);
 
     EXPECT(` (apropos "c") `, isCons);  // weak test but gets some coverage
-    EXPECT(` (mapcar) `, NIL);
-    EXPECT(` (mapcar (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
-    EXPECT(` (mapcar (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
-    EXPECT(` (mapcar (lambda (x) (* 2 x))) `, NIL);
+    EXPECT(` (map) `, NIL);
+    EXPECT(` (map (lambda (x) (* 2 x)) '(1 2 3)) `, ` '(2 4 6) `);
+    EXPECT(` (map (lambda (x) (* 2 x)) '[1 2] '(3)) `, ` '(2 4 6) `);
+    EXPECT(` (map (lambda (x) (* 2 x))) `, NIL);
     EXPECT(` (array-map (lambda (x) (* 2 x)) '(1 2) '[3]) `, ` '[2 4 6] `);
     EXPECT(` (filter (< 3) '(4 2 6 5 1 7)) `, ` '(4 6 5 7) `);
 

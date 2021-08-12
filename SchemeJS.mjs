@@ -1547,9 +1547,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       (a,b) => a.description.toLowerCase() < b.description.toLowerCase());
   }
 
-  // (mapcar fn list1 list2 ...)
-  defineGlobalSymbol("mapcar", mapcar, { dontInline: true });
-  function mapcar(fn, ...lists) {
+  // (map fn list1 list2 ...)
+  defineGlobalSymbol("map", map, { dontInline: true });
+  function map(fn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
     for (let list of lists) {
@@ -1576,7 +1576,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return result;
   }
 
-  // Same as mapcar but results in an Array
+  // Same as map but results in an Array
   defineGlobalSymbol("array-map", array_map, { dontInline: true });
   function array_map(fn, ...lists) {
     let res = [];
@@ -2300,7 +2300,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     // Special eval for JS arrays and objects:
     //   Values that are evaluated and placed in
     //   a new Object or Array in correspoding position.
-    // TODO: Investigate Symbol.species (also for mapcar, etc.)
+    // TODO: Investigate Symbol.species (also for map, etc.)
     if (form !== null && typeof form === 'object') {
       if (form instanceof Array) {
         let res = [];
