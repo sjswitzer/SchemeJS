@@ -2618,6 +2618,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
                 put(str);
                 indent += indentMore;
                 toString(forms, maxCarDepth, maxCdrDepth-1);
+                sep = ""; put(")");
                 indent = saveIndent;
                 return;
               }
