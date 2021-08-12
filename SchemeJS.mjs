@@ -4013,7 +4013,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       params = cons(params, NIL);
     if (!isList(params)) throwBadCompiledLambda(lambda);
     let forms = body[CDR];
-    let ssaParamv = [], paramv = [], restParam;
+    let ssaParamv = [], ssaRestParam, paramv = [], restParam;
     ssaScope = newScope(ssaScope, "compiler-lambda-scope");
     let paramCount = 0, requiredCount, optionalFormsVec = [];
     for (; isCons(params); ++paramCount, params = params[CDR]) {
@@ -4034,10 +4034,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       paramv.push(param);
     }
     if (typeof params === 'symbol') {  // rest param (does not increment paramCount)
-      let ssaParam = newTemp(params);
-      ssaParamv.push(`...${ssaParam}`);
-      ssaScope[params] = ssaParam;
       restParam = params;
+      ssaRestParam = newTemp(params);
+      ssaScope[params] = ssaRestParam;
     }
     else if (!isNil(params))
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
@@ -4046,15 +4045,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     tools.functionDescriptors[ssaFunction] = { requiredCount, evalCount, name: displayName, noScope: true };
     if (nameAtom)
       ssaScope[nameAtom] = ssaFunction;
-    let delim = '', paramStr = '';
+    let delim = '', ssaParamStr = '';
     for (let param of ssaParamv) {
-      paramStr += delim + param;
+      ssaParamStr += delim + param;
       delim = ', ';
     }
+    if (ssaRestParam)
+      ssaParamStr += `${delim}...${ssaRestParam}`;
     let nameStr = nameAtom ? `  // ${nameAtom.description}` : '';
     let ssaScopeTmp = newTemp("tmp_scope"), scopeLines = [];
     scopeLines.push(emit(`let ${ssaScopeTmp} = scope;`));
-    emit(`function ${ssaFunction}(${paramStr}) {${nameStr}`);
+    emit(`function ${ssaFunction}(${ssaParamStr}) {${nameStr}`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
     scopeLines.push(emit(`let scope = newScope(${ssaScopeTmp}, "compiled-lambda-scope");`));
@@ -4073,10 +4074,15 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       let ssaParamName = use(bind(paramv[i]));
       scopeLines.push(emit(`scope[${ssaParamName}] = ${ssaParam};`));
-  }
+    }
     if (restParam) {
+      let ssaTmp = newTemp();
+      emit(`let ${ssaTmp} = NIL;`);
+      emit(`for (let i = ${ssaRestParam}.length; i > 0; --i)`);
+      emit(`  ${ssaTmp} = cons(${ssaRestParam}[i-1], ${ssaTmp});`);
+      emit(`${ssaRestParam} = ${ssaTmp};`);
       let ssaParamName = use(bind(restParam));
-      scopeLines.push(emit(`scope[(${ssaParamName}] = ${ssaParamv[ssaParamv.length-1]};`));
+      scopeLines.push(emit(`scope[${ssaParamName}] =${ssaTmp};`));
     }
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
