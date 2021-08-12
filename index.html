@@ -288,6 +288,10 @@
         font-size: 90%;
       }
 
+      body[data-device="mobile"] #output, body[data-device="mobile"] #input {
+        font-size: 120%;  
+      }
+
       #output {
         /* https://geon.github.io/programming/2016/02/24/flexbox-full-page-web-app-layout */
         flex: 1 1 25em;
@@ -1160,7 +1164,22 @@
             request.onload = _ => {
               if (request.status === 200)
                 resolve(request.responseText);
-              reject(new Error(`Load ${path}, status ${request.status}`));
+              else if (request.status === 404) {
+                // Try again without the query (this is for PWAs that may have cached the resource for offline)
+                request = new XMLHttpRequest();
+                request.onload = _ => {
+                  if (request.status === 200)
+                    resolve(request.responseText);
+                  else
+                    reject(new Error(`Load ${path}, status ${request.status}`));
+                }
+                request.onerror = event => reject(new Error(`XMLHttpRequest error ${String(event)}`));
+                let async = true;
+                request.open('GET', reqPath, async);
+                request.send(null);
+              } else {
+                reject(new Error(`Load ${path}, status ${request.status}`));
+              }
             };
             request.onerror = event => reject(new Error(`XMLHttpRequest error ${String(event)}`));
             let async = true;
