@@ -584,10 +584,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("@?", (a, b) => a?.[b]);  // conditional indexing and member access
   defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { schemeOnly: true });
   defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { schemeOnly: true });
-  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { schemeOnly: true }, "js-call");
+  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { schemeOnly: true });
   defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { schemeOnly: true });
   defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { schemeOnly: true });
-  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { schemeOnly: true }, "js-call?");
+  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { schemeOnly: true });
   defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { schemeOnly: true });
   defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { schemeOnly: true });
   defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { schemeOnly: true }, "js-assign");

@@ -867,9 +867,9 @@
         (@? index array)
         <p> The value of the property "prop" in the given object or undefined if the array is
             undefined or null.</p>
-            (@ "prop" obj)
-            <p> The value of the property "prop" in the given object or undefined if the array is
-              undefined or null.
+        (@ "prop" obj)
+        <p> The value of the property "prop" in the given object or undefined if the array is
+            undefined or null.
       </dd>
       <dd id="defn-array?">
         (array? obj)
@@ -902,6 +902,11 @@
         <p> Defines a global-scope function <i>fn</i> with parameters <i>param...</i>
             which evaluates the forms in the context of the bound parameters.
       </dd>
+      <dd id="defn-compile">
+        (compile (fn param...) form ...)
+        <p> Compiles and defines a global-scope function <i>fn</i> with parameters <i>param...</i>
+            which evaluates the forms in the context of the bound parameters.
+      </dd>
       <dd id="defn-delete">
         (delete a b)
         <p> Deletes property or array element <i>b</i> from JavaScript object <i>a</i>.
@@ -918,14 +923,14 @@
       </dd>
       <dd id="defn-@">
         (@ obj n)
-        <p> References element <i>n</i> of JavaScript array <i>obj</i>.
+        <p> References element <i>n</i> of JavaScript array <i>obj</i>.</p>
         (@ obj "name")
           <p> References member <i>n<name/i> of JavaScript object <i>obj</i>.
       </dd>
       <dd id="defn-@?">
         (@? obj n)
         <p> References element <i>n</i> of JavaScript array <i>obj</i> if <i>obj</i> is not null
-            or undefined, otherwise returns undefined.
+            or undefined, otherwise returns undefined.</p>
         (@"" obj "name")
         <p> References member <i>n<name/i> of JavaScript object <i>obj</i> if <i>obj</i> is not null
             or undefined, otherwise returns undefined.
@@ -988,7 +993,7 @@
         'a
         <br>
         (quote a)
-        <p> Prevents <code>a</code> from being evaluated.
+        <p> Prevents <code>a</code> from being evaluated and returns it literally.
       </dd>
       <dd id="defn-!==">
         (!== a b ...)
@@ -1014,6 +1019,39 @@
         (?? form ...)
         <p> Evaluates the series of forms, returning the first which is neither null or undefined.
             Evaluation ends as soon as a value is returned.
+      </dd>
+      <dd id="defn-defn-@?!"> See implementation. </dd>
+      <dd id="defn-@@"> See implementation. </dd>
+      <dd id="defn-@?!"> See implementation. </dd>
+      <dd id="defn-@@!"> See implementation. </dd>
+      <dd id="defn-@@="> See implementation. </dd>
+      <dd id="defn-@@?"> See implementation. </dd>
+      <dd id="defn-@@?!"> See implementation. </dd>
+      <dd id="defn-@@@"> See implementation. </dd>
+      <dd id="defn-@@@!"> See implementation. </dd>
+      <dd id="defn-@@@="> See implementation. </dd>
+      <dd id="defn-@@@?"> See implementation. </dd>
+      <dd id="defn-@@@?!"> See implementation. </dd>
+      <dd id="defn-Array"> Array <p> The JavaScript Array class. </dd>
+      <dd id="defn-Boolean"> Boolean <p> The JavaScript Boolean class. </dd>
+      <dd id="defn-Number"> Number <p> The JavaScript Number class. </dd>
+      <dd id="defn-BigInt"> BigInt <p> The JavaScript BigInt class. </dd>
+      <dd id="defn-String"> String <p> The JavaScript String class. </dd>
+      <dd id="defn-Object"> Object <p> The JavaScript Object class. </dd>
+      <dd id="defn-Symbol"> Symbol <p> The JavaScript Symbol class. </dd>
+      <dd id="defn-mapcar">
+        (mapcar fn list...)
+        <p> Returns a list of results of <code>fn</code> applied to each element
+            of the given lists (or JavaScript iterables such as JavaScript Arrays).
+      </dd>
+      <dd id="defn-array-map">
+        (array-map fn list...)
+        <p> Returns a JavaScript Array of results of <code>fn</code> applied to each element
+            of the given lists (or JavaScript iterables such as Arrays).
+      </dd>
+      <dd id="defn-atom?">
+        (atom? a)
+        <p> Returns true if <code>a</code> is an atom.
       </dd>
       <dd id="defn-xxx">
         xxx
