@@ -1,4 +1,4 @@
-;; SchemeJS tests
+;; SchemeJS Demo
 
 (define (factoral x)
   (? (<= x 1) 

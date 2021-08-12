@@ -158,6 +158,7 @@
       .help dl p.value {
         color: #555;
       }
+
       .help .impl:before { content: "Impl: " }
       .help .value:before { content: "Value: " }
       .help .js-names:before { content: "JavaScript: " }
@@ -377,15 +378,16 @@
         <h2> SchemeJS: Scheme in JavaScript </h2>
         <p> JavaScript has dynamic typing, functions, closures, and a JIT with
             a small army of crack programmers optimizing its performance.
-            It’s an ideal runtime for Lisp.
+            It’s an ideal runtime for Scheme.
             All it lacks is cons cells, an s-expression parser/printer,
             eval/apply, and a handful of Lisp primitives.
-        <p> Oh, and a compier that compiles Scheme down to perfectly normal
-            JavaScript functions that the JIT can work its magic on.
+        <p> Oh, and a compiler that compiles Scheme down to perfectly normal
+            JavaScript functions that JavaScript JITs can go to town on.
         <p> SchemeJS fills that gap.
         <p> It’s hard to keep JavaScript objects from sneaking into the
-            Scheme world, so I decided to invite them in as first-class.
-            SchemeJS is fully Lisp <i>and</i> fully JavaScript.
+            SchemeJS world, so I decided to invite them in as first-class.
+            SchemeJS is fully Scheme <i>and</i> fully JavaScript.
+        <p> Run a demo by typing <code>(load "demo.scm")</code>.
         <p> Learn about
             <span class="linklike" onclick="showHelp('help-builtin')"">built-in Scheme definitions</span> and
             <span class="linklike" onclick="showHelp('help-details')"">implementation details</span>.
@@ -399,23 +401,36 @@
         <h3> Key Features </h3>
         <dl>
           <dt>  JavaScript Integration
-          <dd>  Scheme and JavaScript have full and fluent access to each other's objects.
-          <dd>  Notations for JavaScript Object and Array literals.
-          <dd>  Core Scheme primitives are implemented directly on fundamental
+          <dd>  SchemeJS and JavaScript have full and fluent access to each other's objects.
+                SchemeJS can call invoke any JavaScript function and every SchemeJS
+                function is a JavaScript function, <i>whether it is compiled or not</i>.
+          <dd>  Syntax for JavaScript Object and Array literals.
+          <dd>  Core SchemeJS primitives are implemented directly on fundamental
                 JavaScript primitives such as function closures and prototype resolution.
                 These are the things that JavaScript JITs optimize most thouroughly.
-          <dd>  Scheme lists are iterable in JavaScript and JavaScript iterables can be
-                viewed as Scheme lists, either directly or lazily.
-          <dd>  Scheme can invoke any JavaScript function natively and Scheme functions and closures
-                are JavaScript functions that can be called directly by JavaScript.
+          <dd>  SchemeJS lists are iterable in JavaScript and JavaScript iterables can be
+                viewed as Scheme lists, either immediately or lazily.
+          <dt>  Iteratable-Aware
+          <dd>  SchemeJS built-in functions that operate on lists also operate on any JavaScript
+                iterable such as Arrays.
+          <dt>  N-ary Comparisons
+          <dd>  Comparison functions such as "<" can be applied to arbitrarily many arguments. In this case
+                it means that each argument is less than the previous. Evaluation ends as soon as
+                the comparison fails.
           <dt>  Partial Function Application
           <dd>  Functions, whether user-defined, compiled, or implemented in JavaScript, when
-                invoked with fewer than their number of required parameters result
+                invoked with fewer than their required number of parameters result
                 in a <i>closure</i> that binds the given arguments.
                 For instance, <code>(+ 5)</code> results in a function (closure) that
                 adds 5 to its argument(s).
-          <dt>  Macros (sorta)
-          <dd>  Users can define "special forms" which take a specified number of evaluated parameters.
+          <dt>  Generalized Special Forms
+          <dd>  Users can define "special forms" that take a specified number of evaluated parameters;
+                the rest are unevaluated.
+          <dt>  Optional Parameters
+          <dd>  A function defined as <code>(define (fn p1 (? p2 expr) (? p3 expr) ) form ...)</code>
+                has optional parameters <code>p2</code> and <code>p3</code> with default values
+                supplied by the expressions that follow them. The expressions are evaluated only
+                if the parameter is absent.
           <dt>  Rest Parameters
           <dd>  A function defined as <code>(define (fn p1 p2 . p3) form ...)</code> takes two
                 normal parameters (<i>p1</i> and <i>p2</i>) and recieves a third parameter <i>p3</i>,
@@ -424,24 +439,34 @@
                 rest parameter <i>p3</i>.
           <dt>  Curry Notation
           <dd>  If you like Curry notation, go ahead and use it!
-                <code>(&lambda;x.(+ x 2))</code>. The evaluator and printer
-                both understand it.
+                <code>(&lambda;x.(+ x 2))</code>. The evaluator, compiler and printer
+                all understand it.
+          <dt>  Predicates as Conditionals
+          <dd>  Predicates such as <code>number?</code> can be used to test a value's type
+                and return a boolean, or as conditionals themselves.
           <dt>  Lazy Lists and Map Functions
           <dd>  JavaScript iterators can be turned into lazy cons cells that don't fetch
                 the next object until someone invokes <i>cdr</i>.
             <p> Lazy "map" is the same, but in addition the mapping function is not applied
-                until someone invoke invokes <i>car</i> on the mapped list (<i>somewhat TBD</i>).
+                until someone invoke invokes <i>car</i> on the mapped list.
           <dt>  Compiler
           <dd>  A compiler that transforms Scheme into perfectly normal JavaScript that the
                 JIT can go to town on.
-          <dd>  Tail-call optimization <i>(coming soon!)</i>.
           <dt>  Easly Embedded
           <dd>  SchemeJS is a JavaScript module designed to be easily embedded into
                 other applications.
-                It comes with a node-js based CLI/REPL and this Web-based REPL;
-                they are just simple embeddings of the SchemeJS runtime.
+                Scheme JS can run in any web page (in a sufficiently modern browser) and do anything
+                JavaScript can do with as few as a half dozen lines of code to import it.
+                It comes with a Node.js-based CLI/REPL and this web-based REPL but
+                they're just simple embeddings of the SchemeJS runtime.
+            <p> SchemeJS has <i>no dependencies</i> other than a modern JavaScript runtime.
+          <dt>  Unicode
+          <dd>  SchemeJS identifiers can use any Unicode "alphabetic" characters (including ideographs).
+                People should be able to program in their own languages.
         </dl>
-        <p> <span class="linklike" onclick="runUnitTests()">Run unit tests</span> (results in console).
+        <p> <span class="linklike" onclick="runUnitTests()">Run unit tests</span>; results
+            display in the browser console. The compiler is curently configured to log compiled
+            code to the console as well.
         <p> Copyright &copy; 2021, Stan Switzer &mdash; (sjswitzer [at] gmail [dot] com)
         <div style="width: 100%">
           This work is licensed under a
