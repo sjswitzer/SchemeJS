@@ -3736,8 +3736,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
               else if (bodyTemplate && bodyTemplate.includes("this"))
                 usesScope = true;
             }
-            //if (compileHook)  // if a hook uses the scop, it can set "used" in the scope itself
-            //  usesScope = false;
+            if (compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
+              usesScope = false;
           } else {  // Still need param info for closures, but don't use for templates
             fnInfo = analyzeJSFunction(fn);
             params = fnInfo.params;
@@ -3754,6 +3754,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         }
         return ssaValue;
       }
+      ssaScope.used = true;
       return `resolveUnbound(${use(bind(sym))})`;
     }
     if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
@@ -3776,6 +3777,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
         let ssaResult = newTemp(fName+'_result');
         let ssaArgList = use(bind(args, `${fName}_args`));
+        ssaScope.used = true;
         emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
         return ssaResult;
       }
@@ -3841,7 +3843,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           emit(`}`);
           return ssaResult;
         }
-        // TODO: Inline SchemeJS functions? Or just trust the JavaScript JIT to do it?
         let ssaResult = newTemp(fName+'_result');
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
@@ -3912,6 +3913,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
       // and to the scope.
+      ssaScope.used = true;
       ssaScope = newScope(ssaScope, "compiler-closure-scope");
       let closedArgStr = '';
       sep = '';
@@ -3938,10 +3940,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (typeof innerParams === 'symbol')
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
-      if (usesScope)
-        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
-      else
-        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr});`);
+      // We always need a scope here
+      emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
       let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;
@@ -4016,6 +4016,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (!isList(params)) throwBadCompiledLambda(lambda);
     let ssaParamv = [], ssaRestParam, paramv = [], restParam;
+    let originalSsaScope = ssaScope;
     ssaScope = newScope(ssaScope, "compiler-lambda-scope");
     let paramCount = 0, requiredCount, optionalFormsVec = [];
     for (; isCons(params); ++paramCount, params = params[CDR]) {
@@ -4091,7 +4092,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
       ssaResult = compileEval(forms[CAR], ssaScope, tools);
-    if (!ssaScope.used)
+    if (ssaScope.used)
+      originalSsaScope.used = true;
+    else
       tools.deleteEmitted(scopeLines);
     use(ssaResult);
     emit(`return ${ssaResult};`);

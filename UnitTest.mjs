@@ -250,8 +250,8 @@ export function run(opts = {}) {
     EXPECT(` (? false 1 2 (oops!)) `, 2);
     EXPECT(` (? true 1 (oops!)) `, 1);
     EXPECT(` (? false (oops!) 2) `, 2);
-    EXPECT_ERROR(` ((? true (!oops)) 2) `, SchemeEvalError);
-    EXPECT_ERROR(` ((? false 1) (!oops))`, SchemeEvalError);
+    EXPECT_ERROR(` ((? true (oops!)) 2) `, SchemeEvalError);
+    EXPECT_ERROR(` ((? false 1) (oops!))`, SchemeEvalError);
     EXPECT_ERROR(` (? false 1 (oops!)) `, SchemeEvalError);
     EXPECT_ERROR(` (? true (oops!) 2) `, SchemeEvalError);
     EXPECT_ERROR(` (? (oops!) 1 2) `, SchemeEvalError);
