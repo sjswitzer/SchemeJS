@@ -4009,10 +4009,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let ssaFunction = newTemp(displayName);
     if (!isCons(body)) throwBadCompiledLambda(lambda);
     let params = body[CAR];
-    if (typeof params === 'symbol')  // Curry notation
-      params = cons(params, NIL);
-    if (!isList(params)) throwBadCompiledLambda(lambda);
     let forms = body[CDR];
+    if (typeof params === 'symbol') { // Curry notation
+      params = cons(params, NIL);
+      forms = cons(forms, NIL);
+    }
+    if (!isList(params)) throwBadCompiledLambda(lambda);
     let ssaParamv = [], ssaRestParam, paramv = [], restParam;
     ssaScope = newScope(ssaScope, "compiler-lambda-scope");
     let paramCount = 0, requiredCount, optionalFormsVec = [];

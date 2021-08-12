@@ -560,6 +560,8 @@ export function run(opts = {}) {
       endTestScope(savedScope);
     }
 
+    // TODO: test compiling special lambdas; need a good API for that.
+
     { // Partial application returning closures
       let savedScope = beginTestScope();
       EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
@@ -572,6 +574,15 @@ export function run(opts = {}) {
       EXPECT(` (add-4 3) `, 7);
       // While we're at it, test notation
       EXPECT(` (define (increment-by n) (\\x.(+ x n))) `, ` 'increment-by `);
+      EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
+      EXPECT(` increment-by-3 `, isClosure);
+      EXPECT(` (increment-by-3 4) `, 7);
+      endTestScope(savedScope);
+    }
+
+    { // Partial application returning closures, compiled
+      let savedScope = beginTestScope();
+      EXPECT(` (compile (increment-by n) (\\x.(+ x n))) `, ` 'increment-by `);
       EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
       EXPECT(` increment-by-3 `, isClosure);
       EXPECT(` (increment-by-3 4) `, 7);
@@ -703,7 +714,7 @@ export function run(opts = {}) {
           printParams: '(a, b, c = {}, d, e = 1, ...rest)',
           body: '', printBody: ' { return a; }', native: false, requiredCount: 2 });
 
-      // Safari and Firefox format the "native code" part differently.
+      // Safari and Firefox format the "native code" part differently than V8.
       //  EXPECT(testAnalyze([].sort),
       //    { name: 'sort', params: [], restParam: undefined, value: undefined,
       //      body: undefined, printBody: ' { [native code] }', native: true });
