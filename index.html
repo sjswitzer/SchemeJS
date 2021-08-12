@@ -387,6 +387,9 @@
         <p> It’s hard to keep JavaScript objects from sneaking into the
             SchemeJS world, so I decided to invite them in as first-class.
             SchemeJS is fully Scheme <i>and</i> fully JavaScript.
+        <p> This implementation aims for broad compatibility with SIOD, but inevitably,
+            and in the grand tradition of list implementations, introduces a new dialect.
+            Which is a sin but not a crime.
         <p> Run a demo by typing <code>(load "demo.scm")</code>.
         <p> Learn about
             <span class="linklike" onclick="showHelp('help-builtin')"">built-in Scheme definitions</span> and
@@ -399,71 +402,71 @@
         <h2> Implementation Details </h2>
         <p>
         <h3> Key Features </h3>
-        <dl>
-          <dt>  JavaScript Integration
-          <dd>  SchemeJS and JavaScript have full and fluent access to each other's objects.
-                SchemeJS can call invoke any JavaScript function and every SchemeJS
-                function is a JavaScript function, <i>whether it is compiled or not</i>.
-          <dd>  Syntax for JavaScript Object and Array literals.
-          <dd>  Core SchemeJS primitives are implemented directly on fundamental
-                JavaScript primitives such as function closures and prototype resolution.
-                These are the things that JavaScript JITs optimize most thouroughly.
-          <dd>  SchemeJS lists are iterable in JavaScript and JavaScript iterables can be
-                viewed as Scheme lists, either immediately or lazily.
-          <dt>  Iteratable-Aware
-          <dd>  SchemeJS built-in functions that operate on lists also operate on any JavaScript
-                iterable such as Arrays.
-          <dt>  N-ary Comparisons
-          <dd>  Comparison functions such as "<" can be applied to arbitrarily many arguments. In this case
-                it means that each argument is less than the previous. Evaluation ends as soon as
-                the comparison fails.
-          <dt>  Partial Function Application
-          <dd>  Functions, whether user-defined, compiled, or implemented in JavaScript, when
-                invoked with fewer than their required number of parameters result
-                in a <i>closure</i> that binds the given arguments.
-                For instance, <code>(+ 5)</code> results in a function (closure) that
-                adds 5 to its argument(s).
-          <dt>  Generalized Special Forms
-          <dd>  Users can define "special forms" that take a specified number of evaluated parameters;
-                the rest are unevaluated.
-          <dt>  Optional Parameters
-          <dd>  A function defined as <code>(define (fn p1 (? p2 expr) (? p3 expr) ) form ...)</code>
-                has optional parameters <code>p2</code> and <code>p3</code> with default values
-                supplied by the expressions that follow them. The expressions are evaluated only
-                if the parameter is absent.
-          <dt>  Rest Parameters
-          <dd>  A function defined as <code>(define (fn p1 p2 . p3) form ...)</code> takes two
-                normal parameters (<i>p1</i> and <i>p2</i>) and recieves a third parameter <i>p3</i>,
-                that recieves a list of the remaining arguments.
-            <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 . p3) form ...)</code> has a
-                rest parameter <i>p3</i>.
-          <dt>  Curry Notation
-          <dd>  If you like Curry notation, go ahead and use it!
-                <code>(&lambda;x.(+ x 2))</code>. The evaluator, compiler and printer
-                all understand it.
-          <dt>  Predicates as Conditionals
-          <dd>  Predicates such as <code>number?</code> can be used to test a value's type
-                and return a boolean, or as conditionals themselves.
-          <dt>  Lazy Lists and Map Functions
-          <dd>  JavaScript iterators can be turned into lazy cons cells that don't fetch
-                the next object until someone invokes <i>cdr</i>.
-            <p> Lazy "map" is the same, but in addition the mapping function is not applied
-                until someone invoke invokes <i>car</i> on the mapped list.
-          <dt>  Compiler
-          <dd>  A compiler that transforms Scheme into perfectly normal JavaScript that the
-                JIT can go to town on.
-          <dt>  Easly Embedded
-          <dd>  SchemeJS is a JavaScript module designed to be easily embedded into
-                other applications.
-                Scheme JS can run in any web page (in a sufficiently modern browser) and do anything
-                JavaScript can do with as few as a half dozen lines of code to import it.
-                It comes with a Node.js-based CLI/REPL and this web-based REPL but
-                they're just simple embeddings of the SchemeJS runtime.
-            <p> SchemeJS has <i>no dependencies</i> other than a modern JavaScript runtime.
-          <dt>  Unicode
-          <dd>  SchemeJS identifiers can use any Unicode "alphabetic" characters (including ideographs).
-                People should be able to program in their own languages.
-        </dl>
+        <h4> JavaScript Integration </h4>
+        <p> SchemeJS and JavaScript have full and fluent access to each other's objects.
+            SchemeJS can call invoke any JavaScript function and every SchemeJS
+            function is a JavaScript function, <i>whether it is compiled or not</i>.
+        <p> Syntax for JavaScript Object and Array literals.
+        <p> Core SchemeJS primitives are implemented directly on fundamental
+            JavaScript primitives such as function closures and prototype resolution.
+            These are the things that JavaScript JITs optimize most thouroughly.
+        <h4> Iteratable-Aware </h4>
+        <p> SchemeJS lists are iterable in JavaScript and JavaScript iterables can be
+            viewed as Scheme lists, either immediately or lazily.
+        <p> SchemeJS built-in functions that operate on lists also operate on any JavaScript
+            iterable such as Arrays.
+        <h4> N-ary Comparisons </h4>
+        <p> Comparison functions such as "<" can be applied to arbitrarily many arguments. In this case
+            it means that each argument is less than the previous. Evaluation ends as soon as
+            the comparison fails.
+        <h4> Partial Function Application </h4
+        <p> Functions, whether user-defined, compiled, or implemented in JavaScript, when
+            invoked with fewer than their required number of parameters result
+            in a <i>closure</i> that binds the given arguments.
+            For instance, <code>(+ 5)</code> results in a function (closure) that
+            adds 5 to its argument(s).
+        <h4> Generalized Special Forms </h4> 
+        <p]> Users can define "special forms" that take a specified number of evaluated parameters;
+             the rest are unevaluated.
+             In <code>(\# 2 (a1 a3 a3 a5) forms...)</code>, <i>a1</i> and <i>a2</i> are evaluated and the rest are not.
+        <h4> Optional Parameters </h4>
+        <p> A function defined as <code>(define (fn p1 (? p2 expr) (? p3 expr) ) form ...)</code>
+            has optional parameters <code>p2</code> and <code>p3</code> with default values
+            supplied by the expressions that follow them. The expressions are evaluated only
+            if the parameter is absent.
+        <h4> Rest Parameters </h4>
+        <p> A function defined as <code>(define (fn p1 p2 . p3) form ...)</code> takes two
+            normal parameters (<i>p1</i> and <i>p2</i>) and recieves a third parameter <i>p3</i>,
+            that recieves a list of the remaining arguments.
+        <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 . p3) form ...)</code> has a
+            rest parameter <i>p3</i>.
+        <h4> Curry Notation </h4>
+        <p> If you like Curry notation, go ahead and use it!
+            <code>(&lambda;x.(+ x 2))</code>. The evaluator, compiler and printer
+            all understand it.
+        <h4> Predicates as Conditionals </h4>
+        <p> Predicates such as <code>number?</code> can be used to test a value's type
+            and return a boolean, or as conditionals themselves.
+        <h4> Lazy Lists and Map Functions </h4>
+        <p> JavaScript iterators can be turned into lazy cons cells that don't fetch
+            the next object until someone invokes <i>cdr</i>.
+        <p> Lazy "map" is the same, but in addition the mapping function is not applied
+            until someone invoke invokes <i>car</i> on the mapped list.
+        <h4> Compiler </h4>
+        <p> A compiler (a "transpiler," tchnicaly, but that sounds silly)
+            that transforms Scheme into perfectly normal JavaScript that the
+            JIT can go to town on.
+        <h4> Easly Embedded </h4>
+        <p> SchemeJS is a JavaScript module designed to be easily embedded into other applications.
+            Scheme JS can run in any web page (in a sufficiently modern browser) and can do anything
+            JavaScript can do with as few as a half dozen lines of code to import it.
+        <p> It comes with a Node.js-based CLI/REPL and this web-based REPL but
+            they're just simple embeddings of the SchemeJS runtime.
+        <p> SchemeJS has <i>no dependencies</i> beyond a modern JavaScript runtime.
+        <h4> Unicode </h4>
+        <p> SchemeJS identifiers can use any Unicode "alphabetic" characters (including ideographs).
+              People should be able to program in their own languages.
+        <h3> Sundry </h3>
         <p> <span class="linklike" onclick="runUnitTests()">Run unit tests</span>; results
             display in the browser console. The compiler is curently configured to log compiled
             code to the console as well.
@@ -972,22 +975,22 @@
       <dd id="defn-lt">
         (< a b ...)
         <p> Returns true if each value is less than the previous.
-            Evaluation ends as soon as this this is not the case.
+            Evaluation ends as soon as this is not the case.
       </dd>
       <dd id="defn-le">
         (<= a b ...)
         <p> Returns true if each value is less than or equal to the previous.
-            Evaluation ends as soon as this this is not the case.
+            Evaluation ends as soon as this is not the case.
       </dd>
       <dd id="defn-gt">
         (> a b ...)
         <p> Returns true if each value is greater than the previous.
-            Evaluation ends as soon as this this is not the case.
+            Evaluation ends as soon as this is not the case.
       </dd>
       <dd id="defn-ge">
         (> a b ...)
         <p> Returns true if each value is greater than or equal the previous.
-            Evaluation ends as soon as this this is not the case.
+            Evaluation ends as soon as this is not the case.
       </dd>
       <dd id="defn-quote">
         'a

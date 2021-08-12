@@ -1,43 +1,5 @@
 # Implementation Notes
 
-## Coding Conventions
-
-Generally, variable, function and class names are camel case. An exception
-is when a function is also a Scheme function with dashes in its name. In that case
-the function uses an underscore where a dash occurs in the Scheme name.
-
-Constants are all-caps. Strings are generally "str" if they are for humans; and 'str'
-if they're for internal purposes; `str` is used when convenient, as it quite often is.
-
-I use "== null" specifically to test for "nullish" (undefined and null). Be careful
-with null since it reports its type as "object" but doesn't do objecty things. Otherwise
-I use ===.
-
-"Let" is used rather than "var." Var is forbidden.
-
-I prefer to define functions _after_ they're used. Tell the big picture first, then details.
-Pascal taught us some bad habits.
-Often a function will have a broad API, process its arguments and options then call
-a mini-me version of itself defined locally. This gets the grubby stuff out of
-the way and then the function can, for instance, recurse on the simpler API and common
-arguments don't need to be passed around but instead can be accessed from the containing scope.
-
-I prefer arrow functions for one-liners, regular functions for longer things. for situations
-where an own "this" is required, or where a forward reference is needed.
-
-I don't use "const" for things that happen to be const, for instance as loop iterands;
-that's just too damn fussy. I use it for things that _should_ be const or _must_ be const.
-Sometimes I use const to make it trivial for JITs to discover that sonething cannot change or,
-in the case of selectable options like the SchemeJS JIT and TRACE_INTERPRETER, JITs can easily
-and dependably DCE the optional code.
-
-Instead of passing in booleans and other unnamed values as parameters (foo(3, true, false, 17))
-I generally try to assign the value to a variable so that it has a name then pass that variable.
-If a function has more than a few obvious parameters, I usually pass an "opts" object instead
-so that parameters can be named entries in the opts argument. Usually, the first thing the function
-does is access the options, assign them to variables and provide a default. This gets that
-out of the way up front and provides documentation on what the options are.
-
 ## Runtime Details
 
 The current scope is simply a JavaScript object and the Scheme scope chain is implemented through its
@@ -143,6 +105,45 @@ Probably the best way to think about it is that JavaScript was secretly Scheme a
 just as Brendan Eich originally intended. Recent improvements in ES6 and beyond have exposed more of the underlying Lispyness and this project wouldn't have been attempted without them.
 It's as if Scheme and Self had an unlikely affair and decided their lovechild would
 have a vaguely Java-like syntax.
+
+## Coding Conventions
+
+Generally, variable, function and class names are camel case. An exception
+is when a function is also a Scheme function with dashes in its name. In that case
+the function uses an underscore where a dash occurs in the Scheme name.
+
+Constants are all-caps. Strings are generally "str" if they are for humans; and 'str'
+if they're for internal purposes; `str` is used when convenient, as it quite often is.
+
+I use "== null" specifically to test for "nullish" (undefined and null). Be careful
+with null since it reports its type as "object" but doesn't do objecty things. Otherwise
+I use ===.
+
+"Let" is used rather than "var." Var is forbidden.
+
+I prefer to define functions _after_ they're used. Tell the big picture first, then details.
+Pascal taught us some bad habits.
+Often a function will have a broad API, process its arguments and options then call
+a mini-me version of itself defined locally. This gets the grubby stuff out of
+the way and then the function can, for instance, recurse on the simpler API and common
+arguments don't need to be passed around but instead can be accessed from the containing scope.
+
+I prefer arrow functions for one-liners, regular functions for longer things. for situations
+where an own "this" is required, or where a forward reference is needed.
+
+I don't use "const" for things that happen to be const, for instance as loop iterands;
+that's just too damn fussy. I use it for things that _should_ be const or _must_ be const.
+Sometimes I use const to make it trivial for JITs to discover that sonething cannot change or,
+in the case of selectable options like the SchemeJS JIT and TRACE_INTERPRETER, JITs can easily
+and dependably DCE the optional code. "const" should convey important information to the human,
+the machine, or both; otherwise it's just noise.
+
+Instead of passing in booleans and other unnamed values as parameters (foo(3, true, false, 17))
+I generally try to assign the value to a variable so that it has a name then pass that variable.
+If a function has more than a few obvious parameters, I usually pass an "opts" object instead
+so that parameters can be named entries in the opts argument. Usually, the first thing the function
+does is access the options, assign them to variables and provide a default. This gets that
+out of the way up front and provides documentation on what the options are.
 
 ## Future Work
 
