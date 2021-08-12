@@ -154,7 +154,8 @@ interpretrer and compiler.
 
 Make let, let* and letrec distinct, I think. They're all implemented as letrec currently.
 No good reason to do it except that it could cause some existing SIOD code to break if I don't.
-Three different "let" primitives was a mistake from the outset, IMO; all you really need is "letrec."
+Three different "let" primitives was a mistake from the outset, IMO;
+all you really need is "letrec."
 
 It would be nice to support writing async and generator functions naturally but I haven't
 given it much thought beyond the observation that a non-recursive interpreter would make "yield" pretty straightforward. Compiling it would require a different approach, I suspect.
@@ -163,7 +164,7 @@ I imagine this is what JavaScript implementations do at the AST level. At least 
 advantage that Scheme code is an AST inherently.
 
 I may revisit "rest" parameters. I like the current notation, but there's no good way
-to have a lambda with just a rest parameter(yes, it technically encroaches on Curry notation
+to have a lambda with just a rest parameter (yes, it technically encroaches on Curry notation
 but that would not be a good notation anyway),
 On the other hand,
 I've found it useful to always have at least two required parameters since then

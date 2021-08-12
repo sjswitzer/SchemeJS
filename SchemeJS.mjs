@@ -2605,6 +2605,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
                     toString(params, maxCarDepth-1, maxCdrDepth-2);  // actually the atom
                     sep = ""; put(".");
                     toString(scopeCons[CDR][CDR], maxCarDepth, maxCdrDepth-3);  // the form
+                    sep = ""; put(")");
                     return;
                   }
                 }
