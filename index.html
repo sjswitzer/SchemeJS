@@ -1043,21 +1043,21 @@
       <dd id="defn-String"> String <p> The JavaScript String class. </dd>
       <dd id="defn-Object"> Object <p> The JavaScript Object class. </dd>
       <dd id="defn-Symbol"> Symbol <p> The JavaScript Symbol class. </dd>
-      <dd id="defn-mapcar">
-        (mapcar fn list...)
+      <dd id="defn-map">
+        (map fn list...)
         <p> Returns a list of results of <code>fn</code> applied to each element
             of the given lists (or JavaScript iterables such as JavaScript Arrays).
+      </dd>
+      <dd id="defn-array-map">
+        (array-map fn list...)
+        <p> Returns a JavaScript Array of results of <code>fn</code> applied to each element
+            of the given lists (or JavaScript iterables such as Arrays).
       </dd>
       <dd id="defn-filter">
         (filter predicate-fn list...)
         <p> Returns a list of elemenys of the given lists
             (or JavaScript iterables) where the <code>predicate-fn</code> applied to the
             element is true.
-      </dd>
-      <dd id="defn-array-map">
-        (array-map fn list...)
-        <p> Returns a JavaScript Array of results of <code>fn</code> applied to each element
-            of the given lists (or JavaScript iterables such as Arrays).
       </dd>
       <dd id="defn-atom?">
         (atom? a)
