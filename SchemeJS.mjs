@@ -907,7 +907,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function and_or_hook(args, ssaScope, tools, name, init, test) {
     if (args.length < 1)
       return init;
-    if (args.length == 1)
+    if (args.length === 1)
       return compileEval(args[0], ssaScope, tools);
     let ssaResult = tools.newTemp(name), saveIndent = tools.indent;
     tools.indent += '  ';
@@ -946,7 +946,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function nullish_hook(args, ssaScope, tools) {
     if (args.length < 1)
       return 'undefined';
-    if (args.length == 1)
+    if (args.length === 1)
       return compileEval(args[0], ssaScope, tools);
     let ssaResult = tools.newTemp('nullish'), saveIndent = tools.indent;
     tools.indent += '  ';
@@ -1126,7 +1126,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       return isPrimitive(f) ? f : _eval(f, this);
   }
   function is_numeric_hook(args, ssaScope, tools) {
-    return conditionalHooks(args, ssaScope, tools, 'is_numeric', `typeof * === 'number' || typeof a == 'bigint`);
+    return conditionalHooks(args, ssaScope, tools, 'is_numeric', `typeof * === 'number' || typeof a === 'bigint`);
   }
 
   defineGlobalSymbol("string?", is_string, { evalArgs: 1, compileHook: is_string_hook }, "is-string");
@@ -2408,7 +2408,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for ( ; isCons(params); params = params[CDR]) {
       let param = params[CAR];
       if (isCons(param)) {
-        if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
+        if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] === 'symbol'))
           throwBadLambda(lambda, `what's this?  ${string(param)}`);
         if (!requiredCount)
           requiredCount = paramCount;
@@ -4021,7 +4021,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for (; isCons(params); ++paramCount, params = params[CDR]) {
       let param = params[CAR], ssaParam;
       if (isCons(param)) {
-        if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
+        if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] === 'symbol'))
           throwBadCompiledLambda(lambda, `Bad param ${string(param)}`);
         optionalFormsVec.push(param[CDR][CDR]);
         param = param[CDR][CAR]

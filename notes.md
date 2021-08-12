@@ -146,6 +146,8 @@ have a vaguely Java-like syntax.
 
 ## Future Work
 
+First, more extensive unit and scenario tests.
+
 I have plans for a non-recursive interpreter and tail-call-optimization in both the
 interpretrer and compiler.
 
