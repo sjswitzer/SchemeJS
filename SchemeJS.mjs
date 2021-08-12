@@ -2271,7 +2271,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           paramStr += sep + params[i], sep = ", ";
         if (restParam)
           paramStr += `${sep}...${restParam}`;
-        closureForms = Atom(`{*js-function-${fName}(${paramStr})*}`);
+        closureForms = cons(Atom(`{*js-function-${fName}(${paramStr})*}`), NIL);
         if (restParam)
           closureParams = Atom(restParam);
         for (let i = params.length; i > argCount; --i)
