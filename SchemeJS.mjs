@@ -3721,7 +3721,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
           let compileHook = fn[COMPILE_HOOK];
           let fnInfo = fn[COMPILE_INFO];
-          let noScope = false;
+          let usesScope = true;  // conservative default
           let params, restParam, valueTemplate, bodyTemplate, native;
           if (fnInfo) {  // this is a built-in OR a jsClosure
             params = fnInfo.params;
@@ -3729,13 +3729,15 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             valueTemplate = fnInfo.value;
             bodyTemplate = fnInfo.body;
             native = fnInfo.native;
-            if (valueTemplate) { // Crude but effective
-              noScope = true;
+            if (valueTemplate) { 
+              usesScope = false;  // templates generally don't use the scope, unless they use "this"
               if (valueTemplate.includes("this"))
-                noScope = false;
+                usesScope = true;
               else if (bodyTemplate && bodyTemplate.includes("this"))
-                noScope = false;
+                usesScope = true;
             }
+            //if (compileHook)  // if a hook uses the scop, it can set "used" in the scope itself
+            //  usesScope = false;
           } else {  // Still need param info for closures, but don't use for templates
             fnInfo = analyzeJSFunction(fn);
             params = fnInfo.params;
@@ -3743,12 +3745,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             native = fnInfo.native;
           }
           if (native || isClosure(fn))
-            noScope = true;
-          if (noScope && TRACE_COMPILER) console.log("NOSCOPE", name);
+            usesScope = true;
           // Everything you need to know about invoking a JS function is right here
           tools.functionDescriptors[ssaValue] = {
             requiredCount, evalCount, name, compileHook, params, restParam,
-            valueTemplate, bodyTemplate, noScope
+            valueTemplate, bodyTemplate, usesScope
           };
         }
         return ssaValue;
@@ -3786,8 +3787,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let compileHook = functionDescriptor.compileHook;
       let valueTemplate = functionDescriptor.valueTemplate;
       let bodyTemplate = functionDescriptor.bodyTemplate;
-      let noScope = functionDescriptor.noScope;
-      if (!noScope)
+      let usesScope = functionDescriptor.usesScope;
+      if (usesScope)
         ssaScope.used = true;
       if (typeof fName === 'symbol')
         fName = fName.description;
@@ -3845,10 +3846,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
-        if (noScope)
-          emit(`let ${ssaResult} = ${ssaFunction}(${ssaArgStr});`)
-        else
+        if (usesScope)
           emit(`let ${ssaResult} = ${ssaFunction}.call(scope, ${ssaArgStr});`)
+        else
+          emit(`let ${ssaResult} = ${ssaFunction}(${ssaArgStr});`)
         return ssaResult;
       }
       //
@@ -3937,10 +3938,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (typeof innerParams === 'symbol')
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
-      if (noScope)
-        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr});`);
-      else
+      if (usesScope)
         emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
+      else
+        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr});`);
       let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;
