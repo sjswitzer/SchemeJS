@@ -3745,7 +3745,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             native = fnInfo.native;
           }
           if (native || isClosure(fn))
-            usesScope = true;
+            usesScope = false;
           // Everything you need to know about invoking a JS function is right here
           tools.functionDescriptors[ssaValue] = {
             requiredCount, evalCount, name, compileHook, params, restParam,
