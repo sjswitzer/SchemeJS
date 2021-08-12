@@ -917,9 +917,9 @@
             Default is the scope of the caller.
       </dd>
       <dd id="defn-eval-string">
-        (eval "str" [scope])
-        <p> Parses the evaluates <i>"str"</i> in the given <i>scope</i>.
-            Default is the scope of the caller.
+        (eval-string "str" [scope])
+        <p> Parses and evaluates <i>"str"</i> in the given (optional) <i>scope</i>.
+            Default scope is the caller's.
       </dd>
       <dd id="defn-@">
         (@ obj n)
@@ -1032,6 +1032,7 @@
       <dd id="defn-@@@="> See implementation. </dd>
       <dd id="defn-@@@?"> See implementation. </dd>
       <dd id="defn-@@@?!"> See implementation. </dd>
+      <dd id="defn-in"> See implementation. </dd>
       <dd id="defn-Array"> Array <p> The JavaScript Array class. </dd>
       <dd id="defn-Boolean"> Boolean <p> The JavaScript Boolean class. </dd>
       <dd id="defn-Number"> Number <p> The JavaScript Number class. </dd>
@@ -1044,6 +1045,12 @@
         <p> Returns a list of results of <code>fn</code> applied to each element
             of the given lists (or JavaScript iterables such as JavaScript Arrays).
       </dd>
+      <dd id="defn-filter">
+        (filter predicate-fn list...)
+        <p> Returns a list of elemenys of the given lists
+            (or JavaScript iterables) where the <code>predicate-fn</code> applied to the
+            element is true.
+      </dd>
       <dd id="defn-array-map">
         (array-map fn list...)
         <p> Returns a JavaScript Array of results of <code>fn</code> applied to each element
@@ -1052,6 +1059,41 @@
       <dd id="defn-atom?">
         (atom? a)
         <p> Returns true if <code>a</code> is an atom.
+      </dd>
+      <dd id="defn-finite?">
+        (finite? a)
+        <p> Returns true if <code>a</code> is neither infinite or a NaN.
+      </dd>
+      <dd id="defn-gensym">
+        (gensym [name]))
+        <p> Generates a unique Symbol that is not equal to any other object and is not an atom.
+            If a string-valued <code>name</code> is provided, that will be the Symbol's "description."
+      </dd>
+      <dd id="defn-globalThis">
+        globalThis
+        <p> The JavaScript global scope.
+      </dd>
+      <dd id="defn-globalScope">
+        globalScope
+        <p> The SchemeJS global scope.
+      </dd>
+      <dd id="defn-sort">
+        (sort list [beforeFn] [accessFn])
+        <p> Sorts <code>list</code> such if <code>beforeFn</code> is applied to elements
+            <code>a</code> and <code>b</code>, then <code>a</code> will be before <code>b</code>
+            in the sorted list; the default is <code>&lt;</code>.
+            The <code>accessFn</code> selects the "key" to be sorted; the default
+            is the element itself.
+        <p> The "list" can be any iterable JavaScript object, but if it is an Array, the result
+            will also be an Array.
+      </dd>
+      <dd id="defn-nsort">
+        (sort list [beforeFn] [accessFn])
+        <p> In-place sort: like <code>sort</code>, but modifies the given list or Array.
+      </dd>
+      <dd id="defn-xxx">
+        xxx
+        <p> xxx
       </dd>
       <dd id="defn-xxx">
         xxx

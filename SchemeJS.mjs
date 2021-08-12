@@ -2375,7 +2375,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { evalArgs: 0, dontInline: true }, "\\\\", "special_lambda");
+  defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { evalArgs: 0, dontInline: true }, "\\\\");
   function special_lambda(evalCount, params, ...forms) {
     let body = NIL;
     for (let i = forms.length; i > 0; --i)
@@ -3184,7 +3184,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   let gensym_count = 0;
-  const gensym = () => Symbol(`*gensym-${gensym_count++}*`);
+  const gensym = (name = `*gensym-${gensym_count++}*`) => Symbol(name);
   defineGlobalSymbol("gensym", gensym);
 
   defineGlobalSymbol("parse", parseSExpr, { dontInline: true });
