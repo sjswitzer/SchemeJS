@@ -9,7 +9,7 @@
 export const VERSION = "1.1 (alpha)";
 
 //
-// Creates a SchemeJS instance, independent of any others.
+// Creates a SchemeJS instance.
 //
 // Instances are distinct to the bones; they do not even recognize each other's
 // Cons cells or NIL values. This is by design. People should be able
@@ -18,7 +18,7 @@ export const VERSION = "1.1 (alpha)";
 // be unaffected.
 //
 // This implementation aims for broad compatibility with SIOD, but inevitably,
-// and in the grand tradition of list implementations, introduces a new dialect.
+// and in the grand tradition of lisp implementations, introduces a new dialect.
 // Which is a sin but not a crime.
 //
 export function createInstance(schemeOpts = {}) {
