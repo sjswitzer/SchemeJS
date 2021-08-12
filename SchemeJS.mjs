@@ -2141,7 +2141,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let args = nameAndParams[CDR];
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
     let form = list(LAMBDA_ATOM, args, forms);
-    let compiledFunction = compile_lambda.call(this, name, form);
+    let compiledFunction = compile_lambda.call(this, name, name.description, form);
     compiledFunction[NAMETAG] = name;
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
@@ -2426,6 +2426,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       requiredCount = paramCount;
     let jitCount = jitThreshold ? jitThreshold|0 : undefined;
     function jsClosure(...args) {
+      scope = newScope(scope, "lambda-scope");
       if (jitThreshold !== undefined) {  // Disable by optioning jitThreshold as undefined
         let jitFn = jsClosure[JITCOMPILED];
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
@@ -2436,10 +2437,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         // Until that happens, the JIT shouldn't be enabled.
         if (--jitCount < 0) {
           jitCount = jitThreshold;
-          jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda, jsClosure);
+          jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, jsClosure[NAMETAG], lambda, jsClosure);
         }
       }
-      scope = newScope(scope, "lambda-scope");
       let params = lambdaParams, i = 0, argLength = args.length;
       for ( ; isCons(params); ++i, params = params[CDR]) {
         let param = params[CAR], optionalForms, arg;
@@ -3551,10 +3551,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
   }
 
-  defineGlobalSymbol("compile-lambda", compile_lambda, { dontInline: true });
-  function compile_lambda(name, lambdaForm) {
+  exportAPI("compile_lambda", compile_lambda)
+  function compile_lambda(name, displayName, lambdaForm, jitFunction) {
     let scope = this;
-    let { code, bindSymToObj } = lambda_compiler.call(this, name, lambdaForm);
+    if (!isCons(lambdaForm) && typeof lambdaForm === 'symbol' ) throw new SchemeEvalError(`Bad lambda ${string(lambda)}`);
+    let { code, bindSymToObj } = lambda_compiler.call(this, name, displayName, lambdaForm, jitFunction);
     if (TRACE_COMPILER || TRACE_COMPILER_CODE)
       console.log("COMPILED", name, code, bindSymToObj);
     let binder = new Function("bound", "resolveUnbound", "invokeUnbound", code);
@@ -3580,7 +3581,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
   }
 
-  function lambda_compiler(nameAtom, lambdaForm, jitFunction) {
+  function lambda_compiler(nameAtom, displayName, lambdaForm, jitFunction) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (nameAtom === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
     let scope = this;
@@ -3607,23 +3608,25 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     use(bind(isCons, "isCons"));
     use(bind(cons, "cons"));
     use(bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
-    let ssaFunction = compileLambda(nameAtom, lambdaForm, ssaScope, tools);
+    let ssaFunction = compileLambda(nameAtom, displayName, lambdaForm, ssaScope, tools);
     if (jitFunction) {
-      let ssaGuardFunction = newTemp(nameAtom.description + '_guard');
+      let ssaGuardFunction = newTemp(displayName + '_guard');
       emit(`function ${ssaGuardFunction}(...params) {`);
       emit(`  if (false`)
-      for (let ssaSym in guardedSymbols) {
-        emit(`      || ${ssaSym} !== scope[${guardedSymbols[ssaSym]}]`)
+      for (let sym in guardedSymbols) {
+        use(sym);
+        let ssaAtom = use(bind(guardedSymbols[sym]));
+        emit(`      || ${sym} !== scope[${ssaAtom}]`);
       }
       emit(`      ) {`);
       let ssaBoundJittedFn = bind(jitFunction);
-      let ssaJITCOMPILD = bind(JITCOMPILED);
+      let ssaJITCOMPILD = use(bind(JITCOMPILED));
       emit(`    ${ssaBoundJittedFn}[${ssaJITCOMPILD}] = undefined;`);
       emit(`    ${ssaBoundJittedFn}(...params);`)
       emit(`  }`)
       emit(`  return ${ssaFunction}(...params);`)
       emit(`}`);
-      redecorateCompiledClosure(ssaGuardFunction, ssaFunction);
+      redecorateCompiledClosure(ssaGuardFunction, ssaFunction, emit);
       emit(`return ${ssaGuardFunction};`)
     } else {
       emit(`return ${ssaFunction};`);
@@ -3632,8 +3635,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emitted = [];
     emit('"use strict";')
     emit(`// params: (bound, resolveUnbound, invokeUnbound)`);
-    emit(`let scope = this;  `);
-    for (let bindingName of Object.keys(bindSymToObj))
+    emit(`let scope = this;`);
+    for (let bindingName in bindSymToObj)
       if (usedSsaValues[bindingName])
         emit(`let ${bindingName} = bound[${string(bindingName)}];`);
     emitted = emitted.concat(saveEmitted);
@@ -3786,7 +3789,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       let ssaFunction;
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
-        return compileLambda(null, form, ssaScope, tools);
+        return compileLambda(null, fn.description, form, ssaScope, tools);
       else
         ssaFunction = compileEval(fn, ssaScope, tools);
       let args = form[CDR];
@@ -4013,7 +4016,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // This function parallels makeJsClosure as closely as possible. If you make a change
   // there, you almost certainly have to make a corresponding change here.
   //
-  function compileLambda(nameAtom, lambda, ssaScope, tools) {
+  function compileLambda(nameAtom, displayName, lambda, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
     if (!isCons(lambda)) throwBadCompiledLambda(lambda);
     let body = lambda[CDR];
@@ -4024,7 +4027,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (typeof evalCount !== 'number') throwBadCompiledLambda(lambda);
       body = body[CDR];
     }
-    let displayName = nameAtom ? nameAtom.description : evalCount === MAX_INTEGER ? `lambda` : `slambda#${evalCount}`;
+    if (!displayName) displayName = nameAtom ? nameAtom.description : evalCount === MAX_INTEGER ? `lambda` : `slambda#${evalCount}`;
     let ssaFunction = newTemp(displayName);
     if (!isCons(body)) throwBadCompiledLambda(lambda);
     let params = body[CAR];
@@ -4151,7 +4154,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
   }
 
-  function redecorateCompiledClosure(ssaToFn, ssaFromFn) {
+  function redecorateCompiledClosure(ssaToFn, ssaFromFn, emit) {
     emit(`${ssaToFn}[CAR] = ${ssaFromFn}[CAR];`);
     emit(`${ssaToFn}[CDR] = ${ssaFromFn}[CDR];`);
     emit(`${ssaToFn}[COMPILED] = ${ssaFromFn}[COMPILED];`);

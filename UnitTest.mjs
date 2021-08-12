@@ -28,7 +28,7 @@ export function run(opts = {}) {
       console.info("SUCCEEDED", test, result, expected));
   let succeeded = 0, failed = 0;
 
-  const globalScope = SchemeJS.createInstance(opts);
+  let globalScope = SchemeJS.createInstance(opts);
   let testScope = globalScope;
   const setGlobalScope = globalScope._setGlobalScope_test_hook_ ?? required();
   const NIL = globalScope.NIL ?? required();
@@ -44,20 +44,31 @@ export function run(opts = {}) {
   const Atom = globalScope.Atom ?? required();
   const compile_lambda = globalScope.compile_lambda ?? required();
   function required() { throw "required" }
+  const justTestJIT = opts.justTestJIT;
 
   const isCompileOrEvalError = e => (e instanceof SchemeCompileError) || (e instanceof SchemeEvalError);
   const evalString = str => testScope.eval_string(str);
+  let evalTestString = evalString;
+
+  if (justTestJIT) {
+    testSuite();
+    return { succeeded, failed };
+  }
 
   // Test Internals
   internalsSuite();
 
   // Test Interpreter
-  let evalTestString = evalString;
   testSuite();
 
   // Test Compiler
   evalTestString = compileThenEvalString;
   testSuite();
+
+  // Test JIT
+  let { succeeded: jitSucceeded, failed: jitFailed } = run({ justTestJIT: true, jitThreshold: 5 });
+  succeeded += jitSucceeded;
+  failed += jitFailed;
 
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
   console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
@@ -842,7 +853,7 @@ export function run(opts = {}) {
   function compileThenEvalString(str) {
     let expr = parseSExpr.call(testScope, str);
     let lambda = list(Atom("lambda"), NIL, expr);
-    let compiled = compile_lambda.call(testScope, Atom('testcase'), lambda);
+    let compiled = compile_lambda.call(testScope, Atom('testcase'), "testcase", lambda);
     return compiled.call(testScope);
   }
 }
