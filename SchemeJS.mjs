@@ -60,7 +60,7 @@ export function createInstance(schemeOpts = {}) {
   const CAR = Symbol("CAR"), CDR = Symbol("CDR");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
-  const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JIT-COMPILED");
+  const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JITCOMPILED");
   const NAMETAG = Symbol("NAMETAG");
   // Since this symbol is tagged on external JS functions,label it as ours as a courtesy.
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
@@ -2435,7 +2435,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         // functions have changed then bails back to the interpreter if so.
         // Until that happens, the JIT shouldn't be enabled.
         if (--jitCount < 0) {
-          jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda);
+          jitCount = jitThreshold;
+          jsClosure[JITCOMPILED] = compile_lambda(jsClosure[NAMETAG], lambda, jsClosure);
         }
       }
       scope = newScope(scope, "lambda-scope");
@@ -3579,11 +3580,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
   }
 
-  function lambda_compiler(nameAtom, lambdaForm) {
+  function lambda_compiler(nameAtom, lambdaForm, jitFunction) {
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
     if (nameAtom === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
     let scope = this;
-    let bindSymToObj = {}, bindObjToSym = new Map(), functionDescriptors = {};
+    let bindSymToObj = {}, guardedSymbols = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
     let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 100, functionDescriptors };
     let ssaScope = new Scope();
@@ -3607,7 +3608,26 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     use(bind(cons, "cons"));
     use(bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
     let ssaFunction = compileLambda(nameAtom, lambdaForm, ssaScope, tools);
-    emit(`return ${ssaFunction};`);
+    if (jitFunction) {
+      let ssaGuardFunction = newTemp(nameAtom.description + '_guard');
+      emit(`function ${ssaGuardFunction}(...params) {`);
+      emit(`  if (false`)
+      for (let ssaSym in guardedSymbols) {
+        emit(`      || ${ssaSym} !== scope[${guardedSymbols[ssaSym]}]`)
+      }
+      emit(`      ) {`);
+      let ssaBoundJittedFn = bind(jitFunction);
+      let ssaJITCOMPILD = bind(JITCOMPILED);
+      emit(`    ${ssaBoundJittedFn}[${ssaJITCOMPILD}] = undefined;`);
+      emit(`    ${ssaBoundJittedFn}(...params);`)
+      emit(`  }`)
+      emit(`  return ${ssaFunction}(...params);`)
+      emit(`}`);
+      redecorateCompiledClosure(ssaGuardFunction, ssaFunction);
+      emit(`return ${ssaGuardFunction};`)
+    } else {
+      emit(`return ${ssaFunction};`);
+    }
     let saveEmitted = emitted;
     emitted = [];
     emit('"use strict";')
@@ -3624,7 +3644,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return { code, bindSymToObj };
 
     // Binds a JavaScript object into the closure
-    function bind(obj, name) {
+    function bind(obj, name, guardSym) {
       if (obj === undefined) return "undefined";
       if (obj === null) return "null";
       if (typeof obj === 'number' || typeof obj === 'bigint' || typeof obj === 'string')
@@ -3649,6 +3669,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       bindSymToObj[name] = obj;
       bindObjToSym.set(obj, name);
+      if (guardSym)
+        guardedSymbols[name] = guardSym;
       return name;
     }
     function emit(str) {
@@ -3712,7 +3734,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (!tools.functionDescriptors[ssaValue]) {
           let fn = scopedVal;
           let name = fn[NAMETAG] ?? fn.name ?? sym.description;
-          ssaValue = bind(fn, newTemp(name));
+          ssaValue = bind(fn, newTemp(name), sym);
           let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
           let requiredCount = parameterDescriptor & 0xffff;
           let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
@@ -4127,6 +4149,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`${ssaClosure}[COMPILED] = ${string(displayName)}`);
     // Mark object as a list, a pair, and a closure.
     emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
+  }
+
+  function redecorateCompiledClosure(ssaToFn, ssaFromFn) {
+    emit(`${ssaToFn}[CAR] = ${ssaFromFn}[CAR];`);
+    emit(`${ssaToFn}[CDR] = ${ssaFromFn}[CDR];`);
+    emit(`${ssaToFn}[COMPILED] = ${ssaFromFn}[COMPILED];`);
+    // Mark object as a list, a pair, and a closure.
+    emit(`${ssaToFn}[PAIR] = ${ssaToFn}[LIST] = ${ssaToFn}[CLOSURE_ATOM] = true;`);
   }
   
   const JS_IDENT_REPLACEMENTS  = {
