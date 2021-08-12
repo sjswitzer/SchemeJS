@@ -567,34 +567,34 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("globalScope", globalScope);
 
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !schemeTrue(a), { schemeOnly: true }, "not");
-  defineGlobalSymbol("~", a => ~a, { schemeOnly: true }, "bit-not");
-  defineGlobalSymbol("**", (a,b) => a ** b, { schemeOnly: true }, "pow");  // overrides Math.pow
-  defineGlobalSymbol("%", (a,b) => a % b, { schemeOnly: true }, "rem");
-  defineGlobalSymbol("<<", (a,b) => a << b, { schemeOnly: true }, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, { schemeOnly: true }, "bit-shr");
-  defineGlobalSymbol(">>>", (a,b) => a >>> b, { schemeOnly: true }, "bit-ushr");
-  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true });  // SIOD
-  defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true });
-  defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true });
-  defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true });
-  defineGlobalSymbol("@", (a, b) => a[b], { schemeOnly: true }, "aref");  // indexing and member access (SIOD: aref)
-  defineGlobalSymbol("@@", (a, b, c) => a[b][c], { schemeOnly: true });
-  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d], { schemeOnly: true });
-  defineGlobalSymbol("@?", (a, b) => a?.[b]);  // conditional indexing and member access
-  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { schemeOnly: true });
-  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { schemeOnly: true });
-  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { schemeOnly: true });
-  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { schemeOnly: true });
-  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { schemeOnly: true });
-  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { schemeOnly: true });
-  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { schemeOnly: true });
-  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { schemeOnly: true });
-  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { schemeOnly: true }, "js-assign");
-  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d), { schemeOnly: true };
-  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { schemeOnly: true });
-  defineGlobalSymbol("delete", (a, b) => delete a[b]), { schemeOnly: true };
-  defineGlobalSymbol("void", _ => undefined, { schemeOnly: true });
+  defineGlobalSymbol("!", a => !schemeTrue(a), { schemeOnly: true, group: "bin-op" }, "not");
+  defineGlobalSymbol("~", a => ~a, { schemeOnly: true, group: "bin-op" }, "bit-not");
+  defineGlobalSymbol("**", (a,b) => a ** b, { schemeOnly: true, group: "bin-op" }, "pow");  // overrides Math.pow
+  defineGlobalSymbol("%", (a,b) => a % b, { schemeOnly: true, group: "bin-op" }, "rem");
+  defineGlobalSymbol("<<", (a,b) => a << b, { schemeOnly: true, group: "bin-op" }, "bit-shl");
+  defineGlobalSymbol(">>", (a,b) => a >> b, { schemeOnly: true, group: "bin-op" }, "bit-shr");
+  defineGlobalSymbol(">>>", (a,b) => a >>> b, { schemeOnly: true, group: "bin-op" }, "bit-ushr");
+  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "bin-op" });  // SIOD
+  defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@", (a, b) => a[b], { schemeOnly: true, group: "js-op" }, "aref");  // indexing and member access (SIOD: aref)
+  defineGlobalSymbol("@@", (a, b, c) => a[b][c], { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d], { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@?", (a, b) => a?.[b], { schemeOnly: true, group: "js-op" });  // conditional indexing and member access
+  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { schemeOnly: true, group: "js-op" }, "js-assign");
+  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d), { schemeOnly: true, group: "js-op" };
+  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("delete", (a, b) => delete a[b]), { schemeOnly: true, group: "js-op" };
+  defineGlobalSymbol("void", _ => undefined, { schemeOnly: true, group: "js-op" });
 
   defineGlobalSymbol("to-lower-case", to_lower_case);
   function to_lower_case(str, locale = undefined) {
@@ -617,7 +617,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //
   // Variable args definitions
   //
-  defineGlobalSymbol("+", add, { compileHook: add_hook }, "add");
+  defineGlobalSymbol("+", add, { compileHook: add_hook, group: "var-op" }, "add");
   function add(a, b, ...rest) {
     a += b;
     for (b of rest)
@@ -633,7 +633,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return str;
   }
 
-  defineGlobalSymbol("-", sub, { compileHook: sub_hook}, "sub");
+  defineGlobalSymbol("-", sub, { compileHook: sub_hook, group: "var-op" }, "sub");
   function sub(a, ...rest) {
     if (rest.length === 0) return -a;
     for (let b of rest)
@@ -651,7 +651,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return str;
   }
 
-  defineGlobalSymbol("*", mul, { compileHook: mul_hook}, MUL, "mul");
+  defineGlobalSymbol("*", mul, { compileHook: mul_hook, group: "var-op" }, MUL, "mul");
   function mul(a, b, ...rest) {
     a *= b;
     for (let b of rest)
@@ -667,7 +667,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return str;
   }
 
-  defineGlobalSymbol('/', div, { compileHook: div_hook }, DIV, "div");
+  defineGlobalSymbol('/', div, { compileHook: div_hook, group: "var-op" }, DIV, "div");
   function div(a, ...rest) {
     if (rest.length === 0) return 1/a;
     for (let b of rest)
@@ -685,7 +685,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return str;
   }
 
-  defineGlobalSymbol("&", bit_and, { compileHook: bit_and_hook }, "bit-and");
+  defineGlobalSymbol("&", bit_and, { compileHook: bit_and_hook, group: "var-op" }, "bit-and");
   function bit_and(a, b, ...rest) {
     a &= b;
     for (b of rest)
@@ -701,7 +701,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return str;
   }
 
-  defineGlobalSymbol("|", bit_or, { compileHook: bit_or_hook }, "bit-or");
+  defineGlobalSymbol("|", bit_or, { compileHook: bit_or_hook, group: "var-op" }, "bit-or");
   function bit_or(a, b, ...rest) {
     a |= b;
     for (let b of rest)
@@ -717,7 +717,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return str;
   }
 
-  defineGlobalSymbol("^", bit_xor, { compileHook: bit_xor_hook}, "bit-xor");
+  defineGlobalSymbol("^", bit_xor, { compileHook: bit_xor_hook, group: "var-op" }, "bit-xor");
   function bit_xor(a, b, ...rest) {
     a ^= b;
     for (let b of rest)
@@ -733,7 +733,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return str;
   }
 
-  defineGlobalSymbol("<", lt, { evalArgs: 2, compileHook: lt_hook }, "lt");
+  defineGlobalSymbol("<", lt, { evalArgs: 2, compileHook: lt_hook, group: "var-op" }, "lt");
   function lt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -770,7 +770,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return result;
   }
 
-  defineGlobalSymbol("<=", le, { evalArgs: 2, compileHook: le_hook }, "le");
+  defineGlobalSymbol("<=", le, { evalArgs: 2, compileHook: le_hook, group: "compare-op" }, "le");
   function le(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -785,7 +785,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, '<=', 'le');
   }
 
-  defineGlobalSymbol(">", gt, { evalArgs: 2, compileHook: gt_hook }, "gt");
+  defineGlobalSymbol(">", gt, { evalArgs: 2, compileHook: gt_hook, group: "compare-op" }, "gt");
   function gt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -800,7 +800,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, '>', 'gt');
   }
 
-  defineGlobalSymbol(">=", ge, { evalArgs: 2, compileHook: ge_hook }, "ge");
+  defineGlobalSymbol(">=", ge, { evalArgs: 2, compileHook: ge_hook, group: "compare-op" }, "ge");
   function ge(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -815,7 +815,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, '>=', 'ge');
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook }, "eqv"); // XXX name
+  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" }, "eqv"); // XXX name
   function eq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -831,7 +831,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, '==', 'eq');
   }
 
-  defineGlobalSymbol("===", eeq, { evalArgs: 2, compileHook: eeq_hook }); // XXX name
+  defineGlobalSymbol("===", eeq, { evalArgs: 2, compileHook: eeq_hook, group: "compare-op" }); // XXX name
   function eeq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -852,7 +852,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // Sorry, "equal?"" does not get the variadic treatment at this time
   defineGlobalSymbol("equal?", (a, b) =>  deep_eq(a, b));
 
-  defineGlobalSymbol("!=", neq, { evalArgs: 2, compileHook: neq_hook }, "ne");
+  defineGlobalSymbol("!=", neq, { evalArgs: 2, compileHook: neq_hook, group: "compare-op" }, "ne");
   function neq(a, b, ...rest) {
     return !eq.call(this, a, b, ...rest);
   }
@@ -862,7 +862,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return `(!${eq})`;
   }
 
-  defineGlobalSymbol("!==", neeq, { evalArgs: 2, compileHook: neeq });
+  defineGlobalSymbol("!==", neeq, { evalArgs: 2, compileHook: neeq, group: "compare-op" });
   function neeq(a, b, ...rest) {
     return !eeq.call(this, a, b, ...rest);
   }
@@ -871,7 +871,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return `(!${eeq})`;
   }
 
-  defineGlobalSymbol("max", max);
+  defineGlobalSymbol("max", max, { group: "var-op" });
   function max(a, b, ...rest) {
     let val = a;
     if (val < b) val = b;
@@ -880,7 +880,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return val;
   }
 
-  defineGlobalSymbol("min", min);
+  defineGlobalSymbol("min", min, { group: "var-op" });
   function min(a, b, ...rest) {
     let val = a;
     if (val > b) val = b;
@@ -891,7 +891,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // Logical & Conditional
 
-  defineGlobalSymbol("&&", and, { evalArgs: 0, compileHook: and_hook }, "and");
+  defineGlobalSymbol("&&", and, { evalArgs: 0, compileHook: and_hook, group: "logical-op" }, "and");
   function and(...forms) {
     let val = true;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -921,7 +921,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return ssaResult;
   }
 
-  defineGlobalSymbol("||", or, { evalArgs: 0, compileHook: or_hook }, "or");
+  defineGlobalSymbol("||", or, { evalArgs: 0, compileHook: or_hook, group: "logical-op" }, "or");
   function or(...forms) {
     let val = false;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -934,7 +934,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return and_or_hook(args, ssaScope, tools, 'or', 'false', 'schemeTrue');
   }
 
-  defineGlobalSymbol("??", nullish, { evalArgs: 0, compileHook: nullish_hook }, "nullish");
+  defineGlobalSymbol("??", nullish, { evalArgs: 0, compileHook: nullish_hook, group: "logical-op" }, "nullish");
   function nullish(...forms) {
     let val = undefined;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -1008,7 +1008,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // The pattern here is that you can either write
   //   (? (bigint x) a b) or simply (bigint? x a b)
   //
-  defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook }, "is_bigint");
+  defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook, group: "pred-op" }, "is_bigint");
   function is_bigint(a, t = true, f = false) {
     if (typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1019,7 +1019,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_bigint', `typeof * === 'bigint'`);
   }
 
-  defineGlobalSymbol("atom?", is_atom, { evalArgs: 1, compileHook: is_atom_hook }, "is_atom");
+  defineGlobalSymbol("atom?", is_atom, { evalArgs: 1, compileHook: is_atom_hook, group: "pred-op" }, "is_atom");
   function is_atom(a, t = true, f = false) {
     if (isAtom(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1030,7 +1030,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_atom', `isAtom(*)`);
   }
 
-  defineGlobalSymbol("undefined?", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook }, "is_undefined")
+  defineGlobalSymbol("undefined?", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook, group: "pred-op" }, "is_undefined")
   function is_undefined(a, t = true, f = false) {
     if (a === undefined)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1041,7 +1041,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_undefined', `* === undefined`);
   }
 
-  defineGlobalSymbol("pair?", isCons, { evalArgs: 1, compileHook: is_pair_hook }, "is-pair", "is-cons");
+  defineGlobalSymbol("pair?", isCons, { evalArgs: 1, compileHook: is_pair_hook, group: "pred-op" }, "is-pair", "is-cons");
   function is_pair(a, t = true, f = false) {
     if (isCons(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1052,7 +1052,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_pair', `is_Cons(*)`);
   }
 
-  defineGlobalSymbol("list?", isList, { evalArgs: 1, compileHook: is_list_hook }, "is-list");
+  defineGlobalSymbol("list?", isList, { evalArgs: 1, compileHook: is_list_hook, group: "pred-op" }, "is-list");
   function is_list(a, t = true, f = false) {
     if (isList(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1063,7 +1063,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_list', `isList(*)`);
   }
 
-  defineGlobalSymbol("null?", is_null, { evalArgs: 1, compileHook: is_null_hook }, "is-null");  // SIOD clained it first. Maybe rethink the naming here.
+  defineGlobalSymbol("null?", is_null, { evalArgs: 1, compileHook: is_null_hook, group: "pred-op" }, "is-null");  // SIOD clained it first. Maybe rethink the naming here.
   function is_null(a, t = true, f = false) {
     if (isNil(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1074,7 +1074,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_null', `isNil(*)`);
   }
 
-  defineGlobalSymbol("jsnull?", is_jsnull, { evalArgs: 1, compileHook: is_jsnull_hook }, "is-jsnull");
+  defineGlobalSymbol("jsnull?", is_jsnull, { evalArgs: 1, compileHook: is_jsnull_hook, group: "pred-op" }, "is-jsnull");
   function is_jsnull(a, t = true, f = false) {
     if (a === null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1085,7 +1085,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_jsnull', `* === null`);
   }
 
-  defineGlobalSymbol("nullish?", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook }, "is-nullish");
+  defineGlobalSymbol("nullish?", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook, group: "pred-op" }, "is-nullish");
   function is_nullish(a, t = true, f = false) {
     if (a == null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1096,7 +1096,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_nullish', `* == null`);
   }
 
-  defineGlobalSymbol("boolean?", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook }, "is-boolean");
+  defineGlobalSymbol("boolean?", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook, group: "pred-op" }, "is-boolean");
   function is_boolean(a, t = true, f = false) {
     if (typeof a === 'boolean')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1107,7 +1107,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_boolean', `typeof * === 'boolean'`);
   }
 
-  defineGlobalSymbol("number?", is_number, { evalArgs: 1, compileHook: is_number_hook }, "is-number");
+  defineGlobalSymbol("number?", is_number, { evalArgs: 1, compileHook: is_number_hook, group: "pred-op" }, "is-number");
   function is_number(a, t = true, f = false) {
     if (typeof a === 'number')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1118,7 +1118,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_number', `typeof * === 'number'`);
   }
 
-  defineGlobalSymbol("numeric?", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook }, "is-numeric");
+  defineGlobalSymbol("numeric?", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook, group: "pred-op" }, "is-numeric");
   function is_numeric(a, t = true, f = false) {
     if (typeof a === 'number' || typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1129,7 +1129,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_numeric', `typeof * === 'number' || typeof a === 'bigint`);
   }
 
-  defineGlobalSymbol("string?", is_string, { evalArgs: 1, compileHook: is_string_hook }, "is-string");
+  defineGlobalSymbol("string?", is_string, { evalArgs: 1, compileHook: is_string_hook, group: "pred-op" }, "is-string");
   function is_string(a, t = true, f = false) {
     if (typeof a === 'string')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1140,7 +1140,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_string', `typeof * === 'string'`);
   }
 
-  defineGlobalSymbol("symbol?", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook }, "is-symbol");
+  defineGlobalSymbol("symbol?", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook, group: "pred-op" }, "is-symbol");
   function is_symbol(a, t = true, f = false) {
     if (typeof a === 'symbol')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1151,7 +1151,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_symbol', `typeof * === 'symbol'`);
   }
 
-  defineGlobalSymbol("function?", is_function, { evalArgs: 1, compileHook: is_function_hook }, "is-function");
+  defineGlobalSymbol("function?", is_function, { evalArgs: 1, compileHook: is_function_hook, group: "pred-op" }, "is-function");
   function is_function(a, t = true, f = false) {
     if (typeof a === 'function')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1162,7 +1162,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_function', `typeof * === 'function'`);
   }
 
-  defineGlobalSymbol("object?", is_object, { evalArgs: 1, compileHook: is_object_hook }, "is-object");
+  defineGlobalSymbol("object?", is_object, { evalArgs: 1, compileHook: is_object_hook, group: "pred-op" }, "is-object");
   function is_object(a, t = true, f = false) {
     if (a !== null && typeof a === 'object')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1173,7 +1173,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_object', `* !== null && typeof * === 'object'`);
   }
 
-  defineGlobalSymbol("array?", is_array, { evalArgs: 1, compileHook: is_array_hook }, "is-array");
+  defineGlobalSymbol("array?", is_array, { evalArgs: 1, compileHook: is_array_hook, group: "pred-op" }, "is-array");
   function is_array(a, t = true, f = false) {
     if (Array.isArray(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1184,7 +1184,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_array', `Array.isArray(*)`);
   }
 
-  defineGlobalSymbol("nan?", is_nan, { evalArgs: 1, compileHook: is_nan_hook } , "is-NaN", "NaN?");
+  defineGlobalSymbol("nan?", is_nan, { evalArgs: 1, compileHook: is_nan_hook, group: "pred-op" } , "is-NaN", "NaN?");
   function is_nan(a, t = true, f = false) {
     if (isNaN(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1195,7 +1195,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_nan', `isNaN(*)`);
   }
 
-  defineGlobalSymbol("finite?", is_finite, { evalArgs: 1, compileHook: is_finite_hook } , "is-finite");
+  defineGlobalSymbol("finite?", is_finite, { evalArgs: 1, compileHook: is_finite_hook, group: "pred-op" } , "is-finite");
   function is_finite(a, t = true, f = false) {
     if (isFinite(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1351,7 +1351,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // Can be inlined (if isList, isIterator, isCons, etc. are bound), but doesn't seem wise
-  defineGlobalSymbol("append", append, { dontInline: true });
+  defineGlobalSymbol("append", append, { dontInline: true, group: "list-op" });
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
@@ -1372,7 +1372,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("last", last, { dontInline: true });
+  defineGlobalSymbol("last", last, { dontInline: true, group: "list-op" });
   function last(list) {
     let res = NIL;
     if (!list || isNil(list)) return NIL; // XXX check this.
@@ -1393,7 +1393,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("butlast", butlast, { dontInline: true });
+  defineGlobalSymbol("butlast", butlast, { dontInline: true, group: "list-op" });
   function butlast(list) {
     let res = NIL, last;
     if (isList(list)) {
@@ -1413,7 +1413,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("length", length, { dontInline: true });
+  defineGlobalSymbol("length", length, { dontInline: true, group: "list-op" });
   function length(list) {
     let n = 0;
     if (isList(list)) {
@@ -1430,7 +1430,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return n;
   }
 
-  defineGlobalSymbol("list", list);
+  defineGlobalSymbol("list", list, { group: "list-op" });
   function list(...elements) {  // easy list builder
     let val = NIL;
     for (let i = elements.length; i > 0; --i)
@@ -1438,7 +1438,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return val;
   }
 
-  defineGlobalSymbol("reverse", reverse);
+  defineGlobalSymbol("reverse", reverse, { dontInline: true, group: "list-op" });
   function reverse(list) {
     let res = NIL;
     for ( ; isCons(list); list = list[CDR])
@@ -1446,7 +1446,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("nreverse", in_place_reverse);  // Name from SIOD
+  defineGlobalSymbol("nreverse", in_place_reverse, { dontInline: true, group: "list-op" });  // Name from SIOD
   function in_place_reverse(list) {
     let res = NIL;
     while (isCons(list)) {
@@ -1458,7 +1458,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("copy-list", copy_list, { dontInline: true });  // TODO: unit tests!
+  defineGlobalSymbol("copy-list", copy_list, { dontInline: true, group: "list-op" });  // TODO: unit tests!
   function copy_list(list) {
     let res = NIL, last;
     if (isNil(list)) return NIL;
@@ -1484,7 +1484,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
-  defineGlobalSymbol("member", member, { dontInline: true });
+  defineGlobalSymbol("member", member, { dontInline: true, group: "list-op" });
   function member(key, list) {
     for ( ; isCons(list); list = list[CDR])
       if (key === list[CAR])   // TODO: == or ===?
@@ -1494,7 +1494,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // (memq key list)
   //     Returns the portion of the list where the car is eq to the key, or () if none found.
-  defineGlobalSymbol("memq", memq, { dontInline: true });
+  defineGlobalSymbol("memq", memq, { dontInline: true, group: "list-op" });
   function memq(key, list) {
     for ( ; isCons(list); list = list[CDR])
       if (key === list[CAR])
@@ -1504,7 +1504,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // (nth index list)
   //     Reference the list using index, with the first element being index 0.
-  defineGlobalSymbol("nth", nth, { dontInline: true });
+  defineGlobalSymbol("nth", nth, { dontInline: true, group: "list-op" });
   function nth(index, list) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
       throw new TypeError(`Not an integer ${string(index)}`);
@@ -1548,7 +1548,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (map fn list1 list2 ...)
-  defineGlobalSymbol("map", map, { dontInline: true });
+  defineGlobalSymbol("map", map, { dontInline: true, group: "list-op" });
   function map(fn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
@@ -1577,7 +1577,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // Same as map but results in an Array
-  defineGlobalSymbol("array-map", array_map, { dontInline: true });
+  defineGlobalSymbol("array-map", array_map, { dontInline: true, group: "list-op" });
   function array_map(fn, ...lists) {
     let res = [];
     // TODO: does not currently special-case the list case.
@@ -1592,7 +1592,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (filter fn list1 list2 ...)
-  defineGlobalSymbol("filter", filter, { dontInline: true });
+  defineGlobalSymbol("filter", filter, { dontInline: true, group: "list-op" });
   function filter(predicateFn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
@@ -1620,7 +1620,42 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
     }
     return result;
-  }  
+  }
+
+  // TODO: lazy-filter?
+
+  // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
+  defineGlobalSymbol("to-list", to_list, { dontInline: true, group: "list_op" });
+  function to_list(obj, depth = 1) {
+    if (depth <= 0) return obj;
+    if (isNil(obj) || isCons(obj)) return obj;
+    if (typeof obj === 'object') {
+      if (isCons(obj)) return obj;  // Careful; Cons is iterable itself
+      let list = NIL, last;
+      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      for (let value of obj) {
+        if (depth > 1 && isIterable(value))
+          value = to_list.call(this, value, depth-1);
+        if (last) last = last[CDR] = cons(value, NIL);
+        else list = last = cons(value, NIL);
+      }
+      return list;
+    }
+    return NIL;
+  }
+
+  // Turns iterable objects like lists into arrays, recursively to "depth"
+  defineGlobalSymbol("to-array", to_array, { dontInline: true, group: "list_op" });
+  function to_array(obj, depth = 1) {
+    if (depth <= 0) return obj;
+    res = [];
+    for (let item of obj) {
+      if (depth > 1 && isIterable(item))
+        value = to_array.call(this, item, depth-1);
+      res.push(item);
+    }
+    return res;
+  }
 
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
@@ -1733,7 +1768,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   function setSym(symbol, value, scope) {
     // Can _almost_ do this using "with." Maybe come back to that.
-    // The hell  of it is that JS has such a primitive internally to do
+    // The hell of it is that JS has such a primitive internally to do
     // the same operation but you can't seem to get at it as a user.
     do {
       if (scope.hasOwnProperty(symbol)) {
@@ -1749,7 +1784,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // (qsort list predicate-fcn access-fcn)
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
   //   comparable performance and is excellent with partially-sorted lists.
-  defineGlobalSymbol("mergesort", mergesort, { dontInline: true }, "sort", "qsort");
+  defineGlobalSymbol("mergesort", mergesort, { dontInline: true, group: "list-op" }, "sort", "qsort");
   function mergesort(list, predicateFn = undefined, accessFn = undefined) {
     if (isNil(list)) return NIL;
     // Sort Arrays as Arrays
@@ -1768,7 +1803,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return in_place_mergesort(copied, predicateFn, accessFn);
   }
 
-  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { dontInline: true }, "in-place-sort", "nsort");
+  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { dontInline: true, group: "list-op" }, "in-place-sort", "nsort");
   function in_place_mergesort(list, predicateFn = undefined, accessFn = undefined) {
     if (isNil(list)) return NIL;
     // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
@@ -2519,6 +2554,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // particularly true of functions (closures) since a SchemeJS closure is
   // simultaneously a JavaScript function and a SchemeJS closure.
   //
+  defineGlobalSymbol("to-string", a => string(a));
   exportAPI("string", string);
   function string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
@@ -2761,26 +2797,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return `\\u{${hex}}`;
   }
 
-  // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
-  defineGlobalSymbol("to-list", to_list, { dontInline: true });
-  function to_list(obj, depth = 1) {
-    if (depth <= 0) return obj;
-    if (isNil(obj) || isCons(obj)) return obj;
-    if (typeof obj === 'object') {
-      if (isCons(obj)) return obj;  // Careful; Cons is iterable itself
-      let list = NIL, last;
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
-      for (let value of obj) {
-        if (depth > 1 && isIterable(value))
-          value = to_list.call(this, value, depth-1);
-        if (last) last = last[CDR] = cons(value, NIL);
-        else list = last = cons(value, NIL);
-      }
-      return list;
-    }
-    return NIL;
-  }
-
   //
   // Lazy lists by mutating down to ordinary Cons cells
   //
@@ -2928,7 +2944,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   LazyIteratorList.prototype[LAZYCDR] = true;
   LazyIteratorList.prototype[LIST] = true;
 
-  defineGlobalSymbol("list-view", list_view, { dontInline: true });
+  defineGlobalSymbol("list-view", list_view, { dontInline: true, group: "list_op" });
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator);
@@ -2940,22 +2956,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return new LazyIteratorList(iterator, a => fn(a))
   }
 
-  // TODO: lazy-filter
-
   defineGlobalSymbol("to-string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
-
-  // Turns iterable objects like lists into arrays, recursively to "depth"
-  defineGlobalSymbol("to-array", to_array, { dontInline: true });
-  function to_array(obj, depth = 1) {
-    if (depth <= 0) return obj;
-    res = [];
-    for (let item of obj) {
-      if (depth > 1 && isIterable(item))
-        value = to_array.call(this, item, depth-1);
-      res.push(item);
-    }
-    return res;
-  }
 
   //
   // S-epression tokenizer and parser
