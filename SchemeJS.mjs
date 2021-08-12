@@ -2596,7 +2596,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
                       sep = " ";
                     }
                     toString(objCar);  // %%closure or %%%closure
-                    sep = " ";
+                    sep = "";
                     if (obj[COMPILED]) put(`{*compiled-${obj[COMPLIED]}*}`);
                     sep = " ";
                     toString(scopeCons[CAR], maxCarDepth-1, maxCdrDepth-2);  // scope
@@ -2626,7 +2626,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
               put("..");  // .. signifies a lazy car
             } else if (obj[COMPILED]) {
               toString(obj[CAR])
-              sep = " ";
+              sep = "";
               put(`{*compiled-${obj[COMPILED]}*}`);
               sep = " ";
             } else {
@@ -3610,9 +3610,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`return ${ssaFunction};`);
     let saveEmitted = emitted;
     emitted = [];
-    emit(`// COMPILED ${nameAtom ? nameAtom.description+' ' : ''}`);
-    let lambdaStrs = string(lambdaForm).split('\n');
-    for (let str of lambdaStrs) emit(`//   ${str}`);
     emit('"use strict";')
     emit(`// params: (bound, resolveUnbound, invokeUnbound)`);
     emit(`let scope = this;  `);
@@ -4056,12 +4053,13 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (ssaRestParam)
       ssaParamStr += `${delim}...${ssaRestParam}`;
-    let nameStr = nameAtom ? `  // ${nameAtom.description}` : '';
     let ssaScopeTmp = newTemp("tmp_scope"), scopeLines = [];
     scopeLines.push(emit(`let ${ssaScopeTmp} = scope;`));
-    emit(`function ${ssaFunction}(${ssaParamStr}) {${nameStr}`);
+    emit(`function ${ssaFunction}(${ssaParamStr}) { // COMPILED ${displayName}`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
+    let lambdaStrs = string(lambda).split('\n');
+    for (let str of lambdaStrs) emit(`//   ${str}`);
     scopeLines.push(emit(`let scope = newScope(${ssaScopeTmp}, "compiled-lambda-scope");`));
     for (let i = 0; i < paramCount; ++i) {
       let ssaParam = ssaParamv[i];

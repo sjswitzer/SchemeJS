@@ -41,7 +41,7 @@ factoral
 (compile (_factoral x)
   (? (<= x 1) 
      (bigint? x 1n 1)
-     (* x (factoral (- x (bigint? x 1n 1))))
+     (* x (_factoral (- x (bigint? x 1n 1))))
   ))
 
 // What it looks like to SchemeJS
@@ -110,10 +110,15 @@ increment-by-3  // Again, note the binding in the closure scope
 times-3
 (times-3 5)
 
-// Object and Array literals
+// Define some variables used in literals below
 (define a "foo")
 (define b 20)
+
+// Array literal
 [ 1 2 3 4 5 6 7 a 3 b 4]
+
+// Object literal
+{ "a": "foo", "b": "bar" [a]: [ 1, 2, 3 ]}
 
 // Indexing Arrays
 (@ ['a 'b 'c 'd] 2)
