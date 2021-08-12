@@ -533,6 +533,16 @@ export function run(opts = {}) {
       endTestScope(savedScope);
     }
 
+    { // optional paramaters, compiled
+      let savedScope = beginTestScope();
+      EXPECT(` (compile (opt a b (? c (+ 2 3))) (list a b c)) `, ` 'opt `)
+      EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
+      EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
+      EXPECT(` (opt 1) `, isClosure);
+      EXPECT(` ((opt 1) 8) `, ` '(1 8 5) `);
+      endTestScope(savedScope);
+    }
+
     { // special lambdas
       let savedScope = beginTestScope();
       EXPECT(` (define a 1) `, ` 'a `);

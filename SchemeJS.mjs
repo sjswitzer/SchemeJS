@@ -4021,8 +4021,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (isCons(param)) {
         if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] == 'symbol'))
           throwBadCompiledLambda(lambda, `Bad param ${string(param)}`);
-        ssaParam = newTemp(param[CDR][CAR]);
         optionalFormsVec.push(param[CDR][CDR]);
+        param = param[CDR][CAR]
+        ssaParam = newTemp(param);
         if (requiredCount === undefined)
           requiredCount = paramCount;
       } else {
@@ -4066,9 +4067,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         emit(`if (${ssaParam} === undefined) {`);
         let saveIndent = tools.indent;
         tools.indent += '  ';
-        let ssaParam = 'NIL';
+        let ssaVal = 'NIL';
         for (let form of optionalForms)
-          ssaParam = compileEval(form, ssaScope, tools);
+          ssaVal = compileEval(form, ssaScope, tools);
+        emit(`${ssaParam} = ${ssaVal};`);
         tools.indent = saveIndent;
         emit('}');
       }
