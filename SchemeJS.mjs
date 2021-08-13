@@ -573,34 +573,36 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("globalScope", globalScope);
 
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !schemeTrue(a), { schemeOnly: true, group: "logical-op" }, "not");
-  defineGlobalSymbol("~", a => ~a, { schemeOnly: true, group: "binary-op" }, "bit-not");
-  defineGlobalSymbol("**", (a,b) => a ** b, { schemeOnly: true, group: "binary-op" }, "pow");  // overrides Math.pow
-  defineGlobalSymbol("%", (a,b) => a % b, { schemeOnly: true, group: "binary-op" }, "rem");
-  defineGlobalSymbol("<<", (a,b) => a << b, { schemeOnly: true, group: "binary-op" }, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, { schemeOnly: true, group: "binary-op" }, "bit-shr");
-  defineGlobalSymbol(">>>", (a,b) => a >>> b, { schemeOnly: true, group: "binary-op" }, "bit-ushr");
+  defineGlobalSymbol("!", a => !schemeTrue(a), { group: "logical-op" });
+  defineGlobalSymbol("~", a => ~a, { group: "binary-op" }, "bit-not");
+  defineGlobalSymbol("**", (a,b) => a ** b, { group: "binary-op" }, "pow");  // overrides Math.pow
+  defineGlobalSymbol("%", (a,b) => a % b, { group: "binary-op" }, "rem");
+  defineGlobalSymbol("<<", (a,b) => a << b, { group: "binary-op" }, "bit-shl");
+  defineGlobalSymbol(">>", (a,b) => a >> b, { group: "binary-op" }, "bit-shr");
+  defineGlobalSymbol(">>>", (a,b) => a >>> b, { group: "binary-op" }, "bit-ushr");
   defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "binary-op" });  // SIOD
   defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true, group: "js-op" });
   defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true, group: "js-op" });
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@", (a, b) => a[b], { schemeOnly: true, group: "js-op" }, "aref");  // indexing and member access (SIOD: aref)
-  defineGlobalSymbol("@@", (a, b, c) => a[b][c], { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d], { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@?", (a, b) => a?.[b], { schemeOnly: true, group: "js-op" });  // conditional indexing and member access
-  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { schemeOnly: true, group: "js-op" }, "js-assign");
-  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d), { schemeOnly: true, group: "js-op" };
-  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@", (a, b) => a[b], { group: "js-op" }, "aref");  // indexing and member access (SIOD: aref)
+  defineGlobalSymbol("@@", (a, b, c) => a[b][c], { group: "js-op" });
+  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d], { group: "js-op" });
+  defineGlobalSymbol("@?", (a, b) => a?.[b], { group: "js-op" });  // conditional indexing and member access
+  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { group: "js-op" });
+  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { group: "js-op" });
+  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { group: "js-op" });
+  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { group: "js-op" });
+  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { group: "js-op" });
+  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { group: "js-op" });
+  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { group: "js-op" });
+  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { group: "js-op" });
+  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { group: "js-op" }, "js-assign");
+  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d), { group: "js-op" };
+  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { group: "js-op" });
   defineGlobalSymbol("delete", (a, b) => delete a[b]), { schemeOnly: true, group: "js-op" };
   defineGlobalSymbol("void", _ => undefined, { schemeOnly: true, group: "js-op" });
+
+  defineGlobalSymbol("not", a => typeof a === 'function' ? ((...params) => !a(...params)) : !a), { group: "logical-op" };
 
   defineGlobalSymbol("to-lower-case", to_lower_case);
   function to_lower_case(str, locale = undefined) {
@@ -844,7 +846,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, 'equal(A, B)', 'scheme_eq');
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" }, "eq?");
+  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" });
   function eq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -860,7 +862,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, 'A == B', 'eq');
   }
 
-  defineGlobalSymbol("===", eeq, { evalArgs: 2, compileHook: eeq_hook, group: "compare-op" }); // XXX name
+  defineGlobalSymbol("===", eeq, { evalArgs: 2, compileHook: eeq_hook, group: "compare-op" }, "eq?", "eqv?");
   function eeq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
