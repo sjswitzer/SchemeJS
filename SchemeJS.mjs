@@ -6,8 +6,6 @@
 //   4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
 //
 
-import { isArray } from "util";
-
 export const VERSION = "1.1 (alpha)";
 
 //
@@ -1984,7 +1982,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // property that determines how strings are compared, for instance you can ignore case
   // or leading and trailing whitespace. Sometimes you're playing horseshoes.
   // You can also opt that NaNs are considered equal.
-  defineGlobalSymbol("equal", equal);
+  defineGlobalSymbol("equal", equal, { dontInline: true });
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
     let stringCompare = report.stringCompare ?? ((a, b) => a === b);
     let NaNsEqual = report.NaNsEqual;
@@ -3078,7 +3076,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         continue;
       }
 
-      if (ch === ';' || (ch === '/' && peekc() === '/')) {  // ; or // begins a comment
+      if (ch === ';') {  // ; begins a comment
         parseContext.push({ type: 'comment', value: ch === ';' ? ch : '//', position, line, lineChar });
         while (ch && !NL[ch])
           nextc();
