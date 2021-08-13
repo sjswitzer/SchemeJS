@@ -4088,7 +4088,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let saveIndent = tools.indent;
     tools.indent += '  ';
     let lambdaStrs = string(lambda).split('\n');
-    for (let str of lambdaStrs) emit(`//   ${str}`);
+    for (let str of lambdaStrs) emit(`// ${str}`);
     scopeLines.push(emit(`let scope = newScope(${ssaScopeTmp}, "compiled-lambda-scope");`));
     for (let i = 0; i < paramCount; ++i) {
       let ssaParam = ssaParamv[i];
