@@ -3690,6 +3690,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     use(bind(car, "car"));
     use(bind(cdr, "cdr"));
     use(bind(Atom, "Atom"));
+    use(bind(equal, "equal"));
     use(bind(newScope, "newScope"));
     use(bind(CAR, "CAR"));
     use(bind(CDR, "CDR"));
