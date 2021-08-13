@@ -106,6 +106,10 @@ just as Brendan Eich originally intended. Recent improvements in ES6 and beyond 
 It's as if Scheme and Self had an unlikely affair and decided their lovechild would
 have a vaguely Java-like syntax.
 
+An alternate, and very useful, way to think about it is that SchemeJS is an AST for JavaScript
+that happens to be executable and has a compiler and a JIT. You can easily target other languages
+to SchemeJS and get an interpreter, compiler and JIT for free!
+
 ## Coding Conventions
 
 Generally, variable, function and class names are camel case. An exception
