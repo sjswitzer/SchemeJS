@@ -50,6 +50,8 @@
       }
 
       /*
+       * XXX TODO: get rid of this holdover
+       *
        * A trick to let the app switch to mobile mode on the fly.
        * Javascript flips the --device property into the
        * body element's data-device attribute, but the app
@@ -296,10 +298,13 @@
         font-size: 90%;
       }
 
-      /* mobile tweeks */
+      /* Mobile tweeks */
       body[data-device="mobile"] #input {
         font-size: 110%;  
-        flex-basis: 3em;
+        flex-basis: 4em;
+      }
+      body[data-device="mobile"] #header {
+          font-size: 120%;
       }
       @media screen and (orientation:portrait) {
         body[data-device="mobile"] #header {
@@ -367,7 +372,7 @@
 
       /* The input box */
       #input {
-        flex: 0 0 8em;
+        flex: 0 0 6em;
         margin-top: 0.25em;
         padding: .5em .5em .5em .5em;
         width: 100%;
