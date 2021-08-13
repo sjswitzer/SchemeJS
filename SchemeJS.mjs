@@ -871,9 +871,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, 'A === B', 'eeq');
   }
 
-  // TODO: give = the variadic treatment
-  defineGlobalSymbol("=", (a, b) =>  deep_eq(a, b));
-
   defineGlobalSymbol("!=", neq, { evalArgs: 2, compileHook: neq_hook, group: "compare-op" }, "ne");
   function neq(a, b, ...rest) {
     return !eq.call(this, a, b, ...rest);
