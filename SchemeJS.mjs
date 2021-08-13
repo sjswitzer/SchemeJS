@@ -329,12 +329,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let atomName = name;
     let atom = Atom(name);
     // Java API name
-    let jsName = replaceAll(name, "->", "_to_");
-    jsName = replaceAll(jsName, "-", "_");
-    jsName = replaceAll(jsName, "@", "_at_");
-    jsName = replaceAll(jsName, "*", "_star_");
-    jsName = replaceAll(jsName, "?", "P");
-    if (!JSIDENT1[jsName[0]])
+    let jsName = replaceAll(name, "-", "_");
+    if (!JSIDENT1[jsName[0]] || jsName.includes("*") || jsName.includes("?") || jsName.includes("@"))
       jsName = undefined;
     return { atom, atomName, jsName };
   }
