@@ -748,24 +748,31 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return true;
   }
   function lt_hook(args, ssaScope, tools) {
-    return compare_hooks(args, ssaScope, tools, '<', 'lt');
+    return compare_hooks(args, ssaScope, tools, 'A < B', 'lt');
   }
 
   function compare_hooks(args, ssaScope, tools, op, name) {
     if (args.length < 2) return 'false'; // individual invokers need to override this
-    if (args.length === 2)
-      return `(${args[0]} ${op} ${args[1]})`;
+    if (args.length === 2) {
+      let str = '';
+      for (let ch of op) {
+        if (ch === 'A') ch = args[0];
+        else if (ch === 'B') ch = args[1];
+        str += ch;
+      }
+      return `(${str})`;
+    }
     let result = tools.newTemp(name);
     tools.emit(`let ${result} = false; ${result}: {`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    tools.emit(`let a = ${args[0]}, b = ${args[1]};`);
-    tools.emit(`if (!(a ${op} b)) break ${result};`);
+    tools.emit(`let A = ${args[0]}, B = ${args[1]};`);
+    tools.emit(`if (!(${op})) break ${result};`);
     for (let i = 2; i < args.length; ++i) {
-      tools.emit(`a = b;`);
-      let b = compileEval(args[i], ssaScope, tools, tools.newTemp);
-      tools.emit(`b = ${b};`);
-      tools.emit(`if (!(a ${op} b)) break ${result};`);
+      tools.emit(`A = B;`);
+      let ssaB = compileEval(args[i], ssaScope, tools, tools.newTemp);
+      tools.emit(`B = ${ssaB};`);
+      tools.emit(`if (!(${op})) break ${result};`);
     }
     tools.emit(`${result} = true;`);
     tools.indent = saveIndent;
@@ -785,7 +792,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return true;
   }
   function le_hook(args, ssaScope, tools) {
-    return compare_hooks(args, ssaScope, tools, '<=', 'le');
+    return compare_hooks(args, ssaScope, tools, 'A <= B', 'le');
   }
 
   defineGlobalSymbol(">", gt, { evalArgs: 2, compileHook: gt_hook, group: "compare-op" }, "gt");
@@ -800,7 +807,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return true;
   }
   function gt_hook(args, ssaScope, tools) {
-    return compare_hooks(args, ssaScope, tools, '>', 'gt');
+    return compare_hooks(args, ssaScope, tools, 'A > B', 'gt');
   }
 
   defineGlobalSymbol(">=", ge, { evalArgs: 2, compileHook: ge_hook, group: "compare-op" }, "ge");
@@ -815,10 +822,26 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return true;
   }
   function ge_hook(args, ssaScope, tools) {
-    return compare_hooks(args, ssaScope, tools, '>=', 'ge');
+    return compare_hooks(args, ssaScope, tools, 'A >= B', 'ge');
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" }, "eqv"); // XXX name
+  defineGlobalSymbol("=", scheme_eq, { evalArgs: 2, compileHook: scheme_eq_hook, group: "compare-op" });
+  function scheme_eq(a, b, ...rest) {
+    let i = 0, restLength = rest.length;
+    for (;;) {
+      if (!equal(a, b)) return false;
+      if (i >= restLength) break;
+      a = b;
+      b = _eval(rest[i++], this);
+    }
+    return true;
+  }
+  function scheme_eq_hook(args, ssaScope, tools) {
+    if (args.length < 2) return 'true';
+    return compare_hooks(args, ssaScope, tools, 'equal(A, B)', 'scheme_eq');
+  }
+
+  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" });
   function eq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -831,7 +854,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function eq_hook(args, ssaScope, tools) {
     if (args.length < 2) return 'true';
-    return compare_hooks(args, ssaScope, tools, '==', 'eq');
+    return compare_hooks(args, ssaScope, tools, 'A == B', 'eq');
   }
 
   defineGlobalSymbol("===", eeq, { evalArgs: 2, compileHook: eeq_hook, group: "compare-op" }); // XXX name
@@ -847,7 +870,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function eeq_hook(args, ssaScope, tools) {
     if (args.length < 2) return 'true';
-    return compare_hooks(args, ssaScope, tools, '===', 'eeq');
+    return compare_hooks(args, ssaScope, tools, 'A === B', 'eeq');
   }
 
   // TODO: give = the variadic treatment
@@ -859,7 +882,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function neq_hook(args, ssaScope, tools) {
     if (args.length < 2) return 'false';
-    let eq = compare_hooks(args, ssaScope, tools, '==', 'eq');
+    let eq = compare_hooks(args, ssaScope, tools, 'A == B', 'eq');
     return `(!${eq})`;
   }
 
@@ -868,7 +891,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return !eeq.call(this, a, b, ...rest);
   }
   function neeq(args, ssaScope, tools) {
-    let eq = compare_hooks(args, ssaScope, tools, '==', 'eq');
+    let eeq = compare_hooks(args, ssaScope, tools, 'A == B', 'eq');
     return `(!${eeq})`;
   }
 
@@ -1961,7 +1984,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // property that determines how strings are compared, for instance you can ignore case
   // or leading and trailing whitespace. Sometimes you're playing horseshoes.
   // You can also opt that NaNs are considered equal.
-  exportAPI("equal", equal);
+  defineGlobalSymbol("equal", equal);
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
     let strCmp = report.strCmp ?? ((a, b) => a === b);
     let NaNsEqual = report.NaNsEqual;
