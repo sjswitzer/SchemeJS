@@ -497,6 +497,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   exportAPI("NIL", NIL);
   defineGlobalSymbol("nil", NIL);
+  defineGlobalSymbol("undefined", undefined, { schemeOnly: true });
   defineGlobalSymbol("null", null, { schemeOnly: true });
   defineGlobalSymbol("true", true, { schemeOnly: true }, "t", "#t"); // SIOD: t, MIT Scheme: #t
   defineGlobalSymbol("false", false, { schemeOnly: true });
@@ -2215,7 +2216,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (isPrimitive(form)) return form;
     if (typeof form === 'symbol') { // atom resolution is the most common case
       let val = scope[form];
-      if (val === undefined) throw new SchemeEvalError(`undefined ${string(form)}`);
+      if (val === undefined) checkUndefinedInScope(form, scope);
       return val;
     }
     if (TRACE_INTERPRETER)
@@ -2366,6 +2367,18 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     function throwBadForm() {
       throw new SchemeEvalError(`Bad form ${string(form)}`);
     }
+  }
+
+  function checkUndefinedInScope(sym, scope) {
+    // We got an "undefined" result and it's probably an unresolved reference, but maybe not!
+    // This is a bit costly but it doesn't happen often and the alternative is to just throw
+    // an error. The advantage is that the compiler and interpreter have the same semantics
+    // around "undefined."
+    while (scope) {
+      if (scope.hasOwnProperty(sym)) return;
+      scope = Object.getPrototypeOf(scope);
+    }
+    throw new SchemeEvalError(`Undefined ${string(sym)}`);
   }
 
   function examineFunctionForParameterDescriptor(fn, evalCount = MAX_INTEGER) {
@@ -3567,7 +3580,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compiledFunction;
     function resolveUnbound(x) {
       let val = scope[x];
-      if (val === undefined) throw new SchemeEvalError("Undefined symbol " + string(x));
+      if (val === undefined) checkUndefinedInScope(x, scope);
       return val;
     }
     function invokeUnbound(fn, args) {
