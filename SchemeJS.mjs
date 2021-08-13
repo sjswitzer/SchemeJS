@@ -1986,16 +1986,16 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // You can also opt that NaNs are considered equal.
   defineGlobalSymbol("equal", equal);
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
-    let strCmp = report.strCmp ?? ((a, b) => a === b);
+    let stringCompare = report.stringCompare ?? ((a, b) => a === b);
     let NaNsEqual = report.NaNsEqual;
-    return deep_eq(a, b, maxDepth, maxLength);
-    function deep_eq(a, b, maxDepth, maxLength) {
-      if (maxDepth <= 0) {
-        report.maxedOut = report.maxDepth = true;
+    return deep_eq(a, b, 0, 0);
+    function deep_eq(a, b, depth, length) {
+      if (depth > maxDepth) {
+        report.maxedOut = report.maxDepth = depth;
         return undefined;
       }
-      if (maxLength <= 0) {
-        report.maxedOut = report.maxLength = true;
+      if (length > maxLength) {
+        report.maxedOut = report.maxLength = length;
         return undefined;
       }
       // Any object or class can have an EQUAL_FUNCTION
@@ -2016,7 +2016,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       // Both types same now so no need to test typeof b
       if (typeof a === 'string') {
-        let res = strCmp(a, b);
+        let res = stringCompare(a, b);
         if (!res) {
           report.a = a, report.b = b;
           report.stringsDiffer = true;
@@ -2040,16 +2040,19 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           report.valuesDiffer = true;
           return false;
         }
-        while (isCons(a) && isCons(b)) {
-          let res = deep_eq(a[CAR], b[CAR], maxDepth-1, maxLength);
-          if (!res)
+        let i = 0, aRest = a, bRest = b;
+        for ( ; isCons(aRest) && isCons(bRest); ++i, ++length, aRest = aRest[CDR], bRest = bRest[CDR]) {
+          let res = deep_eq(aRest[CAR], bRest[CAR], depth+1, length);
+          if (!res) {
+            report.list = a, report.a = aRest[CAR], report.b = bRest[CAR];
+            report.elementsDiffer = i;
+            report = {};  // Don't let this report get smashed by caller.
             return res;
-          a = a[CDR], b = b[CDR];
-          maxLength -= 1;
+          }
         }
-        if (isNil(a) && isNil(b)) // possible imposter nils; they are OK
+        if (isNil(aRest) && isNil(bRest)) // possible imposter nils; they are just fine
           return true;
-        return deep_eq(a, b, maxDepth-1, maxLength);
+        return deep_eq(aRest, bRest, depth+1, length+1);
       } else if (isList(b)) {
         report.a = a, report.b = b;
         report.valuesDiffer = true;
@@ -2064,45 +2067,44 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // But I might change my mind about the prototype check, so leave the additional
       // tests in for now.
       if (Array.isArray(a)) {
-        if (!isArray(b)) {
+        if (a.length != b.length) {
           report.a = a, report.b = b;
-          report.valuesDiffer;
+          report.aVal = a.length, report.bVal = b.length;
+          report.property = 'length';
+          report.valuesDiffer = true;
+          report = {};
           return false;
         }
-        if (a.length !== b.length) {
-          report.a = a, report.b = b;
-          report.lengthsDiffer = true;
-          report = undefined;  // Don't let this report get overwritten!
-          return false;
-        }
-        for (let i = 0; i < a.length && maxLength >= 0; ++i) {
-          let res = deep_eq(a[i], b[i], maxDepth-1, maxLength);
-          if (!res) {
-            report.a = a, report.b = b, report.index = i;
-            report = undefined;  // Don't let this report get overwritten!
-            return res;
-          }
-        }
-        return true;
-      } else if (Array.isArray(b)) {
-        report.a = a, report.b = b;
-        report.valuesDiffer = true;
-        return false;
+        // Array elements are also properties so fall through to Object comparison.
+        // This also distinguishes Arrays that have missing elements.
       }
-      // By process of elimination, both are plain objects.
-      for (let property of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a)))
+      // Object compare
+      for (let property of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a))) {
         if (!b.hasOwnProperty(property)) {
-          report.a = a, report.b = b, report.bMissingProperty = property;
+          report.a = a, report.b = b;
           report.aVal = a[property];
+          report.bMissingProperty = property;
+          report = {};
           return false;
         }
+      }
       for (let property of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b))) {
-        if (!(a.hasOwnProperty(property))) {
-          report.a = a, report.b = b, report.aMissingProperty = property;
+        if (!a.hasOwnProperty(property)) {
+          report.a = a, report.b = b;
           report.bVal = b[property];
+          report.aMissingProperty = property;
+          report = {};
           return false;
         }
-        let res = deep_eq(a[property], b[property], maxDepth-1, maxLength);
+        let res = deep_eq(a[property], b[property], depth+1, length);
+        if (!res) {
+          report.a = a, report.b = b;
+          report.aVal = a[property], report.bVal = b[property];
+          report.elementsDiffer = property;
+          report.valuesDiffer = true;
+          report = {};
+          return res;
+        }
       }
       return true;
     }

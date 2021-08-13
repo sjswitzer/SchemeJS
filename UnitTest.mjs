@@ -691,11 +691,11 @@ export function run(opts = {}) {
       EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
         { name: '', params: ['a'], restParam: undefined, value: 'a', printParams: '(a)',
           body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 1 },
-        { strCmp: trimCompare });
+        { stringCompare: trimCompare });
       EXPECT(testAnalyze(function(a, b, c) { a = 2 * a; return a; }),
         { name: '', params: ['a','b','c'], restParam: undefined, value: 'a', printParams: '(a, b, c)',
           body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 3 },
-        { strCmp: trimCompare });
+        { stringCompare: trimCompare });
       EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
         { name: 'fn', params: ['a'], restParam: undefined, value: 'a', printParams: '(a)',
           body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 1 });
@@ -704,10 +704,10 @@ export function run(opts = {}) {
           body: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 3 });
       EXPECT(testAnalyze(function (a, ...rest) { return a; }),
         { name: '', params: ['a'], restParam: 'rest', value: 'a', printParams: '(a, ...rest)',
-          body: '', printBody: ' { return a; }', native: false, requiredCount: 1 }, { strCmp: trimCompare });
+          body: '', printBody: ' { return a; }', native: false, requiredCount: 1 }, { stringCompare: trimCompare });
       EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
         { name: '', params: ['a','b','c'], restParam: 'rest', value: 'a', printParams: '(a, b, c, ...rest)',
-          body: '', printBody: ' { return a; }', native: false, requiredCount: 3 }, { strCmp: trimCompare });
+          body: '', printBody: ' { return a; }', native: false, requiredCount: 3 }, { stringCompare: trimCompare });
       EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
         { name: 'foo', params: ['a'], restParam: 'rest', value: 'a', printParams: '(a, ...rest)',
           body: '', printBody: ' { return a; }', native: false, requiredCount: 1 });
@@ -719,7 +719,7 @@ export function run(opts = {}) {
           body: '', printBody: ' { return a; }', native: false, requiredCount: 0 });
       EXPECT(testAnalyze(function (...rest) { return a; }),
         { name: '', params: [], restParam: 'rest', value: 'a', printParams: '(...rest)',
-          body: '', printBody: ' { return a; }', native: false, requiredCount: 0 }, { strCmp: trimCompare });
+          body: '', printBody: ' { return a; }', native: false, requiredCount: 0 }, { stringCompare: trimCompare });
       EXPECT(testAnalyze(function bar(a, b, c = {}, d, e = 1, ...rest) { return a; }),
         { name: 'bar', params: ['a','b','c', 'd', 'e'], restParam: 'rest', value: 'a',
           printParams: '(a, b, c = {}, d, e = 1, ...rest)',
