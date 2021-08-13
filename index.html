@@ -50,30 +50,6 @@
       }
 
       /*
-       * XXX TODO: get rid of this holdover
-       *
-       * A trick to let the app switch to mobile mode on the fly.
-       * Javascript flips the --device property into the
-       * body element's data-device attribute, but the app
-       * can change it later.
-       */
-      @media (hover: none) {
-        body {--device: mobile;}
-      }
-      body:not([data-device="mobile"]) .mobile-only {
-        display: none;
-      }
-      body[data-device="mobile"] .desktop-only {
-        display: none;
-      }
-      body:not([data-protocol="file:"]) .local-only {
-        display: none;
-      }
-      body[data-protocol="file:"] .remote-only {
-        display: none;
-      }
-
-      /*
        * Initially-hidden help content.
        * Help contains a custom <close-button> and
        * a <div> for help content which is made scrollable.
@@ -299,19 +275,25 @@
       }
 
       /* Mobile tweeks */
-      body[data-device="mobile"] #input {
-        font-size: 110%;  
-        flex-basis: 4em;
+      @media (hover: none) {
+        html body #input {
+          font-size: 110%;  
+          flex-basis: 4em;
+        }
+        html body #header {
+            font-size: 120%;
+        }
       }
-      body[data-device="mobile"] #header {
-          font-size: 120%;
-      }
-      @media screen and (orientation:portrait) {
-        body[data-device="mobile"] #header {
+      @media (hover: none) and (orientation:portrait) {
+        /* unnecessary CSS selectors to increase match priority */
+        html body #header {
           font-size: 100%;
         }
-        body[data-device="mobile"] #input {
+        html body #input {
           flex-basis: 6em;
+        }
+        html body .help {
+          left: 20%;
         }
       }
 
@@ -393,7 +375,7 @@
       <div id="header">
         <div id="title"><span id="lambda">&lambda;</span> SchemeJS: Scheme in JavaScript</div>
         <div id="about">
-          <span class="button" style="font-size: 80%;" onclick="showHelp('help-about')"> ? </span>
+          <span class="button" onclick="showHelp('help-about')"> ? </span>
         </div>
       </div>
       <div id="output"></div>
@@ -1646,23 +1628,6 @@
           return false;
         persistedState = wad;
         return true;
-      }
-
-      document.body.setAttribute('data-protocol', window.location.protocol);
-
-      function toggleDeviceMode(mode) {
-        const attr = 'data-device';
-        if (mode || !document.body.getAttribute(attr))
-          document.body.setAttribute(attr, mode || 'mobile');
-        else
-          document.body.removeAttribute(attr);
-      }
-
-      {
-        let styles = window.getComputedStyle(document.body);
-        let val = styles.getPropertyValue("--device").trim();
-        if (val !== '')
-          toggleDeviceMode(val);
       }
 
       document.addEventListener('keydown', function(event) {
