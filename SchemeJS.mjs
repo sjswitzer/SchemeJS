@@ -147,6 +147,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("isCons", isCons);
+  exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
 
   //
   // Atoms are Symbols that are in the ATOMS object
