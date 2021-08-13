@@ -20,8 +20,8 @@ instantiation option.
 
 It proved difficult to keep JavaScript objects from sneeking into the SchemeJS environment
 so I invited them in as first'class. SchemeJS is fully Scheme _and_ fully JavaScript.
-It even has notations fof JavaScript Array and Bbject literals. Every JavaScript operator and global
-symbol is available in SchemeJS. Cons cells are JavaScript-iterables but internally
+It even has notations fof JavaScript Array and Object literals. Every JavaScript operator and global
+symbol is available and usable in SchemeJS. Cons cells are JavaScript-iterables but internally
 I generally avoid iterating them because "while (isCons(obj)) ..." is a lot faster.
 But you _can_ iterate over them using "for (let obj of list) ...".
 SchemeJS does _not_ see iterables as Cons cells by default. That would be too slow.
@@ -59,7 +59,7 @@ even use variables if debuggers didn't need them. But, alas, they do.
 
 I digress. The point is that JITs will go to town on the generated code and since
 teams of talented engineers have put countless man-years of effort into making JavaScript fast.
-I stand atop all that work without hardly lifting a finger. It's interesting to note
+I stand atop all that work hardly lifting a finger. It's interesting to note
 the degree of correspondence between Scheme's runtime and a JavaScript runtime.
 You couldn't design a better Scheme runtime if you tried:
 
@@ -69,7 +69,7 @@ Garbage collector: Check.
 
 Strings, numbers, booleans and Functions: Check. I threw in BigInt for fun. "Factoral" likes it.
 
-Function are data. Check. You can create a function from a string and get the string body
+Function are data. Check. You can create a Function from a string and get the string body
 of a function.
 
 Atoms: Check. They're Symbols (in the ATOMS dictionary).
@@ -113,13 +113,13 @@ is when a function is also a Scheme function with dashes in its name. In that ca
 the function uses an underscore where a dash occurs in the Scheme name.
 
 Constants are all-caps. Strings are generally "str" if they are for humans; and 'str'
-if they're for internal purposes; `str` is used when convenient, as it quite often is.
+if they're for internal purposes; \`str\` is used when convenient, as it quite often is.
 
 I use "== null" specifically to test for "nullish" (undefined and null). Be careful
 with null since it reports its type as "object" but doesn't do objecty things. Otherwise
 I use ===.
 
-"Let" is used rather than "var." Var is forbidden.
+"Let" is used rather than "var." "var" is forbidden.
 
 I prefer to define functions _after_ they're used. Tell the big picture first, then details.
 Pascal taught us some bad habits.
