@@ -296,8 +296,18 @@
         font-size: 90%;
       }
 
-      body[data-device="mobile"] #output, body[data-device="mobile"] #input {
-        font-size: 120%;  
+      /* mobile tweeks */
+      body[data-device="mobile"] #input {
+        font-size: 110%;  
+        flex-basis: 3em;
+      }
+      @media screen and (orientation:portrait) {
+        body[data-device="mobile"] #header {
+          font-size: 100%;
+        }
+        body[data-device="mobile"] #input {
+          flex-basis: 6em;
+        }
       }
 
       #output {
@@ -1356,24 +1366,23 @@
             request.onload = _ => {
               if (request.status === 200)
                 resolve(request.responseText);
-              else if (request.status === 404) {
-                // Try again without the query (this is for PWAs that may have cached the resource for offline)
-                request = new XMLHttpRequest();
-                request.onload = _ => {
-                  if (request.status === 200)
-                    resolve(request.responseText);
-                  else
-                    reject(new Error(`Load ${path}, status ${request.status}`));
-                }
-                request.onerror = event => reject(new Error(`XMLHttpRequest error ${String(event)}`));
-                let async = true;
-                request.open('GET', reqPath, async);
-                request.send(null);
-              } else {
+              else
                 reject(new Error(`Load ${path}, status ${request.status}`));
-              }
             };
-            request.onerror = event => reject(new Error(`XMLHttpRequest error ${String(event)}`));
+            request.onerror = _ => {
+              // Try again without the query param (this is for PWAs that may have cached the resource for offline)
+              request = new XMLHttpRequest();
+              request.onload = _ => {
+                if (request.status === 200)
+                  resolve(request.responseText);
+                else
+                  reject(new Error(`Load ${path}, status ${request.status}`));
+              }
+              request.onerror = event => reject(new Error(`XMLHttpRequest error ${String(event)}`));
+              let async = true;
+              request.open('GET', reqPath, async);
+              request.send(null);
+            }
             let async = true;
             request.open('GET', reqPath, async);
             request.send(null);
