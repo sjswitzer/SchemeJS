@@ -331,8 +331,16 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let atom = Atom(name);
     // Java API name
     let jsName = replaceAll(name, "-", "_");
-    if (!JSIDENT1[jsName[0]] || jsName.includes("*") || jsName.includes("?") || jsName.includes("@"))
+    if (!JSIDENT1[jsName[0]]) {
       jsName = undefined;
+    } else {
+      for (let ch of jsName) {
+        if (!JSIDENT2[ch]) {
+          jsName = undefined;
+          break;
+        }
+      }
+    }
     return { atom, atomName, jsName };
   }
 
@@ -836,7 +844,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, 'equal(A, B)', 'scheme_eq');
   }
 
-  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" });
+  defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" }, "eq?");
   function eq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -1976,7 +1984,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // property that determines how strings are compared, for instance you can ignore case
   // or leading and trailing whitespace. Sometimes you're playing horseshoes.
   // You can also opt that NaNs are considered equal.
-  defineGlobalSymbol("equal", equal, { dontInline: true });
+  exportAPI("equal", equal);
+  defineGlobalSymbol("equal?", equal, { dontInline: true });
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
     if (a === b) return true;
     let stringCompare = report.stringCompare ?? ((a, b) => a === b);
