@@ -1977,10 +1977,15 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // You can also opt that NaNs are considered equal.
   defineGlobalSymbol("equal", equal, { dontInline: true });
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
+    if (a === b) return true;
     let stringCompare = report.stringCompare ?? ((a, b) => a === b);
     let NaNsEqual = report.NaNsEqual;
-    return deep_eq(a, b, 0, 0);
+    let res = deep_eq(a, b, 0, 0), originalReport = report;
+    if (report !== originalReport)
+      originalReport.reason = report;
+    return res;
     function deep_eq(a, b, depth, length) {
+      if (a === b) return true;
       if (depth > maxDepth) {
         report.maxedOut = report.maxDepth = depth;
         return undefined;
@@ -1990,6 +1995,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         return undefined;
       }
       // Any object or class can have an EQUAL_FUNCTION
+      // The EQUAL_FUNCTION can deem objects of different types equal if it chooses,
+      // So this precedes the type check.
       let equalFunction = (a != null && a[EQUAL_FUNCTION]) ?? (b != null && b[EQUAL_FUNCTION]);
       if (equalFunction) {
         let res = equalFunction(a, b);
@@ -2037,7 +2044,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           if (!res) {
             report.list = a, report.a = aRest[CAR], report.b = bRest[CAR];
             report.elementsDiffer = i;
-            report = {};  // Don't let this report get smashed by caller.
+            report = { reason: report };
             return res;
           }
         }
@@ -2063,41 +2070,46 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           report.aVal = a.length, report.bVal = b.length;
           report.property = 'length';
           report.valuesDiffer = true;
-          report = {};
           return false;
         }
         // Array elements are also properties so fall through to Object comparison.
         // This also distinguishes Arrays that have missing elements.
       }
-      // Object compare
-      for (let property of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a))) {
-        if (!b.hasOwnProperty(property)) {
-          report.a = a, report.b = b;
-          report.aVal = a[property];
-          report.bMissingProperty = property;
-          report = {};
-          return false;
+      // Object compare, symbols first (since Scheme is symbol-oriented), then names.
+      let res = compareProps(Object.getOwnPropertySymbols(a), Object.getOwnPropertySymbols(b));
+      if (!res) return res;
+      return compareProps(Object.getOwnPropertyNames(a), Object.getOwnPropertyNames(b));
+
+      function compareProps(aProps, bProps) {
+        for (let property of aProps) {
+          if (!b.hasOwnProperty(property)) {
+            report.a = a, report.b = b;
+            report.aVal = a[property];
+            report.bMissingProperty = property;
+            report = { reason: report };
+            return false;
+          }
         }
+        for (let property of bProps) {
+          if (!a.hasOwnProperty(property)) {
+            report.a = a, report.b = b;
+            report.bVal = b[property];
+            report.aMissingProperty = property;
+            report = { reason: report };
+            return false;
+          }
+          let res = deep_eq(a[property], b[property], depth+1, length);
+          if (!res) {
+            report.a = a, report.b = b;
+            report.aVal = a[property], report.bVal = b[property];
+            report.elementsDiffer = property;
+            report.valuesDiffer = true;
+            report = { reason: report };
+            return res;
+          }
+        }
+        return true;
       }
-      for (let property of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b))) {
-        if (!a.hasOwnProperty(property)) {
-          report.a = a, report.b = b;
-          report.bVal = b[property];
-          report.aMissingProperty = property;
-          report = {};
-          return false;
-        }
-        let res = deep_eq(a[property], b[property], depth+1, length);
-        if (!res) {
-          report.a = a, report.b = b;
-          report.aVal = a[property], report.bVal = b[property];
-          report.elementsDiffer = property;
-          report.valuesDiffer = true;
-          report = {};
-          return res;
-        }
-      }
-      return true;
     }
   }
 
