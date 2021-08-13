@@ -1430,8 +1430,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return n;
   }
 
+  // TODO: a compiler hook can do better, but it's kinda fun to let it just inline for now!
   defineGlobalSymbol("list", list, { group: "list-op" });
-  function list(...elements) {  // easy list builder
+  function list(...elements) {
+    // Compiler inlines "list" function
     let val = NIL;
     for (let i = elements.length; i > 0; --i)
       val = cons(elements[i-1], val);
@@ -2267,17 +2269,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // OK, now create a closure.
       // This is a bit involved, but it doesn't happen often
       const boundArgv = argv;
-      let closure = (...args) => {
-        let argv = boundArgv.concat(args);
-        if (TRACE_INTERPRETER) {
-          let logArgs = [ "APPLY (closure)", fName, ...argv ];
-          console.log.apply(scope, logArgs);
-        }
-        let result = fn.apply(scope, argv);
-        if (TRACE_INTERPRETER)
-          console.log("RETURNS", fName, result);
-        return result;
-      };
+      let closure = (...args) => fn.apply(scope, [...boundArgv, ...args]);
       // A closure function leads a double life: as a closure function but also a closure form!
       // Dig out the original function's closure, if it had one.
       let closureBody = fn[CDR];
@@ -2467,9 +2459,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
         if (jitFn)
           return jitFn.apply(this, args);
-        // TODO: the JIT-ed function needs a guard function that tests if the bound
-        // functions have changed then bails back to the interpreter if so.
-        // Until that happens, the JIT shouldn't be enabled.
         if (--jitCount < 0) {
           jitCount = jitThreshold;
           jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, jsClosure[NAMETAG], lambda, jsClosure);
