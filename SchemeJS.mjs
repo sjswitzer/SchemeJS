@@ -1430,14 +1430,22 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return n;
   }
 
-  // TODO: a compiler hook can do better, but it's kinda fun to let it just inline for now!
-  defineGlobalSymbol("list", list, { group: "list-op" });
+  defineGlobalSymbol("list", list, { group: "list-op", compileHook: list_hook });
   function list(...elements) {
-    // Compiler inlines "list" function
     let val = NIL;
     for (let i = elements.length; i > 0; --i)
       val = cons(elements[i-1], val);
     return val;
+  }
+  function list_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    // The compiler can inline the list function just fine, but it's better to do it this way
+    // because no argument array needs to be constructed.
+    let ssaResult = newTemp("list");
+    emit(`let ${ssaResult} = NIL;`);
+    for (let i = args.length; i > 0; --i)
+      emit(`${ssaResult} = cons(${args[i-1]}, ${ssaResult});`)
+    return ssaResult;
   }
 
   defineGlobalSymbol("reverse", reverse, { dontInline: true, group: "list-op" });
