@@ -965,7 +965,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //    (? true) returns a function that evaluates its first parameter.
   //    (? false) returns a function that evaluates its second parameter.
   //
-  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook, group: "core" }, "if");
+  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook, group: "core", schemeOnly: true }, "if");
   function ifelse(p, t, f) {
     p = schemeTrue(p);
     if (p)
@@ -1008,7 +1008,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // The pattern here is that you can either write
   //   (? (bigint x) a b) or simply (bigint? x a b)
   //
-  defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook, group: "pred-op" }, "is_bigint");
+  defineGlobalSymbol("bigint?", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook, group: "pred-op", schemeOnly: true }, "is_bigint");
   function is_bigint(a, t = true, f = false) {
     if (typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1030,7 +1030,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_atom', `isAtom(*)`);
   }
 
-  defineGlobalSymbol("undefined?", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook, group: "pred-op" }, "is_undefined")
+  defineGlobalSymbol("undefined?", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook, group: "pred-op", schemeOnly: true }, "is_undefined")
   function is_undefined(a, t = true, f = false) {
     if (a === undefined)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1074,7 +1074,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_null', `isNil(*)`);
   }
 
-  defineGlobalSymbol("jsnull?", is_jsnull, { evalArgs: 1, compileHook: is_jsnull_hook, group: "pred-op" }, "is-jsnull");
+  defineGlobalSymbol("jsnull?", is_jsnull, { evalArgs: 1, compileHook: is_jsnull_hook, group: "pred-op", schemeOnly: true }, "is-jsnull");
   function is_jsnull(a, t = true, f = false) {
     if (a === null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1085,7 +1085,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_jsnull', `* === null`);
   }
 
-  defineGlobalSymbol("nullish?", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook, group: "pred-op" }, "is-nullish");
+  defineGlobalSymbol("nullish?", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook, group: "pred-op", schemeOnly: true }, "is-nullish");
   function is_nullish(a, t = true, f = false) {
     if (a == null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1096,7 +1096,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_nullish', `* == null`);
   }
 
-  defineGlobalSymbol("boolean?", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook, group: "pred-op" }, "is-boolean");
+  defineGlobalSymbol("boolean?", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook, group: "pred-op", schemeOnly: true }, "is-boolean");
   function is_boolean(a, t = true, f = false) {
     if (typeof a === 'boolean')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1107,7 +1107,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_boolean', `typeof * === 'boolean'`);
   }
 
-  defineGlobalSymbol("number?", is_number, { evalArgs: 1, compileHook: is_number_hook, group: "pred-op" }, "is-number");
+  defineGlobalSymbol("number?", is_number, { evalArgs: 1, compileHook: is_number_hook, group: "pred-op", schemeOnly: true }, "is-number");
   function is_number(a, t = true, f = false) {
     if (typeof a === 'number')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1118,7 +1118,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_number', `typeof * === 'number'`);
   }
 
-  defineGlobalSymbol("numeric?", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook, group: "pred-op" }, "is-numeric");
+  defineGlobalSymbol("numeric?", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook, group: "pred-op", schemeOnly: true }, "is-numeric");
   function is_numeric(a, t = true, f = false) {
     if (typeof a === 'number' || typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1129,7 +1129,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_numeric', `typeof * === 'number' || typeof a === 'bigint`);
   }
 
-  defineGlobalSymbol("string?", is_string, { evalArgs: 1, compileHook: is_string_hook, group: "pred-op" }, "is-string");
+  defineGlobalSymbol("string?", is_string, { evalArgs: 1, compileHook: is_string_hook, group: "pred-op", schemeOnly: true }, "is-string");
   function is_string(a, t = true, f = false) {
     if (typeof a === 'string')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1140,7 +1140,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_string', `typeof * === 'string'`);
   }
 
-  defineGlobalSymbol("symbol?", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook, group: "pred-op" }, "is-symbol");
+  defineGlobalSymbol("symbol?", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook, group: "pred-op", schemeOnly: true }, "is-symbol");
   function is_symbol(a, t = true, f = false) {
     if (typeof a === 'symbol')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1151,7 +1151,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_symbol', `typeof * === 'symbol'`);
   }
 
-  defineGlobalSymbol("function?", is_function, { evalArgs: 1, compileHook: is_function_hook, group: "pred-op" }, "is-function");
+  defineGlobalSymbol("function?", is_function, { evalArgs: 1, compileHook: is_function_hook, group: "pred-op", schemeOnly: true }, "is-function");
   function is_function(a, t = true, f = false) {
     if (typeof a === 'function')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1162,7 +1162,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_function', `typeof * === 'function'`);
   }
 
-  defineGlobalSymbol("object?", is_object, { evalArgs: 1, compileHook: is_object_hook, group: "pred-op" }, "is-object");
+  defineGlobalSymbol("object?", is_object, { evalArgs: 1, compileHook: is_object_hook, group: "pred-op", schemeOnly: true }, "is-object");
   function is_object(a, t = true, f = false) {
     if (a !== null && typeof a === 'object')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1173,7 +1173,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_object', `* !== null && typeof * === 'object'`);
   }
 
-  defineGlobalSymbol("array?", is_array, { evalArgs: 1, compileHook: is_array_hook, group: "pred-op" }, "is-array");
+  defineGlobalSymbol("array?", is_array, { evalArgs: 1, compileHook: is_array_hook, group: "pred-op", schemeOnly: true }, "is-array");
   function is_array(a, t = true, f = false) {
     if (Array.isArray(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1184,7 +1184,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_array', `Array.isArray(*)`);
   }
 
-  defineGlobalSymbol("nan?", is_nan, { evalArgs: 1, compileHook: is_nan_hook, group: "pred-op" } , "is-NaN", "NaN?");
+  defineGlobalSymbol("nan?", is_nan, { evalArgs: 1, compileHook: is_nan_hook, group: "pred-op", schemeOnly: true } , "is-NaN", "NaN?");
   function is_nan(a, t = true, f = false) {
     if (isNaN(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1195,7 +1195,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_nan', `isNaN(*)`);
   }
 
-  defineGlobalSymbol("finite?", is_finite, { evalArgs: 1, compileHook: is_finite_hook, group: "pred-op" } , "is-finite");
+  defineGlobalSymbol("finite?", is_finite, { evalArgs: 1, compileHook: is_finite_hook, group: "pred-op", schemeOnly: true } , "is-finite");
   function is_finite(a, t = true, f = false) {
     if (isFinite(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1243,7 +1243,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  defineGlobalSymbol("cond", cond, { evalArgs: 0, compileHook: cond_hook, group: "core" });
+  defineGlobalSymbol("cond", cond, { evalArgs: 0, compileHook: cond_hook, group: "core", schemeOnly: true });
   function cond(...clauses) {
     // Prescan for errors; the compiler needs to do it so the interpreter should too
     for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
@@ -1673,7 +1673,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // "letrec" can be partially-applied, returning a function that
   // evaluates its arguments in the let scope!
   //
-  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook, group: "core" }, "let", "let*");
+  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook, group: "core", schemeOnly: true }, "let", "let*");
   function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
     for ( ; isCons(bindings); bindings = bindings[CDR]) {
