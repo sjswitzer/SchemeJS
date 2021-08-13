@@ -6,6 +6,8 @@
 //   4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
 //
 
+import { isArray } from "util";
+
 export const VERSION = "1.1 (alpha)";
 
 //
@@ -62,8 +64,8 @@ export function createInstance(schemeOpts = {}) {
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
   const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JITCOMPILED");
   const NAMETAG = Symbol("NAMETAG");
-  // Since this symbol is tagged on external JS functions,label it as ours as a courtesy.
-  const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
+  // Since these symbols are tagged on external JS functions and objects,label it as ours as a courtesy.
+  const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR'), EQUAL_FUNCTION = Symbol('SchemeJS-EQUAL');
 
   // I trust JITs to inline these
   const isCons = obj => obj != null && obj[PAIR] === true;
@@ -848,10 +850,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, '===', 'eeq');
   }
 
-  // XXX is SIOD equal? really a deep compare? 
-
-  // Sorry, "equal?"" does not get the variadic treatment at this time
-  defineGlobalSymbol("equal?", (a, b) =>  deep_eq(a, b));
+  // TODO: give = the variadic treatment
+  defineGlobalSymbol("=", (a, b) =>  deep_eq(a, b));
 
   defineGlobalSymbol("!=", neq, { evalArgs: 2, compileHook: neq_hook, group: "compare-op" }, "ne");
   function neq(a, b, ...rest) {
@@ -1320,10 +1320,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       return false;
     }
     let characterGenerator = iteratorFor(fileContent, LogicError);
+    let assignSyntax = false;  // NEVER allow assign syntax in loaded files.
     for(;;) {
       let expr;
       try {
-        expr = parseSExpr(characterGenerator, { path });
+        expr = parseSExpr(characterGenerator, { path, assignSyntax });
         if (!expr) break;
         reportLoadInput(expr);
         if (noEval) {
@@ -1949,83 +1950,138 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
   }
 
-  exportAPI("deep_eq", deep_eq);
-  function deep_eq(a, b, maxDepth = 10000, report = {}) {
+  // Because lists can be circular and stack depths are finite, equal
+  // must have bounds on its recursion and looping. The bounds are large and
+  // user-optionble, but they are finite. If the bounds are exceeded, deep_eq
+  // returns "undefined," which is "falsey" but distinguishable from
+  // "false."
+  // A client can pass in a "report" object which is filled-in with a report
+  // on where and how objects differ. This has proved useful for unit testing
+  // but can be generally useful. The report can also contain a strCmp
+  // property that determines how strings are compared, for instance you can ignore case
+  // or leading and trailing whitespace. Sometimes you're playing horseshoes.
+  // You can also opt that NaNs are considered equal.
+  exportAPI("equal", equal);
+  function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
     let strCmp = report.strCmp ?? ((a, b) => a === b);
-    return deep_eq(a, b, maxDepth);
-    function deep_eq(a, b, maxDepth) {
+    let NaNsEqual = report.NaNsEqual;
+    return deep_eq(a, b, maxDepth, maxLength);
+    function deep_eq(a, b, maxDepth, maxLength) {
+      if (maxDepth <= 0) {
+        report.maxedOut = report.maxDepth = true;
+        return undefined;
+      }
+      if (maxLength <= 0) {
+        report.maxedOut = report.maxLength = true;
+        return undefined;
+      }
+      // Any object or class can have an EQUAL_FUNCTION
+      let equalFunction = (a != null && a[EQUAL_FUNCTION]) ?? (b != null && b[EQUAL_FUNCTION]);
+      if (equalFunction) {
+        let res = equalFunction(a, b);
+        // If nullish, continue with other tests!
+        if (res != null) {
+          report.a = a, report.b = b;
+          report.equalFunction = equalFunction;
+          return res;
+        }
+      }
       if (typeof a !== typeof b) {
         report.a = a, report.b = b;
+        report.typesDiffer = true;
         return false;
       }
-      if (typeof a === 'string')
-        return strCmp(a, b);
-      if (a === b)
-        return true;
-      // Normally NaNs are not equal to anything, including themselves, but for
-      // the purposes of this function they are
-      if (typeof a === 'number' && isNaN(a) && isNaN(b))
-        return true;
-      if (a == null || b == null) { // nullish and we already know thay aren't equal
-        report.a = a, report.b = b;
-        return false;
-      }
-      if (maxDepth <= 0) {
-        report.depth = true;
-        return false;
-      }
-      maxDepth -= 1;
-
-      if (isCons(a)) {
-        if (!isCons(b)) {
+      // Both types same now so no need to test typeof b
+      if (typeof a === 'string') {
+        let res = strCmp(a, b);
+        if (!res) {
           report.a = a, report.b = b;
+          report.stringsDiffer = true;
+        }
+        return res;
+      }
+      // Normally NaNs are not equal to anything, but we can opt that they are
+      if (typeof a === 'number' && NaNsEqual && isNaN(a) && isNaN(b))
+        return true;
+      if ((a == null || b == null) || typeof a !== 'object') { // this includes Functions, which are strangely not 'object'
+        let res = a === b;
+        if (!res) {
+          report.a = a, report.b = b;
+          report.valuesDiffer = true;
+        }
+        return res;
+      }
+      if (isList(a)) {
+        if (!isList(b)) {
+          report.a = a, report.b = b;
+          report.valuesDiffer = true;
           return false;
         }
-        return deep_eq(a[CAR], b[CAR]) && deep_eq(a[CDR], b[CDR], maxDepth);
-      }
-      if (isCons(b)) {
+        while (isCons(a) && isCons(b)) {
+          let res = deep_eq(a[CAR], b[CAR], maxDepth-1, maxLength);
+          if (!res)
+            return res;
+          a = a[CDR], b = b[CDR];
+          maxLength -= 1;
+        }
+        if (isNil(a) && isNil(b)) // possible imposter nils; they are OK
+          return true;
+        return deep_eq(a, b, maxDepth-1, maxLength);
+      } else if (isList(b)) {
         report.a = a, report.b = b;
+        report.valuesDiffer = true;
         return false;
       }
-      
+      if (Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) {
+        report.a = a, report.b = b;
+        report.prototypesDiffer = true;
+        return false;
+      }
+      // Since the protos are the same; if either is an array, both are.
+      // But I might change my mind about the prototype check, so leave the additional
+      // tests in for now.
       if (Array.isArray(a)) {
-        if (!Array.isArray(b) || a.length !== b.length) {
+        if (!isArray(b)) {
           report.a = a, report.b = b;
+          report.valuesDiffer;
           return false;
         }
-        for (let i = 0; i < a.length; ++i)
-          if (!deep_eq(a[i], b[i], maxDepth)) {
+        if (a.length !== b.length) {
+          report.a = a, report.b = b;
+          report.lengthsDiffer = true;
+          report = undefined;  // Don't let this report get overwritten!
+          return false;
+        }
+        for (let i = 0; i < a.length && maxLength >= 0; ++i) {
+          let res = deep_eq(a[i], b[i], maxDepth-1, maxLength);
+          if (!res) {
             report.a = a, report.b = b, report.index = i;
             report = undefined;  // Don't let this report get overwritten!
-            return false;
+            return res;
           }
+        }
         return true;
-      }
-      if (Array.isArray(b)) {
+      } else if (Array.isArray(b)) {
         report.a = a, report.b = b;
+        report.valuesDiffer = true;
         return false;
       }
-      
-      if (typeof a === 'object') {
-        for (let prop of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a)))
-          if (!b.hasOwnProperty(prop)) {
-            report.a = a, report.b = b, report.prop = prop;
-            report.aVal = a[prop], report.bVal = b[prop];
-            report = undefined;  // Don't let this report get overwritten!
-            return false;
-          }
-        for (let prop of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b)))
-          if (!(a.hasOwnProperty(prop) && deep_eq(a[prop], b[prop], maxDepth))) {
-            report.a = a, report.b = b, report.prop = prop;
-            report.aVal = a[prop], report.bVal = b[prop];
-            report.hasProp = a.hasOwnProperty(prop);
-            report = undefined;  // Don't let this report get overwritten!
-            return false;
-          }
-        return true;
+      // By process of elimination, both are plain objects.
+      for (let property of Object.getOwnPropertyNames(a).concat(Object.getOwnPropertySymbols(a)))
+        if (!b.hasOwnProperty(property)) {
+          report.a = a, report.b = b, report.bMissingProperty = property;
+          report.aVal = a[property];
+          return false;
+        }
+      for (let property of Object.getOwnPropertyNames(b).concat(Object.getOwnPropertySymbols(b))) {
+        if (!(a.hasOwnProperty(property))) {
+          report.a = a, report.b = b, report.aMissingProperty = property;
+          report.bVal = b[property];
+          return false;
+        }
+        let res = deep_eq(a[property], b[property], maxDepth-1, maxLength);
       }
-      report.a = a, report.b = b;
-      return false;
+      return true;
     }
   }
 
@@ -2169,7 +2225,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       value = _eval(value, scope);
     }
     if (typeof name === 'string') name = Atom(name);
-    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
+    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know!)
     if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote");
     if (typeof name !== 'symbol')
       throw new TypeError(`Must define symbol or string ${string(defined)}`);
@@ -2342,7 +2398,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     //   a new Object or Array in correspoding position.
     // TODO: Investigate Symbol.species (also for map, etc.)
     if (form !== null && typeof form === 'object') {
-      if (form instanceof Array) {
+      if (Array.isArray(form)) {
         let res = [];
         for (let element of form)
           res.push(_eval(element, scope));
@@ -2705,7 +2761,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           indent = saveIndent;
           return;
         }
-        if (obj instanceof Array) {
+        if (Array.isArray(obj)) {
           put("[");
           indent += indentMore;
           sep = "";
@@ -3599,7 +3655,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   function lambda_compiler(nameAtom, displayName, lambdaForm, jitFunction) {
-    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know.)
+    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know!)
     if (nameAtom === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote ${lambda}");
     let scope = this;
     let bindSymToObj = {}, guardedSymbols = {}, bindObjToSym = new Map(), functionDescriptors = {};
@@ -3990,7 +4046,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     // Special eval for JS Arrays and Objects
     if (form !== null && typeof form === 'object') {
-      if (form instanceof Array) {
+      if (Array.isArray(form )) {
         let ssaArrayLiteral = newTemp("arrayliteral");
         let evalledSsaValues = [];
         for (let element of form) {

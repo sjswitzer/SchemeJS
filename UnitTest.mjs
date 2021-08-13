@@ -8,7 +8,7 @@
 
 import * as SchemeJS from './SchemeJS.mjs';
 
-let string;
+let string; // So that TestFailure Error can access it
 export class TestFailureError extends Error {
   constructor(message, test, result, expected, report) {
     super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
@@ -34,7 +34,7 @@ export function run(opts = {}) {
   const NIL = globalScope.NIL ?? required();
   string = globalScope.string ?? required();
   const newScope = globalScope.newScope ?? required();
-  const deep_eq = globalScope.deep_eq ?? required();
+  const equal = globalScope.equal ?? required();
   const isCons = globalScope.isCons ?? required();
   const isClosure = globalScope.isClosure ?? required();
   const SchemeEvalError = globalScope.SchemeEvalError ?? required();
@@ -104,7 +104,7 @@ export function run(opts = {}) {
     EXPECT(` (cddr ${testList}) `, ` '(add.ddd) `);
 
     EXPECT(` (sqrt 2) `, Math.sqrt(2));
-    EXPECT(` NaN `, NaN);
+    EXPECT(` NaN `, isNaN);
     EXPECT(` (NaN? 1) `, false);
     EXPECT(` (nan? NaN) `, true);
     EXPECT(` Infinity `, Infinity);
@@ -123,7 +123,7 @@ export function run(opts = {}) {
     EXPECT(` (intern "abc") `, ` 'abc `);
     EXPECT(` (Symbol  "a") `, x => typeof x === 'symbol' && x.description === "a");
     EXPECT(` (Number "10") `, 10);
-    EXPECT(` (Number "foo") `, NaN);
+    EXPECT(` (Number "foo") `, isNaN);
     EXPECT(` (BigInt "10") `, 10n);
     EXPECT(` (BigInt 10) `, 10n);
     EXPECT_ERROR(` (BigInt "foo") `, SyntaxError);  // This is a weird JavaScript thing; why not TypeError?
@@ -204,24 +204,24 @@ export function run(opts = {}) {
       endTestScope(savedScope);
     }
 
-    EXPECT(` (+) `, NaN);  // Sure. Why not?
+    EXPECT(` (+) `, isNaN);  // Sure. Why not?
     EXPECT(` (+ 1) `, isClosure);
     EXPECT(` ((+ 1) 2) `, 3);
     EXPECT(` (+ 1 2) `, 3);
     EXPECT(` (+ 1 2 3) `, 6);
     EXPECT(` (+ 1n 2n) `, 3n);
     EXPECT_ERROR(` (+ 1 2n) `, TypeError);
-    EXPECT(` (-) `, NaN);
+    EXPECT(` (-) `, isNaN);
     EXPECT(` (- 3) `, -3);
     EXPECT(` (- 3n) `, -3n);
     EXPECT(` (- 100 2 5 10) `, 83);
-    EXPECT(` (*) `, NaN);
+    EXPECT(` (*) `, isNaN);
     EXPECT(` (* 1) `, isClosure);
     EXPECT(` (* 1 2) `, 2);
     EXPECT(` (* 1 2 3) `, 6);
     EXPECT(` (* 1 2 3 4) `, 24);
     EXPECT(` (* 300n 200n) `, 60000n);
-    EXPECT(` (/) `, NaN);
+    EXPECT(` (/) `, isNaN);
     EXPECT(` (/ 5) `, 1/5);
     EXPECT(` (/ 0) `, Infinity);
     EXPECT(` (/ -1 0) `, -Infinity);
@@ -765,7 +765,7 @@ export function run(opts = {}) {
         } else {
           if (typeof expected === 'string')
             expected = evalString(expected);
-          ok = deep_eq(result, expected, 100, report);
+          ok = equal(result, expected, 100, 10000, report);
         }
       } catch (error) {
         testFailed("expectation exception", test, error, expected, report);
