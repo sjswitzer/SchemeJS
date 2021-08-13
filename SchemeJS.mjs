@@ -1393,7 +1393,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("butlast", butlast, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("butlast", butlast, { dontInline: true, group: "list-op" }); // TODO: needs unit test!
   function butlast(list) {
     let res = NIL, last;
     if (isList(list)) {
@@ -1402,12 +1402,15 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         else res = last = cons(list[CAR], NIL);
     } else {
       if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      let previous, first = true;;
       for (let value of list) {
-        let item = cons(value, NIL);
-        if (!first)
+        if (!first) {
+          let item = cons(previous, NIL);
           if (last) last = last[CDR] = item;
           else res = last = item;
+        }
         first = false;
+        previous = value;
       }
     }
     return res;
@@ -1492,6 +1495,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     throw new TypeError(`Not a list or iterable ${list}`);
   }
 
+  // XXX TODO: member and memq are almost certainly wrong. Need to find out about SIOD equality.
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
   defineGlobalSymbol("member", member, { dontInline: true, group: "list-op" });
@@ -1558,7 +1562,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (map fn list1 list2 ...)
-  defineGlobalSymbol("map", map, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("map", map, { dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
   function map(fn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;

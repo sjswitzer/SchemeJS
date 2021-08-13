@@ -1007,6 +1007,12 @@
             then evaluates the <i>form</i>s sequentially, returning the value of the last one or
             <i>nil</i> if there are none
       </dd>
+      <dd id="defn-lambda#">
+        (\# n (p1 p2 ...) form ...)
+        <p> Returns a closure that binds parameters <i>p1</i>, <i>p2</i>, etc. to the arguments,
+            then evaluates the first <code>n</code> <i>form</i>s sequentially, returning the value of the last one or
+            <i>nil</i> if there are none. ("Special" evaluation in the lingo, I think.)
+      </dd>
       <dd id="defn-not">
         (! value)
         <p> Logical "not." Returns <i>true</i> if <i>value</i> is not true.
@@ -1102,6 +1108,14 @@
         <p> Returns a list of results of <code>fn</code> applied to each element
             of the given lists (or JavaScript iterables such as JavaScript Arrays).
       </dd>
+      <dd id="defn-lazy-map">
+        (lazy-map fn list...)
+        <p> Returns a list of results of <code>fn</code> applied to each element
+            of the given lists (or JavaScript iterables such as JavaScript Arrays).
+            The twist is it doesn't evaluate the function until someone accesses the "car"
+            of the resulting virtual list or iterate to the next element until someone accesses
+            "cdr."
+      </dd>
       <dd id="defn-array-map">
         (array-map fn list...)
         <p> Returns a JavaScript Array of results of <code>fn</code> applied to each element
@@ -1115,11 +1129,67 @@
       </dd>
       <dd id="defn-atom?">
         (atom? a)
-        <p> Returns true if <code>a</code> is an atom.
+        <p> True if <code>a</code> is an atom.
       </dd>
       <dd id="defn-finite?">
         (finite? a)
-        <p> Returns true if <code>a</code> is neither infinite or a NaN.
+        <p> True if <code>a</code> is neither infinite or a NaN.
+      </dd>
+      <dd id="defn-nan?">
+        (list? a)
+        <p> True if <code>a</code> is a NaN value.
+      </dd>
+      <dd id="defn-list?">
+        (list? a)
+        <p> True if <code>a</code> is either a cons cell (pair) or nil.
+      </dd>
+      <dd id="defn-nullish?">
+        (list? a)
+        <p> True if <code>a</code> is either a undefined or null.
+      </dd>
+      <dd id="defn-number?">
+        (list? a)
+        <p> True if <code>a</code> is a Number.
+      </dd>
+      <dd id="defn-numeric?">
+        (list? a)
+        <p> True if <code>a</code> is either a Number or a BigInt.
+      </dd>
+      <dd id="defn-object?">
+        (list? a)
+        <p> True if <code>a</code> is a JavaScript Object (exclusive of Functions and null).
+      </dd>
+      <dd id="defn-xxx">
+        (list? a)
+        <p> True if <code>a</code> is either a cons cell (pair) or nil.
+      </dd>
+      <dd id="defn-pair?">
+        (list? a)
+        <p> True if <code>a</code> is either a cons cell (pair).
+      </dd>
+      <dd id="defn-string?">
+        (list? a)
+        <p> True if <code>a</code> is a String.
+      </dd>
+      <dd id="defn-symbol?">
+        (list? a)
+        <p> True if <code>a</code> is a JavaScript Symbol (including atoms).
+      </dd>
+      <dd id="defn-undefined?">
+        (list? a)
+        <p> True if <code>a</code> is JavaScript "undefined". Undefined does not
+            turn up much in SchemeJS, but is the result of the <code>void</code> function
+            and the value of the "undefined" keyword.
+      </dd>
+      <dd id="defn-null?">
+        (list? a)
+        <p> True if <code>a</code> is nil.
+            The name is unfortunate, but SIOD already uses "null?" to test for nil.
+      </dd>
+      <dd id="defn-jsnull?">
+        (list? a)
+        <p> True if <code>a</code> is JavaScript "null".
+            The name is unfortunate, but SIOD already uses "null?" to test for nil.
       </dd>
       <dd id="defn-gensym">
         (gensym [name]))
@@ -1143,10 +1213,73 @@
             is the element itself.
         <p> The "list" can be any iterable JavaScript object, but if it is an Array, the result
             will also be an Array.
+        <p> The <code>qsort</code> alias is for SIOD compatibility; it is not the qsort algorithm
+            though the performance is comparable and often better.
       </dd>
       <dd id="defn-nsort">
         (sort list [beforeFn] [accessFn])
         <p> In-place sort: like <code>sort</code>, but modifies the given list or Array.
+      </dd>
+      <dd id="defn-last">
+        (last obj)
+        <p> Returns the last element of the list or JavaScript iterable object.
+            Strings and Arrays are iterable, so this will return the last
+            character of a string or Array.
+      </dd>
+      <dd id="defn-length">
+        (length obj)
+        <p> Returns the length of a list or JavaScript iterable object such as a string or Array.
+      </dd>
+      <dd id="defn-list">
+        (list element ...)
+        <p> Returns a list of the arguments.
+      </dd>
+      <dd id="defn-list-view">
+        (list-view js-iterable)
+        <p> Returns an object indistiguishible to SchemeJS from a list that iterates the elements
+            of an iterable JavaScript-style on demand. In other words, a lazy version of <code>to-list</code>
+      </dd>
+      <dd id="defn-to-list">
+        (to-list js-iterable)
+        <p> Returns a list of the elements of an iterable JavaScript object. See also, <code>list-view</code>.
+      </dd>
+      <dd id="defn-max">
+        (max a b ...)
+        <p> Returns the largest element among its arguments.
+      </dd>
+      <dd id="defn-min">
+        (min a b ...)
+        <p> Returns the smallest element among its arguments.
+      </dd>
+      <dd id="defn-reverse">
+        (reverse list)
+        <p> Returns a new list that is a reversed version of the list or JavaScript iterable argument.
+      </dd>
+      <dd id="defn-nreverse">
+        (nreverse list)
+        <p> In-place reverses and returns the list. To be clear, this function modifies its argument.
+      </dd>
+      <dd id="defn-to-array">
+        (to-array obj [depth])
+        <p> Traverses the list or other iterable, converting it to an array, recursively to the
+          given depth (default 1).
+      </dd>
+      <dd id="defn-to-list">
+        (to-list obj [depth])
+        <p> Traverses the list or other iterable, converting it to an list, recursively to the
+          given depth (default 1).
+      </dd>
+      <dd id="defn-nth">
+        (nth list)
+        <p> Returns the "nth" element of the list or other JavaScript iterable.
+      </dd>
+      <dd id="defn-xxx">
+        xxx
+        <p> xxx
+      </dd>
+      <dd id="defn-xxx">
+        xxx
+        <p> xxx
       </dd>
       <dd id="defn-xxx">
         xxx
