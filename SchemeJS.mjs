@@ -843,6 +843,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function scheme_eq_hook(args, ssaScope, tools) {
     if (args.length < 2) return 'true';
+    tools.use(tools.bind(equal, "equal"));
     return compare_hooks(args, ssaScope, tools, 'equal(A, B)', 'scheme_eq');
   }
 
@@ -3710,7 +3711,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     use(bind(car, "car"));
     use(bind(cdr, "cdr"));
     use(bind(Atom, "Atom"));
-    use(bind(equal, "equal"));
     use(bind(newScope, "newScope"));
     use(bind(CAR, "CAR"));
     use(bind(CDR, "CDR"));
