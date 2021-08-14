@@ -2378,7 +2378,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // OK, now create a closure.
       // This is a bit involved, but it doesn't happen often
       const boundArgv = argv;
-      let closure = (...args) => fn.apply(scope, [...boundArgv, ...args]);
+      let closure = (...args) => fn.call(scope, ...boundArgv, ...args);
       // A closure function leads a double life: as a closure function but also a closure form!
       // Dig out the original function's closure, if it had one.
       let closureBody = fn[CDR];
