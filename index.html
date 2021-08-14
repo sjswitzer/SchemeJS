@@ -1547,8 +1547,13 @@
           for (let { atoms, jsNames, value } of symtab) {
             for (let atom of atoms)
             if (helpGroup === "imported") {
-              let anchor = textElement('a', atom.description)
-              anchor.setAttribute('href', `https://developer.mozilla.org/docs/Web/API/${atom.description}`);
+              let atomDesc = atom.description, anchor = textElement('a', atomDesc);
+              let href = `https://developer.mozilla.org/docs/Web/API/${atomDesc}`;
+              if (atomDesc.includes('-')) {  // reassigned names, like Object-getOwnPropertyNames
+                let parts = atomDesc.split('-');
+                href = `https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/${parts[0]}/${parts[1]}`;
+              }
+              anchor.setAttribute('href', href);
               let dt = document.createElement('dt');
               dt.appendChild(anchor);
               helpElement.appendChild(dt);
