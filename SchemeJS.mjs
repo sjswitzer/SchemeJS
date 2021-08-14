@@ -574,13 +574,13 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // Pokemon gotta catch 'em' all!
   defineGlobalSymbol("!", a => !schemeTrue(a), { group: "logical-op" });
-  defineGlobalSymbol("~", a => ~a, { group: "binary-op" }, "bit-not");
-  defineGlobalSymbol("**", (a,b) => a ** b, { group: "binary-op" }, "pow");  // overrides Math.pow
-  defineGlobalSymbol("%", (a,b) => a % b, { group: "binary-op" }, "rem");
-  defineGlobalSymbol("<<", (a,b) => a << b, { group: "binary-op" }, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, { group: "binary-op" }, "bit-shr");
-  defineGlobalSymbol(">>>", (a,b) => a >>> b, { group: "binary-op" }, "bit-ushr");
-  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "binary-op" });  // SIOD
+  defineGlobalSymbol("~", a => ~a, { group: "bitwise-op" }, "bit-not");
+  defineGlobalSymbol("**", (a,b) => a ** b, { /* classification? */ }, "pow");  // overrides Math.pow
+  defineGlobalSymbol("%", (a,b) => a % b, { /* classification? */ }, "rem");
+  defineGlobalSymbol("<<", (a,b) => a << b, { group: "bitwise-op" }, "bit-shl");
+  defineGlobalSymbol(">>", (a,b) => a >> b, { group: "bitwise-op" }, "bit-shr");
+  defineGlobalSymbol(">>>", (a,b) => a >>> b, { group: "bitwise-op" }, "bit-ushr");
+  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "bitwise-op" });  // SIOD
   defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true, group: "js-op" });
   defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true, group: "js-op" });
   defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true, group: "js-op" });

@@ -65,6 +65,7 @@
         bottom: .5em;
         border: .15em solid black;
         border-radius: .5em;
+        overflow: hidden;  /* so that scrolled text stays bounded to this box */
       }
       div.help > * {
         margin: 0 1em;
@@ -101,6 +102,7 @@
          * "overflow:auto" creates a "block formatting context" while "dislpay:block" does not!
          * I *think* "contain: paint" is more sensible, though, but only seems to work in Chrome.
          * Look up "CSS block formatting context." It's wild!
+         * The block formatting context determines the box that "float" items float within.
          */
         overflow: auto;
         contain: paint;
@@ -250,8 +252,8 @@
 
       #header {
         display: flex;
-        flex: 0 10 auto;
         flex-flow: row nowrap;
+        flex: 0 10 auto;
         width: 100%;
         font-size: 160%;
       }
@@ -509,7 +511,7 @@
         <h2 style="margin-bottom:.25em"> Built-In Functions and Constants </h2>
         <input type="checkbox" name="impl"
           onchange="parentElement.parentElement.setAttribute('data-show-impl', String(event.currentTarget.checked))">
-        <label for="javascript">Implementations</label>,
+        <label for="javascript">Implementations</label> &nbsp;
         <input type="checkbox" name="javascript"
           onchange="parentElement.parentElement.setAttribute('data-show-javascript', String(event.currentTarget.checked))">
         <label for="javascript">JavaScript API</label>
@@ -522,12 +524,13 @@
 
           <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h3> Binary Operations </h3>
-        <dl class="definitions" id="helpgroup-binary-op">
-           <!-- definitions inserted here when SchemeJS module is loaded -->
-        </dl>
         <h3> N-Ary Operations </h3>
         <dl class="definitions" id="helpgroup-var-op">
+           <!-- definitions inserted here when SchemeJS module is loaded -->
+        </dl>
+        <h3> Bitwise Operations </h3>
+        <p> Other bitwise operations are listed avove under N-Ary Operations.
+        <dl class="definitions" id="helpgroup-bitwise-op">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
         <h3> Comparison Operations </h3>
