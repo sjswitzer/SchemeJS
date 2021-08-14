@@ -527,16 +527,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("NaN", NaN, { schemeOnly: true });
   defineGlobalSymbol("Infinity", Infinity, { schemeOnly: true });
 
-  { // (Local scope so we don't hang onto the property descriptors)
+  { // (Local scope so we don't hang onto the property descriptors forever)
     // Import global JavaScript symbols
     let propDescs = Object.getOwnPropertyDescriptors(globalThis);
     for (let name in propDescs) {
       let {value, get} = propDescs[name];
+      if (name === 'eval') name = "js-eval";
       if (!get && value)
         defineGlobalSymbol(name, value, { schemeOnly: true, dontInline: true, group: "imported" });
     }
 
-    // Object static methods
+    // Object static methods: Object-getOwnPropertyDescriptors, etc.
     propDescs = Object.getOwnPropertyDescriptors(Object);
     for (let name in propDescs) {
       let {value, get} = propDescs[name];
@@ -552,7 +553,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         // SIOD defines *pi* so I'll just define them all like that
         if (typeof value === 'number')
           defineGlobalSymbol(`*${name.toLowerCase()}*`, value, { schemeOnly: true }, `Math-${name}`);
-        // SIOD defines sin, cos, asin, etc. so I'll just define them all like that
+        // SIOD defines sin, cos, asin, etc. so I'll just define them all like that,
+        // but also as Math-sin, etc.
         if (typeof value === 'function')
           defineGlobalSymbol(name, value, { schemeOnly: true }, `Math-${name}`);
       }
@@ -1664,6 +1666,165 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return result;
   }
 
+  //
+  // Lazy lists by decaying down to ordinary Cons cells as evaluated
+  //
+  class LazyCarList {
+    [LAZYCAR]; [CDR];
+    constructor(getCar, cdr) {
+      this[LAZYCAR] = getCar;
+      this[CDR] = cdr;
+    }
+    toString() { return string(this) }
+    get [CAR]() {
+      let car = this[LAZYCAR]();
+      delete this[LAZYCAR];
+      Object.setPrototypeOf(this, Cons.prototype);
+      return this[CAR] = car;
+    }
+    set [CAR](val) {
+      delete this[LAZYCAR];
+      Object.setPrototypeOf(this, Cons.prototype);
+      this[CAR] = val;
+    }
+    [Symbol.iterator] = pairIterator();
+  }
+  LazyCarList.prototype[PAIR] = true;
+  LazyCarList.prototype[LIST] = true;
+
+  class LazyCdrList {
+    [CAR]; [LAZYCDR];
+    constructor(car, getCdr) {
+      this[CAR] = car;
+      this[LAZYCDR] = getCdr;
+    }
+    toString() { return string(this) }
+    get [CDR]() {
+      let cdr = this[LAZYCDR]();
+      delete this[LAZYCDR];
+      Object.setPrototypeOf(this, Cons.prototype);
+      return this[CDR] = cdr;
+    }
+    set [CDR](val) {
+      delete this[LAZYCDR];
+      Object.setPrototypeOf(this, Cons.prototype);
+      this[CDR] = val;
+    }
+    [Symbol.iterator] = pairIterator();
+  }
+  LazyCdrList.prototype[PAIR] = true;
+  LazyCdrList.prototype[LIST] = true;
+
+  class LazyCarCdrList {
+    [LAZYCAR]; [LAZYCDR];
+    constructor(getCar, getCdr) {
+      this[LAZYCAR] = getCar;
+      this[LAZYCDR] = getCdr;
+    }
+    toString() { return string(this) }
+    get [CAR]() {
+      let car = this[LAZYCAR]();
+      delete this[LAZYCAR];
+      Object.setPrototypeOf(this, LazyCdrList.prototype);
+      return this[CAR] = car;
+    }
+    set [CAR](val) {
+      delete this[LAZYCAR];
+      Object.setPrototypeOf(this, LazyCdrList.prototype);
+      this[CAR] = val;
+    }
+    get [CDR]() {
+      let cdr = this[LAZYCDR]();
+      delete this[LAZYCDR];
+      Object.setPrototypeOf(this, LazyCarList.prototype);
+      return this[CDR] = cdr;
+    }
+    set [CDR](val) {
+      delete this[LAZYCDR];
+      Object.setPrototypeOf(this, LazyCarList.prototype);
+      this[CDR] = val;
+    }
+    [Symbol.iterator] = pairIterator();
+  }
+  LazyCarCdrList.prototype[PAIR] = true;
+  LazyCarCdrList.prototype[LIST] = true;
+  
+  //
+  // Doesn't even know if it's a cons cell or null yet!
+  //
+  class LazyIteratorList {
+    [LAZYCAR]; [LAZYCDR];
+    constructor(iterator, mapper) {
+      this[LAZYCAR] = mapper;
+      this[LAZYCDR] = iterator;
+    }
+    get [CAR]() {
+      if (!this[PAIR]) throw new TypeError(`car of nil`);
+      return this[CAR];
+    }
+    set [CAR](val) {
+      let mapper = this[LAZYCAR];
+      if (!this[PAIR]) throw new TypeError(`set car of nil`);
+      if (mapper)
+        Object.setPrototypeOf(this, Cons.prototype);
+      this[CAR] = val;
+    }
+    get [CDR]() {
+      if (!this[PAIR]) throw new TypeError(`cdr of nil`);
+      return this[CDR];
+    }
+    set [CDR](val) {
+      if (!this[PAIR]) throw new TypeError(`set cdr of nil`);
+      this[CDR] = val;
+    }
+    get [NULLSYM]() { return !this[PAIR] }
+    get [PAIR]() { // Doesn't even know whether it's a cons or nil yet!
+      let iterator = this[LAZYCDR], mapper = this[LAZYCAR];
+      let { done, value: car } = iterator.next();
+      if (done) {
+        Object.setPrototypeOf(this, Object.getPrototypeOf(NIL));
+        delete this[LAZYCDR];
+        delete this[LAZYCAR];
+        delete this[CAR];
+        delete this[CDR];
+        this[NULLSYM] = true;
+        return false;
+      }
+      let cdr = new LazyIteratorList(iterator, mapper);
+      if (mapper) {
+        Object.setPrototypeOf(this, LazyCarList.prototype);
+        delete this[LAZYCDR];
+        delete this[LAZYCAR];
+        this[LAZYCAR] = () => mapper(car);
+      } else {
+        Object.setPrototypeOf(this, Cons.prototype);
+        delete this[LAZYCDR];
+        delete this[LAZYCAR];
+        this[CAR] = car;
+      }
+      this[CDR] = cdr;
+      return true;
+    }
+    toString() { return string(this) }
+    [Symbol.iterator] = pairIterator();
+  }
+  LazyIteratorList.prototype[SUPERLAZY] = true;
+  LazyIteratorList.prototype[LAZYCAR] = true;
+  LazyIteratorList.prototype[LAZYCDR] = true;
+  LazyIteratorList.prototype[LIST] = true;
+
+  defineGlobalSymbol("list-view", list_view, { dontInline: true, group: "list-op" });
+  function list_view(obj) {
+    let iterator = iteratorFor(obj, TypeError);
+    return new LazyIteratorList(iterator);
+  }
+
+  defineGlobalSymbol("lazy-map", lazy_map, { dontInline: true });
+  function lazy_map(fn, obj) {
+    let scope = this, iterator = iteratorFor(obj, TypeError);
+    return new LazyIteratorList(iterator, a => fn(a))
+  }
+
   // TODO: lazy-filter?
 
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
@@ -1736,6 +1897,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
   function letrec_hook(args, ssaScope, tools) {
+    // XXX TODO: This really only implemnents let*.
+    // For "letrec", emit the `let ${ssaBoundVar} = NIL;` segnemts first,
+    // then the initialization bodies afterwards.
+    // For "let" emit the bodies first, then the initializations.
+    // For "let*" keep doing this.
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (args.length < 2) throw new SchemeCompileError(`Bad letrec`);
     let bindings = args[0];
@@ -2305,7 +2471,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // here you almost certainly need to make a corresponding one there.
   //
 
-  exportAPI("eval", _eval, { dontInline: true });
+  defineGlobalSymbol("eval", _eval, { dontInline: true });
   function _eval(form, scope = this) {
     // Can't be called "eval" because "eval", besides being a global definition,
     // is effectively a keyword in JavaScript.
@@ -2687,7 +2853,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let objType = typeof obj;
       let saveIndent = indent;
       if (obj[CLOSURE_ATOM] || objType === 'object') {
-        // MUST do this before the isNil test, which will cause eager evaluation of
+        // MUST check SUPERLAZY before the isNil test, which will cause eager evaluation of
         // a LazyIteratorList, cause it to call next() and mutate into something else.
         if (obj[SUPERLAZY])
           return put("(...)");
@@ -2848,6 +3014,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       if (typeof obj === 'function' && !obj[LIST]) {
         let fnDesc = analyzeJSFunction(obj);
+        let parameterDescriptor = obj[PARAMETER_DESCRIPTOR] ?? (MAX_INTEGER << 16);
+        let evalCount = parameterDescriptor >> 15 >>> 1;
         let name;
         if (obj[NAMETAG])
           name = obj[NAMETAG];
@@ -2859,7 +3027,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           return put(`{${params} => ${fnDesc.value}}`);
         if (printBody && (printBody.length > 80 || printBody.includes('\n')))
           printBody = '';
-        put(`{function ${name}${params}${printBody}`);
+        let hash = evalCount === MAX_INTEGER ? '' : `# ${evalCount}`;
+        put(`{function${hash} ${name}${params}${printBody}`);
         sep = "";
         return put("}", true);
       }
@@ -2906,165 +3075,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let hex = '000000' + charCode.toString(16);
     hex = hex.substr(hex.length-6);
     return `\\u{${hex}}`;
-  }
-
-  //
-  // Lazy lists by mutating down to ordinary Cons cells
-  //
-  class LazyCarList {
-    [LAZYCAR]; [CDR];
-    constructor(getCar, cdr) {
-      this[LAZYCAR] = getCar;
-      this[CDR] = cdr;
-    }
-    toString() { return string(this) }
-    get [CAR]() {
-      let car = this[LAZYCAR]();
-      delete this[LAZYCAR];
-      Object.setPrototypeOf(this, Cons.prototype);
-      return this[CAR] = car;
-    }
-    set [CAR](val) {
-      delete this[LAZYCAR];
-      Object.setPrototypeOf(this, Cons.prototype);
-      this[CAR] = val;
-    }
-    [Symbol.iterator] = pairIterator();
-  }
-  LazyCarList.prototype[PAIR] = true;
-  LazyCarList.prototype[LIST] = true;
-
-  class LazyCdrList {
-    [CAR]; [LAZYCDR];
-    constructor(car, getCdr) {
-      this[CAR] = car;
-      this[LAZYCDR] = getCdr;
-    }
-    toString() { return string(this) }
-    get [CDR]() {
-      let cdr = this[LAZYCDR]();
-      delete this[LAZYCDR];
-      Object.setPrototypeOf(this, Cons.prototype);
-      return this[CDR] = cdr;
-    }
-    set [CDR](val) {
-      delete this[LAZYCDR];
-      Object.setPrototypeOf(this, Cons.prototype);
-      this[CDR] = val;
-    }
-    [Symbol.iterator] = pairIterator();
-  }
-  LazyCdrList.prototype[PAIR] = true;
-  LazyCdrList.prototype[LIST] = true;
-
-  class LazyCarCdrList {
-    [LAZYCAR]; [LAZYCDR];
-    constructor(getCar, getCdr) {
-      this[LAZYCAR] = getCar;
-      this[LAZYCDR] = getCdr;
-    }
-    toString() { return string(this) }
-    get [CAR]() {
-      let car = this[LAZYCAR]();
-      delete this[LAZYCAR];
-      Object.setPrototypeOf(this, LazyCdrList.prototype);
-      return this[CAR] = car;
-    }
-    set [CAR](val) {
-      delete this[LAZYCAR];
-      Object.setPrototypeOf(this, LazyCdrList.prototype);
-      this[CAR] = val;
-    }
-    get [CDR]() {
-      let cdr = this[LAZYCDR]();
-      delete this[LAZYCDR];
-      Object.setPrototypeOf(this, LazyCarList.prototype);
-      return this[CDR] = cdr;
-    }
-    set [CDR](val) {
-      delete this[LAZYCDR];
-      Object.setPrototypeOf(this, LazyCarList.prototype);
-      this[CDR] = val;
-    }
-    [Symbol.iterator] = pairIterator();
-  }
-  LazyCarCdrList.prototype[PAIR] = true;
-  LazyCarCdrList.prototype[LIST] = true;
-  
-  //
-  // Doesn't even know if it's a cons cell or null yet!
-  //
-  class LazyIteratorList {
-    [LAZYCAR]; [LAZYCDR];
-    constructor(iterator, mapper) {
-      this[LAZYCAR] = mapper;
-      this[LAZYCDR] = iterator;
-    }
-    get [CAR]() {
-      if (!this[PAIR]) throw new TypeError(`car of nil`);
-      return this[CAR];
-    }
-    set [CAR](val) {
-      let mapper = this[LAZYCAR];
-      if (!this[PAIR]) throw new TypeError(`set car of nil`);
-      if (mapper)
-        Object.setPrototypeOf(this, Cons.prototype);
-      this[CAR] = val;
-    }
-    get [CDR]() {
-      if (!this[PAIR]) throw new TypeError(`cdr of nil`);
-      return this[CDR];
-    }
-    set [CDR](val) {
-      if (!this[PAIR]) throw new TypeError(`set cdr of nil`);
-      this[CDR] = val;
-    }
-    get [NULLSYM]() { return !this[PAIR] }
-    get [PAIR]() { // Doesn't even know whether it's a cons or nil yet!
-      let iterator = this[LAZYCDR], mapper = this[LAZYCAR];
-      let { done, value: car } = iterator.next();
-      if (done) {
-        Object.setPrototypeOf(this, Object.getPrototypeOf(NIL));
-        delete this[LAZYCDR];
-        delete this[LAZYCAR];
-        delete this[CAR];
-        delete this[CDR];
-        this[NULLSYM] = true;
-        return false;
-      }
-      let cdr = new LazyIteratorList(iterator, mapper);
-      if (mapper) {
-        Object.setPrototypeOf(this, LazyCarList.prototype);
-        delete this[LAZYCDR];
-        delete this[LAZYCAR];
-        this[LAZYCAR] = () => mapper(car);
-      } else {
-        Object.setPrototypeOf(this, Cons.prototype);
-        delete this[LAZYCDR];
-        delete this[LAZYCAR];
-        this[CAR] = car;
-      }
-      this[CDR] = cdr;
-      return true;
-    }
-    toString() { return string(this) }
-    [Symbol.iterator] = pairIterator();
-  }
-  LazyIteratorList.prototype[SUPERLAZY] = true;
-  LazyIteratorList.prototype[LAZYCAR] = true;
-  LazyIteratorList.prototype[LAZYCDR] = true;
-  LazyIteratorList.prototype[LIST] = true;
-
-  defineGlobalSymbol("list-view", list_view, { dontInline: true, group: "list-op" });
-  function list_view(obj) {
-    let iterator = iteratorFor(obj, TypeError);
-    return new LazyIteratorList(iterator);
-  }
-
-  defineGlobalSymbol("lazy-map", lazy_map, { dontInline: true });
-  function lazy_map(fn, obj) {
-    let scope = this, iterator = iteratorFor(obj, TypeError);
-    return new LazyIteratorList(iterator, a => fn(a))
   }
 
   defineGlobalSymbol("to-string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
