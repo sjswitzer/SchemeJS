@@ -380,6 +380,16 @@
       .canvas-frame .title-bar close-button:hover {
         --close-button-box-color: #f00;
       }
+      .canvas-frame {
+        display: flex;
+        flex-flow: column nowrap;
+        position: absolute;
+        background-color: #ddd;
+      }
+      .drawing-canvas {
+        margin: .1em .5em .5em .5em;
+        background-color: white;
+      }
     </style>
   </head>
   <body>
@@ -1662,15 +1672,14 @@
         canvasRenderingContextAtom = Atom("canvas-rendering-context");
 
         defineGlobalSymbol("canvas", canvas);
-        function canvas(name = "canvas", width = 100, height = 100) {
+        function canvas(name = "canvas", width = 100, height = 100) { 
           let canvasFrame = createElement('div', 'canvas-frame');
-          canvasFrame.setAttribute('class', 'canvas-frame');
           let canvasTitleBar = createElement('div', 'title-bar');
-          let titleSpan = createElement('span', 'title', title);
+          let titleSpan = createElement('span', 'title', name);
           let canvasCloseButton = createElement('close-button');
           canvasTitleBar.appendChild(canvasCloseButton);
           canvasTitleBar.appendChild(titleSpan);
-          let canvasElement = createElement('canvas');
+          let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
           Object.defineProperties(canvasElement, {
@@ -1695,8 +1704,36 @@
             container.removeChild(canvasFrame);
             return canvasElement;
           }
-          canvasX += 10;
-          canvasY += 10;
+          canvasCloseButton.addEventListener('click', _ => canvasFrame.hide());
+          canvasFrame.addEventListener('mousedown', event => {
+            let border = 10;
+            let { offsetX, offsetY } = event;
+            let track = _ => {
+              console.log("TRACK", offsetX, offsetY);
+              canvasElement.x = offsetX;
+              canvasElement.y = offsetY;
+            }
+            /*
+            if (offsetX < border) {
+              if (offsetY < border)
+            } else {
+
+            }*/
+            // let { top, right, bottom, left } = canvasFrame.getBoundingClientRect();
+            let mouseMove = container.addEventListener('xxxmousemove', event => {
+              ({offsetX, offsetY} = event);
+              track();
+            });
+            let mouseUp = container.addEventListener('mouseup', _ => {
+              console.log("MOUSEUP");
+              track();
+              container.removeEventListener('mousemove', mouseMove);
+              container.removeEventListener('mouseup', mouseUp);
+            });
+            event.stopPropagation();
+          });
+          canvasX += 25;
+          canvasY += 25;
           canvasElement.x = canvasX;
           canvasElement.y = canvasY;
           canvasElement.width = width;
@@ -1705,7 +1742,7 @@
           return canvasElement;
         }
 
-        defineGlobalSymbol("draw2d", draw2d, { evalArgs: 1 });
+        defineGlobalSymbol("draw2d", draw2d, { evalArgs: 1, dontInline: true });
         function draw2d(canvas, ...exprs) {
           let scope = this;
           let canvasRenderingContext = canvas.getContext('2d');
@@ -1714,7 +1751,7 @@
             this[canvasRenderingContextAtom] = canvasRenderingContext;
             return previousCanvasRenderingContext;
           }
-          let scope = this.newScope(scope, "canvas-scope");
+          scope = this.newScope(scope, "canvas-scope");
           scope[canvasRenderingContextAtom] = canvasRenderingContext;
           let res = this.NIL;
           for (let expr of exprs)
@@ -1722,7 +1759,7 @@
           return res;
         }
 
-        defineGlobalSymbol("translate", translate, { evalArgs: 2 });
+        defineGlobalSymbol("translate", translate, { evalArgs: 2, dontInline: true });
         function translate(x, y, ...exprs) {
           let scope = this;
           let canvasRenderingContext = scope[canvasRenderingContextAtom];
@@ -1742,7 +1779,7 @@
           }
         }
 
-        defineGlobalSymbol("scale", scale, { evalArgs: 2 });
+        defineGlobalSymbol("scale", scale, { evalArgs: 2, dontInline: true });
         function scale(width, height, ...exprs) {
           let scope = this;
           let canvasRenderingContext = scope[canvasRenderingContextAtom];
@@ -1762,7 +1799,7 @@
           }
         }
 
-        defineGlobalSymbol("rotate", rotate, { evalArgs: 1 });
+        defineGlobalSymbol("rotate", rotate, { evalArgs: 1, dontInline: true });
         function rotate(theta, ...exprs) {
           let scope = this;
           let canvasRenderingContext = scope[canvasRenderingContextAtom];
@@ -1782,15 +1819,15 @@
           }
         }
 
-        function inCRC(fn) {
-          let canvasRenderingContext = this[canvasRenderingContextAtom];
+        function inCRC(scope, fn) {
+          let canvasRenderingContext = scope[canvasRenderingContextAtom];
           fn(canvasRenderingContext);
           return canvasRenderingContext;
         }
 
         function inCRCProp(property) {
-          let canvasRenderingContext = this[canvasRenderingContextAtom];
           return (newValue = undefined) => {
+            let canvasRenderingContext = this[canvasRenderingContextAtom];
             let value = canvasRenderingContext[property];
             if (newValue !== undefined)
               canvasRenderingContext[property] = newValue;
@@ -1798,114 +1835,184 @@
           }
         }
 
-        const saveCanvasRenderingContext = () => inCRC(ctx => ctx.save());
-        defineGlobalSymbol("saveCanvasRenderingContext", saveCanvasRenderingContext);
-        const restoreCanvasRenderingContext = () => inCRC(ctx => ctx.restore());
-        defineGlobalSymbol("restoreCanvasRenderingContext", restoreCanvasRenderingContext);
+        let dontInline = { dontInline: true };  // XXX TODO: remove when draw2d has a compile hook
+
+        defineGlobalSymbol("saveCanvasRenderingContext", saveCanvasRenderingContext, dontInline);
+        function saveCanvasRenderingContext() { return inCRC(this, ctx => ctx.save()) }
+
+        defineGlobalSymbol("restoreCanvasRenderingContext", restoreCanvasRenderingContext, dontInline);
+        function restoreCanvasRenderingContext() { return inCRC(this, ctx => ctx.restore()) }
+
         const renderingContextCanvas = inCRCProp("canvas");
-        defineGlobalSymbol("renderingContextCanvas", renderingContextCanvas);
-        const clearRect = (x, y, width, height) => inCRC(ctx => ctx.clearRect(x, y, width, height));
-        defineGlobalSymbol("clearRect", clearRect);
-        const fillRect = (x, y, width, height) => inCRC(ctx => ctx.fillRect(x, y, width, height));
-        defineGlobalSymbol("fillRect", fillRect);
-        const strokeRect = (x, y, width, height) => inCRC(ctx => ctx.strokeRect(x, y, width, height));
-        defineGlobalSymbol("strokeRect", strokeRect);
-        const filltext = (text, x, y , maxWidth = undefined) => inCRC(ctx => ctx.filltext(text, x, y , maxWidth));
-        defineGlobalSymbol("filltext", filltext);
-        const measureText = (text) => inCRC(ctx => ctx.measureText(text));
-        defineGlobalSymbol("measureText", measureText);
+        defineGlobalSymbol("renderingContextCanvas", renderingContextCanvas, dontInline);
+
+        defineGlobalSymbol("fillRect", fillRect, dontInline);
+        function fillRect(x, y, width, height) { return inCRC(this, ctx => ctx.clearRect(x, y, width, height)) }
+        
+        defineGlobalSymbol("clearRect", fillRect, dontInline);
+        function clearRect(x, y, width, height) { return inCRC(this, ctx => ctx.clearRect(x, y, width, height)) }
+        
+        defineGlobalSymbol("strokeRect", strokeRect, dontInline);
+        function strokeRect(x, y, width, height) {
+          return inCRC(this, ctx => ctx.strokeRect(x, y, width, height))
+        }
+
+        defineGlobalSymbol("filltext", filltext, dontInline);
+        function filltext(text, x, y , maxWidth = undefined) {
+          return inCRC(this, ctx => ctx.filltext(text, x, y , maxWidth))
+        }
+
+        defineGlobalSymbol("measureText", measureText, dontInline);
+        function measureText(text) { return inCRC(this, ctx => ctx.measureText(text)) }
+
         const lineWidth = inCRCProp("lineWidth");
-        defineGlobalSymbol("lineWidth", lineWidth);
+        defineGlobalSymbol("lineWidth", lineWidth, dontInline);
+
         const lineCap = inCRCProp("lineCap");
-        defineGlobalSymbol("lineCap", lineCap);
+        defineGlobalSymbol("lineCap", lineCap, dontInline);
+
         const lineJoin = inCRCProp("lineJoin");
-        defineGlobalSymbol("lineJoin", lineJoin);
+        defineGlobalSymbol("lineJoin", lineJoin, dontInline);
+
         const miterLimit = inCRCProp("miterLimit");
-        defineGlobalSymbol("miterLimit", miterLimit);
-        const getLineDash = () => inCRC(ctx => ctx.getLineDash);
-        defineGlobalSymbol("getLineDash", getLineDash);
-        const setLineDash = (segments) => inCRC(ctx => ctx.setLineDash(segments));
-        defineGlobalSymbol("setLineDash", setLineDash);
+        defineGlobalSymbol("miterLimit", miterLimit, dontInline);
+
+        defineGlobalSymbol("getLineDash", getLineDash, dontInline);
+        function getLineDash() { return inCRC(this, ctx => ctx.getLineDash) }
+
+        defineGlobalSymbol("setLineDash", setLineDash, dontInline);
+        function setLineDash(segments) { inCRC(this, ctx => ctx.setLineDash(segments)) }
+
         const lineDashOffset = inCRCProp("lineDashOffset");
-        defineGlobalSymbol("lineDashOffset", lineDashOffset);
+        defineGlobalSymbol("lineDashOffset", lineDashOffset, dontInline);
+        
         const font = inCRCProp("font");
-        defineGlobalSymbol("font", font);
+        defineGlobalSymbol("font", font, dontInline);
+
         const textAlign = inCRCProp("textAlign");
-        defineGlobalSymbol("textAlign", textAlign);
+        defineGlobalSymbol("textAlign", textAlign, dontInline);
+
         const textBaseline = inCRCProp("textBaseline");
-        defineGlobalSymbol("textBaseline", textBaseline);
+        defineGlobalSymbol("textBaseline", textBaseline, dontInline);
+
         const direction = inCRCProp("direction");
-        defineGlobalSymbol("direction", direction);
+        defineGlobalSymbol("direction", direction, dontInline);
+
         const fillStyle = inCRCProp("fillStyle");
-        defineGlobalSymbol("fillStyle", fillStyle);
+        defineGlobalSymbol("fillStyle", fillStyle, dontInline);
+
         const strokeStyle = inCRCProp("strokeStyle");
-        defineGlobalSymbol("strokeStyle", strokeStyle);
-        const createConicGradient = (startAngle, x, y) => inCRC(ctx => ctx.createConicGradient(startAngle, x, y));
-        defineGlobalSymbol("createConicGradient", createConicGradient);
-        const createLinearGradient = (x0, y0, x1, y1) => inCRC(ctx => ctx.createLinearGradient(x0, y0, x1, y1));
-        defineGlobalSymbol("createLinearGradient", createLinearGradient);
-        const createRadialGradient = (x0, y0, r0, x1, y1, r1) => inCRC(ctx => ctx.createRadialGradient(x0, y0, r0, x1, y1, r1));
-        defineGlobalSymbol("createRadialGradient", createRadialGradient);
-        const createPattern = (image, repetition) => inCRC(ctx => ctx.createPattern(image, repetition));
-        defineGlobalSymbol("createPattern", createPattern);
-        const shadowBlur = inCRCProp("shadowBlur");
-        defineGlobalSymbol("shadowBlur", shadowBlur);
+        defineGlobalSymbol("strokeStyle", strokeStyle, dontInline);
+
+        defineGlobalSymbol("createConicGradient", createConicGradient, dontInline);
+        function createConicGradient(startAngle, x, y) {
+          return inCRC(this, ctx => ctx.createConicGradient(startAngle, x, y))
+        }
+
+        defineGlobalSymbol("createLinearGradient", createLinearGradient, dontInline);
+        function createLinearGradient(x0, y0, x1, y1) {
+          return inCRC(this, ctx => ctx.createLinearGradient(x0, y0, x1, y1))
+        }
+
+        defineGlobalSymbol("createRadialGradient", createRadialGradient), dontInline;
+        function createRadialGradient(x0, y0, r0, x1, y1, r1) {
+          return inCRC(this, ctx => ctx.createRadialGradient(x0, y0, r0, x1, y1, r1))
+        }
+
+        defineGlobalSymbol("createPattern", createPattern, dontInline);
+        function createPattern(image, repetition) { inCRC(this, ctx => ctx.createPattern(image, repetition)) }
+
         const shadowColor = inCRCProp("shadowColor");
-        defineGlobalSymbol("shadowColor", shadowColor);
+        defineGlobalSymbol("shadowColor", shadowColor, dontInline);
+
         const shadowOffsetX = inCRCProp("shadowOffsetX");
-        defineGlobalSymbol("shadowOffsetX", shadowOffsetX);
+        defineGlobalSymbol("shadowOffsetX", shadowOffsetX, dontInline);
+
         const shadowOffsetY = inCRCProp("shadowOffsetY");
-        defineGlobalSymbol("shadowOffsetY", shadowOffsetY);
-        const beginPath = () => inCRC(ctx => ctx.beginPath());
-        defineGlobalSymbol("beginPath", beginPath);
-        const closePath = () => inCRC(ctx => ctx.closePath());
-        defineGlobalSymbol("closePath", closePath);
-        const moveTo = (x, y) => inCRC(ctx => ctx.moveTo(x, y));
-        defineGlobalSymbol("moveTo", moveTo);
-        const lineTo = (x, y) => inCRC(ctx => ctx.lineTo(x, y));
-        defineGlobalSymbol("lineTo", lineTo);
-        const bezierCurveTo = (cp1x, cp1y, cp2x, cp2y, x, y) => inCRC(ctx => ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y));
-        defineGlobalSymbol("bezierCurveTo", bezierCurveTo);
-        const quadraticCurveTox = (cpx, cpy, x, y) => inCRC(ctx => ctx.quadraticCurveTo(cpx, cpy, x, y));
-        defineGlobalSymbol("quadraticCurveTox", quadraticCurveTox);
-        const arc = (x, y, radius, startAngle, endAngle, counterclockwise = false) => inCRC(ctx => ctx.arc(x, y, radius, startAngle, endAngle, counterclockwise));
-        defineGlobalSymbol("arc", arc);
-        const arcTo = (x1, y1, x2, y2, radius) => inCRC(ctx => ctx.arcTo(x1, y1, x2, y2, radius));
-        defineGlobalSymbol("arcTo", arcTo);
-        const ellipse = (x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise = false) => inCRC(ctx => ctx.ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise));
-        defineGlobalSymbol("ellipse", ellipse);
-        const rect = (x, y, width, height) => inCRC(ctx => ctx.rect(x, y, width, height));
-        defineGlobalSymbol("rect", rect);
-        const fill = (...params) => inCRC(ctx => ctx.fill(...params));
-        defineGlobalSymbol("fill", fill);
-        const stroke = (...params) => inCRC(ctx => ctx.stroke(...params));
-        defineGlobalSymbol("stroke", stroke);
-        const drawFocusIfNeeded = (...params) => inCRC(ctx => ctx.drawFocusIfNeeded(...params));
-        defineGlobalSymbol("drawFocusIfNeeded", drawFocusIfNeeded);
-        const scrollPathIntoView = (...params) => inCRC(ctx => ctx.scrollPathIntoView(...params));
-        defineGlobalSymbol("scrollPathIntoView", scrollPathIntoView);
-        const isPointInPath = (...params) => inCRC(ctx => ctx.isPointInPath(...params));
-        defineGlobalSymbol("isPointInPath", isPointInPath);
-        const isPointInStroke = (...params) => inCRC(ctx => ctx.isPointInStroke(...params));
-        defineGlobalSymbol("isPointInStroke", isPointInStroke);
-        const clip = (...params) => inCRC(ctx => ctx.clip(...params));
-        defineGlobalSymbol("clip", clip);
+        defineGlobalSymbol("shadowOffsetY", shadowOffsetY, dontInline);
+
+        defineGlobalSymbol("beginPath", beginPath), dontInline;
+        function beginPath() { return inCRC(this, ctx => ctx.beginPath()) }
+
+        defineGlobalSymbol("closePath", closePath, dontInline);
+        function closePath() { return inCRC(this, ctx => ctx.closePath()) }
+
+        defineGlobalSymbol("moveTo", moveTo, dontInline);
+        function moveTo(x, y) { return inCRC(this, ctx => ctx.moveTo(x, y)) }
+
+        defineGlobalSymbol("lineTo", lineTo, dontInline);
+        function lineTo(x, y) { return inCRC(this, ctx => ctx.lineTo(x, y)) }
+
+        defineGlobalSymbol("bezierCurveTo", bezierCurveTo, dontInline);
+        function bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y) {
+          return inCRC(this, ctx => ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y))
+        }
+
+        defineGlobalSymbol("quadraticCurveTox", quadraticCurveTox, dontInline);
+        function quadraticCurveTox(cpx, cpy, x, y) {
+          return inCRC(this, ctx => ctx.quadraticCurveTo(cpx, cpy, x, y))
+        }
+
+        defineGlobalSymbol("arc", arc, dontInline);
+        function arc(x, y, radius, startAngle, endAngle, counterclockwise = false) {
+          return inCRC(this, ctx => ctx.arc(x, y, radius, startAngle, endAngle, counterclockwise))
+        }
+
+        defineGlobalSymbol("arcTo", arcTo, dontInline);
+        function arcTo(x1, y1, x2, y2, radius) { return inCRC(this, ctx => ctx.arcTo(x1, y1, x2, y2, radius)) }
+
+        defineGlobalSymbol("ellipse", ellipse, dontInline);
+        function ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise = false) {
+          return inCRC(this, ctx => ctx.ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise))
+        }
+
+        defineGlobalSymbol("rect", rect, dontInline);
+        function rect(x, y, width, height) { return inCRC(this, ctx => ctx.rect(x, y, width, height)) }
+
+        defineGlobalSymbol("fill", fill, dontInline);
+        function fill(...params) { return inCRC(this, ctx => ctx.fill(...params)) }
+
+        defineGlobalSymbol("stroke", stroke, dontInline);
+        function stroke(...params) { return inCRC(this, ctx => ctx.stroke(...params)) }
+
+        defineGlobalSymbol("drawFocusIfNeeded", drawFocusIfNeeded, dontInline);
+        function drawFocusIfNeeded(...params) { return inCRC(this, ctx => ctx.drawFocusIfNeeded(...params)) }
+
+        defineGlobalSymbol("scrollPathIntoView", scrollPathIntoView, dontInline);
+        function scrollPathIntoView(...params) { return inCRC(this, ctx => ctx.scrollPathIntoView(...params)) }
+
+        defineGlobalSymbol("isPointInPath", isPointInPath, dontInline);
+        function isPointInPath(...params) { return inCRC(this, ctx => ctx.isPointInPath(...params)) }
+
+        defineGlobalSymbol("isPointInStroke", isPointInStroke, dontInline);
+        function isPointInStroke(...params) { return inCRC(this, ctx => ctx.isPointInStroke(...params)) }
+
+        defineGlobalSymbol("clip", clip, dontInline);
+        function clip(...params) { return inCRC(this, ctx => ctx.clip(...params)) }
+
         const globalAlpha = inCRCProp("globalAlpha");
-        defineGlobalSymbol("globalAlpha", globalAlpha);
+        defineGlobalSymbol("globalAlpha", globalAlpha, dontInline);
+
         const globalCompositeOperation = inCRCProp("globalCompositeOperation");
-        defineGlobalSymbol("globalCompositeOperation", globalCompositeOperation);
-        const drawImage = (...params) => inCRC(ctx => ctx.drawImage(...params));
-        defineGlobalSymbol("drawImage", drawImage);
-        const createImageData = (...params) => inCRC(ctx => ctx.createImageData(...params));
-        defineGlobalSymbol("createImageData", createImageData);
-        const getImageData = (sx, sy, sw, sh) => inCRC(ctx => ctx.getImageData(sx, sy, sw, sh));
-        defineGlobalSymbol("getImageData", getImageData);
-        const putImageData = (...params) => inCRC(ctx => ctx.putImageData(...params));
-        defineGlobalSymbol("putImageData", putImageData);
+        defineGlobalSymbol("globalCompositeOperation", globalCompositeOperation, dontInline);
+
+        defineGlobalSymbol("drawImage", drawImage, dontInline);
+        function drawImage(...params) { return inCRC(this, ctx => ctx.drawImage(...params)) }
+
+        defineGlobalSymbol("createImageData", createImageData, dontInline);
+        function createImageData(...params) { return inCRC(this, ctx => ctx.createImageData(...params)) }
+
+        defineGlobalSymbol("getImageData", getImageData, dontInline);
+        function getImageData(sx, sy, sw, sh) { return inCRC(this, ctx => ctx.getImageData(sx, sy, sw, sh)) }
+
+        defineGlobalSymbol("putImageData", putImageData, dontInline);
+        function putImageData(...params) { return inCRC(this, ctx => ctx.putImageData(...params)) }
+
         const imageSmoothingEnabled = inCRCProp("imageSmoothingEnabled");
-        defineGlobalSymbol("imageSmoothingEnabled", imageSmoothingEnabled);
+        defineGlobalSymbol("imageSmoothingEnabled", imageSmoothingEnabled, dontInline);
+
         const imageSmoothingQuality = inCRCProp("imageSmoothingQuality");
-        defineGlobalSymbol("imageSmoothingQuality", imageSmoothingQuality);
+        defineGlobalSymbol("imageSmoothingQuality", imageSmoothingQuality, dontInline);
       }
 
       let printBoxElement;
