@@ -1671,6 +1671,34 @@
         let canvasX = 0, canvasY = 0;
         canvasRenderingContextAtom = Atom("canvas-rendering-context");
 
+        class SchemeCanvas {
+          canvasFrame; canvasElement;
+          constructor(canvasFrame, canvasElement) {
+            this.canvasFrame = canvasFrame;
+            this.canvasElement = canvasElement;
+          }
+          get x() { return Number(this.canvasFrame.getAttribute('left')) }
+          set x(x) { this.canvasFrame.setAttribute('left', x) }
+          get y() { return Number(this.canvasFrame.getAttribute('top')) }
+          set y(y) { this.canvasFrame.setAttribute('top', y) }
+          get width() { return Number(this.canvasElement.getAttribute('width')) }
+          set width(width) { this.canvasElement.setAttribute('width', width) }
+          get height() { return Number(this.canvasElement.getAttribute('height')) }
+          set height(height) { this.canvasElement.setAttribute('height', height) }
+          show(x, y, width, height) {
+            if (x !== undefined) this.x = x;
+            if (y !== undefined) this.y = y;
+            if (width !== undefined) this.width = width;
+            if (height !== undefined) this.height = height;
+            container.appendChild(this.canvasFrame);
+            return this;
+          }
+          hide() {
+            container.removeChild(this.canvasFrame);
+            return this;
+          }
+        }
+
         defineGlobalSymbol("canvas", canvas);
         function canvas(name = "canvas", width = 100, height = 100) { 
           let canvasFrame = createElement('div', 'canvas-frame');
@@ -1682,36 +1710,15 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
-          Object.defineProperties(canvasElement, {
-            x: { get: () => Number(canvasFrame.getAttribute('left'))},
-            x: { set: (x) => canvasFrame.setAttribute('left', x)},
-            y: { get: () => Number(canvasFrame.getAttribute('top'))},
-            y: { set: (y) => canvasFrame.setAttribute('top', y)},
-            width: { get: () => Number(canvasElement.getAttribute('width'))},
-            width: { set: (width) =>canvasElement.setAttribute('width', width)},
-            height: { get: () => Number(canvasElement.getAttribute('height'))},
-            height: { set: (height) => canvasElement.setAttribute('height', height)},
-          });
-          canvasElement.show = (x, y, width, height) => {
-            if (x !== undefined) canvasElement.x = x;
-            if (y !== undefined) canvasElement.y = y;
-            if (width !== undefined) canvasElement.width = width;
-            if (height !== undefined) canvasElement.height = height;
-            container.appendChild(canvasFrame);
-            return canvasElement;
-          }
-          canvasElement.hide = () => {
-            container.removeChild(canvasFrame);
-            return canvasElement;
-          }
+          let schemeCanvas = new SchemeCanvas(canvasFrame, canvasElement);
           canvasCloseButton.addEventListener('click', _ => canvasFrame.hide());
           canvasFrame.addEventListener('mousedown', event => {
             let border = 10;
             let { offsetX, offsetY } = event;
             let track = _ => {
               console.log("TRACK", offsetX, offsetY);
-              canvasElement.x = offsetX;
-              canvasElement.y = offsetY;
+              schemeCanvas.x = offsetX;
+              schemeCanvas.y = offsetY;
             }
             /*
             if (offsetX < border) {
@@ -1734,18 +1741,18 @@
           });
           canvasX += 25;
           canvasY += 25;
-          canvasElement.x = canvasX;
-          canvasElement.y = canvasY;
-          canvasElement.width = width;
-          canvasElement.height = height;
-          canvasElement.show();   // Not sure if this should happen by default, but for now...
+          schemeCanvas.x = canvasX;
+          schemeCanvas.y = canvasY;
+          schemeCanvas.width = width;
+          schemeCanvas.height = height;
+          schemeCanvas.show();   // Not sure if this should happen by default, but for now...
           return canvasElement;
         }
 
         defineGlobalSymbol("draw2d", draw2d, { evalArgs: 1, dontInline: true });
         function draw2d(canvas, ...exprs) {
           let scope = this;
-          let canvasRenderingContext = canvas.getContext('2d');
+          let canvasRenderingContext = canvas.canvasElement.getContext('2d');
           if (exprs.length < 1) {
             let previousCanvasRenderingContext = this[canvasRenderingContextAtom];
             this[canvasRenderingContextAtom] = canvasRenderingContext;
@@ -1914,7 +1921,7 @@
           return inCRC(this, ctx => ctx.createLinearGradient(x0, y0, x1, y1))
         }
 
-        defineGlobalSymbol("createRadialGradient", createRadialGradient), dontInline;
+        defineGlobalSymbol("createRadialGradient", createRadialGradient, dontInline);
         function createRadialGradient(x0, y0, r0, x1, y1, r1) {
           return inCRC(this, ctx => ctx.createRadialGradient(x0, y0, r0, x1, y1, r1))
         }
@@ -1931,7 +1938,7 @@
         const shadowOffsetY = inCRCProp("shadowOffsetY");
         defineGlobalSymbol("shadowOffsetY", shadowOffsetY, dontInline);
 
-        defineGlobalSymbol("beginPath", beginPath), dontInline;
+        defineGlobalSymbol("beginPath", beginPath, dontInline);
         function beginPath() { return inCRC(this, ctx => ctx.beginPath()) }
 
         defineGlobalSymbol("closePath", closePath, dontInline);
