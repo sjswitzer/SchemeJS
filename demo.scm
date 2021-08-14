@@ -60,7 +60,7 @@ _factoral
 (opt 1)  ;; Note the binding in the closure scope
 ;; What's that in JavaScript?
 ;; This is what actually executes... in the interpreter!
-(println (String (opt 1)))  ;; Let's see that in JavaScript
+(println (String (opt 1)))
 ((opt 1) 8)
 
 ;; Let's compile a function with optional parameters
