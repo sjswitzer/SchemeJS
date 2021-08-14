@@ -1595,15 +1595,15 @@
             key = ' ' + key;
           return key;
         }
+      }
 
-        function createElement(type = 'div', cls, text) {
-          let element = document.createElement(type);
-          if (cls)
-            element.setAttribute('class', cls);
-          if (text)
-            element.textContent = text;
-          return element;
-        }
+      function createElement(type = 'div', cls, text) {
+        let element = document.createElement(type);
+        if (cls)
+          element.setAttribute('class', cls);
+        if (text)
+          element.textContent = text;
+        return element;
       }
 
       const LOCAL_STORAGE_KEY = `SchemeJS-${location.pathname}`;
@@ -1747,24 +1747,15 @@
       function showInput(inputText, path, line, expr, varNo) {
         // Show results and save in variables for later reuse
         inputText = trimEndNewlines(inputText);
-        let div = document.createElement('div');
-        div.setAttribute('class', 'input-box');
+        let div = createElement('div', 'input-box');
         if (varNo != null && expr !== undefined) {
-          let span = document.createElement('span');
-          span.setAttribute('class', "tag");
           let name = `?${varNo}`;
           globalScope[globalScope.Atom(name)] = expr;
-          span.textContent = name;
-          div.appendChild(span);
+          div.appendChild(createElement('span', 'tag', name));
         }
-        let innerDiv = document.createElement('div');
-        innerDiv.setAttribute('class', 'input-scroller');
-        if (path != null) {
-          let pathElement = document.createElement('div');
-          pathElement.setAttribute('class', 'load-path');
-          pathElement.textContent = `${path}, line ${line}:`;
-          innerDiv.appendChild(pathElement);
-        }
+        let innerDiv = createElement('div', 'input-scroller');
+        if (path != null)
+          innerDiv.appendChild(createElement('div', 'load-path', `${path}, line ${line}:`));
         for (let pgf of convertToHTMLContent(inputText, 'text'))
           innerDiv.appendChild(pgf);
         div.appendChild(innerDiv);
@@ -1781,18 +1772,13 @@
       function showResult(value, varNo) {
         if (printBoxElement)
           printBoxElement = undefined;
-        let div = document.createElement('div');
-        div.setAttribute('class', 'result-box');
+        let div = createElement('div', 'result-box');
         if (varNo != null) {
-          let span = document.createElement('span');
-          span.setAttribute('class', "tag");
           let name = `=${varNo}`;
           globalScope[globalScope.Atom(name)] = value;
-          span.textContent = name;
-          div.appendChild(span);
+          div.appendChild(createElement('span', 'tag', name));
         }
-        let innerDiv = document.createElement('div');
-        innerDiv.setAttribute('class', 'result-scroller');
+        let innerDiv = createElement('div', 'result-scroller');
         let evaluatedString = globalScope.string(value);
         for (let pgf of convertToHTMLContent(evaluatedString, 'text'))
           innerDiv.appendChild(pgf);
@@ -1802,12 +1788,9 @@
       }
 
       function linePrinter(line) {
-        if (!printBoxElement) {
-          printBoxElement = document.createElement('div');
-          printBoxElement.setAttribute('class', 'print-box');
-        }
-        let innerDiv = document.createElement('div');
-        innerDiv.setAttribute('class', 'print-scroller');
+        if (!printBoxElement)
+          printBoxElement = createElement('div', 'print-box');
+        let innerDiv = createElement('div', 'print-scroller');
         for (let pgf of convertToHTMLContent(line+'\n', 'text'))
           innerDiv.appendChild(pgf);
         printBoxElement.appendChild(innerDiv);
@@ -1817,9 +1800,7 @@
 
       function showError(error) {
         console.error("Error", error);
-        let errorElement = document.createElement('div');
-        errorElement.setAttribute('class', 'error-box');
-        errorElement.textContent = String(error)
+        let errorElement = createElement('div', 'error-box', String(error));
         outputElement.appendChild(errorElement)
         errorElement.scrollIntoView();
       }
@@ -1839,12 +1820,9 @@
           addDiv(line);
         return divs;
         function addDiv(line) {
-          let element = document.createElement('div');
-          if (cls)
-            element.setAttribute('class', cls);
-          element.textContent = line.replaceAll(' ', NBSP);
+          let element = createElement('div', cls, line.replaceAll(' ', NBSP));
           if (line === '')
-            element.appendChild(document.createElement('br'));
+            element.appendChild(createElement('br'));
           divs.push(element);
         }
         return res;
@@ -1944,10 +1922,7 @@
                 if (n < replace.textContent.length)
                   after = replace.splitText(n);
               }
-              let highlightElement = document.createElement('span');
-              highlightElement.textContent = replace.textContent;
-              if (cls)
-                highlightElement.setAttribute('class', cls);
+              let highlightElement = createElement('span', cls, replace.textContent);
               if (style)
                 highlightElement.setAttribute('style', style);
               node.parentElement.replaceChild(highlightElement, replace);
