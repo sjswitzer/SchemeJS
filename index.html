@@ -1547,18 +1547,18 @@
           for (let { atoms, jsNames, value } of symtab) {
             for (let atom of atoms)
             if (helpGroup === "imported") {
-              let atomDesc = atom.description, anchor = textElement('a', atomDesc);
+              let atomDesc = atom.description, anchor = createElement('a', null, atomDesc);
               let href = `https://developer.mozilla.org/docs/Web/API/${atomDesc}`;
               if (atomDesc.includes('-')) {  // reassigned names, like Object-getOwnPropertyNames
                 let parts = atomDesc.split('-');
                 href = `https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/${parts[0]}/${parts[1]}`;
               }
               anchor.setAttribute('href', href);
-              let dt = document.createElement('dt');
+              let dt = createElement('dt');
               dt.appendChild(anchor);
               helpElement.appendChild(dt);
             } else {
-              helpElement.appendChild(textElement('dt', atom.description));
+              helpElement.appendChild(createElement('dt', null, atom.description));
             }
             let dd;
             for (let atom of atoms) {
@@ -1567,20 +1567,19 @@
               if (dd) break;
             }
             if (!dd) {
-              dd = textElement('dd');
-              dd.appendChild(textElement('span', `TBD defn-${atoms[0].description}`, 'tbd' ));
+              dd = createElement('dd');
+              dd.appendChild(createElement('span', 'tbd', `TBD defn-${atoms[0].description}`));
             }
             helpElement.appendChild(dd);
-            if (typeof value === 'function') {
-              dd.appendChild(textElement('p', string(value), 'impl'));
-            } else {
-              dd.appendChild(textElement('p', string(value), 'value'));
-            }
+            if (typeof value === 'function')
+              dd.appendChild(createElement('p', 'impl', string(value)));
+            else
+              dd.appendChild(createElement('p', 'value', string(value)));
             if (jsNames.length > 0) {
-              let jsNamesElement = textElement('p', '', 'js-names');
+              let jsNamesElement = createElement('p', 'js-names');
               dd.appendChild(jsNamesElement);
               for (let jsName of jsNames)
-                jsNamesElement.appendChild(textElement('span', jsName, 'js-name'));
+                jsNamesElement.appendChild(createElement('span', 'js-name', jsName));
             }
           }
         }
@@ -1597,12 +1596,12 @@
           return key;
         }
 
-        function textElement(type, text, cls) {
+        function createElement(type = 'div', cls, text) {
           let element = document.createElement(type);
-          if (text)
-            element.textContent = text;
           if (cls)
             element.setAttribute('class', cls);
+          if (text)
+            element.textContent = text;
           return element;
         }
       }
@@ -1652,6 +1651,15 @@
         if (event.key === 'Escape')
           showHelp(null);
       });
+
+      let canvasX = 0, canvasY = 0;
+
+      function canvas(name = "canvas", width = 100, height = 100) {
+        let canvasFrame = createElement('div', 'canvas-frame');
+        canvasFrame.setAttribute('class', 'canvas-frame');
+        let canvasTitleBar = createElement('div', 'title-bar');
+        let titleSpan = createElement('span', 'title', title);
+      }
 
       let printBoxElement;
 
