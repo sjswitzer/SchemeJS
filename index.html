@@ -41,13 +41,6 @@
       html, table  {
         font: 100% caption, sans-serif;
       }
-      @media all and (orientation:landscape) {
-        /* iPhone crowds the screen in portrait but has lots of padding in landscape
-           because they don't give you the slot or curved corner areas. So kill the padding there. */
-        body[data-device="mobile"] {
-          padding: 0px 0px;
-        }
-      }
 
       /*
        * Initially-hidden help content.
@@ -276,7 +269,7 @@
         font-size: 90%;
       }
 
-      /* Mobile tweeks */
+      /* Mobile tweeks; unnecessary CSS selectors to increase match priority */
       @media (hover: none) {
         html body #input {
           font-size: 110%;  
@@ -287,7 +280,6 @@
         }
       }
       @media (hover: none) and (orientation:portrait) {
-        /* unnecessary CSS selectors to increase match priority */
         html body #header {
           font-size: 100%;
         }
@@ -297,6 +289,9 @@
         html body .help {
           left: 20%;
         }
+      }
+      @media not all and (hover: none) {
+        body #about { font-size: 80%; }
       }
 
       #output {
@@ -352,8 +347,6 @@
         background-color: #d6d6fd;
         border-radius: .5em .5em 0 0;
        }
-
-      #scratch { color:hsl(46, 100%, 50%) }
 
       /* The input box */
       #input {
