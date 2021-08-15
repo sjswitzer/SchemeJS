@@ -1678,7 +1678,7 @@
       function defineGraphicsFunctions() {
         let newCanvasX = 200, newCanvasY = 10;
         let gfxContectAtom = Atom("gfx-context");
-        let drawAtom = Atom("draw"), animateAtom = Atom("animate");
+        let drawAtom = Atom("draw"), animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas");
 
         let crc2schemeCanvasMap = new WeakMap();
 
@@ -1693,12 +1693,13 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
-          let drawFn, staleImage = false, animate = false;
+          let drawFn, staleImage = false, animate = false, clearCanvasMode = true;
           function redraw() {
             if (!drawFn) return;
             if (staleImage || animate) {
               let cxt = canvasElement.getContext('2d');
-              cxt.clearRect(0, 0, canvasElement.width, canvasElement.height);
+              if (clearCanvasMode)
+                cxt.clearRect(0, 0, canvasElement.width, canvasElement.height);
               cxt.beginPath();
               drawFn(cxt);
             }
@@ -1730,14 +1731,6 @@
               animate = value;
               redraw();
             },
-            show(x, y, width, height) {
-              if (x !== undefined) this.x = x;
-              if (y !== undefined) this.y = y;
-              if (width !== undefined) this.width = width;
-              if (height !== undefined) this.height = height;
-              bodyElement.appendChild(canvasFrame);
-              return this;
-            },
             get [drawAtom]() { return drawFn; },
             set [drawAtom](fn) {
               if (typeof fn !== 'function')
@@ -1745,6 +1738,16 @@
               drawFn = fn;
               staleImage = true;
               window.requestAnimationFrame(redraw);
+            },
+            get [clearCanvasAtom]() { return clearCanvasMode },
+            set [clearCanvasAtom](value) { clearCanvasMode = value },
+            show(x, y, width, height) {
+              if (x !== undefined) this.x = x;
+              if (y !== undefined) this.y = y;
+              if (width !== undefined) this.width = width;
+              if (height !== undefined) this.height = height;
+              bodyElement.appendChild(canvasFrame);
+              return this;
             },
             hide() {
               bodyElement.removeChild(canvasFrame);
