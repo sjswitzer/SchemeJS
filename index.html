@@ -1784,7 +1784,7 @@
           if (exprs.length < 1) {
             let previousCanvasRenderingContext = this[canvasRenderingContextAtom];
             this[canvasRenderingContextAtom] = canvasRenderingContext;
-            return NIL;
+            return canvasRenderingContext;
           }
           scope = this.newScope(scope, "canvas-scope");
           scope[canvasRenderingContextAtom] = canvasRenderingContext;
@@ -1800,7 +1800,7 @@
           let canvasRenderingContext = scope[canvasRenderingContextAtom];
           if (exprs.length < 1) {
             canvasRenderingContext.translate(x, y);
-            return NIL;
+            return canvasRenderingContext;
           }
           canvasRenderingContext.save();
           try {
@@ -1820,7 +1820,7 @@
           let canvasRenderingContext = scope[canvasRenderingContextAtom];
           if (exprs.length < 1) {
             canvasRenderingContext.scale(width, height);
-            return NIL;
+            return canvasRenderingContext;
           }
           canvasRenderingContext.save();
           try {
@@ -1840,7 +1840,7 @@
           let canvasRenderingContext = scope[canvasRenderingContextAtom];
           if (exprs.length < 1) {
             canvasRenderingContext.rotate(theta);
-            return NIL;
+            return canvasRenderingContext;
           }
           canvasRenderingContext.save();
           try {

@@ -564,6 +564,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     defineGlobalSymbol("globalThis", globalThis, { schemeOnly: true });
     for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
       defineGlobalSymbol(obj.name, obj, { schemeOnly: true });
+    defineGlobalSymbol("Date-now", Date.now, { schemeOnly: true });
   }
 
   defineGlobalSymbol("eval-string", eval_string, { dontInline: true });
@@ -2422,12 +2423,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // (define variable value)
   // (define (fn args) forms)
   defineGlobalSymbol("define", define, { evalArgs: 0, dontInline: true });
-  function define(defined, value) {
+  function define(defined, value, ...rest) {
     let scope = this, name = defined;
     if (isCons(defined)) {
       name = defined[CAR];
       let params = defined[CDR];
-      value = lambda.call(scope, params, value);
+      value = lambda.call(scope, params, value, ...rest);
     } else {
       value = _eval(value, scope);
     }
