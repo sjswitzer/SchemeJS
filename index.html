@@ -1694,14 +1694,27 @@
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
           let drawFn, staleImage = false, animate = false, clearCanvasMode = true;
+          let canvas2dRenderingContext = canvasElement.getContext('2d');
           function redraw() {
             if (!drawFn) return;
             if (staleImage || animate) {
-              let cxt = canvasElement.getContext('2d');
-              if (clearCanvasMode)
-                cxt.clearRect(0, 0, canvasElement.width, canvasElement.height);
-              cxt.beginPath();
-              drawFn(cxt);
+              canvas2dRenderingContext.resetTransform();
+              // The spec says there's supposed to be a reset method, but MDN
+              // doesn't mention it and emperically, it doesn't exist yet.
+              // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
+              //   canvas2dRenderingContext.reset();
+              // So instead, pop a buncha renderingContexts, reset the
+              // transform and, optionally clear the screen
+              for (let i = 0; i < 20; ++i);
+                canvas2dRenderingContext.restore();
+              canvas2dRenderingContext.save();  // So we can easily restore context (just above)
+              if (clearCanvasMode) {
+                // NB: the stuff above is redundant if this ever works:
+                //    canvas2dRenderingContext.reset();
+                canvas2dRenderingContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
+              }
+              canvas2dRenderingContext.beginPath();
+              drawFn(canvas2dRenderingContext);
             }
             staleImage = false;
             if (animate)
@@ -1741,6 +1754,7 @@
             },
             get [clearCanvasAtom]() { return clearCanvasMode },
             set [clearCanvasAtom](value) { clearCanvasMode = value },
+            get canvas2dRenderingContext() { return canvas2dRenderingContext },
             show(x, y, width, height) {
               if (x !== undefined) this.x = x;
               if (y !== undefined) this.y = y;
@@ -1817,7 +1831,7 @@
 
         defineGlobalSymbol("draw2d", draw2d, { dontInline: true, group: "web-gfx" });
         function draw2d(schemeCanvas) {
-          let canvasRenderingContext = schemeCanvas.canvasElement.getContext('2d');
+          let canvasRenderingContext = schemeCanvas.canvas2dRenderingContext;
           crc2schemeCanvasMap.set(canvasRenderingContext, schemeCanvas);
           return canvasRenderingContext;
         }
