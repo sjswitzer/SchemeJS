@@ -41,3 +41,4 @@
 (define shipCanvas (canvas "Too Late!" 300 320))
 (@= shipCanvas 'draw satltsadw)
 (@= shipCanvas 'animate true)
+(@! shipCanvas 'show 20 20)

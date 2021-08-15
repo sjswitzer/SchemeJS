@@ -1678,7 +1678,9 @@
       function defineGraphicsFunctions() {
         let newCanvasX = 200, newCanvasY = 10;
         let gfxContectAtom = Atom("gfx-context");
-        let drawAtom = Atom("draw"), animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas");
+        let drawAtom = Atom("draw"), animateAtom = Atom("animate");
+        let clearCanvasAtom = Atom("clear-canvas");
+        let showAtom = Atom("show"), hideAtom = Atom("hide");
 
         let crc2schemeCanvasMap = new WeakMap();
 
@@ -1693,7 +1695,7 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
-          let drawFn, staleImage = false, animating = false, clearCanvasMode = true;
+          let drawFn, staleImage = false, animate = false, clearCanvasMode = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           function redraw() {
             if (!drawFn || !staleImage) return;
@@ -1720,7 +1722,7 @@
             if (!drawFn) return;
             staleImage = true;
             redraw();
-            if (animating)
+            if (animate && canvasFrame.parentElement)
               window.requestAnimationFrame(drawAnimation);
           }
           let schemeCanvas = {
@@ -1742,10 +1744,10 @@
               staleImage = true;
               window.requestAnimationFrame(redraw);
             },
-            get [animateAtom]() { return animating },
+            get [animateAtom]() { return animate },
             set [animateAtom](value) {
-              animating = value;
-              if (animating)
+              animate = value;
+              if (animate)
                 drawAnimation();
             },
             get [drawAtom]() { return drawFn; },
@@ -1754,23 +1756,27 @@
                 throw new SchemeEvalError(`[draw] not a function ${string(fn)}`);
               drawFn = fn;
               staleImage = true;
-              window.requestAnimationFrame(animating ? drawAnimation : redraw);
+              window.requestAnimationFrame(animate ? drawAnimation : redraw);
             },
             get [clearCanvasAtom]() { return clearCanvasMode },
             set [clearCanvasAtom](value) { clearCanvasMode = value },
             get canvas2dRenderingContext() { return canvas2dRenderingContext },
-            show(x, y, width, height) {
+            [showAtom](x = optional, y = optional, width = optional, height = optional) {
               if (x !== undefined) this.x = x;
               if (y !== undefined) this.y = y;
               if (width !== undefined) this.width = width;
               if (height !== undefined) this.height = height;
               bodyElement.appendChild(canvasFrame);
+              if (animate)
+                requestAnimationFrame(drawAnimation);
               return this;
             },
-            hide() {
+            show(...params) { return this[showAtom](...params) },
+            [hideAtom]() {
               bodyElement.removeChild(canvasFrame);
               return this;
             },
+            hide() { this[hideAtom]() },
           };
           canvasCloseButton.addEventListener('click', _ => schemeCanvas.hide());
           canvasFrame.addEventListener('mousedown', mouseDown);
