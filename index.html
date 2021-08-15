@@ -1333,7 +1333,7 @@
       const outputElement = document.getElementById('output');
       let globalScope, SCHEME_VERSION;
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError;
-      let NIL, Atom, defineGlobalSymbol, originalLoad, canvasRenderingContextAtom;
+      let NIL, Atom, defineGlobalSymbol, originalLoad, gfxContectAtom;
       let varNo = 0, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
       let traceCompilerCode = true;
@@ -1674,7 +1674,7 @@
 
       function defineGraphicsFunctions() {
         let newCanvasX = 300, newCanvasY = 10;
-        canvasRenderingContextAtom = Atom("canvas-rendering-context");
+        gfxContectAtom = Atom("gfx-context");
 
         let crc2schemeCanvasMap = new WeakMap();
 
@@ -1776,93 +1776,57 @@
           return schemeCanvas;
         }
 
-        defineGlobalSymbol("draw2d", draw2d, { evalArgs: 1, dontInline: true, group: "web-gfx" });
-        function draw2d(schemeCanvas, ...exprs) {
-          let scope = this;
+        defineGlobalSymbol("draw2d", draw2d, { dontInline: true, group: "web-gfx" });
+        function draw2d(schemeCanvas) {
           let canvasRenderingContext = schemeCanvas.canvasElement.getContext('2d');
           crc2schemeCanvasMap.set(canvasRenderingContext, schemeCanvas);
-          if (exprs.length < 1) {
-            let previousCanvasRenderingContext = this[canvasRenderingContextAtom];
-            this[canvasRenderingContextAtom] = canvasRenderingContext;
-            return canvasRenderingContext;
-          }
-          scope = this.newScope(scope, "canvas-scope");
-          scope[canvasRenderingContextAtom] = canvasRenderingContext;
-          let res = NIL;
-          for (let expr of exprs)
-            res = scope.eval(expr);
-          return res;
+          canvasRenderingContext;
         }
 
-        defineGlobalSymbol("translate", translate, { evalArgs: 2, dontInline: true, group: "web-gfx" });
-        function translate(x, y, ...exprs) {
-          let scope = this;
-          let canvasRenderingContext = scope[canvasRenderingContextAtom];
-          if (exprs.length < 1) {
-            canvasRenderingContext.translate(x, y);
-            return canvasRenderingContext;
-          }
+        defineGlobalSymbol("gfx-save", { evalArgs: 0, dontInline: true, group: "web-gfx" });
+        function gfx_save(...forms) {
+          let scope = this, canvasRenderingContext = scope[gfxContectAtom];
           canvasRenderingContext.save();
           try {
-            canvasRenderingContext.translate(x, y);
             let res = NIL;
-            for (let expr of exprs)
-              res = scope.eval(expr);
+            for (let form of forms)
+              res = scope.eval(form);
             return res;
           } finally {
             canvasRenderingContext.restore();
           }
         }
 
-        defineGlobalSymbol("scale", scale, { evalArgs: 2, dontInline: true, group: "web-gfx" });
-        function scale(width, height, ...exprs) {
-          let scope = this;
-          let canvasRenderingContext = scope[canvasRenderingContextAtom];
-          if (exprs.length < 1) {
-            canvasRenderingContext.scale(width, height);
-            return canvasRenderingContext;
-          }
-          canvasRenderingContext.save();
-          try {
-            canvasRenderingContext.scale(width, height);
-            let res = NIL;
-            for (let expr of exprs)
-              res = scope.eval(expr);
-            return res;
-          } finally {
-            canvasRenderingContext.restore();
-          }
+        defineGlobalSymbol("translate", translate, {dontInline: true, group: "web-gfx" });
+        function translate(x, y) {
+          let scope = this, canvasRenderingContext = scope[gfxContectAtom];
+          canvasRenderingContext.translate(x, y);
+          return canvasRenderingContext;
         }
 
-        defineGlobalSymbol("rotate", rotate, { evalArgs: 1, dontInline: true, group: "web-gfx" });
-        function rotate(theta, ...exprs) {
-          let scope = this;
-          let canvasRenderingContext = scope[canvasRenderingContextAtom];
-          if (exprs.length < 1) {
-            canvasRenderingContext.rotate(theta);
-            return canvasRenderingContext;
-          }
-          canvasRenderingContext.save();
-          try {
-            canvasRenderingContext.rotate(theta);
-            let res = NIL;
-            for (let expr of exprs)
-              res = scope.eval(expr);
-            return res;
-          } finally {
-            canvasRenderingContext.restore();
-          }
+        defineGlobalSymbol("scale", scale, { dontInline: true, group: "web-gfx" });
+        function scale(width, height = width) {
+          let scope = this, canvasRenderingContext = scope[gfxContectAtom];
+          canvasRenderingContext.scale(width, height);
+          return canvasRenderingContext;
+        }
+
+        defineGlobalSymbol("rotate", rotate, { dontInline: true, group: "web-gfx" });
+        function rotate(theta) {
+          let scope = this, canvasRenderingContext = scope[gfxContectAtom];
+          canvasRenderingContext.rotate(theta);
+          return canvasRenderingContext;
         }
 
         function CRCfunction(scope, fn) {
-          let canvasRenderingContext = scope[canvasRenderingContextAtom];
+          let canvasRenderingContext = scope[gfxContectAtom];
           fn(canvasRenderingContext);
           return canvasRenderingContext;
         }
 
         function CRCProperty(property) {
           return function(newValue = undefined) {
-            let canvasRenderingContext = this[canvasRenderingContextAtom];
+            let canvasRenderingContext = this[gfxContectAtom];
             let value = canvasRenderingContext[property];
             if (newValue !== undefined)
               canvasRenderingContext[property] = newValue;
@@ -1881,30 +1845,30 @@
         function restore_rendering_context() { return CRCfunction(this, ctx => ctx.restore()) }
 
         defineGlobalSymbol("canvas-width", canvas_width, commonOptions);
-        function canvas_width() { return this[canvasRenderingContextAtom].canvas.width };
+        function canvas_width() { return this[gfxContectAtom].canvas.width };
 
         defineGlobalSymbol("clear-canvas", clear_canvas, commonOptions);
         function clear_canvas() {
-          let ctx = this[canvasRenderingContextAtom], canvas = ctx.canvas, width = canvas.width, height = canvas.height;
+          let ctx = this[gfxContectAtom], canvas = ctx.canvas, width = canvas.width, height = canvas.height;
           return ctx.clearRect(0, 0, width, height);
         };
 
         defineGlobalSymbol("show-canvas", show_canvas, commonOptions);
         function show_canvas(x = optional, y = optional, width = optional, height = optional) {
-          let ctx = this[canvasRenderingContextAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
+          let ctx = this[gfxContectAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
           schemeCanvas.show(x, y, width, height);
           return NIL;
         };
 
         defineGlobalSymbol("hide-canvas", hide_canvas, commonOptions);
         function hide_canvas() {
-          let ctx = this[canvasRenderingContextAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
+          let ctx = this[gfxContectAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
           schemeCanvas.hide();
           return NIL;
         };
 
         defineGlobalSymbol("canvas-height", canvas_height, commonOptions);
-        function canvas_height() { return this[canvasRenderingContextAtom].canvas.height };
+        function canvas_height() { return this[gfxContectAtom].canvas.height };
 
         defineGlobalSymbol("fill-rect", fill_rect, commonOptions);
         function fill_rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.fillRect(x, y, width, height)) }

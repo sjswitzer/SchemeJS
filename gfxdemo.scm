@@ -1,7 +1,7 @@
 ;; Web graphics in SchemeJS
 
 ;; Example adapted from https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
-(define (house canvas-rendering-context)
+(define (house gfx-context)
   (line-width 10)
   (stroke-rect 75 140 150 110) ;; Wall
   (fill-rect 130 190 40 60)    ;; Door
@@ -16,8 +16,9 @@
 (house (draw2d (canvas "house" 300 300)))
 
 ;; Ship Arriving Too Late to Save a Drowning Witch
-(define (satltsadw canvas-rendering-context)
-  (scale (/ (canvas-width) 10) (/ (canvas-width) 10)
+(define (satltsadw gfx-context)
+  (gfx-save
+    (scale (/ (canvas-width) 10))
     (line-width .2)
     (stroke-rect 0 0 10 9) ;; bounding box
     (move-to 0 7) (line-to 10 7) (stroke) ;; sea level

@@ -61,7 +61,6 @@ export function createInstance(schemeOpts = {}) {
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
   const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JITCOMPILED");
-  const NAMETAG = Symbol("NAMETAG");
   // Since these symbols are tagged on external JS functions and objects,label it as ours as a courtesy.
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR'), EQUAL_FUNCTION = Symbol('SchemeJS-EQUAL');
 
@@ -123,8 +122,11 @@ export function createInstance(schemeOpts = {}) {
     }
     nilClass.prototype[NULLSYM] = true;
     nilClass.prototype[LIST] = true;
+    Object.freeze(nilClass);
+    Object.freeze(nilClass.prototype);
     return nilClass;
   })());
+  Object.freeze(NIL);
   
   // Create a new scope with newScope(oldScope, "description").
   // A new scope's prototype is the enclosing scope.
@@ -282,7 +284,7 @@ export function createInstance(schemeOpts = {}) {
 // Because they're indirectly refernced by defineGlobalSymbol is why.
 const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_INFO = Symbol("BUILTIN-COMPILE-INFO");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
-const analyzedFunctions = new Map();
+const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
 let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to implement help.
 
   //
@@ -2438,7 +2440,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (typeof name !== 'symbol')
       throw new TypeError(`Must define symbol or string ${string(defined)}`);
     if (value != null &(typeof value === 'function' || typeof value === 'object'))
-      value[NAMETAG] = name.description;
+      namedObjects.set(value, name.description);
     globalScope[name] = value;
     // Make available to JavaScript as well
     let { jsName } = normalizeExportToJavaScriptName(name);
@@ -2456,7 +2458,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
     let form = list(LAMBDA_ATOM, args, forms);
     let compiledFunction = compile_lambda.call(this, name, name.description, form);
-    compiledFunction[NAMETAG] = name;
+    namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
     let { jsName } = normalizeExportToJavaScriptName(name);
@@ -2514,7 +2516,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           item = _eval(item, scope);
         argv[i] = item;
       }
-      let fName = fn[NAMETAG] ?? fn.name;
+      let fName = namedObjects.get(fn) ?? fn.name;
       let jitCompiled = fn[JITCOMPILED];
       if (jitCompiled) fn = jitCompiled;
       if (argCount >= requiredCount) {
@@ -2668,7 +2670,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       argv.push(args[CAR])
     let fName;
     if (TRACE_INTERPRETER) {
-      fName = fn[NAMETAG] ?? fn.name;
+      fName = namedObjects.get(fn) ?? fn.name;
       let logArgs = [ "APPLY (api)", fName, ...argv ];
       console.log.apply(scope, logArgs);
     }
@@ -2750,7 +2752,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           return jitFn.apply(this, args);
         if (--jitCount < 0) {
           jitCount = jitThreshold;
-          jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, jsClosure[NAMETAG], lambda, jsClosure);
+          jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, namedObjects.get(jsClosure), lambda, jsClosure);
         }
       }
       let params = lambdaParams, i = 0, argLength = args.length;
@@ -3017,11 +3019,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         let fnDesc = analyzeJSFunction(obj);
         let parameterDescriptor = obj[PARAMETER_DESCRIPTOR] ?? (MAX_INTEGER << 16);
         let evalCount = parameterDescriptor >> 15 >>> 1;
-        let name;
-        if (obj[NAMETAG])
-          name = obj[NAMETAG];
-        else
-          name = fnDesc.name ?? '';
+        let name = namedObjects.get(name);
+        if (!name)
+          name = fnDesc.name ?? obj.name;
         let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
         if (fnDesc.value && !fnDesc.body && !printBody)
@@ -3862,7 +3862,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (scopedVal && typeof scopedVal === 'function') {
         if (!tools.functionDescriptors[ssaValue]) {
           let fn = scopedVal;
-          let name = fn[NAMETAG] ?? fn.name ?? sym.description;
+          let name = namedObjects.get(fn) ?? fn.name ?? sym.description;
           ssaValue = bind(fn, newTemp(name), sym);
           let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
           let requiredCount = parameterDescriptor & 0xffff;
