@@ -15,17 +15,29 @@
 )
 (house (draw2d (canvas "house" 300 300)))
 
+;; animation helper
+(define (sinusoidal (? magnitude 1) (? period 1000))
+  (* magnitude (sin (* *2pi* (/ (Date-now) period))))
+)
+
 ;; Ship Arriving Too Late to Save a Drowning Witch
 (define (satltsadw gfx-context)
-  (gfx-save
+  (gfx-save ;; saves then restores the graphics state, transforms etc
     (scale (/ (canvas-width) 10))
     (line-width .2)
     (stroke-rect 0 0 10 9) ;; bounding box
     (move-to 0 7) (line-to 10 7) (stroke) ;; sea level
-    (move-to 0 3) (line-to 5.5 3) (line-to 2.5 7) (stroke) ;; ship
-    (move-to 5.5 7) (line-to 6.5 5) (line-to 7.5 7) (stroke) ;; witch
+    (begin-path) (rect 0 0 10 7) (clip) ;; clipping region for the ship and witch 
+    (translate (sinusoidal .1 3000) (sinusoidal .4 4500))  ;; bob the ship and witch
+    (move-to -5 3) (line-to 5.5 3) (line-to -0.5 11) ;; ship
+    (translate (sinusoidal 0.05 1500) (sinusoidal 0.1 1337))  ;; bob the witch some more
+    (move-to 4.5 9) (line-to 6.5 5) (line-to 8.5 9) ;; witch
+    (stroke) ;; draw them
   )
   (font "80% sans-serif")
-  (fill-text "Ship Arriving Too Late to Save a Drowning Witch" 0 (canvas-width))
+  (fill-text "Ship Arriving Too Late to Save a Drowning Witch" 0.1 (canvas-width))
 )
-(satltsadw (draw2d (canvas "Too late" 300 320)))
+
+(define shipCanvas (canvas "Too Late!" 300 320))
+(@= shipCanvas 'draw satltsadw)
+(@= shipCanvas 'animate true)

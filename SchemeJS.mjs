@@ -226,7 +226,7 @@ export function createInstance(schemeOpts = {}) {
   for (let codePoint = 0x21; codePoint < 0x7f; ++codePoint) {
     let ch = String.fromCodePoint(codePoint)
      // All printable charactes except single-char tokens, digits and quotes
-    if (!SINGLE_CHAR_TOKENS[ch] && !DIGITS[ch] && !QUOTES[ch])
+    if (!SINGLE_CHAR_TOKENS[ch] && !DIGITS[ch] && !QUOTES[ch] &&!ch !== ';')
       IDENT1[ch] = codePoint;
   }
   // Latin-1 Supplement (all printable characters)

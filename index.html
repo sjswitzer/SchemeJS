@@ -427,7 +427,8 @@
         <p> This implementation aims for broad compatibility with SIOD, but inevitably,
             and in the grand tradition of lisp implementations, introduces a new dialect.
             Which is a sin but not a crime.
-        <p> Run a demo by typing <code>(load "demo.scm")</code>.
+        <p> Run a demo by typing <code>(load "demo.scm")</code>
+            and <code>(load "gfxdemo,scm")</code>.
         <p> Learn about
             <span class="linklike" onclick="showHelp('help-builtin')"">built-in Scheme definitions</span> and
             <span class="linklike" onclick="showHelp('help-details')"">implementation details</span>.
@@ -1332,8 +1333,8 @@
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
       let globalScope, SCHEME_VERSION;
-      let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError;
-      let NIL, Atom, defineGlobalSymbol, originalLoad, gfxContectAtom;
+      let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, SchemeEvalError;
+      let NIL, Atom, string, defineGlobalSymbol, originalLoad;
       let varNo = 0, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
       let traceCompilerCode = true;
@@ -1349,7 +1350,9 @@
         SchemeParseError = globalScope.SchemeParseError;
         SchemeSyntaxError = globalScope.SchemeSyntaxError;
         SchemeParseIncompleteError = globalScope.SchemeParseIncompleteError;
+        SchemeEvalError = globalScope.SchemeEvalError;
         NIL = globalScope.NIL;
+        string = globalScope.string;
         Atom = globalScope.Atom;
         defineGlobalSymbol = globalScope.defineGlobalSymbol;
         defineGraphicsFunctions();
@@ -1673,8 +1676,9 @@
       });
 
       function defineGraphicsFunctions() {
-        let newCanvasX = 300, newCanvasY = 10;
-        gfxContectAtom = Atom("gfx-context");
+        let newCanvasX = 200, newCanvasY = 10;
+        let gfxContectAtom = Atom("gfx-context");
+        let drawAtom = Atom("draw"), animateAtom = Atom("animate");
 
         let crc2schemeCanvasMap = new WeakMap();
 
@@ -1689,6 +1693,19 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
+          let drawFn, staleImage = false, animate = false;
+          function redraw() {
+            if (!drawFn) return;
+            if (staleImage || animate) {
+              let cxt = canvasElement.getContext('2d');
+              cxt.clearRect(0, 0, canvasElement.width, canvasElement.height);
+              cxt.beginPath();
+              drawFn(cxt);
+            }
+            staleImage = false;
+            if (animate)
+              window.requestAnimationFrame(redraw);
+          }
           let schemeCanvas = {
             canvasElement,
             canvasFrame,
@@ -1697,9 +1714,22 @@
             get y() { return parseInt(canvasFrame.style.top) },
             set y(y) { canvasFrame.style.top = y+"px" },
             get width() { return Number(canvasElement.width) },
-            set width(width) { canvasElement.width = width },
+            set width(width) {
+              canvasElement.width = width;
+              staleImage = true;
+              window.requestAnimationFrame(redraw);
+            },
             get height() { return Number(canvasElement.height) },
-            set height(height) { canvasElement.height = height },
+            set height(height) {
+              canvasElement.height = height;
+              staleImage = true;
+              window.requestAnimationFrame(redraw);
+            },
+            get [animateAtom]() { return animate },
+            set [animateAtom](value) {
+              animate = value;
+              redraw();
+            },
             show(x, y, width, height) {
               if (x !== undefined) this.x = x;
               if (y !== undefined) this.y = y;
@@ -1707,6 +1737,14 @@
               if (height !== undefined) this.height = height;
               bodyElement.appendChild(canvasFrame);
               return this;
+            },
+            get [drawAtom]() { return drawFn; },
+            set [drawAtom](fn) {
+              if (typeof fn !== 'function')
+                throw new SchemeEvalError(`[draw] not a function ${string(fn)}`);
+              drawFn = fn;
+              staleImage = true;
+              window.requestAnimationFrame(redraw);
             },
             hide() {
               bodyElement.removeChild(canvasFrame);
@@ -1734,7 +1772,7 @@
               [1, -1, 0,  0], [1, 0, 1,  0], [0, 1, 0,  0],
               [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
             ][i];
-            console.log("SIZEFACTORS", i, fx, fw, fy, fh, event, canvasWidth, canvasHeight);
+            // console.log("SIZEFACTORS", i, fx, fw, fy, fh, event, canvasWidth, canvasHeight);
             function mouseMove(event) {
               event.preventDefault();
               ({pageX, pageY} = event);
@@ -1742,29 +1780,19 @@
               // console.log("MOUSEMOVE", event, pageX, pageY, deltaX, deltaY);
               if (fx !== 0) schemeCanvas.x = left + fx * deltaX;
               if (fy !== 0) schemeCanvas.y = top + fy * deltaY;
-              let saveCanvas, canvasElement = schemeCanvas.canvasElement;
-              if (fw !== 0 || fh !== 0) { // If resizing, save the content
-                saveCanvas = document.createElement('canvas');
-                saveCanvas.width = canvasElement.width;
-                saveCanvas.height = canvasElement.height;
-                let ctx = saveCanvas.getContext('2d');
-                ctx.drawImage(canvasElement, 0, 0);
-              }
               if (fw !== 0) schemeCanvas.width = canvasWidth + fw * deltaX;
               if (fh !== 0) schemeCanvas.height = canvasHeight + fh * deltaY;
-              if (saveCanvas) { // If content saved, draw it back
-                let ctx = canvasElement.getContext('2d');
-                ctx.drawImage(saveCanvas, 0, 0);
-              }
             }
             function mouseUp(event) {
               event.preventDefault();
-              console.log("MOUSEUP", event);
+              // console.log("MOUSEUP", event);
               bodyElement.removeEventListener('mousemove', mouseMove);
               bodyElement.removeEventListener('mouseup', mouseUp);
+              bodyElement.removeEventListener('mouseleave', mouseUp);
             }
             bodyElement.addEventListener('mousemove', mouseMove);
             bodyElement.addEventListener('mouseup', mouseUp);
+            bodyElement.addEventListener('mouseleave', mouseUp);
           });
           newCanvasX += 25;
           newCanvasY += 25;
