@@ -1740,10 +1740,10 @@
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
               // console.log("MOUSEMOVE", event, pageX, pageY, deltaX, deltaY);
-              schemeCanvas.x = left + fx * deltaX;
-              schemeCanvas.y = top + fy * deltaY;
-              schemeCanvas.width = canvasWidth + fw * deltaX;
-              schemeCanvas.height = canvasHeight + fh * deltaY;
+              if (fx !== 0) schemeCanvas.x = left + fx * deltaX;
+              if (fy !== 0) schemeCanvas.y = top + fy * deltaY;
+              if (fw !== 0) schemeCanvas.width = canvasWidth + fw * deltaX;
+              if (fh !== 0) schemeCanvas.height = canvasHeight + fh * deltaY;
             }
             function mouseUp(event) {
               event.preventDefault();
