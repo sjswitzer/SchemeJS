@@ -3019,7 +3019,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         let fnDesc = analyzeJSFunction(obj);
         let parameterDescriptor = obj[PARAMETER_DESCRIPTOR] ?? (MAX_INTEGER << 16);
         let evalCount = parameterDescriptor >> 15 >>> 1;
-        let name = namedObjects.get(name);
+        let name = namedObjects.get(obj);
         if (!name)
           name = fnDesc.name ?? obj.name;
         let params = fnDesc.printParams;
