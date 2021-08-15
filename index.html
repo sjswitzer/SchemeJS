@@ -376,23 +376,28 @@
         vertical-align: -20%;
         transition: .5s;
         transition-property: --close-button-box-color;
+        margin-right: 1ch;
       }
       .canvas-frame .title-bar close-button:hover {
         --close-button-box-color: #f00;
+      }
+      .canvas-frame .title-bar {
       }
       .canvas-frame {
         display: flex;
         flex-flow: column nowrap;
         position: absolute;
         background-color: #ddd;
+        border: .1em solid;
+        border-radius: .5em;
+        padding: 5px;
       }
       .drawing-canvas {
-        margin: .1em .5em .5em .5em;
         background-color: white;
       }
     </style>
   </head>
-  <body>
+  <body id="body">
     <div id="container">
       <div id="header">
         <div id="title"><span id="lambda">&lambda;</span> SchemeJS: Scheme in JavaScript</div>
@@ -1323,7 +1328,7 @@
     <script type="text/javascript">
       "use strict";
 
-      const container = document.getElementById('container');
+      const bodyElement = document.getElementById('body');
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
       let globalScope, SCHEME_VERSION;
@@ -1671,35 +1676,7 @@
         let canvasX = 0, canvasY = 0;
         canvasRenderingContextAtom = Atom("canvas-rendering-context");
 
-        class SchemeCanvas {
-          canvasFrame; canvasElement;
-          constructor(canvasFrame, canvasElement) {
-            this.canvasFrame = canvasFrame;
-            this.canvasElement = canvasElement;
-          }
-          get x() { return Number(this.canvasFrame.getAttribute('left')) }
-          set x(x) { this.canvasFrame.setAttribute('left', x) }
-          get y() { return Number(this.canvasFrame.getAttribute('top')) }
-          set y(y) { this.canvasFrame.setAttribute('top', y) }
-          get width() { return Number(this.canvasElement.getAttribute('width')) }
-          set width(width) { this.canvasElement.setAttribute('width', width) }
-          get height() { return Number(this.canvasElement.getAttribute('height')) }
-          set height(height) { this.canvasElement.setAttribute('height', height) }
-          show(x, y, width, height) {
-            if (x !== undefined) this.x = x;
-            if (y !== undefined) this.y = y;
-            if (width !== undefined) this.width = width;
-            if (height !== undefined) this.height = height;
-            container.appendChild(this.canvasFrame);
-            return this;
-          }
-          hide() {
-            container.removeChild(this.canvasFrame);
-            return this;
-          }
-        }
-
-        defineGlobalSymbol("canvas", canvas);
+        defineGlobalSymbol("canvas", canvas, { dontInline: true });
         function canvas(name = "canvas", width = 100, height = 100) { 
           let canvasFrame = createElement('div', 'canvas-frame');
           let canvasTitleBar = createElement('div', 'title-bar');
@@ -1710,34 +1687,67 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
-          let schemeCanvas = new SchemeCanvas(canvasFrame, canvasElement);
-          canvasCloseButton.addEventListener('click', _ => canvasFrame.hide());
+          let schemeCanvas = {
+            get x() { return parseInt(canvasFrame.style.left) },
+            set x(x) { canvasFrame.style.left = x+"px" },
+            get y() { return parseInt(canvasFrame.style.top) },
+            set y(y) { canvasFrame.style.top = y+"px" },
+            get width() { return Number(canvasElement.width) },
+            set width(width) { canvasElement.width = width },
+            get height() { return Number(canvasElement.height) },
+            set height(height) { canvasElement.height = height },
+            show(x, y, width, height) {
+              if (x !== undefined) this.x = x;
+              if (y !== undefined) this.y = y;
+              if (width !== undefined) this.width = width;
+              if (height !== undefined) this.height = height;
+              bodyElement.appendChild(canvasFrame);
+              return this;
+            },
+            hide() {
+              bodyElement.removeChild(canvasFrame);
+              return this;
+            },
+          };
+          canvasCloseButton.addEventListener('click', _ => schemeCanvas.hide());
           canvasFrame.addEventListener('mousedown', event => {
-            let border = 10;
-            let { offsetX, offsetY } = event;
-            let track = _ => {
-              console.log("TRACK", offsetX, offsetY);
-              schemeCanvas.x = offsetX;
-              schemeCanvas.y = offsetY;
-            }
-            /*
-            if (offsetX < border) {
-              if (offsetY < border)
-            } else {
-
-            }*/
-            // let { top, right, bottom, left } = canvasFrame.getBoundingClientRect();
-            let mouseMove = container.addEventListener('xxxmousemove', event => {
-              ({offsetX, offsetY} = event);
-              track();
-            });
-            let mouseUp = container.addEventListener('mouseup', _ => {
-              console.log("MOUSEUP");
-              track();
-              container.removeEventListener('mousemove', mouseMove);
-              container.removeEventListener('mouseup', mouseUp);
-            });
             event.stopPropagation();
+            let border = 10;
+            let { pageX, pageY } = event;
+            let initialX = pageX, initialY = pageY;
+            let { top, right, left, bottom } = canvasFrame.getBoundingClientRect();
+            let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
+            let i = 0;
+            if (pageX < left + border) i = 0;
+            else if (pageX > right - border) i = 2;
+            else i = 1;
+            if (pageY < top + border) i += 0;
+            else if (pageY > bottom - border) i += 6
+            else i += 3;
+            let [fx, fw, fy, fh] = [
+              [1, -1, 1, -1], [0, 0, 1, -1], [0, 1, 1, -1],
+              [1, -1, 0,  0], [1, 0, 1,  0], [0, 1, 0,  0],
+              [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
+            ][i];
+            console.log("SIZEFACTORS", i, fx, fw, fy, fh, event, canvasWidth, canvasHeight);
+            function mouseMove(event) {
+              event.stopPropagation();
+              ({pageX, pageY} = event);
+              let deltaX = pageX - initialX, deltaY = pageY - initialY;
+              // console.log("MOUSEMOVE", event, pageX, pageY, deltaX, deltaY);
+              schemeCanvas.x = left + fx * deltaX;
+              schemeCanvas.y = top + fy * deltaY;
+              schemeCanvas.width = canvasWidth + fw * deltaX;
+              schemeCanvas.height = canvasHeight + fh * deltaY;
+            }
+            function mouseUp(event) {
+              event.stopPropagation();
+              console.log("MOUSEUP", event);
+              bodyElement.removeEventListener('mousemove', mouseMove);
+              bodyElement.removeEventListener('mouseup', mouseUp);
+            }
+            bodyElement.addEventListener('mousemove', mouseMove);
+            bodyElement.addEventListener('mouseup', mouseUp);
           });
           canvasX += 25;
           canvasY += 25;
