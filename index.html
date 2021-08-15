@@ -1693,32 +1693,35 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
-          let drawFn, staleImage = false, animate = false, clearCanvasMode = true;
+          let drawFn, staleImage = false, animating = false, clearCanvasMode = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           function redraw() {
-            if (!drawFn) return;
-            if (staleImage || animate) {
-              canvas2dRenderingContext.resetTransform();
-              // The spec says there's supposed to be a reset method, but MDN
-              // doesn't mention it and emperically, it doesn't exist yet.
-              // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
-              //   canvas2dRenderingContext.reset();
-              // So instead, pop a buncha renderingContexts, reset the
-              // transform and, optionally clear the screen
-              for (let i = 0; i < 20; ++i);
-                canvas2dRenderingContext.restore();
-              canvas2dRenderingContext.save();  // So we can easily restore context (just above)
-              if (clearCanvasMode) {
-                // NB: the stuff above is redundant if this ever works:
-                //    canvas2dRenderingContext.reset();
-                canvas2dRenderingContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
-              }
-              canvas2dRenderingContext.beginPath();
-              drawFn(canvas2dRenderingContext);
+            if (!drawFn || !staleImage) return;
+            canvas2dRenderingContext.resetTransform();
+            // The spec says there's supposed to be a reset method, but MDN
+            // doesn't mention it and emperically, it doesn't exist yet.
+            // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
+            //   canvas2dRenderingContext.reset();
+            // So instead, pop a buncha renderingContexts, reset the
+            // transform and, optionally clear the screen
+            for (let i = 0; i < 20; ++i);
+              canvas2dRenderingContext.restore();
+            canvas2dRenderingContext.save();  // So we can easily restore context (just above)
+            if (clearCanvasMode) {
+              // NB: the stuff above is redundant if this ever works:
+              //    canvas2dRenderingContext.reset();
+              canvas2dRenderingContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
             }
+            canvas2dRenderingContext.beginPath();
+            drawFn(canvas2dRenderingContext);
             staleImage = false;
-            if (animate)
-              window.requestAnimationFrame(redraw);
+          }
+          function drawAnimation() {
+            if (!drawFn) return;
+            staleImage = true;
+            redraw();
+            if (animating)
+              window.requestAnimationFrame(drawAnimation);
           }
           let schemeCanvas = {
             canvasElement,
@@ -1739,10 +1742,11 @@
               staleImage = true;
               window.requestAnimationFrame(redraw);
             },
-            get [animateAtom]() { return animate },
+            get [animateAtom]() { return animating },
             set [animateAtom](value) {
-              animate = value;
-              redraw();
+              animating = value;
+              if (animating)
+                drawAnimation();
             },
             get [drawAtom]() { return drawFn; },
             set [drawAtom](fn) {
@@ -1750,7 +1754,7 @@
                 throw new SchemeEvalError(`[draw] not a function ${string(fn)}`);
               drawFn = fn;
               staleImage = true;
-              window.requestAnimationFrame(redraw);
+              window.requestAnimationFrame(animating ? drawAnimation : redraw);
             },
             get [clearCanvasAtom]() { return clearCanvasMode },
             set [clearCanvasAtom](value) { clearCanvasMode = value },
