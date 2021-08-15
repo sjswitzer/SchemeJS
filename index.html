@@ -1753,7 +1753,9 @@
           };
           console.log("SCHEMECANVAS", schemeCanvas);
           canvasCloseButton.addEventListener('click', _ => schemeCanvas.hide());
-          canvasFrame.addEventListener('mousedown', event => {
+          canvasFrame.addEventListener('mousedown', mouseDown);
+          canvasFrame.addEventListener('touchstart', mouseDown);
+          function mouseDown(event) {
             event.preventDefault();
             let border = 10;
             let { pageX, pageY } = event;
@@ -1789,11 +1791,17 @@
               bodyElement.removeEventListener('mousemove', mouseMove);
               bodyElement.removeEventListener('mouseup', mouseUp);
               bodyElement.removeEventListener('mouseleave', mouseUp);
+              bodyElement.removeEventListener('touchmove', mouseUp);
+              bodyElement.removeEventListener('touchend', mouseUp);
+              bodyElement.removeEventListener('touchcancel', mouseUp);
             }
             bodyElement.addEventListener('mousemove', mouseMove);
             bodyElement.addEventListener('mouseup', mouseUp);
             bodyElement.addEventListener('mouseleave', mouseUp);
-          });
+            bodyElement.addEventListener('touchmove', mouseMove);
+            bodyElement.addEventListener('touchend', mouseUp);
+            bodyElement.addEventListener('touchcancel', mouseUp);
+          }
           newCanvasX += 25;
           newCanvasY += 25;
           schemeCanvas.x = newCanvasX;
