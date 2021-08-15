@@ -1803,7 +1803,7 @@
         }
 
         defineGlobalSymbol("scale", scale, { evalArgs: 2, dontInline: true, group: "web-gfx" });
-        function scale(width, height, ...exprs) {
+        function scale(width, height = width, ...exprs) {
           let scope = this;
           let canvasRenderingContext = scope[canvasRenderingContextAtom];
           if (exprs.length < 1) {
