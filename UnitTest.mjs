@@ -82,6 +82,7 @@ export function run(opts = {}) {
     // to skip a lot of tests that use it incidentally.
     //
 
+    EXPECT(` '(a .7) `, ` '(a 0.7) `)  // Make sure the dot notation doesn't get tripped up with numbers
     EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
     EXPECT(` (car '(1 . 2)) `, ` 1 `);
     EXPECT(` (cdr '(1 . 2)) `, 2);
