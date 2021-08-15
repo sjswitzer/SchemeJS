@@ -1679,7 +1679,7 @@
         let crc2schemeCanvasMap = new WeakMap();
 
         defineGlobalSymbol("canvas", canvas, { dontInline: true, group: "web-gfx" });
-        function canvas(name = "canvas", width = 300, height = 150) { 
+        function canvas(name = "canvas", width = 200, height = width) { 
           let canvasFrame = createElement('div', 'canvas-frame');
           let canvasTitleBar = createElement('div', 'title-bar');
           let titleSpan = createElement('span', 'title', name);
@@ -1815,7 +1815,7 @@
         }
 
         defineGlobalSymbol("scale", scale, { evalArgs: 2, dontInline: true, group: "web-gfx" });
-        function scale(width, height = width, ...exprs) {
+        function scale(width, height, ...exprs) {
           let scope = this;
           let canvasRenderingContext = scope[canvasRenderingContextAtom];
           if (exprs.length < 1) {
