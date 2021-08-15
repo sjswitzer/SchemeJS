@@ -1780,10 +1780,10 @@
         function draw2d(schemeCanvas) {
           let canvasRenderingContext = schemeCanvas.canvasElement.getContext('2d');
           crc2schemeCanvasMap.set(canvasRenderingContext, schemeCanvas);
-          canvasRenderingContext;
+          return canvasRenderingContext;
         }
 
-        defineGlobalSymbol("gfx-save", { evalArgs: 0, dontInline: true, group: "web-gfx" });
+        defineGlobalSymbol("gfx-save", gfx_save, { evalArgs: 0, dontInline: true, group: "web-gfx" });
         function gfx_save(...forms) {
           let scope = this, canvasRenderingContext = scope[gfxContectAtom];
           canvasRenderingContext.save();
@@ -1795,6 +1795,7 @@
           } finally {
             canvasRenderingContext.restore();
           }
+          return canvasRenderingContext;
         }
 
         defineGlobalSymbol("translate", translate, {dontInline: true, group: "web-gfx" });
