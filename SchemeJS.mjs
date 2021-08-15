@@ -3035,7 +3035,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (objType === 'symbol') {
         if (obj === LAMBDA_ATOM) return put(lambdaStr);
         if (obj === SLAMBDA_ATOM) return put(lambdaStr+"#");
-        return put(obj.description);
+        if (isAtom(obj)) return put(obj.description);
+        return put(`Symbol(${obj.description})`);
       }
       if (objType === 'string') {
         let str = '"';
