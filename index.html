@@ -1695,10 +1695,10 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
-          let drawFn, staleImage = false, animate = false, clearCanvasMode = true;
+          let drawFn, _staleImage = false, animate = false, animating = false, clearCanvasMode = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
-          function redraw() {
-            if (!drawFn || !staleImage) return;
+          function _doRedraw() {
+            if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
             canvas2dRenderingContext.resetTransform();
             // The spec says there's supposed to be a reset method, but MDN
             // doesn't mention it and emperically, it doesn't exist yet.
@@ -1716,14 +1716,25 @@
             }
             canvas2dRenderingContext.beginPath();
             drawFn(canvas2dRenderingContext);
-            staleImage = false;
+            _staleImage = false;
           }
-          function drawAnimation() {
-            if (!drawFn) return;
-            staleImage = true;
-            redraw();
-            if (animate && canvasFrame.parentElement)
-              window.requestAnimationFrame(drawAnimation);
+          function _drawAnimation() {
+            _staleImage = true;
+            _doRedraw();
+            if (drawFn && animate && canvasFrame.parentElement)
+              return window.requestAnimationFrame(_drawAnimation);
+            animating = false;
+          }
+          function redraw() {
+            _staleImage = true;
+            requestAnimationFrame(_doRedraw);
+          }
+          function startAnimation() {
+            // Take special care to not get multiple animation loops going.
+            if (animating) return;
+            if (!(drawFn && animate && canvasFrame.parentElement)) return;
+            animating = true;
+            window.requestAnimationFrame(_drawAnimation);
           }
           let schemeCanvas = {
             canvasElement,
@@ -1733,30 +1744,22 @@
             get y() { return parseInt(canvasFrame.style.top) },
             set y(y) { canvasFrame.style.top = y+"px" },
             get width() { return Number(canvasElement.width) },
-            set width(width) {
-              canvasElement.width = width;
-              staleImage = true;
-              window.requestAnimationFrame(redraw);
-            },
+            set width(width) { canvasElement.width = width; redraw(); },
             get height() { return Number(canvasElement.height) },
-            set height(height) {
-              canvasElement.height = height;
-              staleImage = true;
-              window.requestAnimationFrame(redraw);
-            },
+            set height(height) { canvasElement.height = height; redraw(); },
             get [animateAtom]() { return animate },
             set [animateAtom](value) {
               animate = value;
               if (animate)
-                drawAnimation();
+                startAnimation();
             },
             get [drawAtom]() { return drawFn; },
             set [drawAtom](fn) {
               if (typeof fn !== 'function')
                 throw new SchemeEvalError(`[draw] not a function ${string(fn)}`);
               drawFn = fn;
-              staleImage = true;
-              window.requestAnimationFrame(animate ? drawAnimation : redraw);
+              _staleImage = true;
+              window.requestAnimationFrame(animate ? startAnimation : _doRedraw);
             },
             get [clearCanvasAtom]() { return clearCanvasMode },
             set [clearCanvasAtom](value) { clearCanvasMode = value },
@@ -1768,7 +1771,7 @@
               if (height !== undefined) this.height = height;
               bodyElement.appendChild(canvasFrame);
               if (animate)
-                requestAnimationFrame(drawAnimation);
+                startAnimation();
               return this;
             },
             show(...params) { return this[showAtom](...params) },
