@@ -1337,6 +1337,7 @@
       let NIL, Atom, string, defineGlobalSymbol, originalLoad;
       let varNo = 0, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
+      const optional = undefined;  // so that parameters show up pretty when printed
       let traceCompilerCode = true;
 
       onload = importSchemeAndRunREPL();
@@ -1900,8 +1901,6 @@
           }
         }
 
-        const optional = undefined;  // so that things show up pretty when printer
-
         let commonOptions = { dontInline: true, group: "web-gfx" };  // XXX TODO: remove dontInline when draw2d has a compile hook
 
         defineGlobalSymbol("save-rendering-context", save_rendering_context, commonOptions);
@@ -1948,7 +1947,7 @@
         }
 
         defineGlobalSymbol("fill-text", fill_text, commonOptions);
-        function fill_text(text, x, y , maxWidth = undefined) {
+        function fill_text(text, x, y , maxWidth = optional) {
           return CRCfunction(this, ctx => ctx.fillText(text, x, y , maxWidth))
         }
 

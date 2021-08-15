@@ -37,6 +37,7 @@ export function createInstance(schemeOpts = {}) {
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
+  const optional = undefined;  // so that parameters show up pretty when printed
 
   // Creating a Cons should be as cheap as possible, so no subclassing
   // or calls to super. But people should be able to be able to define their
@@ -611,7 +612,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("not", a => typeof a === 'function' ? ((...params) => !a(...params)) : !a), { group: "logical-op" };
 
   defineGlobalSymbol("to-lower-case", to_lower_case);
-  function to_lower_case(str, locale = undefined) {
+  function to_lower_case(str, locale = optional) {
     if (typeof str !== 'string') throw new TypeError(`${string(str)} is not a string}`);
     let result;  // write this way so that it can be a compiler template
     if (locale === undefined) result = str.toLowerCase();
@@ -620,7 +621,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   defineGlobalSymbol("to-upper-case", to_upper_case);
-  function to_upper_case(str, locale = undefined) {
+  function to_upper_case(str, locale = optional) {
     if (typeof str !== 'string') throw new TypeError(`${string(str)} is not a string}`);
     let result;  // write this way so that it can be a compiler template
     if (locale === undefined) result = str.toUpperCase();
@@ -1997,7 +1998,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
   //   comparable performance and is excellent with partially-sorted lists.
   defineGlobalSymbol("mergesort", mergesort, { dontInline: true, group: "list-op" }, "sort", "qsort");
-  function mergesort(list, predicateFn = undefined, accessFn = undefined) {
+  function mergesort(list, predicateFn = optional, accessFn = optional) {
     if (isNil(list)) return NIL;
     // Sort Arrays as Arrays
     if (Array.isArray(list))
@@ -2016,7 +2017,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { dontInline: true, group: "list-op" }, "in-place-sort", "nsort");
-  function in_place_mergesort(list, predicateFn = undefined, accessFn = undefined) {
+  function in_place_mergesort(list, predicateFn = optional, accessFn = optional) {
     if (isNil(list)) return NIL;
     // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
     let before = predicateFn, scope = this;
