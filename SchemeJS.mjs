@@ -3799,7 +3799,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       bindSymToObj[name] = obj;
       bindObjToSym.set(obj, name);
-      if (guardSym)
+      if (guardSym) // XXX TODO: I don't think this is needed; just guard the bound symbols that aren't atoms
         guardedSymbols[name] = guardSym;
       return name;
     }
@@ -3873,6 +3873,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           let usesScope = true;  // conservative default
           let params, restParam, valueTemplate, bodyTemplate, native;
           if (fnInfo) {  // this is a built-in OR a jsClosure
+            // XXX TODO: just use the fnInfo as the function descriptor;
+            // a little renaming will do it.
             params = fnInfo.params;
             restParam = fnInfo.restParam;
             valueTemplate = fnInfo.value;
