@@ -8,7 +8,7 @@
 ;; Ship Arriving Too Late to Save a Drowning Witch
 (define (satltsadw gfx-context)
   (gfx-save ;; saves then restores the graphics state, transforms etc
-    (scale (/ (canvas-width) 10))
+    (scale (/ (canvas-width) 10)) ;; scale to a 10 x 10 coordinate system
     (line-width .2)
     (stroke-rect 0 0 10 9) ;; bounding box
     (move-to 0 7) (line-to 10 7) (stroke) ;; sea level
