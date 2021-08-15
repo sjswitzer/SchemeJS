@@ -3202,12 +3202,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         continue;
       }
 
-      if (SINGLE_CHAR_TOKENS[ch]) {
-        yield { type: ch, position, line, lineChar };
-        nextc();
-        continue;
-      }
-
       // JS numbers are weird. The strategy here is to match anything that looks vaguely like a number
       // then let JS sort it all out.
       if (NUM1[ch]) {
@@ -3240,6 +3234,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             continue;
           }
         }
+      }
+
+      if (SINGLE_CHAR_TOKENS[ch]) {
+        yield { type: ch, position, line, lineChar };
+        nextc();
+        continue;
       }
 
       if (IDENT1[ch]) {
