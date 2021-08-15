@@ -1742,8 +1742,20 @@
               // console.log("MOUSEMOVE", event, pageX, pageY, deltaX, deltaY);
               if (fx !== 0) schemeCanvas.x = left + fx * deltaX;
               if (fy !== 0) schemeCanvas.y = top + fy * deltaY;
+              let saveCanvas, canvasElement = schemeCanvas.canvasElement;
+              if (fw !== 0 || fh !== 0) { // If resizing, save the content
+                saveCanvas = document.createElement('canvas');
+                saveCanvas.width = canvasElement.width;
+                saveCanvas.height = canvasElement.height;
+                let ctx = saveCanvas.getContext('2d');
+                ctx.drawImage(canvasElement, 0, 0);
+              }
               if (fw !== 0) schemeCanvas.width = canvasWidth + fw * deltaX;
               if (fh !== 0) schemeCanvas.height = canvasHeight + fh * deltaY;
+              if (saveCanvas) { // If content saved, draw it back
+                let ctx = canvasElement.getContext('2d');
+                ctx.drawImage(saveCanvas, 0, 0);
+              }
             }
             function mouseUp(event) {
               event.preventDefault();
