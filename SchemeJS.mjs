@@ -567,6 +567,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
       defineGlobalSymbol(obj.name, obj, { schemeOnly: true });
     defineGlobalSymbol("Date-now", Date.now, { schemeOnly: true });
+    defineGlobalSymbol("*2pi*", 2*Math.PI, { schemeOnly: true });
   }
 
   defineGlobalSymbol("eval-string", eval_string, { dontInline: true });
