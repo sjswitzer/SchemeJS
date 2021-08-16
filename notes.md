@@ -122,6 +122,7 @@ it I realized it inevitably would be, thanks to the JavaScript runtime and its J
 
 Probably the best way to think about it is that JavaScript was secretly Scheme all along,
 just as Brendan Eich originally intended. Recent improvements in ES6 and beyond have exposed more of the underlying Lispyness and this project wouldn't have been attempted without them.
+You could argue that JavaScript is, in fact, a [Lisp 2](https://en.wikipedia.org/wiki/LISP_2).
 It's as if Scheme and Self had an unlikely affair and decided their lovechild would
 have a vaguely Java-like syntax.
 

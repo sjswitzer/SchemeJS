@@ -1,6 +1,22 @@
+;;
 ;; Web graphics in SchemeJS
+;;
+;; The Web Graphics primitives are simply the JavaScript CanvasRenderingContext2D
+;; methods (https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D)
+;; mapped into SchemeJS with camelCase replaced-by-dashes and implicitly applied
+;; to the variable named "gfx-context".
+;; So "(move-to x y)" equates to "gfxContext.moveTo(x y)" in JavaScript.
+;; 
+;; The exceptions are the stashing functions, described inline below, and "gfx-save".
+;; "(gfx-save expr expr ...)" saves the current drawing state (colors, transforms,
+;; line widts, etc.) then executes the enclosed expressions. When done, it restores
+;; the previous drawing state. So you can take a drawing excursion, with whatever scales,
+;; rotations, colors, line widths you want then return to the previous state and continue.
+;;
 
-;; Animation helper: a sinusoidal time-varying value
+;; Animation helper: a sinusoidal time-varying value of a given magintude,
+;; period (in seconds) and phase.
+;; (Date.now) is the number of milliseconds since midnight Jan 1, 1970 (the Unix epoch).
 (define (sinusoidal (? magnitude 1) (? period 1) (? phase 0))
   (* magnitude (sin (+ phase (* *2pi* (/ (Date-now) period 1000)))))
 )
@@ -56,7 +72,7 @@
 (@= lissajousCanvas 'clear-canvas false)     ;; And don't clear the canvas before re-drawing
 (@= lissajousCanvas 'clear-color "black")    ;; Well, except initially
 
-(define pi_2 (/ *pi* 2))
+(define pi_2 (/ *pi* 2))  ;; Cosine is sine 90 degress (pi/2 radians) out of phase
 
 ;; Spirograph/Epicycle is not so very different from a lissajous
 (define (spirograph gfx-context tick)
