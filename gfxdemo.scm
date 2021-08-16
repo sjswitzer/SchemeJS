@@ -32,14 +32,14 @@
 (define (lissajous gfx-context tick)
   ;; fade the canvas by drawing over it with black and a very low alpha every several ticks
   (fill-style "#00000004")
-  (? (== 0 (% tick 20))
+  (? (== 0 (% tick 5))
     (fill-rect 0 0 (canvas-width) (canvas-height))
     nil ;; todo: closures for ? are a bad idea
   )
   (scale (/ (canvas-width) 100) (/ (canvas-height) 100)) ;; scale to a 100 x 100 coordinate system
   (translate 50 50) ;; centered on (50, 50)
   (move-to-stashed)
-  (stash-point (sinusoidal 45 3.19) (sinusoidal 45 2.83))
+  (stash-point (sinusoidal 45 2.19) (sinusoidal 45 1.53))
   (line-to-stashed)
   (stroke-style "green") (line-cap "round") (line-width 1.5) (stroke)
 )
@@ -57,8 +57,8 @@
 ;; Spirograph/Epicycle is not so very different
 (define (spirograph gfx-context tick)
   ;; fade the canvas by drawing over it with white and a very low alpha every several ticks
-  (fill-style "#ffffff06")
-  (? (== 0 (% tick 20))
+  (fill-style "#ffffff0c")
+  (? (== 0 (% tick 25))
     (fill-rect 0 0 (canvas-width) (canvas-height))
     nil ;; todo: closures for ? are a bad idea
   )
@@ -66,8 +66,8 @@
   (translate 50 50) ;; centered on (50, 50)
   (move-to-stashed)
   (stash-point
-    (+ (sinusoidal 10 11.7     ) (sinusoidal 35 -4.3     ))
-    (+ (sinusoidal 10 11.7 pi_2) (sinusoidal 35 -4.3 pi_2)))
+    (+ (sinusoidal 10 4.7     ) (sinusoidal 35 -1.3     ))
+    (+ (sinusoidal 10 4.7 pi_2) (sinusoidal 35 -1.3 pi_2)))
   (line-to-stashed)
   (stroke-style "red") (line-cap "round") (line-width 1.5) (stroke)
 )
@@ -75,5 +75,5 @@
 (define spirographCanvas (canvas "Spirograph"  300 300))
 (@= spirographCanvas 'draw spirograph)
 (@= spirographCanvas 'animate true)
-(@! spirographCanvas 'show 500 30)
+(@! spirographCanvas 'show 600 40)
 (@= spirographCanvas 'clear-canvas false)     ;; and don't clear the canvas before re-drawing
