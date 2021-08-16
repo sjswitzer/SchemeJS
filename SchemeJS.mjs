@@ -2748,12 +2748,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (jitThreshold !== undefined) {  // Disable by optioning jitThreshold as undefined
         let jitFn = jsClosure[JITCOMPILED];
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
-        if (jitFn)
-          return jitFn.apply(this, args);
-        if (--jitCount < 0) {
+        if (!jitFn && --jitCount < 0) {
           jitCount = jitThreshold;
-          jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, namedObjects.get(jsClosure), lambda, jsClosure);
+          jitFn = jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, namedObjects.get(jsClosure), lambda, jsClosure);
         }
+        return jitFn.apply(this, args);
       }
       let params = lambdaParams, i = 0, argLength = args.length;
       for ( ; isCons(params); ++i, params = params[CDR]) {

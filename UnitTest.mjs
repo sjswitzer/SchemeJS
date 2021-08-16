@@ -65,10 +65,12 @@ export function run(opts = {}) {
   evalTestString = compileThenEvalString;
   testSuite();
 
-  // Test JIT
-  let { succeeded: jitSucceeded, failed: jitFailed } = run({ justTestJIT: true, jitThreshold: 5 });
+  // TODO: Test JIT
+  /*
+  let { succeeded: jitSucceeded, failed: jitFailed } = run({ justTestJIT: true, jitThreshold: 0 });
   succeeded += jitSucceeded;
   failed += jitFailed;
+  */
 
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
   console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
