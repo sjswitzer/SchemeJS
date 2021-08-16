@@ -33,7 +33,7 @@
   ;; fade the canvas by drawing over it with white and a very low alpha
   (fill-style "#00000002")
   (fill-rect 0 0 (canvas-width) (canvas-height))
-  (scale (/ (canvas-width) 100)) ;; scale to a 100 x 100 coordinate system
+  (scale (/ (canvas-width) 100) (/ (canvas-height) 100)) ;; scale to a 100 x 100 coordinate system
   (translate 50 50) ;; centered on (50, 50)
   (fill-style "#8f8") (begin-path)
   (ellipse (sinusoidal 45 7.49) (sinusoidal 45 5.73) 1 1 0 0 *2pi*)
