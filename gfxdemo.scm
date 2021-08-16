@@ -50,3 +50,29 @@
 (@! lissajousCanvas 'backing-buffer 500 500) ;; use an offscreen-backing buffer
 (@= lissajousCanvas 'clear-canvas false)     ;; and don't clear the canvas before re-drawing
 (@= lissajousCanvas 'clear-color "black")    ;; well, except initially
+
+(define pi_2 (/ *pi* 2))
+
+;; Spirograph/Epicycle is not so very different
+(define (spirograph gfx-context tick)
+  ;; fade the canvas by drawing over it with white and a very low alpha every several ticks
+  (fill-style "#ffffff08")
+  (? (== 0 (% tick 20))
+    nil ;; (fill-rect 0 0 (canvas-width) (canvas-height))
+    nil ;; todo: closures for ? are a bad idea
+  )
+  (scale (/ (canvas-width) 100) (/ (canvas-height) 100)) ;; scale to a 100 x 100 coordinate system
+  (translate 50 50) ;; centered on (50, 50)
+  (fill-style "red") (begin-path)
+  (ellipse 
+    (+ (sinusoidal 10 7.1     ) (sinusoidal 35 23     ))
+    (+ (sinusoidal 10 7.1 pi_2) (sinusoidal 35 23 pi_2))
+    1 1 0 0 *2pi*)
+  (fill)
+)
+
+(define spirographCanvas (canvas "Spirograph"  300 300))
+(@= spirographCanvas 'draw spirograph)
+(@= spirographCanvas 'animate true)
+(@! spirographCanvas 'show 500 30)
+(@= spirographCanvas 'clear-canvas false)     ;; and don't clear the canvas before re-drawing
