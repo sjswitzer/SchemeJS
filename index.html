@@ -1680,7 +1680,7 @@
         let newCanvasX = 200, newCanvasY = 10;
         let gfxContectAtom = Atom("gfx-context");
         let drawAtom = Atom("draw"), animateAtom = Atom("animate");
-        let clearCanvasAtom = Atom("clear-canvas");
+        let clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");
         let showAtom = Atom("show"), hideAtom = Atom("hide");
 
         let crc2schemeCanvasMap = new WeakMap();
@@ -1698,9 +1698,28 @@
           canvasFrame.appendChild(canvasElement);
           let drawFn, _staleImage = false, animate = false, animating = false, clearCanvasMode = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
+          let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
           function _doRedraw() {
             if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
-            canvas2dRenderingContext.resetTransform();
+            let renderingContext = canvas2dRenderingContext;
+            let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
+            if (backingBufferWidth > 0 && backingBufferHeight > 0) {
+              let neededWidth = backingBufferWidth > canvasWidth ? backingBufferWidth : canvasWidth;
+              let neededHeight = backingBufferHeight > canvasHeight ? backingBufferHeight : canvasHeight;
+              let oldBackingCanvas = backingCanvas;
+              backingCanvas = createElement('canvas');
+              backingCanvas.width = neededWidth;
+              backingCanvas.height = neededHeight;
+              backing2dRenderingContext = backingCanvas.getContext('2d');
+              if (oldBackingCanvas)
+                backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0 );
+              else
+                backing2dRenderingContext.drawImage(canvasElement, 0, 0);
+              renderingContext = backing2dRenderingContext;
+            } else {
+              backingCanvas = backing2dRenderingContext = undefined;
+            }
+            renderingContext.resetTransform();
             // The spec says there's supposed to be a reset method, but MDN
             // doesn't mention it and emperically, it doesn't exist yet.
             // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
@@ -1708,15 +1727,17 @@
             // So instead, pop a buncha renderingContexts, reset the
             // transform and, optionally clear the screen
             for (let i = 0; i < 20; ++i);
-              canvas2dRenderingContext.restore();
-            canvas2dRenderingContext.save();  // So we can easily restore context (just above)
+              renderingContext.restore();
+            renderingContext.save();  // So we can easily restore context (just above)
             if (clearCanvasMode) {
               // NB: the stuff above is redundant if this ever works:
               //    canvas2dRenderingContext.reset();
-              canvas2dRenderingContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
+              renderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
             }
-            canvas2dRenderingContext.beginPath();
-            drawFn(canvas2dRenderingContext);
+            renderingContext.beginPath();
+            drawFn(renderingContext);
+            if (backingCanvas)
+              canvas2dRenderingContext.drawImage(backingCanvas, 0, 0);
             _staleImage = false;
           }
           function _drawAnimation() {
@@ -1764,6 +1785,11 @@
             },
             get [clearCanvasAtom]() { return clearCanvasMode },
             set [clearCanvasAtom](value) { clearCanvasMode = value },
+            [backingBufferAtom](width, height = width) {
+              backingBufferWidth = width;
+              backingBufferHeight = height;
+            },
+            backingBuffer(width, height) { return this[backingBufferAtom](width, height) },
             get canvas2dRenderingContext() { return canvas2dRenderingContext },
             [showAtom](x = optional, y = optional, width = optional, height = optional) {
               if (x !== undefined) this.x = x;
