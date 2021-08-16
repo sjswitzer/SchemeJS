@@ -56,17 +56,17 @@
 ;; Spirograph/Epicycle is not so very different
 (define (spirograph gfx-context tick)
   ;; fade the canvas by drawing over it with white and a very low alpha every several ticks
-  (fill-style "#ffffff08")
+  (fill-style "#ffffff06")
   (? (== 0 (% tick 20))
-    nil ;; (fill-rect 0 0 (canvas-width) (canvas-height))
+    (fill-rect 0 0 (canvas-width) (canvas-height))
     nil ;; todo: closures for ? are a bad idea
   )
   (scale (/ (canvas-width) 100) (/ (canvas-height) 100)) ;; scale to a 100 x 100 coordinate system
   (translate 50 50) ;; centered on (50, 50)
   (fill-style "red") (begin-path)
   (ellipse 
-    (+ (sinusoidal 10 7.1     ) (sinusoidal 35 23     ))
-    (+ (sinusoidal 10 7.1 pi_2) (sinusoidal 35 23 pi_2))
+    (+ (sinusoidal 10 11.7     ) (sinusoidal 35 -4.3     ))
+    (+ (sinusoidal 10 11.7 pi_2) (sinusoidal 35 -4.3 pi_2))
     1 1 0 0 *2pi*)
   (fill)
 )
