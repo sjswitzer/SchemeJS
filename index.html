@@ -1331,6 +1331,7 @@
       "use strict";
 
       const bodyElement = document.getElementById('body');
+      const containerElement = document.getElementById('container');
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
       const loadFileInputElement = document.getElementById('load-file-dialog');
@@ -1728,7 +1729,7 @@
       }
 
       function defineGraphicsFunctions() {
-        let newCanvasX = 200, newCanvasY = 10;
+        let newCanvasX = 20, newCanvasY = 10;
         gfxContextAtom = Atom("gfx-context"), drawAtom = Atom("draw");
         animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");
         showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
@@ -1788,20 +1789,22 @@
               if (y !== undefined) this.y = y;
               if (width !== undefined) this.width = width;
               if (height !== undefined) this.height = height;
-              bodyElement.appendChild(canvasFrame);
+              containerElement.appendChild(canvasFrame);
               if (animate)
                 startAnimation();
               return this;
             },
             [hideAtom]() {
-              bodyElement.removeChild(canvasFrame);
+              if (canvasFrame.parentNode)
+                canvasFrame.parentNode.removeChild(canvasFrame);
               return this;
             },
           };
           Object.setPrototypeOf(schemeWidget, SchemeWidget.prototype);
           contextToSchemeWidget.set(canvas2dRenderingContext, schemeWidget);
           let drawTime = Date.now();
-          function _doRedraw(...rest) {
+          let tickCount = 0;
+          function _doRedraw() {
             if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
             let now = Date.now();
             if (now - drawTime > 200) // ms
@@ -1866,15 +1869,14 @@
               }
             }
             renderingContext.beginPath();
-            drawFn(renderingContext, ...rest);
+            drawFn(renderingContext, tickCount++);
             if (backingCanvas)
               canvas2dRenderingContext.drawImage(backingCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, canvasWidth, canvasHeight);
             _staleImage = false;
           }
-          let tickCount = 0;
           function _drawAnimation() {
             _staleImage = true;
-            _doRedraw(tickCount++);
+            _doRedraw();
             if (drawFn && animate && canvasFrame.parentElement)
               return window.requestAnimationFrame(_drawAnimation);
             animating = false;
@@ -1895,6 +1897,8 @@
           canvasFrame.addEventListener('touchstart', mouseDown);
           function mouseDown(event) {
             event.preventDefault();
+            // Place element at the end of its parent's node list so it diplays on top
+            canvasFrame.parentNode.appendChild(canvasFrame);
             let border = 10;
             let { pageX, pageY } = event;
             let initialX = pageX, initialY = pageY;
@@ -1927,16 +1931,16 @@
               event.preventDefault();
               // console.log("MOUSEUP", event);
               bodyElement.removeEventListener('mousemove', mouseMove);
+              bodyElement.removeEventListener('touchmove', mouseMove);
               bodyElement.removeEventListener('mouseup', mouseUp);
               bodyElement.removeEventListener('mouseleave', mouseUp);
-              bodyElement.removeEventListener('touchmove', mouseUp);
               bodyElement.removeEventListener('touchend', mouseUp);
               bodyElement.removeEventListener('touchcancel', mouseUp);
             }
             bodyElement.addEventListener('mousemove', mouseMove);
+            bodyElement.addEventListener('touchmove', mouseMove);
             bodyElement.addEventListener('mouseup', mouseUp);
             bodyElement.addEventListener('mouseleave', mouseUp);
-            bodyElement.addEventListener('touchmove', mouseMove);
             bodyElement.addEventListener('touchend', mouseUp);
             bodyElement.addEventListener('touchcancel', mouseUp);
           }
@@ -1950,8 +1954,8 @@
           return schemeWidget;
         }
 
-        defineGlobalSymbol("draw2d", draw2d, { dontInline: true, group: "web-gfx" });
-        function draw2d(schemeWidget) {
+        defineGlobalSymbol("canvas-gfx-context", canvas_gfx_context, { dontInline: true, group: "web-gfx" });
+        function canvas_gfx_context(schemeWidget) {
           let canvasRenderingContext = schemeWidget.canvas2dRenderingContext;
           return canvasRenderingContext;
         }

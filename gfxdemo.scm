@@ -97,3 +97,16 @@
 (@= spirographCanvas 'animate true)
 (@! spirographCanvas 'show 600 40)
 (@= spirographCanvas 'clear-canvas false)
+
+;; Here's a widget to scribble in interactively
+(define scribble (canvas "Scribble" 300))
+
+;; Set the gfx-context variable to the canvas's drawing context so you can now
+;; enter drawing commands into the command window and draw interactively.
+;; Again, the commands are all documented at
+;;    https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
+;; Try it!
+(define gfx-context (canvas-gfx-context scribble))
+(stroke-style "blue")
+(stroke-rect 10 10 40 40)
+(fill-text "Try it! Just enter drawing commands below." 10 65)
