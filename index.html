@@ -1910,9 +1910,6 @@
           canvasFrame.addEventListener('mousedown', mouseDown);
           canvasFrame.addEventListener('touchstart', mouseDown);
           function mouseDown(event) {
-            event.preventDefault();
-            // Place element at the end of its parent's node list so it diplays on top
-            canvasFrame.parentNode.appendChild(canvasFrame);
             let border = 10;
             let { pageX, pageY } = event;
             let initialX = pageX, initialY = pageY;
@@ -1931,10 +1928,20 @@
               [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
             ][i];
             // console.log("SIZEFACTORS", i, fx, fw, fy, fh, event, canvasWidth, canvasHeight);
+            let resizeOK = false, resizeThreshold = 5;
             function mouseMove(event) {
-              event.preventDefault();
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
+              // Don't resize  or reparent until a threshold of movement has occurred.
+              // This is both good practice and avoids a browser behavior where a moved or resized canvas
+              // won't receive a click event. In this case, the close button won't work.
+              if (Math.abs(deltaX) > resizeThreshold || Math.abs(deltaY) > resizeThreshold) {
+                resizeOK = true;
+                // Place element at the end of its parent's node list so it diplays on top
+                canvasFrame.parentNode.appendChild(canvasFrame);
+              }
+              if (!resizeOK)
+                return;
               // console.log("MOUSEMOVE", event, pageX, pageY, deltaX, deltaY);
               if (fx !== 0) schemeWidget.x = left + fx * deltaX;
               if (fy !== 0) schemeWidget.y = top + fy * deltaY;
@@ -1942,7 +1949,6 @@
               if (fh !== 0) schemeWidget.height = canvasHeight + fh * deltaY;
             }
             function mouseUp(event) {
-              event.preventDefault();
               // console.log("MOUSEUP", event);
               bodyElement.removeEventListener('mousemove', mouseMove);
               bodyElement.removeEventListener('touchmove', mouseMove);
