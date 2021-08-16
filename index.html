@@ -1761,6 +1761,10 @@
             canvasElement.height = newHeight;
             canvas2dRenderingContext.save();
             canvas2dRenderingContext.resetTransform();
+            if (clearColor) {
+              canvas2dRenderingContext.fillStyle = clearColor;
+              canvas2dRenderingContext.fillRect(0, 0, newWidth, newHeight);
+            }
             canvas2dRenderingContext.drawImage(scratch, 0, 0, width, height, 0, 0, width, height);
             canvas2dRenderingContext.restore();
           }
@@ -1928,20 +1932,13 @@
               [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
             ][i];
             // console.log("SIZEFACTORS", i, fx, fw, fy, fh, event, canvasWidth, canvasHeight);
-            let resizeOK = false, resizeThreshold = 5;
             function mouseMove(event) {
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
-              // Don't resize  or reparent until a threshold of movement has occurred.
-              // This is both good practice and avoids a browser behavior where a moved or resized canvas
-              // won't receive a click event. In this case, the close button won't work.
-              if (Math.abs(deltaX) > resizeThreshold || Math.abs(deltaY) > resizeThreshold) {
-                resizeOK = true;
-                // Place element at the end of its parent's node list so it diplays on top
+              // Place element at the end of its parent's node list so it diplays on top.
+              // But only if it hasn't been removed!
+              if (canvasFrame.parentNode)
                 canvasFrame.parentNode.appendChild(canvasFrame);
-              }
-              if (!resizeOK)
-                return;
               // console.log("MOUSEMOVE", event, pageX, pageY, deltaX, deltaY);
               if (fx !== 0) schemeWidget.x = left + fx * deltaX;
               if (fy !== 0) schemeWidget.y = top + fy * deltaY;
