@@ -1754,7 +1754,7 @@
             hide() { this[hideAtom]() },
           };
           contextToSchemeCanvas.set(canvas2dRenderingContext, schemeCanvas);
-          function _doRedraw() {
+          function _doRedraw(...rest) {
             if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
             let renderingContext = canvas2dRenderingContext;
             let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
@@ -1762,28 +1762,30 @@
               let neededWidth = backingBufferWidth > canvasWidth ? backingBufferWidth : canvasWidth;
               let neededHeight = backingBufferHeight > canvasHeight ? backingBufferHeight : canvasHeight;
               let oldBackingCanvas = backingCanvas, oldBacking2dRenderingContext = backing2dRenderingContext;
-              backingCanvas = createElement('canvas');
-              backingCanvas.width = neededWidth;
-              backingCanvas.height = neededHeight;
-              backing2dRenderingContext = backingCanvas.getContext('2d');
-              contextToSchemeCanvas.set(backing2dRenderingContext, schemeCanvas);
-              if (clearColor) {
-                backing2dRenderingContext.save();
-                backing2dRenderingContext.fillStyle = clearColor;
-                backing2dRenderingContext.fillRect(0, 0, neededWidth, neededHeight);
-                backing2dRenderingContext.restore();
-              }
-              if (oldBackingCanvas) {
-                let w = oldBackingCanvas.width, h = oldBackingCanvas.height;
-                if (neededWidth < w) w = neededWidth;
-                if (neededHeight < h) h = neededHeight;
-                backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0, w, h, 0, 0, w, h);
-                contextToSchemeCanvas.delete(oldBacking2dRenderingContext);
-              } else {
-                let w = canvasElement.width, h = canvasElement.height;
-                if (neededWidth < w) w = neededWidth;
-                if (neededHeight < h) h = neededHeight;
-                backing2dRenderingContext.drawImage(canvasElement, 0, 0, w, h, 0, 0, w, h);
+              if (!oldBackingCanvas || neededWidth !== oldBackingCanvas.width || neededHeight !== oldBackingCanvas.height) {
+                backingCanvas = createElement('canvas');
+                backingCanvas.width = neededWidth;
+                backingCanvas.height = neededHeight;
+                backing2dRenderingContext = backingCanvas.getContext('2d');
+                contextToSchemeCanvas.set(backing2dRenderingContext, schemeCanvas);
+                if (clearColor) {
+                  backing2dRenderingContext.save();
+                  backing2dRenderingContext.fillStyle = clearColor;
+                  backing2dRenderingContext.fillRect(0, 0, neededWidth, neededHeight);
+                  backing2dRenderingContext.restore();
+                }
+                if (oldBackingCanvas) {
+                  let w = oldBackingCanvas.width, h = oldBackingCanvas.height;
+                  if (neededWidth < w) w = neededWidth;
+                  if (neededHeight < h) h = neededHeight;
+                  backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0, w, h, 0, 0, w, h);
+                  contextToSchemeCanvas.delete(oldBacking2dRenderingContext);
+                } else {
+                  let w = canvasElement.width, h = canvasElement.height;
+                  if (neededWidth < w) w = neededWidth;
+                  if (neededHeight < h) h = neededHeight;
+                  backing2dRenderingContext.drawImage(canvasElement, 0, 0, w, h, 0, 0, w, h);
+                }
               }
               renderingContext = backing2dRenderingContext;
             } else {
@@ -1813,14 +1815,15 @@
               }
             }
             renderingContext.beginPath();
-            drawFn(renderingContext);
+            drawFn(renderingContext, ...rest);
             if (backingCanvas)
               canvas2dRenderingContext.drawImage(backingCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, canvasWidth, canvasHeight);
             _staleImage = false;
           }
+          let tickCount = 0;
           function _drawAnimation() {
             _staleImage = true;
-            _doRedraw();
+            _doRedraw(tickCount++);
             if (drawFn && animate && canvasFrame.parentElement)
               return window.requestAnimationFrame(_drawAnimation);
             animating = false;

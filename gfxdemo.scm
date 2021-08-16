@@ -29,14 +29,17 @@
 (@! shipCanvas 'show 20 20)
 
 ;; Now a lissajous figure
-(define (lissajous gfx-context)
-  ;; fade the canvas by drawing over it with white and a very low alpha
-  (fill-style "#00000002")
-  (fill-rect 0 0 (canvas-width) (canvas-height))
+(define (lissajous gfx-context tick)
+  ;; fade the canvas by drawing over it with black and a very low alpha every several ticks
+  (fill-style "#00000008")
+  (? (== 0 (% tick 20))
+    (fill-rect 0 0 (canvas-width) (canvas-height))
+    nil ;; todo: closures for ? are a bad idea
+  )
   (scale (/ (canvas-width) 100) (/ (canvas-height) 100)) ;; scale to a 100 x 100 coordinate system
   (translate 50 50) ;; centered on (50, 50)
   (fill-style "#8f8") (begin-path)
-  (ellipse (sinusoidal 45 7.49) (sinusoidal 45 5.73) 1 1 0 0 *2pi*)
+  (ellipse (sinusoidal 45 7.19) (sinusoidal 45 5.83) 1 1 0 0 *2pi*)
   (fill)
 )
 
