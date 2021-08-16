@@ -1678,10 +1678,11 @@
 
       function defineGraphicsFunctions() {
         let newCanvasX = 200, newCanvasY = 10;
-        let gfxContectAtom = Atom("gfx-context");
+        let gfxContextAtom = Atom("gfx-context");
         let drawAtom = Atom("draw"), animateAtom = Atom("animate");
         let clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");
         let showAtom = Atom("show"), hideAtom = Atom("hide");
+        let contextToSchemeCanvas = new WeakMap();
 
         let crc2schemeCanvasMap = new WeakMap();
 
@@ -1699,65 +1700,6 @@
           let drawFn, _staleImage = false, animate = false, animating = false, clearCanvasMode = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
-          function _doRedraw() {
-            if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
-            let renderingContext = canvas2dRenderingContext;
-            let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
-            if (backingBufferWidth > 0 && backingBufferHeight > 0) {
-              let neededWidth = backingBufferWidth > canvasWidth ? backingBufferWidth : canvasWidth;
-              let neededHeight = backingBufferHeight > canvasHeight ? backingBufferHeight : canvasHeight;
-              let oldBackingCanvas = backingCanvas;
-              backingCanvas = createElement('canvas');
-              backingCanvas.width = neededWidth;
-              backingCanvas.height = neededHeight;
-              backing2dRenderingContext = backingCanvas.getContext('2d');
-              if (oldBackingCanvas)
-                backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0 );
-              else
-                backing2dRenderingContext.drawImage(canvasElement, 0, 0);
-              renderingContext = backing2dRenderingContext;
-            } else {
-              backingCanvas = backing2dRenderingContext = undefined;
-            }
-            renderingContext.resetTransform();
-            // The spec says there's supposed to be a reset method, but MDN
-            // doesn't mention it and emperically, it doesn't exist yet.
-            // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
-            //   canvas2dRenderingContext.reset();
-            // So instead, pop a buncha renderingContexts, reset the
-            // transform and, optionally clear the screen
-            for (let i = 0; i < 20; ++i);
-              renderingContext.restore();
-            renderingContext.save();  // So we can easily restore context (just above)
-            if (clearCanvasMode) {
-              // NB: the stuff above is redundant if this ever works:
-              //    canvas2dRenderingContext.reset();
-              renderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
-            }
-            renderingContext.beginPath();
-            drawFn(renderingContext);
-            if (backingCanvas)
-              canvas2dRenderingContext.drawImage(backingCanvas, 0, 0);
-            _staleImage = false;
-          }
-          function _drawAnimation() {
-            _staleImage = true;
-            _doRedraw();
-            if (drawFn && animate && canvasFrame.parentElement)
-              return window.requestAnimationFrame(_drawAnimation);
-            animating = false;
-          }
-          function redraw() {
-            _staleImage = true;
-            requestAnimationFrame(_doRedraw);
-          }
-          function startAnimation() {
-            // Take special care to not get multiple animation loops going.
-            if (animating) return;
-            if (!(drawFn && animate && canvasFrame.parentElement)) return;
-            animating = true;
-            window.requestAnimationFrame(_drawAnimation);
-          }
           let schemeCanvas = {
             canvasElement,
             canvasFrame,
@@ -1808,6 +1750,75 @@
             },
             hide() { this[hideAtom]() },
           };
+          contextToSchemeCanvas.set(canvas2dRenderingContext, schemeCanvas);
+          function _doRedraw() {
+            if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
+            let renderingContext = canvas2dRenderingContext;
+            let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
+            if (backingBufferWidth > 0 && backingBufferHeight > 0) {
+              let neededWidth = backingBufferWidth > canvasWidth ? backingBufferWidth : canvasWidth;
+              let neededHeight = backingBufferHeight > canvasHeight ? backingBufferHeight : canvasHeight;
+              let oldBackingCanvas = backingCanvas, oldBacking2dRenderingContext = backing2dRenderingContext;
+              backingCanvas = createElement('canvas');
+              backingCanvas.width = neededWidth;
+              backingCanvas.height = neededHeight;
+              backing2dRenderingContext = backingCanvas.getContext('2d');
+              contextToSchemeCanvas.set(backing2dRenderingContext, schemeCanvas);
+              if (oldBackingCanvas) {
+                let w = oldBackingCanvas.width, h = oldBackingCanvas.height;
+                if (neededWidth < w) w = neededWidth;
+                if (neededHeight < h) h = neededHeight;
+                backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0, w, h, 0, 0, w, h);
+                contextToSchemeCanvas.delete(oldBacking2dRenderingContext);
+              } else {
+                let w = canvasElement.width, h = canvasElement.height;
+                if (neededWidth < w) w = neededWidth;
+                if (neededHeight < h) h = neededHeight;
+                backing2dRenderingContext.drawImage(canvasElement, 0, 0, w, h, 0, 0, w, h);
+              }
+              renderingContext = backing2dRenderingContext;
+            } else {
+              backingCanvas = backing2dRenderingContext = undefined;
+            }
+            renderingContext.resetTransform();
+            // The spec says there's supposed to be a reset method, but MDN
+            // doesn't mention it and emperically, it doesn't exist yet.
+            // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
+            //   canvas2dRenderingContext.reset();
+            // So instead, pop a buncha renderingContexts, reset the
+            // transform and, optionally clear the screen
+            for (let i = 0; i < 20; ++i);
+              renderingContext.restore();
+            renderingContext.save();  // So we can easily restore context (just above)
+            if (clearCanvasMode) {
+              // NB: the stuff above is redundant if this ever works:
+              //    canvas2dRenderingContext.reset();
+              renderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
+            }
+            renderingContext.beginPath();
+            drawFn(renderingContext);
+            if (backingCanvas)
+              canvas2dRenderingContext.drawImage(backingCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, canvasWidth, canvasHeight);
+            _staleImage = false;
+          }
+          function _drawAnimation() {
+            _staleImage = true;
+            _doRedraw();
+            if (drawFn && animate && canvasFrame.parentElement)
+              return window.requestAnimationFrame(_drawAnimation);
+            animating = false;
+          }
+          function redraw() {
+            _staleImage = true;
+            requestAnimationFrame(_doRedraw);
+          }
+          function startAnimation() {
+            // Take special care to not get multiple animation loops going.
+            if (animating) return;
+            if (!(drawFn && animate && canvasFrame.parentElement)) return;
+            animating = true;
+            window.requestAnimationFrame(_drawAnimation);
+          }
           canvasCloseButton.addEventListener('click', _ => schemeCanvas.hide());
           canvasFrame.addEventListener('mousedown', mouseDown);
           canvasFrame.addEventListener('touchstart', mouseDown);
@@ -1877,7 +1888,7 @@
 
         defineGlobalSymbol("gfx-save", gfx_save, { evalArgs: 0, dontInline: true, group: "web-gfx" });
         function gfx_save(...forms) {
-          let scope = this, canvasRenderingContext = scope[gfxContectAtom];
+          let scope = this, canvasRenderingContext = scope[gfxContextAtom];
           canvasRenderingContext.save();
           try {
             let res = NIL;
@@ -1892,34 +1903,34 @@
 
         defineGlobalSymbol("translate", translate, {dontInline: true, group: "web-gfx" });
         function translate(x, y) {
-          let scope = this, canvasRenderingContext = scope[gfxContectAtom];
+          let scope = this, canvasRenderingContext = scope[gfxContextAtom];
           canvasRenderingContext.translate(x, y);
           return canvasRenderingContext;
         }
 
         defineGlobalSymbol("scale", scale, { dontInline: true, group: "web-gfx" });
         function scale(width, height = width) {
-          let scope = this, canvasRenderingContext = scope[gfxContectAtom];
+          let scope = this, canvasRenderingContext = scope[gfxContextAtom];
           canvasRenderingContext.scale(width, height);
           return canvasRenderingContext;
         }
 
         defineGlobalSymbol("rotate", rotate, { dontInline: true, group: "web-gfx" });
         function rotate(theta) {
-          let scope = this, canvasRenderingContext = scope[gfxContectAtom];
+          let scope = this, canvasRenderingContext = scope[gfxContextAtom];
           canvasRenderingContext.rotate(theta);
           return canvasRenderingContext;
         }
 
         function CRCfunction(scope, fn) {
-          let canvasRenderingContext = scope[gfxContectAtom];
+          let canvasRenderingContext = scope[gfxContextAtom];
           fn(canvasRenderingContext);
           return canvasRenderingContext;
         }
 
         function CRCProperty(property) {
           return function(newValue = undefined) {
-            let canvasRenderingContext = this[gfxContectAtom];
+            let canvasRenderingContext = this[gfxContextAtom];
             let value = canvasRenderingContext[property];
             if (newValue !== undefined)
               canvasRenderingContext[property] = newValue;
@@ -1936,30 +1947,38 @@
         function restore_rendering_context() { return CRCfunction(this, ctx => ctx.restore()) }
 
         defineGlobalSymbol("canvas-width", canvas_width, commonOptions);
-        function canvas_width() { return this[gfxContectAtom].canvas.width };
+        function canvas_width() {
+          let ctx = this[gfxContextAtom];
+          let schemeCanvas = contextToSchemeCanvas.get(ctx);
+          return schemeCanvas.width;
+        };
+
+        defineGlobalSymbol("canvas-height", canvas_height, commonOptions);
+        function canvas_height() {
+          let ctx = this[gfxContextAtom];
+          let schemeCanvas = contextToSchemeCanvas.get(ctx);
+          return schemeCanvas.height;
+        };
 
         defineGlobalSymbol("clear-canvas", clear_canvas, commonOptions);
         function clear_canvas() {
-          let ctx = this[gfxContectAtom], canvas = ctx.canvas, width = canvas.width, height = canvas.height;
+          let ctx = this[gfxContextAtom], canvas = ctx.canvas, width = canvas.width, height = canvas.height;
           return ctx.clearRect(0, 0, width, height);
         };
 
         defineGlobalSymbol("show-canvas", show_canvas, commonOptions);
         function show_canvas(x = optional, y = optional, width = optional, height = optional) {
-          let ctx = this[gfxContectAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
+          let ctx = this[gfxContextAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
           schemeCanvas.show(x, y, width, height);
           return NIL;
         };
 
         defineGlobalSymbol("hide-canvas", hide_canvas, commonOptions);
         function hide_canvas() {
-          let ctx = this[gfxContectAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
+          let ctx = this[gfxContextAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
           schemeCanvas.hide();
           return NIL;
         };
-
-        defineGlobalSymbol("canvas-height", canvas_height, commonOptions);
-        function canvas_height() { return this[gfxContectAtom].canvas.height };
 
         defineGlobalSymbol("fill-rect", fill_rect, commonOptions);
         function fill_rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.fillRect(x, y, width, height)) }
