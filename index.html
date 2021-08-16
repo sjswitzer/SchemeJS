@@ -1754,8 +1754,13 @@
             hide() { this[hideAtom]() },
           };
           contextToSchemeCanvas.set(canvas2dRenderingContext, schemeCanvas);
+          let drawTime = Date.now();
           function _doRedraw(...rest) {
             if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
+            let now = Date.now();
+            if (now - drawTime > 100) // ms
+              schemeCanvas.stashX = schemeCanvas.stashY = undefined;
+            drawTime = now;
             let renderingContext = canvas2dRenderingContext;
             let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
             if (backingBufferWidth > 0 && backingBufferHeight > 0) {
@@ -1978,6 +1983,30 @@
           let ctx = this[gfxContextAtom];
           let schemeCanvas = contextToSchemeCanvas.get(ctx);
           return schemeCanvas.height;
+        };
+
+        defineGlobalSymbol("stash-point", stash_point, commonOptions);
+        function stash_point(x, y) {
+          let ctx = this[gfxContextAtom];
+          let schemeCanvas = contextToSchemeCanvas.get(ctx);
+          schemeCanvas.stashX = x;
+          schemeCanvas.stashY = y;
+        };
+
+        defineGlobalSymbol("move-to-stashed", move_to_stashed, commonOptions);
+        function move_to_stashed(x, y) {
+          let ctx = this[gfxContextAtom];
+          let schemeCanvas = contextToSchemeCanvas.get(ctx);
+          if (schemeCanvas.stashX !== undefined && schemeCanvas.stashY !== undefined)
+            ctx.moveTo(schemeCanvas.stashX, schemeCanvas.stashY);
+        };
+
+        defineGlobalSymbol("line-to-stashed", line_to_stashed, commonOptions);
+        function line_to_stashed(x, y) {
+          let ctx = this[gfxContextAtom];
+          let schemeCanvas = contextToSchemeCanvas.get(ctx);
+          if (schemeCanvas.stashX !== undefined && schemeCanvas.stashY !== undefined)
+            ctx.lineTo(schemeCanvas.stashX, schemeCanvas.stashY);
         };
 
         defineGlobalSymbol("clear-canvas", clear_canvas, commonOptions);
