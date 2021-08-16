@@ -1750,6 +1750,20 @@
           let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
+          function _resizeWithoutSmashingContent(newWidth, newHeight) {
+            let scratch = createElement('canvas'), ctx = scratch.getContext('2d');
+            let width = canvasElement.width, height = canvasElement.height;
+            // Unfortunately, you can't set them together
+            scratch.width = width;
+            scratch.height = height;
+            ctx.drawImage(canvasElement, 0, 0, width, height, 0, 0, width, height);
+            canvasElement.width = newWidth;
+            canvasElement.height = newHeight;
+            canvas2dRenderingContext.save();
+            canvas2dRenderingContext.resetTransform();
+            canvas2dRenderingContext.drawImage(scratch, 0, 0, width, height, 0, 0, width, height);
+            canvas2dRenderingContext.restore();
+          }
           let schemeWidget = { // Can access state through scoped references
             get canvasElement() { return canvasElement },
             get canvasFrame() { return canvasFrame },
@@ -1759,9 +1773,9 @@
             get [yAtom]() { return parseInt(canvasFrame.style.top) },
             set [yAtom](y) { canvasFrame.style.top = y+"px" },
             get [widthAtom]() { return Number(canvasElement.width) },
-            set [widthAtom](width) { canvasElement.width = width; redraw(); },
+            set [widthAtom](width) { _resizeWithoutSmashingContent(width, canvasElement.height) },
             get [heightAtom]() { return Number(canvasElement.height) },
-            set [heightAtom](height) { canvasElement.height = height; redraw(); },
+            set [heightAtom](height) { _resizeWithoutSmashingContent(canvasElement.width, height) },
             get [drawAtom]() { return drawFn; },
             set [drawAtom](fn) {
               if (typeof fn !== 'function')
