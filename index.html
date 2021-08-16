@@ -409,6 +409,7 @@
       <div id="input" spellcheck="false" autocomplete="off" spellcheck="false" autocorrect="off"
           autocapitalize="none"></div>
     </div>
+    <input type="file" style="display:none" id="load-file-dialog" accept=".scm">
     <div class="help" id="help-about">
       <close-button onclick="showHelp(null)"></close-button>
       <div class="help-content">
@@ -1332,6 +1333,7 @@
       const bodyElement = document.getElementById('body');
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
+      const loadFileInputElement = document.getElementById('load-file-dialog');
       let globalScope, SCHEME_VERSION;
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, SchemeEvalError;
       let NIL, Atom, string, defineGlobalSymbol, originalLoad;
@@ -1378,10 +1380,13 @@
       // For "load" and "require"
       let capturedInput, loadPath, loadLine, loadLineCount, loadAsyncContent;
 
-      function load(path, noEval = false) {
-        doLoad();
+      function load(path = optional, noEval = false) {
+        if (path)
+          doXHRLoad();
+        else
+          doFileLoad();
         return NIL;
-        async function doLoad() {
+        async function doXHRLoad() {
           let xhr = new Promise((resolve, reject) => {
             let request = new XMLHttpRequest();
             // Bypass the cache.
@@ -1413,23 +1418,40 @@
           });
           try {
             let content = await xhr;
-            let saveLoadAsyncContent = loadAsyncContent, savePath = loadPath, saveLine = loadLine, saveLoadLineCount = loadLineCount;
-            loadAsyncContent = content;
-            loadPath = path;
-            loadLine = 0;
-            loadLineCount = 0;
-            let res;
-            try {
-              res = originalLoad.call(globalScope, path, noEval);
-            } finally {
-              loadAsyncContent = saveLoadAsyncContent;
-              loadPath = savePath;
-              loadLine = saveLine;
-              loadLineCount = saveLoadLineCount;
-            }
+            invokeLoadWithPathAndContent(path, content);
           } catch (error) {
             showError(error);
           }
+        }
+        function doFileLoad() {
+            loadFileInputElement.onchange =  function handleFileLoad(event) {
+              let fileList = this.files, file = fileList[0];
+              console.log("FILEDIALOG", fileList, file);
+              loadContent(file);
+              async function loadContent(file) {
+                let path = file.name;
+                let content = await(file.text());
+                invokeLoadWithPathAndContent(path, content);
+              }
+            };
+            loadFileInputElement.click();
+        }
+        function invokeLoadWithPathAndContent(path, content) {
+          let saveLoadAsyncContent = loadAsyncContent, savePath = loadPath, saveLine = loadLine, saveLoadLineCount = loadLineCount;
+          loadAsyncContent = content;
+          loadPath = path;
+          loadLine = 0;
+          loadLineCount = 0;
+          let res;
+          try {
+            res = originalLoad.call(globalScope, path, noEval);
+          } finally {
+            loadAsyncContent = saveLoadAsyncContent;
+            loadPath = savePath;
+            loadLine = saveLine;
+            loadLineCount = saveLoadLineCount;
+          }
+          return res;
         }
       }
 
