@@ -1698,15 +1698,41 @@
           showHelp(null);
       });
 
+      let gfxContextAtom, drawAtom, animateAtom, clearCanvasAtom, backingBufferAtom;
+      let showAtom, hideAtom, clearColorAtom;
+      let xAtom, yAtom, widthAtom, heightAtom;
+      let contextToSchemeWidget = new WeakMap();
+
+      class SchemeWidget {
+        get x() { return this[xAtom] }
+        set x(value) { this[xAtom] = value }
+        get y() { return this[yAtom] }
+        set y(value) { this[yAtom] = value }
+        get width() { return this[widthAtom] }
+        set width(value) { this[widthAtom] = value }
+        get height() { return this[heightAtom] }
+        set height(value) { this[heightAtom] = value }
+        get drawFn() { this[drawAtom] }
+        set drawFn(value) { this[drawAtom] = value }
+        get animate() { this[animateAtom] }
+        set animate(value) { this[animateAtom] = value }
+        get animate() { this[animateAtom] }
+        set animate(value) { this[animateAtom] = value }
+        get clearCanvas() { this[clearCanvasAtom] }
+        set clearCanvas(value) { this[clearCanvasAtom] = value }
+        get clearColor() { this[clearColorAtom] }
+        set clearColor(value) { this[clearColorAtom] = value }
+        backingBuffer(width, height) { return this[backingBufferAtom](width, height) }
+        show(...params) { return this[showAtom](...params) }
+        hide() { this[hideAtom]() }
+      }
+
       function defineGraphicsFunctions() {
         let newCanvasX = 200, newCanvasY = 10;
-        let gfxContextAtom = Atom("gfx-context");
-        let drawAtom = Atom("draw"), animateAtom = Atom("animate");
-        let clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");
-        let showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
-        let contextToSchemeCanvas = new WeakMap();
-
-        let crc2schemeCanvasMap = new WeakMap();
+        gfxContextAtom = Atom("gfx-context"), drawAtom = Atom("draw");
+        animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");
+        showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
+        xAtom = Atom("x"), yAtom = Atom("y"), widthAtom = Atom("width"), heightAtom = Atom("height");
 
         defineGlobalSymbol("canvas", canvas, { dontInline: true, group: "web-gfx" });
         function canvas(name = "canvas", width = 200, height = width) { 
@@ -1723,23 +1749,18 @@
           let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
-          let schemeCanvas = {
-            canvasElement,
-            canvasFrame,
-            get x() { return parseInt(canvasFrame.style.left) },
-            set x(x) { canvasFrame.style.left = x+"px" },
-            get y() { return parseInt(canvasFrame.style.top) },
-            set y(y) { canvasFrame.style.top = y+"px" },
-            get width() { return Number(canvasElement.width) },
-            set width(width) { canvasElement.width = width; redraw(); },
-            get height() { return Number(canvasElement.height) },
-            set height(height) { canvasElement.height = height; redraw(); },
-            get [animateAtom]() { return animate },
-            set [animateAtom](value) {
-              animate = value;
-              if (animate)
-                startAnimation();
-            },
+          let schemeWidget = { // Can access state through scoped references
+            get canvasElement() { return canvasElement },
+            get canvasFrame() { return canvasFrame },
+            get canvas2dRenderingContext() { return canvas2dRenderingContext },
+            get [xAtom]() { return parseInt(canvasFrame.style.left) },
+            set [xAtom](x) { canvasFrame.style.left = x+"px" },
+            get [yAtom]() { return parseInt(canvasFrame.style.top) },
+            set [yAtom](y) { canvasFrame.style.top = y+"px" },
+            get [widthAtom]() { return Number(canvasElement.width) },
+            set [widthAtom](width) { canvasElement.width = width; redraw(); },
+            get [heightAtom]() { return Number(canvasElement.height) },
+            set [heightAtom](height) { canvasElement.height = height; redraw(); },
             get [drawAtom]() { return drawFn; },
             set [drawAtom](fn) {
               if (typeof fn !== 'function')
@@ -1747,6 +1768,12 @@
               drawFn = fn;
               _staleImage = true;
               window.requestAnimationFrame(animate ? startAnimation : _doRedraw);
+            },
+            get [animateAtom]() { return animate },
+            set [animateAtom](value) {
+              animate = value;
+              if (animate)
+                startAnimation();
             },
             get [clearCanvasAtom]() { return clearCanvasMode },
             set [clearCanvasAtom](value) { clearCanvasMode = value },
@@ -1756,8 +1783,6 @@
               backingBufferWidth = width;
               backingBufferHeight = height;
             },
-            backingBuffer(width, height) { return this[backingBufferAtom](width, height) },
-            get canvas2dRenderingContext() { return canvas2dRenderingContext },
             [showAtom](x = optional, y = optional, width = optional, height = optional) {
               if (x !== undefined) this.x = x;
               if (y !== undefined) this.y = y;
@@ -1768,20 +1793,19 @@
                 startAnimation();
               return this;
             },
-            show(...params) { return this[showAtom](...params) },
             [hideAtom]() {
               bodyElement.removeChild(canvasFrame);
               return this;
             },
-            hide() { this[hideAtom]() },
           };
-          contextToSchemeCanvas.set(canvas2dRenderingContext, schemeCanvas);
+          Object.setPrototypeOf(schemeWidget, SchemeWidget.prototype);
+          contextToSchemeWidget.set(canvas2dRenderingContext, schemeWidget);
           let drawTime = Date.now();
           function _doRedraw(...rest) {
             if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
             let now = Date.now();
             if (now - drawTime > 200) // ms
-              schemeCanvas.stashX = schemeCanvas.stashY = undefined;
+              schemeWidget.stashX = schemeWidget.stashY = undefined;
             drawTime = now;
             let renderingContext = canvas2dRenderingContext;
             let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
@@ -1794,7 +1818,7 @@
                 backingCanvas.width = neededWidth;
                 backingCanvas.height = neededHeight;
                 backing2dRenderingContext = backingCanvas.getContext('2d');
-                contextToSchemeCanvas.set(backing2dRenderingContext, schemeCanvas);
+                contextToSchemeWidget.set(backing2dRenderingContext, schemeWidget);
                 if (clearColor) {
                   backing2dRenderingContext.save();
                   backing2dRenderingContext.fillStyle = clearColor;
@@ -1806,7 +1830,7 @@
                   if (neededWidth < w) w = neededWidth;
                   if (neededHeight < h) h = neededHeight;
                   backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0, w, h, 0, 0, w, h);
-                  contextToSchemeCanvas.delete(oldBacking2dRenderingContext);
+                  contextToSchemeWidget.delete(oldBacking2dRenderingContext);
                 } else {
                   let w = canvasElement.width, h = canvasElement.height;
                   if (neededWidth < w) w = neededWidth;
@@ -1866,7 +1890,7 @@
             animating = true;
             window.requestAnimationFrame(_drawAnimation);
           }
-          canvasCloseButton.addEventListener('click', _ => schemeCanvas.hide());
+          canvasCloseButton.addEventListener('click', _ => schemeWidget.hide());
           canvasFrame.addEventListener('mousedown', mouseDown);
           canvasFrame.addEventListener('touchstart', mouseDown);
           function mouseDown(event) {
@@ -1894,10 +1918,10 @@
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
               // console.log("MOUSEMOVE", event, pageX, pageY, deltaX, deltaY);
-              if (fx !== 0) schemeCanvas.x = left + fx * deltaX;
-              if (fy !== 0) schemeCanvas.y = top + fy * deltaY;
-              if (fw !== 0) schemeCanvas.width = canvasWidth + fw * deltaX;
-              if (fh !== 0) schemeCanvas.height = canvasHeight + fh * deltaY;
+              if (fx !== 0) schemeWidget.x = left + fx * deltaX;
+              if (fy !== 0) schemeWidget.y = top + fy * deltaY;
+              if (fw !== 0) schemeWidget.width = canvasWidth + fw * deltaX;
+              if (fh !== 0) schemeWidget.height = canvasHeight + fh * deltaY;
             }
             function mouseUp(event) {
               event.preventDefault();
@@ -1918,18 +1942,17 @@
           }
           newCanvasX += 25;
           newCanvasY += 25;
-          schemeCanvas.x = newCanvasX;
-          schemeCanvas.y = newCanvasY;
-          schemeCanvas.width = width;
-          schemeCanvas.height = height;
-          schemeCanvas.show();   // Not sure if this should happen by default, but for now...
-          return schemeCanvas;
+          schemeWidget.x = newCanvasX;
+          schemeWidget.y = newCanvasY;
+          schemeWidget.width = width;
+          schemeWidget.height = height;
+          schemeWidget.show();   // Not sure if this should happen by default, but for now...
+          return schemeWidget;
         }
 
         defineGlobalSymbol("draw2d", draw2d, { dontInline: true, group: "web-gfx" });
-        function draw2d(schemeCanvas) {
-          let canvasRenderingContext = schemeCanvas.canvas2dRenderingContext;
-          crc2schemeCanvasMap.set(canvasRenderingContext, schemeCanvas);
+        function draw2d(schemeWidget) {
+          let canvasRenderingContext = schemeWidget.canvas2dRenderingContext;
           return canvasRenderingContext;
         }
 
@@ -1996,39 +2019,39 @@
         defineGlobalSymbol("canvas-width", canvas_width, commonOptions);
         function canvas_width() {
           let ctx = this[gfxContextAtom];
-          let schemeCanvas = contextToSchemeCanvas.get(ctx);
-          return schemeCanvas.width;
+          let schemeWidget = contextToSchemeWidget.get(ctx);
+          return schemeWidget.width;
         };
 
         defineGlobalSymbol("canvas-height", canvas_height, commonOptions);
         function canvas_height() {
           let ctx = this[gfxContextAtom];
-          let schemeCanvas = contextToSchemeCanvas.get(ctx);
-          return schemeCanvas.height;
+          let schemeWidget = contextToSchemeWidget.get(ctx);
+          return schemeWidget.height;
         };
 
         defineGlobalSymbol("stash-point", stash_point, commonOptions);
         function stash_point(x, y) {
           let ctx = this[gfxContextAtom];
-          let schemeCanvas = contextToSchemeCanvas.get(ctx);
-          schemeCanvas.stashX = x;
-          schemeCanvas.stashY = y;
+          let schemeWidget = contextToSchemeWidget.get(ctx);
+          schemeWidget.stashX = x;
+          schemeWidget.stashY = y;
         };
 
         defineGlobalSymbol("move-to-stashed", move_to_stashed, commonOptions);
         function move_to_stashed(x, y) {
           let ctx = this[gfxContextAtom];
-          let schemeCanvas = contextToSchemeCanvas.get(ctx);
-          if (schemeCanvas.stashX !== undefined && schemeCanvas.stashY !== undefined)
-            ctx.moveTo(schemeCanvas.stashX, schemeCanvas.stashY);
+          let schemeWidget = contextToSchemeWidget.get(ctx);
+          if (schemeWidget.stashX !== undefined && schemeWidget.stashY !== undefined)
+            ctx.moveTo(schemeWidget.stashX, schemeWidget.stashY);
         };
 
         defineGlobalSymbol("line-to-stashed", line_to_stashed, commonOptions);
         function line_to_stashed(x, y) {
           let ctx = this[gfxContextAtom];
-          let schemeCanvas = contextToSchemeCanvas.get(ctx);
-          if (schemeCanvas.stashX !== undefined && schemeCanvas.stashY !== undefined)
-            ctx.lineTo(schemeCanvas.stashX, schemeCanvas.stashY);
+          let schemeWidget = contextToSchemeWidget.get(ctx);
+          if (schemeWidget.stashX !== undefined && schemeWidget.stashY !== undefined)
+            ctx.lineTo(schemeWidget.stashX, schemeWidget.stashY);
         };
 
         defineGlobalSymbol("clear-canvas", clear_canvas, commonOptions);
@@ -2039,15 +2062,15 @@
 
         defineGlobalSymbol("show-canvas", show_canvas, commonOptions);
         function show_canvas(x = optional, y = optional, width = optional, height = optional) {
-          let ctx = this[gfxContextAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
-          schemeCanvas.show(x, y, width, height);
+          let ctx = this[gfxContextAtom], schemeWidget = contextToSchemeWidget.get(ctx);
+          schemeWidget.show(x, y, width, height);
           return NIL;
         };
 
         defineGlobalSymbol("hide-canvas", hide_canvas, commonOptions);
         function hide_canvas() {
-          let ctx = this[gfxContextAtom], schemeCanvas = crc2schemeCanvasMap.get(ctx);
-          schemeCanvas.hide();
+          let ctx = this[gfxContextAtom], schemeWidget = contextToSchemeWidget.get(ctx);
+          schemeWidget.hide();
           return NIL;
         };
 
