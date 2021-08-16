@@ -1681,7 +1681,7 @@
         let gfxContextAtom = Atom("gfx-context");
         let drawAtom = Atom("draw"), animateAtom = Atom("animate");
         let clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");
-        let showAtom = Atom("show"), hideAtom = Atom("hide");
+        let showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
         let contextToSchemeCanvas = new WeakMap();
 
         let crc2schemeCanvasMap = new WeakMap();
@@ -1697,7 +1697,8 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrame.appendChild(canvasTitleBar);
           canvasFrame.appendChild(canvasElement);
-          let drawFn, _staleImage = false, animate = false, animating = false, clearCanvasMode = true;
+          let drawFn, _staleImage = false, animate = false, animating = false;
+          let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
           let schemeCanvas = {
@@ -1727,6 +1728,8 @@
             },
             get [clearCanvasAtom]() { return clearCanvasMode },
             set [clearCanvasAtom](value) { clearCanvasMode = value },
+            get [clearColorAtom]() { return clearColor },
+            set [clearColorAtom](value) { clearColor = value; forceClear = true; },
             [backingBufferAtom](width, height = width) {
               backingBufferWidth = width;
               backingBufferHeight = height;
@@ -1764,6 +1767,12 @@
               backingCanvas.height = neededHeight;
               backing2dRenderingContext = backingCanvas.getContext('2d');
               contextToSchemeCanvas.set(backing2dRenderingContext, schemeCanvas);
+              if (clearColor) {
+                backing2dRenderingContext.save();
+                backing2dRenderingContext.fillStyle = clearColor;
+                backing2dRenderingContext.fillRect(0, 0, neededWidth, neededHeight);
+                backing2dRenderingContext.restore();
+              }
               if (oldBackingCanvas) {
                 let w = oldBackingCanvas.width, h = oldBackingCanvas.height;
                 if (neededWidth < w) w = neededWidth;
@@ -1790,10 +1799,18 @@
             for (let i = 0; i < 20; ++i);
               renderingContext.restore();
             renderingContext.save();  // So we can easily restore context (just above)
-            if (clearCanvasMode) {
+            if (clearCanvasMode || forceClear) {
+              forceClear = false;
               // NB: the stuff above is redundant if this ever works:
               //    canvas2dRenderingContext.reset();
-              renderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
+              if (clearColor) {
+                renderingContext.save();
+                renderingContext.fillStyle = clearColor;
+                renderingContext.fillRect(0, 0, canvasWidth, canvasHeight);
+                renderingContext.restore();
+              } else {
+                renderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
+              }
             }
             renderingContext.beginPath();
             drawFn(renderingContext);

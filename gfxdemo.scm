@@ -31,11 +31,11 @@
 ;; Now a lissajous figure
 (define (lissajous gfx-context)
   ;; fade the canvas by drawing over it with white and a very low alpha
-  (fill-style "#ffffff04")
+  (fill-style "#00000002")
   (fill-rect 0 0 (canvas-width) (canvas-height))
   (scale (/ (canvas-width) 100)) ;; scale to a 100 x 100 coordinate system
   (translate 50 50) ;; centered on (50, 50)
-  (fill-style "green") (begin-path)
+  (fill-style "#8f8") (begin-path)
   (ellipse (sinusoidal 45 7.49) (sinusoidal 45 5.73) 1 1 0 0 *2pi*)
   (fill)
 )
@@ -45,4 +45,5 @@
 (@= lissajousCanvas 'animate true)
 (@! lissajousCanvas 'show 300 30)
 (@! lissajousCanvas 'backing-buffer 500 500) ;; use an offscreen-backing buffer
-(@= lissajousCanvas 'clear-canvas false)     ;; and don't clear the canvas before drawing
+(@= lissajousCanvas 'clear-canvas false)     ;; and don't clear the canvas before re-drawing
+(@= lissajousCanvas 'clear-color "black")    ;; well, except initially
