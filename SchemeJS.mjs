@@ -1000,7 +1000,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //    (? false) returns a function that evaluates its second parameter.
   //
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook, group: "core", schemeOnly: true }, "if");
-  function ifelse(p, t, f) {
+  function ifelse(p, t = true, f = false) {
     p = schemeTrue(p);
     if (p)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1008,8 +1008,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       return isPrimitive(f) ? f : _eval(f, this);
   }
   function ifelse_hook(args, ssaScope, tools) {
-    if (args[0] === undefined && args[1] === undefined && args[2] === undefined)
-      return 'undefined';
     return conditionalHooks(args, ssaScope, tools, 'if', 'schemeTrue(*)');
   }
 

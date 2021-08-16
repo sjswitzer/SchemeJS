@@ -229,16 +229,11 @@ export function run(opts = {}) {
     EXPECT(' (/ 3 7) ', 3/7);
     EXPECT(' (/ 100000 10 10 10) ', 100);
 
-    EXPECT(` (?) `, undefined);
-    EXPECT(` (? true) `, isClosure);
-    EXPECT(` ((? true) 1 2) `, 1);
-    EXPECT(` (? false) `, isClosure);
-    EXPECT(` ((? false) 1 2) `, 2);
-    EXPECT(` (? true 1) `, isClosure);
-    EXPECT(` ((? true 1) 2) `, 1);
-    EXPECT(` ((? true 1) (oops!)) `, 1);
-    EXPECT(` (? false 1) `, isClosure);
-    EXPECT(` ((? false (oops!)) 2)`, 2);
+    EXPECT(` (?) `, false);
+    EXPECT(` (? true) `, true);
+    EXPECT(` (? false) `, false);
+    EXPECT(` (? true 1) `, 1);
+    EXPECT(` (? false 1) `, false);
     EXPECT(` (? true 1 2) `, 1);
     EXPECT(` (? false 1 2) `, 2);
     EXPECT(` (? (< 3 5) (+ 3 4) (* 3 4)) `, 7);
@@ -262,8 +257,6 @@ export function run(opts = {}) {
     EXPECT(` (? false 1 2 (oops!)) `, 2);
     EXPECT(` (? true 1 (oops!)) `, 1);
     EXPECT(` (? false (oops!) 2) `, 2);
-    EXPECT_ERROR(` ((? true (oops!)) 2) `, SchemeEvalError);
-    EXPECT_ERROR(` ((? false 1) (oops!))`, SchemeEvalError);
     EXPECT_ERROR(` (? false 1 (oops!)) `, SchemeEvalError);
     EXPECT_ERROR(` (? true (oops!) 2) `, SchemeEvalError);
     EXPECT_ERROR(` (? (oops!) 1 2) `, SchemeEvalError);

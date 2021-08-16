@@ -34,7 +34,6 @@
   (fill-style "#00000004")
   (? (== 0 (% tick 5))
     (fill-rect 0 0 (canvas-width) (canvas-height))
-    nil ;; todo: closures for ? are a bad idea
   )
   (scale (/ (canvas-width) 100) (/ (canvas-height) 100)) ;; scale to a 100 x 100 coordinate system
   (translate 50 50) ;; centered on (50, 50)
@@ -60,7 +59,6 @@
   (fill-style "#ffffff0c")
   (? (== 0 (% tick 25))
     (fill-rect 0 0 (canvas-width) (canvas-height))
-    nil ;; todo: closures for ? are a bad idea
   )
   (scale (/ (canvas-width) 100) (/ (canvas-height) 100)) ;; scale to a 100 x 100 coordinate system
   (translate 50 50) ;; centered on (50, 50)
