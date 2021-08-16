@@ -44,5 +44,5 @@
 (@= lissajousCanvas 'draw lissajous)
 (@= lissajousCanvas 'animate true)
 (@! lissajousCanvas 'show 300 30)
-;; (@! lissajousCanvas 'backing-buffer 500 500) ;; use an offscreen-backing buffer
+(@! lissajousCanvas 'backing-buffer 500 500) ;; use an offscreen-backing buffer
 (@= lissajousCanvas 'clear-canvas false)     ;; and don't clear the canvas before drawing
