@@ -39,7 +39,7 @@
   (scale (/ (canvas-width) 100) (/ (canvas-height) 100)) ;; scale to a 100 x 100 coordinate system
   (translate 50 50) ;; centered on (50, 50)
   (move-to-stashed)
-  (stash-point (sinusoidal 45 7.19) (sinusoidal 45 5.83))
+  (stash-point (sinusoidal 45 3.19) (sinusoidal 45 2.83))
   (line-to-stashed)
   (stroke-style "green") (line-cap "round") (line-width 1.5) (stroke)
 )

@@ -1758,7 +1758,7 @@
           function _doRedraw(...rest) {
             if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
             let now = Date.now();
-            if (now - drawTime > 100) // ms
+            if (now - drawTime > 200) // ms
               schemeCanvas.stashX = schemeCanvas.stashY = undefined;
             drawTime = now;
             let renderingContext = canvas2dRenderingContext;
