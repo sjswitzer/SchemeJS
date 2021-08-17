@@ -1823,13 +1823,16 @@
           let drawTime = Date.now();
           let tickCount = 0;
           function _doRedraw() {
+            // Encapsulate common drawing and animation patterns in an easy
+            // declatative structure
             if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
             let now = Date.now();
-            if (now - drawTime > 200) // ms
+            if (now - drawTime > 200 /* ms */) // Stale stash -- heuristic!
               schemeWidget.stashX = schemeWidget.stashY = undefined;
             drawTime = now;
             let renderingContext = canvas2dRenderingContext;
             let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
+            // If we're using a backing buffer make sure it (a) exists and (b) is big enough
             if (backingBufferWidth > 0 && backingBufferHeight > 0) {
               let neededWidth = backingBufferWidth > canvasWidth ? backingBufferWidth : canvasWidth;
               let neededHeight = backingBufferHeight > canvasHeight ? backingBufferHeight : canvasHeight;
@@ -1840,12 +1843,14 @@
                 backingCanvas.height = neededHeight;
                 backing2dRenderingContext = backingCanvas.getContext('2d');
                 contextToSchemeWidget.set(backing2dRenderingContext, schemeWidget);
+                // Clear to the clearColor, if any
                 if (clearColor) {
                   backing2dRenderingContext.save();
                   backing2dRenderingContext.fillStyle = clearColor;
                   backing2dRenderingContext.fillRect(0, 0, neededWidth, neededHeight);
                   backing2dRenderingContext.restore();
                 }
+                // Transfer old contents to the new buffer
                 if (oldBackingCanvas) {
                   let w = oldBackingCanvas.width, h = oldBackingCanvas.height;
                   if (neededWidth < w) w = neededWidth;
@@ -1865,7 +1870,7 @@
             }
             renderingContext.resetTransform();
             // The spec says there's supposed to be a reset method, but MDN
-            // doesn't mention it and emperically, it doesn't exist yet.
+            // doesn't mention it and, emperically, it doesn't exist (yet?).
             // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
             //   canvas2dRenderingContext.reset();
             // So instead, pop a buncha renderingContexts, reset the
@@ -1875,8 +1880,6 @@
             renderingContext.save();  // So we can easily restore context (just above)
             if (clearCanvasMode || forceClear) {
               forceClear = false;
-              // NB: the stuff above is redundant if this ever works:
-              //    canvas2dRenderingContext.reset();
               if (clearColor) {
                 renderingContext.save();
                 renderingContext.fillStyle = clearColor;
@@ -1886,18 +1889,11 @@
                 renderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
               }
             }
-            renderingContext.beginPath();
+            renderingContext.beginPath();  // Make sure no path parts hanging around
             drawFn(renderingContext, tickCount++);
             if (backingCanvas)
               canvas2dRenderingContext.drawImage(backingCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, canvasWidth, canvasHeight);
             _staleImage = false;
-          }
-          function _drawAnimation() {
-            _staleImage = true;
-            _doRedraw();
-            if (drawFn && animate && canvasFrame.parentElement)
-              return window.requestAnimationFrame(_drawAnimation);
-            animating = false;
           }
           function redraw() {
             _staleImage = true;
@@ -1908,7 +1904,14 @@
             if (animating) return;
             if (!(drawFn && animate && canvasFrame.parentElement)) return;
             animating = true;
-            window.requestAnimationFrame(_drawAnimation);
+            window.requestAnimationFrame(drawAnimation);
+            function drawAnimation() {
+              _staleImage = true;
+              _doRedraw();
+              if (drawFn && animate && canvasFrame.parentElement)
+                return window.requestAnimationFrame(drawAnimation);
+              animating = false;
+            }
           }
           canvasCloseButton.addEventListener('click', _ => schemeWidget.hide());
           canvasFrame.addEventListener('mousedown', mouseDown);
@@ -2031,11 +2034,11 @@
 
         let commonOptions = { dontInline: true, group: "web-gfx" };  // XXX TODO: remove dontInline when draw2d has a compile hook
 
-        defineGlobalSymbol("save-rendering-context", save_rendering_context, commonOptions);
-        function save_rendering_context() { return CRCfunction(this, ctx => ctx.save()) }
+        defineGlobalSymbol("save-context", save_context, commonOptions);
+        function save_context() { return CRCfunction(this, ctx => ctx.save()) }
 
-        defineGlobalSymbol("restore-rendering-context", restore_rendering_context, commonOptions);
-        function restore_rendering_context() { return CRCfunction(this, ctx => ctx.restore()) }
+        defineGlobalSymbol("restore-context", restore_context, commonOptions);
+        function restore_context() { return CRCfunction(this, ctx => ctx.restore()) }
 
         defineGlobalSymbol("canvas-width", canvas_width, commonOptions);
         function canvas_width() {
@@ -2078,7 +2081,13 @@
         defineGlobalSymbol("clear-canvas", clear_canvas, commonOptions);
         function clear_canvas() {
           let ctx = this[gfxContextAtom], canvas = ctx.canvas, width = canvas.width, height = canvas.height;
-          return ctx.clearRect(0, 0, width, height);
+          ctx.save();
+          if (clearColor) {
+            ctx.fillStyle = clearColor;
+            ctx.fillRect(0, 0, width, width);
+          }
+          ctx.clearRect(0, 0, width, height);
+          ctx.restore();
         };
 
         defineGlobalSymbol("show-canvas", show_canvas, commonOptions);

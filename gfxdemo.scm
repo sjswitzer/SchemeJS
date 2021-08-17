@@ -5,13 +5,22 @@
 ;; methods (https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D)
 ;; mapped into SchemeJS with camelCase replaced-by-dashes and implicitly applied
 ;; to the variable named "gfx-context".
-;; So "(move-to x y)" equates to "gfxContext.moveTo(x y)" in JavaScript.
+;; So "(move-to x y)" equates to "gfxContext.moveTo(x, y)" in JavaScript.
 ;; 
 ;; The exceptions are the stashing functions, described inline below, and "gfx-save".
 ;; "(gfx-save expr expr ...)" saves the current drawing state (colors, transforms,
-;; line widts, etc.) then executes the enclosed expressions. When done, it restores
+;; line widths, etc.) then executes the enclosed expressions. When done, it restores
 ;; the previous drawing state. So you can take a drawing excursion, with whatever scales,
 ;; rotations, colors, line widths you want then return to the previous state and continue.
+;;
+;; Finally, the "gfxContext.save()" and "gfxContext ctx.restore()" functions are renamed
+;; "(save-context)" and "(restore-context)". "Save" and "restore" are confusingly
+;; general, and you won't be needing them anyway because you can do the two
+;; together in a structured way by using
+;;   (gfx-save expr expr ...)
+;; which is the same as
+;;   (save-context) expr expr ... (restore-context)
+;; but can't be messed up.
 ;;
 
 ;; Animation helper: a sinusoidal time-varying value of a given magintude,
