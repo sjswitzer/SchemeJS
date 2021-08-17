@@ -152,6 +152,8 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("isCons", isCons);
   exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
 
+  const isArray = Array.isArray;
+
   //
   // Atoms are Symbols that are in the ATOMS object
   //
@@ -1207,7 +1209,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   defineGlobalSymbol("array?", is_array, { evalArgs: 1, compileHook: is_array_hook, group: "pred-op", schemeOnly: true }, "is-array");
   function is_array(a, t = true, f = false) {
-    if (Array.isArray(a))
+    if (isArray(a))
       return isPrimitive(t) ? t : _eval(t, this);
     else
       return isPrimitive(f) ? f : _eval(f, this);
@@ -1414,7 +1416,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         res = list[CAR];
     } else {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
-      if (Array.isArray(list)) {
+      if (isArray(list)) {
         if (list.length > 0)
           return list[list.length-1];
         return NIL;
@@ -1457,7 +1459,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         n += 1;
     } else {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
-      if (Array.isArray(list) && list.length > 0)
+      if (isArray(list) && list.length > 0)
         return list.length;
       if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
       for (let _ of list)
@@ -1561,7 +1563,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         index -= 1;
       if (isCons(list))
         return list[CAR];
-  ``} else if (Array.isArray(list)) {
+  ``} else if (isArray(list)) {
       if (index < list.length)
         return list[index];
     } else {
@@ -1999,7 +2001,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function mergesort(list, predicateFn = optional, accessFn = optional) {
     if (isNil(list)) return NIL;
     // Sort Arrays as Arrays
-    if (Array.isArray(list))
+    if (isArray(list))
       return in_place_mergesort(list.slice(0), predicateFn, accessFn);
     // Lists and other iterables are sorted as lists
     if (isCons(list))
@@ -2031,7 +2033,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
     }
     // Sort arrays as arrays
-    if (Array.isArray(list)) {
+    if (isArray(list)) {
       // ES10 stipulates that it only cares whether the compare function
       // returns > 0, which means move "b"  before "a," or <= zero,
       // which means leave "a" before "b". There's no ned to distinguish
@@ -2246,7 +2248,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // Since the protos are the same; if either is an array, both are.
       // But I might change my mind about the prototype check, so leave the additional
       // tests in for now.
-      if (Array.isArray(a)) {
+      if (isArray(a)) {
         if (a.length != b.length) {
           report.a = a, report.b = b;
           report.aVal = a.length, report.bVal = b.length;
@@ -2608,7 +2610,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     //   a new Object or Array in correspoding position.
     // TODO: Investigate Symbol.species (also for map, etc.)
     if (form !== null && typeof form === 'object') {
-      if (Array.isArray(form)) {
+      if (isArray(form)) {
         let res = [];
         for (let element of form)
           res.push(_eval(element, scope));
@@ -2746,8 +2748,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     function jsClosure(...args) {
       scope = newScope(scope, "lambda-scope");
       if (jitThreshold !== undefined) {  // Disable by optioning jitThreshold as undefined
-        let jitFn = jsClosure[JITCOMPILED];
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
+        let jitFn = jsClosure[JITCOMPILED];
         if (!jitFn && --jitCount < 0) {
           jitCount = jitThreshold;
           jitFn = jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, namedObjects.get(jsClosure), lambda, jsClosure);
@@ -2970,7 +2972,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           indent = saveIndent;
           return;
         }
-        if (Array.isArray(obj)) {
+        if (isArray(obj)) {
           put("[");
           indent += indentMore;
           sep = "";
@@ -4100,7 +4102,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     // Special eval for JS Arrays and Objects
     if (form !== null && typeof form === 'object') {
-      if (Array.isArray(form )) {
+      if (isArray(form )) {
         let ssaArrayLiteral = newTemp("arrayliteral");
         let evalledSsaValues = [];
         for (let element of form) {
