@@ -1375,13 +1375,13 @@
       let varNo = 0, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
       const optional = undefined;  // so that parameters show up pretty when printed
-      let traceCompilerCode = true;
+      let traceCompilerCode = true, traceInterpreter = false;
 
       onload = importSchemeAndRunREPL();
       async function importSchemeAndRunREPL() {
         let SchemeJS = await(import("./SchemeJS.mjs"));
         globalScope = SchemeJS.createInstance({
-          lambdaStr, readFile, linePrinter, traceCompilerCode,
+          lambdaStr, readFile, linePrinter, traceCompilerCode, traceInterpreter,
           reportLoadResult, reportLoadInput, reportSchemeError, reportSystemError
         });
         SCHEME_VERSION = globalScope.VERSION;
@@ -1785,7 +1785,8 @@
           let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
-          let userMedia, userMediaElement, userMediaStream, audioContext, audioAnalyser;
+          let userMedia, userMediaElement, userMediaStream, audioContext;
+          let audioAnalyser, frequencyDataArray = new Uint8Array(1), timeDomainDataArray = new Uint8Array(1);
           function _resizeWithoutSmashingContent(newWidth, newHeight) {
             let scratch = createElement('canvas'), ctx = scratch.getContext('2d');
             let width = canvasElement.width, height = canvasElement.height;
@@ -1864,7 +1865,17 @@
               } else {}
                 ctx.clearRect(0, 0, width, height);
               ctx.restore();
-            }
+            },
+            get [Atom('frequency-domain-data')]() {
+              if (audioAnalyser)
+                audioAnalyser.getByteFrequencyData(frequencyDataArray);
+              return frequencyDataArray;
+            },
+            get [Atom('time-domain-data')]() {
+              if (audioAnalyser)
+                audioAnalyser.getByteTimeDomainData(timeDomainDataArray);
+              return timeDomainDataArray;
+            },
           };
           Object.setPrototypeOf(schemeWidget, SchemeWidget.prototype);
           contextToSchemeWidget.set(canvas2dRenderingContext, schemeWidget);
@@ -2034,6 +2045,8 @@
                   audioAnalyser = audioContext.createAnalyser();
                   let source = audioContext.createMediaStreamSource(userMediaStream);
                   source.connect(audioAnalyser);
+                  frequencyDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+                  timeDomainDataArray = new Uint8Array(audioAnalyser.fftSize);
                 } catch(_) {
                   console.log("ERROR", _);
                 }
