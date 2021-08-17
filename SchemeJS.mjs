@@ -3689,11 +3689,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let compiledFunction = binder.call(this, bindSymToObj, resolveUnbound, invokeUnbound);
     return compiledFunction;
     function resolveUnbound(x) {
-      let val = scope[x];
-      if (val === undefined) checkUndefinedInScope(x, scope);
-      return val;
+      return _eval(x, scope);
     }
     function invokeUnbound(fn, args) {
+      // This is _almost_ apply, but it evaluates its arguments first.
       let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
       let requiredCount = parameterDescriptor & 0xffff;
       let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
