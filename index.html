@@ -1943,18 +1943,13 @@
               [1, -1, 0,  0], [1, 0, 1,  0], [0, 1, 0,  0],
               [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
             ][i];
-            let moveOK = false, threshold = 4;
             function mouseMove(event) {
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
-              if (Math.abs(deltaX) > threshold || Math.abs(deltaY) > threshold) {
-                moveOK = true;
-                // Place element at the end of its parent's node list so it diplays on top.
-                // But only if it hasn't been removed!
+              setTimeout(_ => { // defer so as not to interfere with click events; e.g. the close button
                 if (canvasFrame.parentNode)
                   canvasFrame.parentNode.appendChild(canvasFrame);
-              }
-              if (!moveOK) return;
+              });
               if (fx !== 0) schemeWidget.x = left + fx * deltaX;
               if (fy !== 0) schemeWidget.y = top + fy * deltaY;
               if (fw !== 0) schemeWidget.width = canvasWidth + fw * deltaX;
@@ -1967,11 +1962,10 @@
               bodyElement.removeEventListener('mouseleave', mouseUp);
               bodyElement.removeEventListener('touchend', mouseUp);
               bodyElement.removeEventListener('touchcancel', mouseUp);
-              if (!moveOK) // still need to front the element
-                setTimeout(_ => {
-                  if (canvasFrame.parentNode)
-                    canvasFrame.parentNode.appendChild(canvasFrame);
-                });
+              setTimeout(_ => { // defer so as not to interfere with click events; e.g. the close button
+                if (canvasFrame.parentNode)
+                  canvasFrame.parentNode.appendChild(canvasFrame);
+              });
             }
             bodyElement.addEventListener('mousemove', mouseMove);
             bodyElement.addEventListener('touchmove', mouseMove);
