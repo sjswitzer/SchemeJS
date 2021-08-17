@@ -1816,6 +1816,16 @@
                 canvasFrame.parentNode.removeChild(canvasFrame);
               return this;
             },
+            clear_canvas() {
+              let ctx = backing2dRenderingContext ?? canvas2dRenderingContext;
+              ctx.save();
+              if (clearColor) {
+                ctx.fillStyle = clearColor;
+                ctx.fillRect(0, 0, width, width);
+              } else {}
+                ctx.clearRect(0, 0, width, height);
+              ctx.restore();
+            }
           };
           Object.setPrototypeOf(schemeWidget, SchemeWidget.prototype);
           contextToSchemeWidget.set(canvas2dRenderingContext, schemeWidget);
@@ -2086,14 +2096,9 @@
 
         defineGlobalSymbol("clear-canvas", clear_canvas, commonOptions);
         function clear_canvas() {
-          let ctx = this[gfxContextAtom], canvas = ctx.canvas, width = canvas.width, height = canvas.height;
-          ctx.save();
-          if (clearColor) {
-            ctx.fillStyle = clearColor;
-            ctx.fillRect(0, 0, width, width);
-          }
-          ctx.clearRect(0, 0, width, height);
-          ctx.restore();
+          let ctx = this[gfxContextAtom];
+          let schemeWidget = contextToSchemeWidget.get(ctx);
+          schemeWidget.clear_canvas();
         };
 
         defineGlobalSymbol("show-canvas", show_canvas, commonOptions);
