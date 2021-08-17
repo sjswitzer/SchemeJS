@@ -1944,6 +1944,78 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return ssaResult;
   }
 
+  // (for-in key value obj form...)
+  defineGlobalSymbol("for-in", for_in, { evalArgs: 0, XXXcompileHook: for_in_hook, group: "core", schemeOnly: true });
+  function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
+    obj = _eval(obj, scope)
+    let scope = newScope(this, "for-in-scope");
+    if (isIterable(obj)) {
+      let key = 0;
+      for (let value of obj) {
+        scope[keySymbol] = key++;
+        scope[valueSymbol] = value;
+        _eval(form, scope);
+        for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
+          _eval(forms[i], scope);  
+      }
+      return NIL;
+    }
+    if (obj == null || typeof obj !== 'object')
+      throw new SchemeEvalError(`for-in requires iterable or object ${string(obj)}`)
+    for (let key in obj) {
+      let value = obj[key];
+      scope[keySymbol] = key;
+      scope[valueSymbol] = value;
+      _eval(form, scope);
+      for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
+        _eval(forms[i], scope);
+    }
+    return NIL;
+  }
+  function for_in_hook(args, ssaScope, tools) {
+    // XXX TODO: This is just letrec cloned for now as a placeholder
+    // For "letrec", emit the `let ${ssaBoundVar} = NIL;` segnemts first,
+    // then the initialization bodies afterwards.
+    // For "let" emit the bodies first, then the initializations.
+    // For "let*" keep doing this.
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    if (args.length < 2) throw new SchemeCompileError(`Bad letrec`);
+    let bindings = args[0];
+    let ssaResult = newTemp("letrec");
+    ssaScope = newScope(ssaScope, "compiler-letrec-scope");
+    let ssaTmpScope = newTemp("scope_tmp");
+    emit(`let ${ssaTmpScope} = scope;`);
+    emit(`let ${ssaResult} = NIL; { // letrec`);
+    let saveIndent = tools.indent;
+    tools.indent += '  ';
+    emit(`let scope = newScope(${ssaTmpScope}, "compiled-letrec-scope");`);
+    for( ; isCons(bindings); bindings = bindings[CDR]) {
+      let binding = bindings[CAR];
+      if (!isCons(binding))
+        throw new SchemeCompileError(`Bad binding ${string(binding)}`)
+      let boundVar = binding[CAR], bindingForms = binding[CDR];
+      if (typeof boundVar !== 'symbol')
+        throw new SchemeEvalError(`Bad binding ${string(binding)}`);
+      let ssaBoundVar = newTemp(boundVar);
+      emit(`let ${ssaBoundVar} = NIL;`);
+      for ( ; isCons(bindingForms); bindingForms = bindingForms[CDR]) {
+        let ssaVal = compileEval(bindingForms[CAR], ssaScope, tools);
+        emit(`${ssaBoundVar} = ${ssaVal};`);
+      }
+      let paramAtom = use(bind(boundVar));
+      ssaScope[boundVar] = ssaBoundVar;
+      emit(`scope[${paramAtom}] = ${ssaBoundVar};`);
+    }
+    for (let i = 1; i < args.length; ++i) {
+      let ssaVal = compileEval(args[i], ssaScope, tools);
+      emit(`${ssaResult} = ${ssaVal};`);
+    }
+    tools.indent = saveIndent;
+    emit(`}`);
+    return ssaResult;
+  }
+
+
   // Something like this would be nice, but it's not quite right
   //  let setSymWithWith = new Function("symbol", "value", "scope",
   //    "with (scope) { return symbol = value }");

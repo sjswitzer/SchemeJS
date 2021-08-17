@@ -1785,7 +1785,7 @@
           let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
-          let userMedia, userMediaElement, userMediaStream, audioContext, audioAnalyzer;
+          let userMedia, userMediaElement, userMediaStream, audioContext, audioAnalyser;
           function _resizeWithoutSmashingContent(newWidth, newHeight) {
             let scratch = createElement('canvas'), ctx = scratch.getContext('2d');
             let width = canvasElement.width, height = canvasElement.height;
@@ -2029,12 +2029,13 @@
               audioContext = new AudioContext();
               startMedia(userMedia);
               async function startMedia(constraints) {
-                let stream = null;
                 try {
-                  userMediaStream = await MediaDevices.getUserMedia(constraints);
-                  audioAnalyzer = audioContext.createAnalyzer();
-                  userMediaStream.connect(audioAnalyzer);
+                  userMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                  audioAnalyser = audioContext.createAnalyser();
+                  let source = audioContext.createMediaStreamSource(userMediaStream);
+                  source.connect(audioAnalyser);
                 } catch(_) {
+                  console.log("ERROR", _);
                 }
               }
             } else if (!userMedia && alreadyUsingMedia) {
