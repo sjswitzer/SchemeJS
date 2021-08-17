@@ -28,7 +28,7 @@
   )
 )
 
-(define microphoneCanvas (canvas "Microphone"  300 300))
+(define microphoneCanvas (canvas "Microphone"  600 400))
 (@= microphoneCanvas 'draw o-scope)
 (@= microphoneCanvas 'animate true)
 (@= microphoneCanvas 'user-media { "audio": true })

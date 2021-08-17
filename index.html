@@ -434,7 +434,7 @@
     </div>
     <input type="file" style="display:none" id="load-file-dialog" accept=".scm">
     <div style="display: none">
-      <div id="user-media-template" class="microphone-control">
+      <div id="user-media-template" class="microphone-control" onmousedown="event.stopPropagation()">
         <label>
           <input type="checkbox" class="mute-toggle">
             &#x1F3A4
@@ -1786,7 +1786,16 @@
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
           let userMedia, userMediaElement, userMediaStream, audioContext;
-          let audioAnalyser, frequencyDataArray = new Uint8Array(1), timeDomainDataArray = new Uint8Array(1);
+          let audioSource, gainNode, volume = .5, muted = false;
+          let audioAnalyser, fftSize = 512, frequencyDataArray = new Uint8Array(1), timeDomainDataArray = new Uint8Array(1);
+          function attachAnalyzer() {
+            if (audioAnalyser || !audioContext || !gainNode) return;
+            audioAnalyser = audioContext.createAnalyser();
+            audioAnalyser.fftSize = fftSize;
+            gainNode.connect(audioAnalyser);
+            frequencyDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+            timeDomainDataArray = new Uint8Array(audioAnalyser.fftSize);
+          }
           function _resizeWithoutSmashingContent(newWidth, newHeight) {
             let scratch = createElement('canvas'), ctx = scratch.getContext('2d');
             let width = canvasElement.width, height = canvasElement.height;
@@ -1837,6 +1846,8 @@
             set [clearCanvasAtom](value) { clearCanvasMode = value },
             get [clearColorAtom]() { return clearColor },
             set [clearColorAtom](value) { clearColor = value; forceClear = true; },
+            get [Atom('fft-size')]() { return fftSize },
+            set [Atom('fft-size')](value) { fftSize = Math.max(32, Math.min(32768, 2**Math.ceil(Math.log2(value)))) },
             [backingBufferAtom](width, height = width) {
               backingBufferWidth = width;
               backingBufferHeight = height;
@@ -1867,11 +1878,13 @@
               ctx.restore();
             },
             get [Atom('frequency-domain-data')]() {
+              if (!audioAnalyser) attachAnalyzer();
               if (audioAnalyser)
                 audioAnalyser.getByteFrequencyData(frequencyDataArray);
               return frequencyDataArray;
             },
             get [Atom('time-domain-data')]() {
+              if (!audioAnalyser) attachAnalyzer();
               if (audioAnalyser)
                 audioAnalyser.getByteTimeDomainData(timeDomainDataArray);
               return timeDomainDataArray;
@@ -2036,25 +2049,37 @@
               let deep = true;
               userMediaElement = userMediaTemplateElement.cloneNode(deep);
               canvasFrameElement.appendChild(userMediaElement);
-              userMediaStream = undefined;
+              let muteElement = userMediaElement.querySelector(".mute-toggle");
+              muteElement.addEventListener('input', _ => { muted = muteElement.checked; setGain() });
+              let volumeElement = userMediaElement.querySelector(".volume");
+              volumeElement.addEventListener('input',  _ => { volume = volumeElement.value / 100; setGain() });
+              userMediaStream = audioSource = gainNode = undefined;
               audioContext = new AudioContext();
               startMedia(userMedia);
+              function setGain() {
+                if (!gainNode) return;
+                let vol = volume;
+                if (muted) vol = 0;
+                gainNode.gain.setValueAtTime(vol, audioContext.currentTime);
+              }
               async function startMedia(constraints) {
                 try {
                   userMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-                  audioAnalyser = audioContext.createAnalyser();
-                  let source = audioContext.createMediaStreamSource(userMediaStream);
-                  source.connect(audioAnalyser);
-                  frequencyDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
-                  timeDomainDataArray = new Uint8Array(audioAnalyser.fftSize);
-                } catch(_) {
-                  console.log("ERROR", _);
+                  audioSource = audioContext.createMediaStreamSource(userMediaStream);
+                  gainNode = audioContext.createGain();
+                  setGain();
+                  audioSource.connect(gainNode);
+                } catch(error) {
+                  console.log("GET-USER+MEDIA_ERROR", error);
                 }
               }
             } else if (!userMedia && alreadyUsingMedia) {
               if (userMediaElement)
                 canvasFrameElement.removeChild(userMediaElement);
               userMediaElement = undefined;
+              userMediaStream = audioContext = audioAnalyser = undefined;
+              frequencyDataArray = new Uint8Array(1);
+              timeDomainDataArray = new Uint8Array(1);
             }
           }
           newCanvasX += 25;
