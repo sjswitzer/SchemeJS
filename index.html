@@ -367,6 +367,7 @@
       }
 
       /* canvas support */
+      .canvas-frame { user-select: none }
       .canvas-frame .title-bar { font: 90% Lucida Console, Monaco, Consolas, Courier New, monospace; }
       .canvas-frame .title-bar close-button {
         --close-button-box-color: #f77;
@@ -395,6 +396,28 @@
       .drawing-canvas {
         background-color: white;
       }
+
+      .microphone-control {
+        user-select: none;
+        margin-top: .1em;
+        margin-left: .1em;
+      }
+      .microphone-control label { position:relative; cursor: pointer; bottom: .1em }
+      .microphone-control .mute-toggle {
+        position: absolute;
+        opacity: 0;
+      }
+      .microphone-control .muted {
+        display: inline-block; padding: 0;
+        font-size: 200%; height: 100%;
+        position: absolute; margin-top: -.2em; left: -.1em;
+      }
+      .microphone-control .muted { display: none }
+      .microphone-control .mute-toggle:checked ~ .muted {
+        display: inline-block; padding: 0;
+        font-size: 200%; height: 100%;
+        position: absolute; margin-top: -.2em; left: -.1em;
+      }
     </style>
   </head>
   <body id="body">
@@ -410,6 +433,16 @@
           autocapitalize="none"></div>
     </div>
     <input type="file" style="display:none" id="load-file-dialog" accept=".scm">
+    <div style="display: none">
+      <div id="user-media-template" class="microphone-control">
+        <label>
+          <input type="checkbox" class="mute-toggle">
+            &#x1F3A4
+            <div class="muted">&#x29B8;</div>
+        </label>
+        <input class="volume" type="range" min="0" max="100" step="5">
+      </div>
+    </div>
     <div class="help" id="help-about">
       <close-button onclick="showHelp(null)"></close-button>
       <div class="help-content">
@@ -1335,6 +1368,7 @@
       const inputElement = document.getElementById('input');
       const outputElement = document.getElementById('output');
       const loadFileInputElement = document.getElementById('load-file-dialog');
+      const userMediaTemplateElement = document.getElementById("user-media-template");
       let globalScope, SCHEME_VERSION;
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, SchemeEvalError;
       let NIL, Atom, string, defineGlobalSymbol, originalLoad;
@@ -1701,6 +1735,7 @@
       let gfxContextAtom, drawAtom, animateAtom, clearCanvasAtom, backingBufferAtom;
       let showAtom, hideAtom, clearColorAtom;
       let xAtom, yAtom, widthAtom, heightAtom;
+      let userMediaAtom;
       let contextToSchemeWidget = new WeakMap();
 
       class SchemeWidget {
@@ -1733,22 +1768,24 @@
         animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");
         showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
         xAtom = Atom("x"), yAtom = Atom("y"), widthAtom = Atom("width"), heightAtom = Atom("height");
+        userMediaAtom = Atom("user-media");
 
         defineGlobalSymbol("canvas", canvas, { dontInline: true, group: "web-gfx" });
         function canvas(name = "canvas", width = 200, height = width) { 
-          let canvasFrame = createElement('div', 'canvas-frame');
+          let canvasFrameElement = createElement('div', 'canvas-frame');
           let canvasTitleBar = createElement('div', 'title-bar');
           let titleSpan = createElement('span', 'title', name);
-          let canvasCloseButton = createElement('close-button');
-          canvasTitleBar.appendChild(canvasCloseButton);
+          let canvasCloseButtonElement = createElement('close-button');
+          canvasTitleBar.appendChild(canvasCloseButtonElement);
           canvasTitleBar.appendChild(titleSpan);
           let canvasElement = createElement('canvas', 'drawing-canvas');
-          canvasFrame.appendChild(canvasTitleBar);
-          canvasFrame.appendChild(canvasElement);
+          canvasFrameElement.appendChild(canvasTitleBar);
+          canvasFrameElement.appendChild(canvasElement);
           let drawFn, _staleImage = false, animate = false, animating = false;
           let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
+          let userMedia, userMediaElement;
           function _resizeWithoutSmashingContent(newWidth, newHeight) {
             let scratch = createElement('canvas'), ctx = scratch.getContext('2d');
             let width = canvasElement.width, height = canvasElement.height;
@@ -1769,12 +1806,12 @@
           }
           let schemeWidget = { // Can access state through scoped references
             get canvasElement() { return canvasElement },
-            get canvasFrame() { return canvasFrame },
+            get canvasFrame() { return canvasFrameElement },
             get canvas2dRenderingContext() { return canvas2dRenderingContext },
-            get [xAtom]() { return parseInt(canvasFrame.style.left) },
-            set [xAtom](x) { canvasFrame.style.left = x+"px" },
-            get [yAtom]() { return parseInt(canvasFrame.style.top) },
-            set [yAtom](y) { canvasFrame.style.top = y+"px" },
+            get [xAtom]() { return parseInt(canvasFrameElement.style.left) },
+            set [xAtom](x) { canvasFrameElement.style.left = x+"px" },
+            get [yAtom]() { return parseInt(canvasFrameElement.style.top) },
+            set [yAtom](y) { canvasFrameElement.style.top = y+"px" },
             get [widthAtom]() { return Number(canvasElement.width) },
             set [widthAtom](width) { _resizeWithoutSmashingContent(width, canvasElement.height) },
             get [heightAtom]() { return Number(canvasElement.height) },
@@ -1793,6 +1830,8 @@
               if (animate)
                 startAnimation();
             },
+            get [userMediaAtom]() { return userMedia },
+            set [userMediaAtom](value) { startUserMedia(value) },
             get [clearCanvasAtom]() { return clearCanvasMode },
             set [clearCanvasAtom](value) { clearCanvasMode = value },
             get [clearColorAtom]() { return clearColor },
@@ -1806,14 +1845,14 @@
               if (y !== undefined) this.y = y;
               if (width !== undefined) this.width = width;
               if (height !== undefined) this.height = height;
-              containerElement.appendChild(canvasFrame);
+              containerElement.appendChild(canvasFrameElement);
               if (animate)
                 startAnimation();
               return this;
             },
             [hideAtom]() {
-              if (canvasFrame.parentNode)
-                canvasFrame.parentNode.removeChild(canvasFrame);
+              if (canvasFrameElement.parentNode)
+                canvasFrameElement.parentNode.removeChild(canvasFrameElement);
               return this;
             },
             clear_canvas() {
@@ -1834,7 +1873,7 @@
           function _doRedraw() {
             // Encapsulate common drawing and animation patterns in an easy
             // declatative structure
-            if (!(drawFn && _staleImage && canvasFrame.parentElement)) return;
+            if (!(drawFn && _staleImage && canvasFrameElement.parentElement)) return;
             let now = Date.now();
             if (now - drawTime > 200 /* ms */) // Stale stash -- heuristic!
               schemeWidget.stashX = schemeWidget.stashY = undefined;
@@ -1911,26 +1950,26 @@
           function startAnimation() {
             // Take special care to not get multiple animation loops going.
             if (animating) return;
-            if (!(drawFn && animate && canvasFrame.parentElement)) return;
+            if (!(drawFn && animate && canvasFrameElement.parentElement)) return;
             animating = true;
             window.requestAnimationFrame(drawAnimation);
             function drawAnimation() {
               _staleImage = true;
               _doRedraw();
-              if (drawFn && animate && canvasFrame.parentElement)
+              if (drawFn && animate && canvasFrameElement.parentElement)
                 return window.requestAnimationFrame(drawAnimation);
               animating = false;
             }
           }
-          canvasCloseButton.addEventListener('click', _ => schemeWidget.hide());
-          canvasFrame.addEventListener('mousedown', mouseDown);
-          canvasFrame.addEventListener('touchstart', mouseDown);
+          canvasCloseButtonElement.addEventListener('click', _ => schemeWidget.hide());
+          canvasFrameElement.addEventListener('mousedown', mouseDown);
+          canvasFrameElement.addEventListener('touchstart', mouseDown);
           function mouseDown(event) {
             event.stopPropagation();
             let border = 10;
             let { pageX, pageY } = event;
             let initialX = pageX, initialY = pageY;
-            let { top, right, left, bottom } = canvasFrame.getBoundingClientRect();
+            let { top, right, left, bottom } = canvasFrameElement.getBoundingClientRect();
             let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
             let i = 0;
             if (pageX < left + border) i = 0;
@@ -1949,8 +1988,8 @@
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
               setTimeout(_ => { // defer so as not to interfere with click events; e.g. the close button
-                if (canvasFrame.parentNode)
-                  canvasFrame.parentNode.appendChild(canvasFrame);
+                if (canvasFrameElement.parentNode)
+                  canvasFrameElement.parentNode.appendChild(canvasFrameElement);
               });
               if (fx !== 0) schemeWidget.x = left + fx * deltaX;
               if (fy !== 0) schemeWidget.y = top + fy * deltaY;
@@ -1966,8 +2005,8 @@
               bodyElement.removeEventListener('touchend', mouseUp);
               bodyElement.removeEventListener('touchcancel', mouseUp);
               setTimeout(_ => { // defer so as not to interfere with click events; e.g. the close button
-                if (canvasFrame.parentNode)
-                  canvasFrame.parentNode.appendChild(canvasFrame);
+                if (canvasFrameElement.parentNode)
+                  canvasFrameElement.parentNode.appendChild(canvasFrameElement);
               });
             }
             bodyElement.addEventListener('mousemove', mouseMove);
@@ -1976,6 +2015,21 @@
             bodyElement.addEventListener('mouseleave', mouseUp);
             bodyElement.addEventListener('touchend', mouseUp);
             bodyElement.addEventListener('touchcancel', mouseUp);
+          }
+          function startUserMedia(value) {
+            let alreadyUsingMedia = userMedia;
+            userMedia = value;
+            if (userMedia && !alreadyUsingMedia) {
+              if (userMediaElement)
+                canvasFrameElement.removeChild(userMediaElement);
+              let deep = true;
+              userMediaElement = userMediaTemplateElement.cloneNode(deep);
+              canvasFrameElement.appendChild(userMediaElement);
+            } else if (!userMedia && alreadyUsingMedia) {
+              if (userMediaElement)
+                canvasFrameElement.removeChild(userMediaElement);
+              userMediaElement = undefined;
+            }
           }
           newCanvasX += 25;
           newCanvasY += 25;
