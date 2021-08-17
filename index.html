@@ -1427,7 +1427,6 @@
         function doFileLoad() {
             loadFileInputElement.onchange =  function handleFileLoad(event) {
               let fileList = this.files, file = fileList[0];
-              console.log("FILEDIALOG", fileList, file);
               loadContent(file);
               async function loadContent(file) {
                 let path = file.name;
@@ -1934,26 +1933,35 @@
               [1, -1, 0,  0], [1, 0, 1,  0], [0, 1, 0,  0],
               [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
             ][i];
-            // Place element at the end of its parent's node list so it diplays on top.
-            // But only if it hasn't been removed!
-            if (canvasFrame.parentNode)
-              canvasFrame.parentNode.appendChild(canvasFrame);
+            let moveOK = false, threshold = 4;
             function mouseMove(event) {
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
+              if (Math.abs(deltaX) > threshold || Math.abs(deltaY) > threshold) {
+                moveOK = true;
+                // Place element at the end of its parent's node list so it diplays on top.
+                // But only if it hasn't been removed!
+                if (canvasFrame.parentNode)
+                  canvasFrame.parentNode.appendChild(canvasFrame);
+              }
+              if (!moveOK) return;
               if (fx !== 0) schemeWidget.x = left + fx * deltaX;
               if (fy !== 0) schemeWidget.y = top + fy * deltaY;
               if (fw !== 0) schemeWidget.width = canvasWidth + fw * deltaX;
               if (fh !== 0) schemeWidget.height = canvasHeight + fh * deltaY;
             }
             function mouseUp(event) {
-              // console.log("MOUSEUP", event);
               bodyElement.removeEventListener('mousemove', mouseMove);
               bodyElement.removeEventListener('touchmove', mouseMove);
               bodyElement.removeEventListener('mouseup', mouseUp);
               bodyElement.removeEventListener('mouseleave', mouseUp);
               bodyElement.removeEventListener('touchend', mouseUp);
               bodyElement.removeEventListener('touchcancel', mouseUp);
+              if (!moveOK) // still need to front the element
+                setTimeout(_ => {
+                  if (canvasFrame.parentNode)
+                    canvasFrame.parentNode.appendChild(canvasFrame);
+                });
             }
             bodyElement.addEventListener('mousemove', mouseMove);
             bodyElement.addEventListener('touchmove', mouseMove);
@@ -2338,8 +2346,6 @@
           showResult(value, varNo);
         } catch (error) {
           if (error instanceof SchemeParseError) {
-            if (!(error instanceof SchemeParseIncompleteError))
-              // console.log("SchemeParseError", error);
             if (error instanceof SchemeSyntaxError) {
               let position = error.position;
               colorizeCharsAt(inputElement, position, inputText.length - position, 'error-tokens');
