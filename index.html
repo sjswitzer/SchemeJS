@@ -1934,15 +1934,13 @@
               [1, -1, 0,  0], [1, 0, 1,  0], [0, 1, 0,  0],
               [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
             ][i];
-            // console.log("SIZEFACTORS", i, fx, fw, fy, fh, event, canvasWidth, canvasHeight);
+            // Place element at the end of its parent's node list so it diplays on top.
+            // But only if it hasn't been removed!
+            if (canvasFrame.parentNode)
+              canvasFrame.parentNode.appendChild(canvasFrame);
             function mouseMove(event) {
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
-              // Place element at the end of its parent's node list so it diplays on top.
-              // But only if it hasn't been removed!
-              if (canvasFrame.parentNode)
-                canvasFrame.parentNode.appendChild(canvasFrame);
-              // console.log("MOUSEMOVE", event, pageX, pageY, deltaX, deltaY);
               if (fx !== 0) schemeWidget.x = left + fx * deltaX;
               if (fy !== 0) schemeWidget.y = top + fy * deltaY;
               if (fw !== 0) schemeWidget.width = canvasWidth + fw * deltaX;
