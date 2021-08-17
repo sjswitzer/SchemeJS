@@ -759,7 +759,26 @@ export function run(opts = {}) {
     let result, ok = false, savedScope;
     if (testScope === globalScope)
       savedScope = beginTestScope();
-    try {
+    if (throwOnError) { // do outside of try block so errors will be uncaught
+      runTest();
+    } else {
+      try {
+        runTest();
+      } catch (error) {
+        if (error instanceof TestFailureError) throw error;
+        testFailed("exception", test, error, expected);
+        return;
+      } finally {
+        if (savedScope)
+          endTestScope(savedScope);
+      }
+    }
+    if (ok) {
+      testSucceeded(test, result, expected);
+    } else {
+      testFailed(test, test, result, expected, report);
+    }
+    function runTest() {
       if (typeof test === 'function')
         result = test.call(testScope);
       else if (typeof test === 'string')
@@ -776,19 +795,10 @@ export function run(opts = {}) {
         }
       } catch (error) {
         testFailed("expectation exception", test, error, expected, report);
+      } finally {
+        if (savedScope)
+          endTestScope(savedScope);
       }
-    } catch (error) {
-      if (error instanceof TestFailureError) throw error;
-      testFailed("exception", test, error, expected);
-      return;
-    } finally {
-      if (savedScope)
-        endTestScope(savedScope);
-    }
-    if (ok) {
-      testSucceeded(test, result, expected);
-    } else {
-      testFailed(test, test, result, expected, report);
     }
   }
 
