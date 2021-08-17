@@ -1926,6 +1926,7 @@
           canvasFrame.addEventListener('mousedown', mouseDown);
           canvasFrame.addEventListener('touchstart', mouseDown);
           function mouseDown(event) {
+            event.stopPropagation();
             let border = 10;
             let { pageX, pageY } = event;
             let initialX = pageX, initialY = pageY;
@@ -1944,6 +1945,7 @@
               [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
             ][i];
             function mouseMove(event) {
+              event.stopPropagation();
               ({pageX, pageY} = event);
               let deltaX = pageX - initialX, deltaY = pageY - initialY;
               setTimeout(_ => { // defer so as not to interfere with click events; e.g. the close button
@@ -1956,6 +1958,7 @@
               if (fh !== 0) schemeWidget.height = canvasHeight + fh * deltaY;
             }
             function mouseUp(event) {
+              event.stopPropagation();
               bodyElement.removeEventListener('mousemove', mouseMove);
               bodyElement.removeEventListener('touchmove', mouseMove);
               bodyElement.removeEventListener('mouseup', mouseUp);
