@@ -412,6 +412,7 @@
         display: inline-block; padding: 0;
         font-size: 200%; height: 100%;
         position: absolute; margin-top: -.2em; left: -.1em;
+        color: #f88;
       }
       .microphone-control .muted { display: none }
       .microphone-control .mute-toggle:checked ~ .muted {
@@ -441,7 +442,7 @@
             &#x1F3A4
             <div class="muted">&#x29B8;</div>
         </label>
-        <input class="volume" type="range" min="0" max="100" step="5">
+        <input class="volume" type="range" value="100" min="0" max="100" step="5">
       </div>
     </div>
     <div class="help" id="help-about">
@@ -1787,16 +1788,35 @@
           let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
+          let muteElement, volumeElement;
           let userMedia, userMediaElement, userMediaStream, audioContext;
-          let audioSource, gainNode, volume = .5, muted = false;
-          let audioAnalyser, fftSize = 512, frequencyDataArray = new Uint8Array(1), timeDomainDataArray = new Uint8Array(1);
+          let audioSource, gainNode;
+          let audioAnalyser, fftSize = 512, frequencyDataArray = new Uint8Array(1), timeDomainDataArray = frequencyDataArray;
           function attachAnalyzer() {
             if (audioAnalyser || !audioContext || !gainNode) return;
             audioAnalyser = audioContext.createAnalyser();
             audioAnalyser.fftSize = fftSize;
             gainNode.connect(audioAnalyser);
-            frequencyDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
-            timeDomainDataArray = new Uint8Array(audioAnalyser.fftSize);
+            setGain();
+          }
+          function setGain() {
+            if (!gainNode) return;
+            let muted = muteElement? muteElement.checked : false;
+            if (muted) {
+              audioContext.suspend();
+              frequencyDataArray = timeDomainDataArray = new Uint8Array(1);
+              return;
+            }
+            else {
+              audioContext.resume();
+            }
+            if (audioAnalyser && frequencyDataArray.length === 1) {
+              frequencyDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+              timeDomainDataArray = new Uint8Array(audioAnalyser.fftSize);
+            }
+            let volume = volumeElement ? parseFloat(volumeElement.value) / 100 : .5;
+            let vol = volume;
+            gainNode.gain.setValueAtTime(vol, audioContext.currentTime);
           }
           function _resizeWithoutSmashingContent(newWidth, newHeight) {
             let scratch = createElement('canvas'), ctx = scratch.getContext('2d');
@@ -1881,13 +1901,13 @@
             },
             get [Atom('frequency-domain-data')]() {
               if (!audioAnalyser) attachAnalyzer();
-              if (audioAnalyser)
+              if (audioAnalyser && frequencyDataArray.length !== 1)
                 audioAnalyser.getByteFrequencyData(frequencyDataArray);
               return frequencyDataArray;
             },
             get [Atom('time-domain-data')]() {
               if (!audioAnalyser) attachAnalyzer();
-              if (audioAnalyser)
+              if (audioAnalyser && timeDomainDataArray.length !== 1)
                 audioAnalyser.getByteTimeDomainData(timeDomainDataArray);
               return timeDomainDataArray;
             },
@@ -2051,19 +2071,13 @@
               let deep = true;
               userMediaElement = userMediaTemplateElement.cloneNode(deep);
               canvasFrameElement.appendChild(userMediaElement);
-              let muteElement = userMediaElement.querySelector(".mute-toggle");
-              muteElement.addEventListener('input', _ => { muted = muteElement.checked; setGain() });
-              let volumeElement = userMediaElement.querySelector(".volume");
-              volumeElement.addEventListener('input',  _ => { volume = volumeElement.value / 100; setGain() });
+              muteElement = userMediaElement.querySelector(".mute-toggle");
+              muteElement.addEventListener('input', _ => { setGain() });
+              volumeElement = userMediaElement.querySelector(".volume");
+              volumeElement.addEventListener('input',  _ => { setGain()});
               userMediaStream = audioSource = gainNode = undefined;
               audioContext = new AudioContext();
               startMedia(userMedia);
-              function setGain() {
-                if (!gainNode) return;
-                let vol = volume;
-                if (muted) vol = 0;
-                gainNode.gain.setValueAtTime(vol, audioContext.currentTime);
-              }
               async function startMedia(constraints) {
                 try {
                   userMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -2072,7 +2086,7 @@
                   setGain();
                   audioSource.connect(gainNode);
                 } catch(error) {
-                  console.log("GET-USER+MEDIA_ERROR", error);
+                  console.log("GET-USER-MEDIA-ERROR", error);
                 }
               }
             } else if (!userMedia && alreadyUsingMedia) {
