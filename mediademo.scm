@@ -13,7 +13,6 @@
       (for-in i value frequency-domain-data
         (fill-rect i (- 256 value) 1 value)
       )
-      (stroke)
     )
     (gfx-save  ;; Draw waveform
       (stroke-style "green") (line-width 3) (begin-path)
