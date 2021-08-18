@@ -3786,27 +3786,28 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let scope = this;
     let bindSymToObj = {}, guardedSymbols = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
-    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 100, functionDescriptors };
+    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 100,
+      bindLiterally, functionDescriptors };
     let ssaScope = new Scope();
     // Well-known names
-    use(bind(string, "string"));
-    use(bind(NIL, "NIL"));
-    use(bind(schemeTrue, "schemeTrue"));
-    use(bind(Cons, "Cons"));
-    use(bind(car, "car"));
-    use(bind(cdr, "cdr"));
-    use(bind(Atom, "Atom"));
-    use(bind(newScope, "newScope"));
-    use(bind(CAR, "CAR"));
-    use(bind(CDR, "CDR"));
-    use(bind(PAIR, "PAIR"));
-    use(bind(LIST, "LIST"));
-    use(bind(COMPILED, "COMPILED"));
+    bindLiterally(string, "string");
+    bindLiterally(NIL, "NIL");
+    bindLiterally(schemeTrue, "schemeTrue");
+    bindLiterally(Cons, "Cons");
+    bindLiterally(car, "car");
+    bindLiterally(cdr, "cdr");
+    bindLiterally(Atom, "Atom");
+    bindLiterally(newScope, "newScope");
+    bindLiterally(CAR, "CAR");
+    bindLiterally(CDR, "CDR");
+    bindLiterally(PAIR, "PAIR");
+    bindLiterally(LIST, "LIST");
+    bindLiterally(COMPILED, "COMPILED");
     // For template bodies
-    use(bind(isList, "isList"));
-    use(bind(isCons, "isCons"));
-    use(bind(cons, "cons"));
-    use(bind(CLOSURE_ATOM, "CLOSURE_ATOM"));
+    bindLiterally(isList, "isList");
+    bindLiterally(isCons, "isCons");
+    bindLiterally(cons, "cons");
+    bindLiterally(CLOSURE_ATOM, "CLOSURE_ATOM");
     let ssaFunction = compileLambda(nameAtom, displayName, lambdaForm, ssaScope, tools);
     if (jitFunction) {
       let ssaGuardFunction = newTemp(displayName + '_guard');
@@ -3859,8 +3860,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (name) {
         if (typeof name === 'symbol')
           name = newTemp(name.description);
-        if (bindSymToObj[name])  // collision
+        if (bindSymToObj[name]) { // collision
           name = newTemp(name);
+        }
       } else {
         if (typeof obj === 'symbol')
           name = newTemp(obj.description+'_atom');
@@ -3871,9 +3873,18 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       bindSymToObj[name] = obj;
       bindObjToSym.set(obj, name);
-      if (guardSym) // XXX TODO: I don't think this is needed; just guard the bound symbols that aren't atoms
+      if (guardSym)
         guardedSymbols[name] = guardSym;
       return name;
+    }
+    function bindLiterally(obj, name) {
+      // These symbols are referred to literally in compiled code and must retain the given name,
+      // and are never subject to guard checks.
+      // Since generated names begin with _ and $ collisions are not possible;
+      // nevertheless guard against errors.
+      let boundName = use(bind(obj, name));
+      if (boundName !== name)
+        throw new LogicError(`Unguarded sybols must not be renamed ${string(name)} = ${string(obj)}`);
     }
     function emit(str) {
       emitted.push(tools.indent + str + '\n');
@@ -3902,7 +3913,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     // Functions that end up being used as templates are bound because
     // we don't know in advance whether they'll be used as values.
     // "use" is called on any bound value that is ultimately used for its value.
-    // This keeps compileed templates from being bound unnecessarily at runtime.
+    // This keeps compileed templates from being bound unnecessarily at runtime,
+    // so long as their value isn't used for any other reason.
     function use(ssaValue) {
       usedSsaValues[ssaValue] = true;
       return ssaValue;
@@ -4363,12 +4375,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`${ssaToFn}[PAIR] = ${ssaToFn}[LIST] = ${ssaToFn}[CLOSURE_ATOM] = true;`);
   }
   
-  const JS_IDENT_REPLACEMENTS  = {
+  const JS_IDENT_REPLACEMENTS = {
     '~': '$tilde', '!': '$bang', '@': '$at', '#': '$hash', '$': '$cash', '%': '$pct', '^': '$hat',
     '&': '$and', '|': '$or', '*': '$star', '+': '$plus', '-': '$dash', '=': '$eq', '<': '$lt',
-    '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q'
+    '>': '$gt', '/': '$stroke', '\\': '$bs', '?': '$q', MUL: '$mul', DIV: '$div', ELIPSIS: "$elipsis",
   };
 
+  //
+  // Preserves "normal" JavaScript names as much as possible; they generally just get an _ prefix.
+  // Lisp symbols with special characters get translated using $symid from the replacement
+  // table above or $x<codepoint> otherwise. So any unicode name is represented.
+  //
   exportAPI("toJavaScriptIdentifier", toJavaScriptIdentifier);
   function toJavaScriptIdentifier(name) {
     if (typeof name === 'symbol')
@@ -4376,13 +4393,13 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let newName = "", fragment = "";
     for (let ch of name) {
       if (JS_IDENT_REPLACEMENTS[ch]) {
-        newName += fragment + JS_IDENT_REPLACEMENTS[ch];
+        newName += `${fragment}${JS_IDENT_REPLACEMENTS[ch]}`;
         fragment = "";
       } else if (JSIDENT2[ch]) {
         if (!fragment) fragment = "_";
         fragment += ch;
       } else {
-        newName += fragment + '$x' + ch.codePointAt(0).toString(16);
+        newName += `${fragment}$x${ch.codePointAt(0).toString(16)}`;
         fragment = "";
       }
     }
