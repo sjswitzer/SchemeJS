@@ -759,7 +759,9 @@ export function run(opts = {}) {
     let result, ok = false, savedScope;
     if (testScope === globalScope)
       savedScope = beginTestScope();
-    if (throwOnError) { // do outside of try block so errors will be uncaught
+    // TODO: This doesn't work since Node always catches errors so there's no such
+    // thing as an uncaught error.
+    if (false /* throwOnError */) { // do outside of try block so errors will be uncaught
       runTest();
     } else {
       try {

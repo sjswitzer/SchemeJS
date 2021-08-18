@@ -285,7 +285,7 @@ export function createInstance(schemeOpts = {}) {
 
 // Why are these initialized here, you ask?
 // Because they're indirectly refernced by defineGlobalSymbol is why.
-const COMPILE_HOOK = Symbol("COMPILE-HOOK"), COMPILE_INFO = Symbol("BUILTIN-COMPILE-INFO");
+const COMPILE_INFO = Symbol("BUILTIN-COMPILE-INFO");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
 const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
 let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to implement help.
@@ -304,12 +304,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (typeof aliases[0] === 'object')
       opts = aliases.shift();
     let group = opts.group ?? "default";
-    if (typeof value === 'function') {
-      let evalCount = opts.evalArgs ?? MAX_INTEGER;
-      examineFunctionForParameterDescriptor(value, evalCount);
-      if (!opts.dontInline)
-        examineFunctionForCompilerTemplates(name, value, opts.compileHook, evalCount);
-    }
+    if (typeof value === 'function')
+      examineFunctionForCompilerTemplates(name, value, opts);
     let { atom, atomName, jsName } = normalizeExportToJavaScriptName(name);
     globalScope[atom] = value;
     helpGroups[atom] = group;
@@ -371,31 +367,46 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return str;
   }
 
-  function examineFunctionForCompilerTemplates(name, fn, hook, evalCount) {
-    if (hook) {
-      fn[COMPILE_HOOK] = hook;
+  function examineFunctionForCompilerTemplates(name, fn, opts) {
+    let evalCount = opts.evalArgs ?? MAX_INTEGER;
+    let hook = opts.compileHook;
+    examineFunctionForParameterDescriptor(fn, evalCount);
+    let fnInfo = analyzeJSFunction(fn);
+    fnInfo.evalCount = evalCount;
+    if (hook)
+      fnInfo.compileHook = hook;
+    if (hook || evalCount !== MAX_INTEGER) {
+      fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
     } else {
-      // A policy thing, I guess. You wouldnt expect to inline an Error class definition
+      // A policy thing, I guess. You wouldn't expect to inline an Error class definition
       // and it's tedious to mark them all as "dontInline." This would actually be the case
       // of any "class," but Error classes are the only ones currently defined in the
       // SchemeJS API and there's no way to truly distinguish a class from a function
       // in JavaScript.
       if (subclassOf(fn, Error))
         return;
-      if (evalCount !== MAX_INTEGER) { // templates are of no use for special evaluation
-        console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
-        return;
-      }
     }
-    let fnInfo = analyzeJSFunction(fn);
-    // Can't inline a native function, obviously, but you _could_ hook one
-    if (fnInfo.native)
-      return;
-  
-    if (!fnInfo.value && !hook) {
+    if (opts.dontInline) {
+      fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
+    } else if (!hook && evalCount !== MAX_INTEGER) {
+      console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
+    } else if (!fnInfo.valueTemplate && !fnInfo.compileHook) {
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
-      return;
     }
+    // Is a scope needed to call the function?
+    let usesScope = true;  // conservative default
+    if (fnInfo.valueTemplate) { 
+      usesScope = false;  // templates generally don't use the scope, unless they use "this"
+      if (fnInfo.valueTemplate.includes("this"))
+        usesScope = true;
+      else if (fnInfo.bodyTemplate && fnInfo.bodyTemplate.includes("this"))
+        usesScope = true;
+    }
+    if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
+      usesScope = false;
+    if (isClosure(fn))  // closures never need the scope
+      usesScope = false;
+    fnInfo.usesScope = usesScope;
     fn[COMPILE_INFO] = fnInfo;
   }
 
@@ -2723,10 +2734,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   function examineFunctionForParameterDescriptor(fn, evalCount = MAX_INTEGER) {
-    //let res = { name, params, restParam, value, body, printBody, printParams, native, requiredCount };
-    let { requiredCount, native } = analyzeJSFunction(fn);
-    if (native)
-      requiredCount = 0;
+    let { requiredCount } = analyzeJSFunction(fn);
     return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
   }
 
@@ -2863,9 +2871,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     jsClosure[CDR] = schemeClosure[CDR];
     jsClosure[LIST] = jsClosure[PAIR] = true;
     jsClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
-    // Because the closure has a generic (...args) parameter, the compiker needs more info
+    // Because the closure has a generic (...args) parameter, the compiler needs more info
     // to be able to create binding closures over it.
-    jsClosure[COMPILE_INFO] = { params: paramv, restParam };
+    jsClosure[COMPILE_INFO] = { params: paramv, restParam, requiredCount, evalCount };
     return jsClosure;
   }
 
@@ -3098,8 +3106,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           name = fnDesc.name ?? obj.name;
         let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
-        if (fnDesc.value && !fnDesc.body && !printBody)
-          return put(`{${params} => ${fnDesc.value}}`);
+        if (fnDesc.valueTemplate && !fnDesc.bodyTemplate && !printBody)
+          return put(`{${params} => ${fnDesc.valueTemplate}}`);
         if (printBody && (printBody.length > 80 || printBody.includes('\n')))
           printBody = '';
         let hash = evalCount === MAX_INTEGER ? '' : `# ${evalCount}`;
@@ -3619,7 +3627,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (analyzed)
       return analyzed;
     let str = fn.toString(), pos = 0, token = "", paramPos = 0, requiredCount;
-    let name = fn.name, params = [], restParam, value, body, native = false, printParams, printBody;
+    let name = fn.name, params = [], restParam, valueTemplate, bodyTemplate, native = false, printParams, printBody;
     parse: {
       if (nextToken() === 'function') {
         paramPos = pos;
@@ -3647,12 +3655,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (nextToken() === '{')
           parseBody();
         else
-          value = possibleValue;
+          valueTemplate = possibleValue;
       }
     }
     if (requiredCount === undefined)
       requiredCount = params.length;
-    let res = { name, params, restParam, value, body, printBody, printParams, native, requiredCount };
+    if (native)
+      requiredCount = 0;
+    let res = { name, params, restParam, value: valueTemplate, body: bodyTemplate, printBody, printParams, native, requiredCount };
     analyzedFunctions.set(fn, res);
     return res;
 
@@ -3707,8 +3717,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           while (nextToken() === ';');
           if (token !== '}') return;
           if (nextToken() !== '') return;
-          value = possibleValue;
-          body = str.substring(bodyPos, returnPos);
+          valueTemplate = possibleValue;
+          bodyTemplate = str.substring(bodyPos, returnPos);
         }
       }
     }
@@ -3942,54 +3952,30 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let ssaValue = ssaScope[sym];
       if (ssaValue)
         return ssaValue;
-      // for now, only bind functions from outside scope
+      // For now, only bind _functions_ from outside scope
       let scopedVal = scope[sym];
       if (scopedVal && typeof scopedVal === 'function') {
+        let fn = scopedVal;
+        let name = namedObjects.get(fn) ?? fn.name ?? sym.description;
+        let guardSym = sym;
+        ssaValue = bind(fn, newTemp(name), guardSym);
         if (!tools.functionDescriptors[ssaValue]) {
-          let fn = scopedVal;
-          let name = namedObjects.get(fn) ?? fn.name ?? sym.description;
-          ssaValue = bind(fn, newTemp(name), sym);
-          let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-          let requiredCount = parameterDescriptor & 0xffff;
-          let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-          let compileHook = fn[COMPILE_HOOK];
           let fnInfo = fn[COMPILE_INFO];
-          let usesScope = true;  // conservative default
-          let params, restParam, valueTemplate, bodyTemplate, native;
-          if (fnInfo) {  // this is a built-in OR a jsClosure
-            // XXX TODO: just use the fnInfo as the function descriptor;
-            // a little renaming will do it.
-            params = fnInfo.params;
-            restParam = fnInfo.restParam;
-            valueTemplate = fnInfo.value;
-            bodyTemplate = fnInfo.body;
-            native = fnInfo.native;
-            if (valueTemplate) { 
-              usesScope = false;  // templates generally don't use the scope, unless they use "this"
-              if (valueTemplate.includes("this"))
-                usesScope = true;
-              else if (bodyTemplate && bodyTemplate.includes("this"))
-                usesScope = true;
-            }
-            if (compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
-              usesScope = false;
-          } else {  // Still need param info for closures, but don't use for templates
+          if (!fnInfo) {  // Neither a builtin nor a jsClosure
+            let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+            let requiredCount = parameterDescriptor & 0xffff;
+            let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+            let usesScope = true;  // We don't know anything about this function so assume it might use
             fnInfo = analyzeJSFunction(fn);
-            params = fnInfo.params;
-            restParam = fnInfo.restParam;
-            native = fnInfo.native;
+            fnInfo.requiredCount = requiredCount;
+            fnInfo.evalCount = evalCount;
+            fnInfo.usesScope = !isClosure(fn);
           }
-          if (native || isClosure(fn))
-            usesScope = false;
           // Everything you need to know about invoking a JS function is right here
-          tools.functionDescriptors[ssaValue] = {
-            requiredCount, evalCount, name, compileHook, params, restParam,
-            valueTemplate, bodyTemplate, usesScope
-          };
+          tools.functionDescriptors[ssaValue] = fnInfo;
         }
         return ssaValue;
       }
-      ssaScope.used = true;
       return `resolveUnbound(${use(bind(sym))})`;
     }
     if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
@@ -4175,7 +4161,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (typeof innerParams === 'symbol')
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
-      // We always need a scope here
+      // We always need a scope here XXX is this true?
+      ssaScope.scopeUsed = true;
       emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
       let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
@@ -4293,7 +4280,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       ssaParamStr += `${delim}...${ssaRestParam}`;
     let ssaScopeTmp = newTemp("tmp_scope"), scopeLines = [];
     scopeLines.push(emit(`let ${ssaScopeTmp} = scope;`));
-    emit(`function ${ssaFunction}(${ssaParamStr}) { // COMPILED ${displayName}`);
+    emit(`function ${ssaFunction}(${ssaParamStr}) { // COMPILED ${displayName}, req: ${requiredCount}, eval: ${evalCount === MAX_INTEGER ? 'MAX_INTEGER' : evalCount}`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
     let lambdaStrs = string(lambda).split('\n');
@@ -4330,7 +4317,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       ssaResult = compileEval(forms[CAR], ssaScope, tools);
     if (ssaScope.used)
       originalSsaScope.used = true;
-    else
+    if (!ssaScope.used || (paramCount === 0 && !restParam))
       tools.deleteEmitted(scopeLines);
     use(ssaResult);
     emit(`return ${ssaResult};`);
