@@ -1802,7 +1802,7 @@
           function setGain() {
             if (!gainNode) return;
             let muted = muteElement? muteElement.checked : false;
-            if (muted) {
+            if (muted || !canvasFrameElement.parentNode) {
               audioContext.suspend();
               frequencyDataArray = timeDomainDataArray = new Uint8Array(1);
               return;
@@ -1882,11 +1882,13 @@
               containerElement.appendChild(canvasFrameElement);
               if (animate)
                 startAnimation();
+              setGain();
               return this;
             },
             [hideAtom]() {
               if (canvasFrameElement.parentNode)
                 canvasFrameElement.parentNode.removeChild(canvasFrameElement);
+              setGain();
               return this;
             },
             clear_canvas() {
