@@ -1962,7 +1962,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return ssaResult;
   }
 
-  // (for-in key value obj form...)
+  // (for-in key value obj form forms...)
   defineGlobalSymbol("for-in", for_in, { evalArgs: 0, XXXcompileHook: for_in_hook, group: "core", schemeOnly: true });
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
@@ -1992,48 +1992,42 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return NIL;
   }
   function for_in_hook(args, ssaScope, tools) {
-    // XXX TODO: This is just letrec cloned for now as a placeholder
-    // For "letrec", emit the `let ${ssaBoundVar} = NIL;` segnemts first,
-    // then the initialization bodies afterwards.
-    // For "let" emit the bodies first, then the initializations.
-    // For "let*" keep doing this.
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    if (args.length < 2) throw new SchemeCompileError(`Bad letrec`);
-    let bindings = args[0];
-    let ssaResult = newTemp("letrec");
-    ssaScope = newScope(ssaScope, "compiler-letrec-scope");
+    if (args.length < 4) throw new SchemeCompileError(`Bad for-in`);
+    let indexVar = args[0], valueVar = args[1];
+    if (!isAtom(indexVar)) throw new SchemeCompileError(`bad index variable in for-in ${indexVar}`);
+    if (!isAtom(valueVar)) throw new SchemeCompileError(`bad value variable in for-in ${valueVar}`);
+    let ssaIndexVarAtom = use(bind(indexVar)), ssaValueVarAtom  = use(bind(valueVar));
+    let ssaObj = compileEval(args[2], ssaScope, tools);
     let ssaTmpScope = newTemp("scope_tmp");
     emit(`let ${ssaTmpScope} = scope;`);
-    emit(`let ${ssaResult} = NIL; { // letrec`);
+    ssaScope = newScope(ssaScope, "compiler-for-in-scope");
+    ssaScope[indexVar] = ssaIndexVar;
+    ssaScope[valueVar] = ssaValueVar;
+    let ssaFn = newTemp('for-in-fn)');
+    emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (for-in ${string(indexVar)} ${string(valueVar)} ...)`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    emit(`let scope = newScope(${ssaTmpScope}, "compiled-letrec-scope");`);
-    for( ; isCons(bindings); bindings = bindings[CDR]) {
-      let binding = bindings[CAR];
-      if (!isCons(binding))
-        throw new SchemeCompileError(`Bad binding ${string(binding)}`)
-      let boundVar = binding[CAR], bindingForms = binding[CDR];
-      if (typeof boundVar !== 'symbol')
-        throw new SchemeEvalError(`Bad binding ${string(binding)}`);
-      let ssaBoundVar = newTemp(boundVar);
-      emit(`let ${ssaBoundVar} = NIL;`);
-      for ( ; isCons(bindingForms); bindingForms = bindingForms[CDR]) {
-        let ssaVal = compileEval(bindingForms[CAR], ssaScope, tools);
-        emit(`${ssaBoundVar} = ${ssaVal};`);
-      }
-      let paramAtom = use(bind(boundVar));
-      ssaScope[boundVar] = ssaBoundVar;
-      emit(`scope[${paramAtom}] = ${ssaBoundVar};`);
-    }
-    for (let i = 1; i < args.length; ++i) {
-      let ssaVal = compileEval(args[i], ssaScope, tools);
-      emit(`${ssaResult} = ${ssaVal};`);
-    }
+    emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`);
+    emit(`scope[${ssaIndexVarAtom}] = ${ssaIndexVar};`)
+    emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`)
+    for (let i = 3; i < args.length; ++i)
+      compileEval(args[i], ssaScope, tools);
     tools.indent = saveIndent;
+    emit('}');
+    tools.bindLiterally(isIterable, "isIterable");
+    emit(`if (isIterable(${ssaObj})) {`);
+    emit(`  let key = 0;`);
+    emit(`  for (let value of ${ssaObj})`);
+    emit(`    ${ssaFn}(key, value);`);
+    emit(`} else {`);
+    emit(`  if (${ssaObj} == null || typeof ${ssaObj} !== 'object'))`);
+    emit(`    throw new SchemeEvalError(\`for-in requires iterable or object \${string(${ssaObj})}\`);`);
+    emit(`  for (let key in ${ssaObj})`);
+    emit(`    ${ssaFn}(kxey, ${ssaObj}[key]);`);
     emit(`}`);
-    return ssaResult;
+    return 'NIL';
   }
-
 
   // Something like this would be nice, but it's not quite right
   //  let setSymWithWith = new Function("symbol", "value", "scope",
