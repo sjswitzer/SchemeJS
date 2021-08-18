@@ -4,7 +4,7 @@
 
 (define (o-scope gfx-context)
   (let ( (time-domain-data (@ microphoneCanvas 'time-domain-data))
-         (frequency-domain-data (@ microphoneCanvas 'frequency-domain-data)))
+         (frequency-domain-data (@ microphoneCanvas 'frequency-domain-data)) )
     (gfx-save  ;; Draw spectrum
       (fill-style "yellow")
       ;; Scale to the numbe of samples + one (one is the width of the rectangles) along the x axis,
