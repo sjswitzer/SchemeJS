@@ -2125,6 +2125,7 @@
           return canvasRenderingContext;
         }
 
+        // When there are macros, this can be rewritten as a LET binding, probably
         defineGlobalSymbol("gfx-save", gfx_save, { evalArgs: 0, dontInline: true, group: "web-gfx" });
         function gfx_save(...forms) {
           let scope = this, canvasRenderingContext = scope[gfxContextAtom];
