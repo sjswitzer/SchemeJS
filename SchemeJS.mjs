@@ -3662,7 +3662,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       requiredCount = params.length;
     if (native)
       requiredCount = 0;
-    let res = { name, params, restParam, value: valueTemplate, body: bodyTemplate, printBody, printParams, native, requiredCount };
+    let res = { name, params, restParam, valueTemplate, bodyTemplate, printBody, printParams, native, requiredCount };
     analyzedFunctions.set(fn, res);
     return res;
 
@@ -3968,6 +3968,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             fnInfo = analyzeJSFunction(fn);
             fnInfo.requiredCount = requiredCount;
             fnInfo.evalCount = evalCount;
+            fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
             fnInfo.usesScope = !isClosure(fn) && !fnInfo.native;
           }
           // Everything you need to know about invoking a JS function is right here
@@ -3985,11 +3986,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (!isCons(form)) throwBadForm();
         return bind(form[CDR][CAR], 'quoted');
       }
-      let ssaFunction;
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
         return compileLambda(null, fn.description, form, ssaScope, tools);
-      else
-        ssaFunction = compileEval(fn, ssaScope, tools);
+      let ssaFunction = compileEval(fn, ssaScope, tools);
       let args = form[CDR];
       let functionDescriptor = tools.functionDescriptors[ssaFunction];
       if (!functionDescriptor) {
