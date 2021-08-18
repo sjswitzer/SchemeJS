@@ -6,7 +6,7 @@
   (let ( (time-domain-data (@ microphoneCanvas 'time-domain-data))
          (frequency-domain-data (@ microphoneCanvas 'frequency-domain-data)) )
     (gfx-save  ;; Draw spectrum
-      (fill-style "#a00")
+      (fill-style "#a22")
       ;; Scale to the number of samples + one (one is the width of the rectangles) along the x axis,
       ;; and 256 (the range of values) along the y axis.
       (scale (/ (canvas-width) (+ 1 (@ frequency-domain-data "length"))) (/ (canvas-height) 256))
@@ -15,7 +15,7 @@
       )
     )
     (gfx-save  ;; Draw waveform
-      (stroke-style "#8f8") (line-width 3) (begin-path)
+      (stroke-style "#8f8") (begin-path)
       ;; Scale to the number of samples along the x axis,
       ;; and 256 along the y axis.
       (scale (/ (canvas-width) (+ 1 (@ time-domain-data "length"))) (/ (canvas-height) 256))
