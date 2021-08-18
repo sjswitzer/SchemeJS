@@ -4085,6 +4085,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       let name = fName + '_closure';
       let ssaResult = newTemp(name), ssaTmpScope = newTemp("tmp_scope")
+      // If we had a compile hook but didn't use it because we're making a closure
+      // we assume it  needs a scope when invoked.
+      if (compileHook)
+        usesScope = true;
       ssaScope.used = true;
       ssaScope = newScope(ssaScope, "compiler-closure-scope");
       emit(`let ${ssaTmpScope} = scope;`);
@@ -4161,7 +4165,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
       let displayName;
-      if (true || usesScope) {
+      if (usesScope) {
         emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
         displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       } else {
