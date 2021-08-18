@@ -388,6 +388,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (opts.dontInline) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
+    }
+    else if (fnInfo.native) {
+      // not an error
     } else if (!compileHook && evalCount !== MAX_INTEGER) {
       console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
     } else if (!fnInfo.valueTemplate && !fnInfo.compileHook) {
@@ -404,7 +407,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
       usesScope = false;
-    if (isClosure(fn))  // closures never need the scope
+    if (fnInfo.native)  // native functions don't need a scope
+      usesScope = false;
+    // Closures dont need scope either and it's theoretically possible to call
+    // this utility with a compiled Scheme function
+    if (isClosure(fn))
       usesScope = false;
     fnInfo.usesScope = usesScope;
     fn[COMPILE_INFO] = fnInfo;
