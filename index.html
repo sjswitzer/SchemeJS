@@ -2010,17 +2010,17 @@
           canvasCloseButtonElement.addEventListener('click', _ => schemeWidget.hide());
           canvasFrameElement.addEventListener('mousedown', mouseDown);
           canvasFrameElement.addEventListener('touchstart', mouseDown);
-          canvasFrameElement.addEventListener('mouseover', mouseOver);
-          let dragBorder = 10;
+          canvasFrameElement.addEventListener('mousemove', updateCursor);
+          let resizeBorder = 15, mouseIsDown = false;
           function getDragInfo(event) {
             let { pageX, pageY } = event;
             let { top, right, left, bottom } = canvasFrameElement.getBoundingClientRect();
             let i = 0;
-            if (pageX < left + dragBorder) i = 0;
-            else if (pageX > right - dragBorder) i = 2;
+            if (pageX < left + resizeBorder) i = 0;
+            else if (pageX > right - resizeBorder) i = 2;
             else i = 1;
-            if (pageY < top + dragBorder) i += 0;
-            else if (pageY > bottom - dragBorder) i += 6
+            if (pageY < top + resizeBorder) i += 0;
+            else if (pageY > bottom - resizeBorder) i += 6
             else i += 3;
             let [fx, fw, fy, fh, cursor] = [
               [1, -1, 1, -1, "nwse-resize"], [0, 0, 1, -1, "ns-resize"], [0, 1, 1, -1, "nesw-resize"],
@@ -2029,14 +2029,9 @@
             ][i];
             return { pageX, pageY, fx, fw, fy, fh, cursor, top, right, left, bottom };
           }
-          function mouseOver(event) {
+          function updateCursor(event) {
             let { cursor } = getDragInfo(event);
             canvasFrameElement.style.cursor = cursor;
-            canvasFrameElement.addEventListener('mouseout', mouseOut);
-            function mouseOut(event) {
-              canvasFrameElement.removeEventListener('mouseout', mouseOut);
-              canvasFrameElement.style.cursor = '';
-            }
           }
           function mouseDown(event) {
             event.stopPropagation();
