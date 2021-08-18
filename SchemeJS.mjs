@@ -369,13 +369,13 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   function examineFunctionForCompilerTemplates(name, fn, opts) {
     let evalCount = opts.evalArgs ?? MAX_INTEGER;
-    let hook = opts.compileHook;
+    let compileHook = opts.compileHook;
     examineFunctionForParameterDescriptor(fn, evalCount);
     let fnInfo = analyzeJSFunction(fn);
     fnInfo.evalCount = evalCount;
-    if (hook)
-      fnInfo.compileHook = hook;
-    if (hook || evalCount !== MAX_INTEGER) {
+    if (compileHook)
+      fnInfo.compileHook = compileHook;
+    if (compileHook || evalCount !== MAX_INTEGER) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
     } else {
       // A policy thing, I guess. You wouldn't expect to inline an Error class definition
@@ -388,7 +388,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (opts.dontInline) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-    } else if (!hook && evalCount !== MAX_INTEGER) {
+    } else if (!compileHook && evalCount !== MAX_INTEGER) {
       console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
     } else if (!fnInfo.valueTemplate && !fnInfo.compileHook) {
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
@@ -3965,11 +3965,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
             let requiredCount = parameterDescriptor & 0xffff;
             let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-            let usesScope = true;  // We don't know anything about this function so assume it might use
             fnInfo = analyzeJSFunction(fn);
             fnInfo.requiredCount = requiredCount;
             fnInfo.evalCount = evalCount;
-            fnInfo.usesScope = !isClosure(fn);
+            fnInfo.usesScope = !isClosure(fn) && !fnInfo.native;
           }
           // Everything you need to know about invoking a JS function is right here
           tools.functionDescriptors[ssaValue] = fnInfo;
@@ -4086,6 +4085,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       let name = fName + '_closure';
       let ssaResult = newTemp(name), ssaTmpScope = newTemp("tmp_scope")
+      ssaScope.used = true;
+      ssaScope = newScope(ssaScope, "compiler-closure-scope");
       emit(`let ${ssaTmpScope} = scope;`);
       emit(`let ${ssaResult}; {`);
       let saveIndent = tools.indent;
@@ -4134,8 +4135,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
       // and to the scope.
-      ssaScope.used = true;
-      ssaScope = newScope(ssaScope, "compiler-closure-scope");
       let closedArgStr = '';
       sep = '';
       for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR]) {
@@ -4161,10 +4160,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (typeof innerParams === 'symbol')
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
-      // We always need a scope here XXX is this true?
-      ssaScope.scopeUsed = true;
-      emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
-      let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
+      let displayName;
+      if (true || usesScope) {
+        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
+        displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
+      } else {
+        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr});`);
+        displayName = `(${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr})`;
+      }
       decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
       tools.indent = saveIndent;
       emit(`}`);
