@@ -2012,25 +2012,34 @@
           canvasCloseButtonElement.addEventListener('click', _ => schemeWidget.hide());
           canvasFrameElement.addEventListener('mousedown', mouseDown);
           canvasFrameElement.addEventListener('touchstart', mouseDown);
+          canvasFrameElement.addEventListener('mousemove', updateCursor);
+          let resizeBorder = 15, mouseIsDown = false;
+          function getDragInfo(event) {
+            let { pageX, pageY } = event;
+            let { top, right, left, bottom } = canvasFrameElement.getBoundingClientRect();
+            let i = 0;
+            if (pageX < left + resizeBorder) i = 0;
+            else if (pageX > right - resizeBorder) i = 2;
+            else i = 1;
+            if (pageY < top + resizeBorder) i += 0;
+            else if (pageY > bottom - resizeBorder) i += 6
+            else i += 3;
+            let [fx, fw, fy, fh, cursor] = [
+              [1, -1, 1, -1, "nwse-resize"], [0, 0, 1, -1, "ns-resize"], [0, 1, 1, -1, "nesw-resize"],
+              [1, -1, 0,  0, "ew-resize"  ], [1, 0, 1,  0, "grabbing" ], [0, 1, 0,  0, "ew-resize"  ],
+              [1, -1, 0,  1, "nesw-resize"], [0, 0, 0,  1, "ns-resize"], [0, 1, 0,  1, "nwse-resize"],
+            ][i];
+            return { pageX, pageY, fx, fw, fy, fh, cursor, top, right, left, bottom };
+          }
+          function updateCursor(event) {
+            let { cursor } = getDragInfo(event);
+            canvasFrameElement.style.cursor = cursor;
+          }
           function mouseDown(event) {
             event.stopPropagation();
-            let border = 10;
-            let { pageX, pageY } = event;
-            let initialX = pageX, initialY = pageY;
-            let { top, right, left, bottom } = canvasFrameElement.getBoundingClientRect();
+            let { pageX, pageY, fx, fw, fy, fh, top, right, left, bottom } = getDragInfo(event);
             let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
-            let i = 0;
-            if (pageX < left + border) i = 0;
-            else if (pageX > right - border) i = 2;
-            else i = 1;
-            if (pageY < top + border) i += 0;
-            else if (pageY > bottom - border) i += 6
-            else i += 3;
-            let [fx, fw, fy, fh] = [
-              [1, -1, 1, -1], [0, 0, 1, -1], [0, 1, 1, -1],
-              [1, -1, 0,  0], [1, 0, 1,  0], [0, 1, 0,  0],
-              [1, -1, 0,  1], [0, 0, 0,  1], [0, 1, 0,  1],
-            ][i];
+            let initialX = pageX, initialY = pageY;
             function mouseMove(event) {
               event.stopPropagation();
               ({pageX, pageY} = event);

@@ -7,7 +7,7 @@
          (frequency-domain-data (@ microphoneCanvas 'frequency-domain-data)) )
     (gfx-save  ;; Draw spectrum
       (fill-style "yellow")
-      ;; Scale to the numbe of samples + one (one is the width of the rectangles) along the x axis,
+      ;; Scale to the number of samples + one (one is the width of the rectangles) along the x axis,
       ;; and 256 (the range of values) along the y axis.
       (scale (/ (canvas-width) (+ 1 (@ frequency-domain-data "length"))) (/ (canvas-height) 256))
       (for-in i value frequency-domain-data
