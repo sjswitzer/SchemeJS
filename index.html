@@ -1791,7 +1791,7 @@
           let muteElement, volumeElement;
           let userMedia, userMediaElement, userMediaStream, audioContext;
           let audioSource, gainNode;
-          let audioAnalyser, fftSize = 512, frequencyDataArray = new Uint8Array(1), timeDomainDataArray = frequencyDataArray;
+          let audioAnalyser, fftSize = 1024, frequencyDataArray = new Uint8Array(1), timeDomainDataArray = frequencyDataArray;
           function attachAnalyzer() {
             if (audioAnalyser || !audioContext || !gainNode) return;
             audioAnalyser = audioContext.createAnalyser();
