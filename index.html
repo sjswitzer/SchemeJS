@@ -2012,7 +2012,8 @@
           canvasFrameElement.addEventListener('touchstart', mouseDown);
           canvasFrameElement.addEventListener('mouseOver', mouseOver);
           let pageX, pageY, fx, fw, fy, fh, cursor, top, right, left, bottom, dragBorder = 10;
-          function getDragInfo() {
+          function getDragInfo(event) {
+            ({ pageX, pageY } = event);
             ({ top, right, left, bottom } = canvasFrameElement.getBoundingClientRect());
             let i = 0;
             if (pageX < left + dragBorder) i = 0;
@@ -2032,10 +2033,9 @@
           }
           function mouseDown(event) {
             event.stopPropagation();
-            ({ pageX, pageY } = event);
-            let initialX = pageX, initialY = pageY;
             let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
-            getDragInfo();
+            getDragInfo(event);
+            let initialX = pageX, initialY = pageY;
             function mouseMove(event) {
               event.stopPropagation();
               ({pageX, pageY} = event);
