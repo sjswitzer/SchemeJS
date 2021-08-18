@@ -2013,7 +2013,7 @@
           canvasFrameElement.addEventListener('mousedown', mouseDown);
           canvasFrameElement.addEventListener('touchstart', mouseDown);
           canvasFrameElement.addEventListener('mousemove', updateCursor);
-          let resizeBorder = 15, mouseIsDown = false;
+          let resizeBorder = 12, mouseIsDown = false;
           function getDragInfo(event) {
             let { pageX, pageY } = event;
             let { top, right, left, bottom } = canvasFrameElement.getBoundingClientRect();

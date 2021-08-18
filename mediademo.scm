@@ -11,7 +11,7 @@
       ;; and 256 (the range of values) along the y axis.
       (scale (/ (canvas-width) (+ 1 (@ frequency-domain-data "length"))) (/ (canvas-height) 256))
       (for-in i value frequency-domain-data
-        (fill-rect i (- 256 value) 2 value) ;; making one pixel wider to overdraw a bit and not leave gaps
+        (fill-rect i (- 256 value) 2 value) ;; make one pixel wider to overdraw a bit and not leave gaps
       )
     )
     (gfx-save  ;; Draw waveform
