@@ -2012,8 +2012,23 @@
           canvasFrameElement.addEventListener('touchstart', mouseDown);
           canvasFrameElement.addEventListener('mouseOver', mouseOver);
           let pageX, pageY, fx, fw, fy, fh, cursor, top, right, left, bottom, dragBorder = 10;
+          function getDragInfo() {
+            ({ top, right, left, bottom } = canvasFrameElement.getBoundingClientRect());
+            let i = 0;
+            if (pageX < left + dragBorder) i = 0;
+            else if (pageX > right - dragBorder) i = 2;
+            else i = 1;
+            if (pageY < top + dragBorder) i += 0;
+            else if (pageY > bottom - dragBorder) i += 6
+            else i += 3;
+            [fx, fw, fy, fh, cursor] = [
+              [1, -1, 1, -1, "nwse-resize"], [0, 0, 1, -1, "ns-resize"], [0, 1, 1, -1, "nesw-resize"],
+              [1, -1, 0,  0, "ew-resize"  ], [1, 0, 1,  0, "grabbing" ], [0, 1, 0,  0, "ew-resize"  ],
+              [1, -1, 0,  1, "nesw-resize"], [0, 0, 0,  1, "ns-resize"], [0, 1, 0,  1, "nwse-resize"],
+            ][i];
+          }
           function mouseOver(event) {
-            ({ pageX, pageY } = event);
+            // ({ pageX, pageY } = event);
           }
           function mouseDown(event) {
             event.stopPropagation();
@@ -2021,21 +2036,6 @@
             let initialX = pageX, initialY = pageY;
             let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
             getDragInfo();
-            function getDragInfo() {
-              ({ top, right, left, bottom } = canvasFrameElement.getBoundingClientRect());
-              let i = 0;
-              if (pageX < left + dragBorder) i = 0;
-              else if (pageX > right - dragBorder) i = 2;
-              else i = 1;
-              if (pageY < top + dragBorder) i += 0;
-              else if (pageY > bottom - dragBorder) i += 6
-              else i += 3;
-              [fx, fw, fy, fh, cursor] = [
-                [1, -1, 1, -1, "nwse-resize"], [0, 0, 1, -1, "ns-resize"], [0, 1, 1, -1, "nesw-resize"],
-                [1, -1, 0,  0, "ew-resize"  ], [1, 0, 1,  0, "grabbing" ], [0, 1, 0,  0, "ew-resize"  ],
-                [1, -1, 0,  1, "nesw-resize"], [0, 0, 0,  1, "ns-resize"], [0, 1, 0,  1, "nwse-resize"],
-              ][i];
-            }
             function mouseMove(event) {
               event.stopPropagation();
               ({pageX, pageY} = event);
