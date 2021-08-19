@@ -3835,7 +3835,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     bindLiterally(cons, "cons");
     bindLiterally(CLOSURE_ATOM, "CLOSURE_ATOM");
     let ssaFunction = compileLambda(nameAtom, displayName, lambdaForm, ssaScope, tools);
-    if (jitFunction) {
+    if (jitFunction && guardedSymbols.length > 0) {
       let ssaGuardFunction = newTemp(displayName + '_guard');
       emit(`function ${ssaGuardFunction}(...params) {`);
       emit(`  if (false`)
