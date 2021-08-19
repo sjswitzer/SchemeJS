@@ -401,17 +401,21 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (typeof opts.usesDynamicScope === 'boolean') {
       usesDynamicScope = opts.usesDynamicScope;
     } else {
-      if (fnInfo.valueTemplate) { 
-        usesDynamicScope = fnInfo.usesThis;
-      }
-      if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
+      if (compileHook) {  // It's up to the hook to say whether it uses dynamic scope
         usesDynamicScope = false;
-      if (fnInfo.native)  // native functions don't need a scope
-        usesDynamicScope = false;
-      // Closures dont need scope either and it's theoretically possible to call
-      // this utility with a compiled Scheme function
-      if (isClosure(fn))
-        usesDynamicScope = false;
+      } else {
+        if (fnInfo.valueTemplate) { 
+          usesDynamicScope = fnInfo.usesThis;
+        }
+        if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
+          usesDynamicScope = false;
+        if (fnInfo.native)  // native functions don't need a scope
+          usesDynamicScope = false;
+        // Closures dont need scope either and it's theoretically possible to call
+        // this utility with a compiled Scheme function
+        if (isClosure(fn))
+          usesDynamicScope = false;
+    }
   }
     if (usesDynamicScope)
       fnInfo.usesDynamicScope = usesDynamicScope;
