@@ -405,8 +405,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       else if (fnInfo.bodyTemplate && fnInfo.bodyTemplate.includes("this"))
         usesScope = true;
     }
-    if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
-      usesScope = false;
+    // XXXTODO: this is going to take another careful pass to ensure scopes are properly accounted for
+    //  if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
+    //    usesScope = false;
     if (fnInfo.native)  // native functions don't need a scope
       usesScope = false;
     // Closures dont need scope either and it's theoretically possible to call
@@ -2020,7 +2021,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`if (isIterable(${ssaObj})) {`);
     emit(`  let key = 0;`);
     emit(`  for (let value of ${ssaObj})`);
-    emit(`    ${ssaFn}(key, value);`);
+    emit(`    ${ssaFn}(key++, value);`);
     emit(`} else {`);
     emit(`  if (${ssaObj} == null || typeof ${ssaObj} !== 'object')`);
     emit(`    throw new SchemeEvalError(\`for-in requires iterable or object \${string(${ssaObj})}\`);`);
