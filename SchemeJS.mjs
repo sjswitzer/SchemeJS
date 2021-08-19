@@ -2022,7 +2022,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`  for (let value of ${ssaObj})`);
     emit(`    ${ssaFn}(key, value);`);
     emit(`} else {`);
-    emit(`  if (${ssaObj} == null || typeof ${ssaObj} !== 'object'))`);
+    emit(`  if (${ssaObj} == null || typeof ${ssaObj} !== 'object')`);
     emit(`    throw new SchemeEvalError(\`for-in requires iterable or object \${string(${ssaObj})}\`);`);
     emit(`  for (let key in ${ssaObj})`);
     emit(`    ${ssaFn}(kxey, ${ssaObj}[key]);`);
@@ -4075,10 +4075,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
-        if (usesScope)
-          emit(`let ${ssaResult} = ${ssaFunction}.call(scope, ${ssaArgStr});`)
-        else
-          emit(`let ${ssaResult} = ${ssaFunction}(${ssaArgStr});`)
+        if (usesScope) {
+          if (ssaArgStr) ssaArgStr = `, ${ssaArgStr}`;
+          emit(`let ${ssaResult} = ${ssaFunction}.call(scope${ssaArgStr});`);
+        } else {
+          emit(`let ${ssaResult} = ${ssaFunction}(${ssaArgStr});`);
+        }
         return ssaResult;
       }
       //
