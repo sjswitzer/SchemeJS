@@ -2997,7 +2997,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
                     }
                     toString(objCar);  // %%closure or %%%closure
                     sep = "";
-                    if (obj[COMPILED]) put(`{*compiled-${obj[COMPLIED]}*}`);
+                    if (obj[COMPILED]) put(`{*compiled-${obj[COMPILED]}*}`);
                     sep = " ";
                     toString(scopeCons[CAR], maxCarDepth-1, maxCdrDepth-2);  // scope
                     sep = " ";
@@ -3847,9 +3847,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit('"use strict";')
     emit(`// params: (bound, resolveUnbound, invokeUnbound)`);
     emit(`let scope = this;`);
-    for (let bindingName in bindSymToObj)
-      if (usedSsaValues[bindingName])
-        emit(`let ${bindingName} = bound[${string(bindingName)}];`);
+    for (let bindingName in bindSymToObj) {
+      if (usedSsaValues[bindingName]) {
+        let bindingDesc = string(bindSymToObj[bindingName]);
+        if (bindingDesc.length > 30)
+          bindingDesc = `${bindingDesc.substr(0, 30)}...`;
+        emit(`let ${bindingName} = bound[${string(bindingName)}]; // ${bindingDesc}`);
+      }
+    }
     emitted = emitted.concat(saveEmitted);
     let code = '';
     for (let emittedLine of emitted)
@@ -3985,7 +3990,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let fn = form[CAR];
       if (fn === QUOTE_ATOM) {
         if (!isCons(form)) throwBadForm();
-        return bind(form[CDR][CAR], 'quoted');
+        let quotedVal = form[CDR][CAR];
+        if (isAtom(quotedVal))
+          return bind(quotedVal);
+        return bind(quotedVal, 'quoted');
       }
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
         return compileLambda(null, fn.description, form, ssaScope, tools);
@@ -4311,7 +4319,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       scopeLines.push(emit(`scope[${ssaParamName}] = ${ssaParam};`));
     }
     if (restParam) {
-      let ssaTmp = newTemp();
+      let ssaTmp = newTemp(restParam);
       emit(`let ${ssaTmp} = NIL;`);
       emit(`for (let i = ${ssaRestParam}.length; i > 0; --i)`);
       emit(`  ${ssaTmp} = cons(${ssaRestParam}[i-1], ${ssaTmp});`);

@@ -2188,7 +2188,7 @@
         }
 
         function CRCProperty(property) {
-          return function(newValue = undefined) {
+          return function get_set_crc_property(newValue = undefined) {
             let canvasRenderingContext = this[gfxContextAtom];
             let value = canvasRenderingContext[property];
             if (newValue !== undefined)
