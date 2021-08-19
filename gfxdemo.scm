@@ -26,12 +26,12 @@
 ;; Animation helper: a sinusoidal time-varying value of a given magintude,
 ;; period (in seconds) and phase.
 ;; (Date.now) is the number of milliseconds since midnight Jan 1, 1970 (the Unix epoch).
-(define (sinusoidal (? magnitude 1) (? period 1) (? phase 0))
+(compile (sinusoidal (? magnitude 1) (? period 1) (? phase 0))
   (* magnitude (sin (+ phase (* *2pi* (/ (Date-now) period 1000)))))
 )
 
 ;; Ship Arriving Too Late to Save a Drowning Witch
-(compile (satltsadw gfx-context)
+(define (satltsadw gfx-context)
   (gfx-save ;; Saves then restores the graphics state (scale, colors, etc) afterwards
     (scale (/ (canvas-width) 10))  ;; Scale to a 10 x 10 coordinate system
     (line-width .2)
@@ -54,7 +54,7 @@
 (@! shipCanvas 'show 20 20)      ;; Move the canvas widget from its default position
 
 ;; Now a lissajous figure
-(compile (lissajous gfx-context tick)
+(define (lissajous gfx-context tick)
   ;; Fade the canvas by drawing over it with black and a very low alpha every several ticks
   ;; If the alpha is too low, things won't fade things completely; they just converge on light
   ;; gray. So instead use a slightly higer alpha and only apply it every several frames.
@@ -84,7 +84,7 @@
 (define pi_2 (/ *pi* 2))  ;; Cosine is sine 90 degress (pi/2 radians) out of phase
 
 ;; Spirograph/Epicycle is not so very different from a lissajous
-(compile (spirograph gfx-context tick)
+(define (spirograph gfx-context tick)
   ;; Fade the canvas by drawing over it with white and a very low alpha every several ticks
   (fill-style "#ffffff0c")
   (? (== 0 (% tick 20))
