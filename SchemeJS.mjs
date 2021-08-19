@@ -398,22 +398,23 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     // Is a scope needed to call the function?
     let usesDynamicScope = true;  // conservative default
-    if (fnInfo.valueTemplate) { 
-      usesDynamicScope = false;  // templates generally don't use the scope, unless they use "this"
-      if (fnInfo.valueTemplate.includes("this"))
-        usesDynamicScope = true;
-      else if (fnInfo.bodyTemplate && fnInfo.bodyTemplate.includes("this"))
-        usesDynamicScope = true;
-    }
-    if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
-      usesDynamicScope = false;
-    if (fnInfo.native)  // native functions don't need a scope
-      usesDynamicScope = false;
-    // Closures dont need scope either and it's theoretically possible to call
-    // this utility with a compiled Scheme function
-    if (isClosure(fn))
-      usesDynamicScope = false;
-    fnInfo.usesDynamicScope = usesDynamicScope;
+    if (typeof opts.usesDynamicScope === 'boolean') {
+      usesDynamicScope = opts.usesDynamicScope;
+    } else {
+      if (fnInfo.valueTemplate) { 
+        usesDynamicScope = fnInfo.usesThis;
+      }
+      if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
+        usesDynamicScope = false;
+      if (fnInfo.native)  // native functions don't need a scope
+        usesDynamicScope = false;
+      // Closures dont need scope either and it's theoretically possible to call
+      // this utility with a compiled Scheme function
+      if (isClosure(fn))
+        usesDynamicScope = false;
+  }
+    if (usesDynamicScope)
+      fnInfo.usesDynamicScope = usesDynamicScope;
     fn[COMPILE_INFO] = fnInfo;
   }
 
@@ -426,7 +427,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   exportAPI("SUPERLAZY_SYMBOL", SUPERLAZY);
 
   defineGlobalSymbol("VERSION", VERSION);
-  defineGlobalSymbol("intern", Atom, { dontInline: true }, "Atom");
+  defineGlobalSymbol("intern", Atom, { usesDynamicScope: false, dontInline: true }, "Atom");
 
   class SchemeError extends Error {};
   SchemeError.prototype.name = "SchemeError";
@@ -519,7 +520,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
 
-  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[CAR], { evalArgs: 0, dontInline: true }, "quote");
+  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[CAR], { usesDynamicScope: false, evalArgs: 0 }, "quote");
   
   defineGlobalSymbol("scope", function() { return this });
 
@@ -557,7 +558,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let {value, get} = propDescs[name];
       if (name === 'eval') name = "js-eval";
       if (!get && value)
-        defineGlobalSymbol(name, value, { schemeOnly: true, dontInline: true, group: "imported" });
+        defineGlobalSymbol(name, value, { schemeOnly: true, usesDynamicScope: false, dontInline: true, group: "imported" });
     }
 
     // Object static methods: Object-getOwnPropertyDescriptors, etc.
@@ -1404,7 +1405,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // Can be inlined (if isList, isIterator, isCons, etc. are bound), but doesn't seem wise
-  defineGlobalSymbol("append", append, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("append", append, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
@@ -1425,7 +1426,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("last", last, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("last", last, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function last(list) {
     let res = NIL;
     if (!list || isNil(list)) return NIL; // XXX check this.
@@ -1446,7 +1447,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("butlast", butlast, { dontInline: true, group: "list-op" }); // TODO: needs unit test!
+  defineGlobalSymbol("butlast", butlast, { usesDynamicScope: false, dontInline: true, group: "list-op" }); // TODO: needs unit test!
   function butlast(list) {
     let res = NIL, last;
     if (isList(list)) {
@@ -1469,7 +1470,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("length", length, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("length", length, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function length(list) {
     let n = 0;
     if (isList(list)) {
@@ -1504,7 +1505,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return ssaResult;
   }
 
-  defineGlobalSymbol("reverse", reverse, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("reverse", reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function reverse(list) {
     let res = NIL;
     for ( ; isCons(list); list = list[CDR])
@@ -1512,7 +1513,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("nreverse", in_place_reverse, { dontInline: true, group: "list-op" });  // Name from SIOD
+  defineGlobalSymbol("nreverse", in_place_reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // Name from SIOD
   function in_place_reverse(list) {
     let res = NIL;
     while (isCons(list)) {
@@ -1524,7 +1525,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("copy-list", copy_list, { dontInline: true, group: "list-op" });  // TODO: unit tests!
+  defineGlobalSymbol("copy-list", copy_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // TODO: unit tests!
   function copy_list(list) {
     let res = NIL, last;
     if (isNil(list)) return NIL;
@@ -1551,7 +1552,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // XXX TODO: member and memq are almost certainly wrong. Need to find out about SIOD equality.
   // (member key list)
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
-  defineGlobalSymbol("member", member, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("member", member, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function member(key, list) {
     for ( ; isCons(list); list = list[CDR])
       if (key === list[CAR])   // TODO: == or ===?
@@ -1561,7 +1562,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // (memq key list)
   //     Returns the portion of the list where the car is eq to the key, or () if none found.
-  defineGlobalSymbol("memq", memq, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("memq", memq, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function memq(key, list) {
     for ( ; isCons(list); list = list[CDR])
       if (key === list[CAR])
@@ -1571,7 +1572,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // (nth index list)
   //     Reference the list using index, with the first element being index 0.
-  defineGlobalSymbol("nth", nth, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("nth", nth, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function nth(index, list) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
       throw new TypeError(`Not an integer ${string(index)}`);
@@ -1615,7 +1616,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (map fn list1 list2 ...)
-  defineGlobalSymbol("map", map, { dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
+  defineGlobalSymbol("map", map, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
   function map(fn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
@@ -1644,7 +1645,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // Same as map but results in an Array
-  defineGlobalSymbol("array-map", array_map, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("array-map", array_map, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function array_map(fn, ...lists) {
     let res = [];
     // TODO: does not currently special-case the list case.
@@ -1659,7 +1660,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (filter fn list1 list2 ...)
-  defineGlobalSymbol("filter", filter, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("filter", filter, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function filter(predicateFn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
@@ -1836,22 +1837,22 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   LazyIteratorList.prototype[LAZYCDR] = true;
   LazyIteratorList.prototype[LIST] = true;
 
-  defineGlobalSymbol("list-view", list_view, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("list-view", list_view, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator);
   }
 
-  defineGlobalSymbol("lazy-map", lazy_map, { dontInline: true });
+  defineGlobalSymbol("lazy-map", lazy_map, { usesDynamicScope: false, dontInline: true });
   function lazy_map(fn, obj) {
-    let scope = this, iterator = iteratorFor(obj, TypeError);
+    let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator, a => fn(a))
   }
 
   // TODO: lazy-filter?
 
   // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
-  defineGlobalSymbol("to-list", to_list, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("to-list", to_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function to_list(obj, depth = 1) {
     if (depth <= 0) return obj;
     if (isNil(obj) || isCons(obj)) return obj;
@@ -1871,7 +1872,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // Turns iterable objects like lists into arrays, recursively to "depth"
-  defineGlobalSymbol("to-array", to_array, { dontInline: true, group: "list-op" });
+  defineGlobalSymbol("to-array", to_array, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function to_array(obj, depth = 1) {
     if (depth <= 0) return obj;
     res = [];
@@ -2093,7 +2094,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // (qsort list predicate-fcn access-fcn)
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
   //   comparable performance and is excellent with partially-sorted lists.
-  defineGlobalSymbol("mergesort", mergesort, { dontInline: true, group: "list-op" }, "sort", "qsort");
+  defineGlobalSymbol("mergesort", mergesort, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "sort", "qsort");
   function mergesort(list, predicateFn = optional, accessFn = optional) {
     if (isNil(list)) return NIL;
     // Sort Arrays as Arrays
@@ -2112,7 +2113,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return in_place_mergesort(copied, predicateFn, accessFn);
   }
 
-  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { dontInline: true, group: "list-op" }, "in-place-sort", "nsort");
+  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "in-place-sort", "nsort");
   function in_place_mergesort(list, predicateFn = optional, accessFn = optional) {
     if (isNil(list)) return NIL;
     // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
@@ -2255,7 +2256,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // or leading and trailing whitespace. Sometimes you're playing horseshoes.
   // You can also opt that NaNs are considered equal.
   exportAPI("equal", equal);
-  defineGlobalSymbol("equal?", equal, { dontInline: true });
+  defineGlobalSymbol("equal?", equal, { usesDynamicScope: false, dontInline: true });
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
     if (a === b) return true;
     let stringCompare = report.stringCompare ?? ((a, b) => a === b);
@@ -2417,7 +2418,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   SchemeJSThrow.prototype.name = "SchemeJSThrow";
 
   // (*throw tag value) -- SIOD style
-  defineGlobalSymbol("*throw", schemeThrow, { dontInline: true });
+  defineGlobalSymbol("*throw", schemeThrow, { usesDynamicScope: false, dontInline: true });
   function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style
@@ -3117,9 +3118,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         let fnDesc = analyzeJSFunction(obj);
         let parameterDescriptor = obj[PARAMETER_DESCRIPTOR] ?? (MAX_INTEGER << 16);
         let evalCount = parameterDescriptor >> 15 >>> 1;
-        let name = namedObjects.get(obj);
-        if (!name)
-          name = fnDesc.name ?? obj.name;
+        let name = namedObjects.get(obj) ?? fnDesc.name ?? obj.name;
         let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
         if (fnDesc.valueTemplate && !fnDesc.bodyTemplate && !printBody)
@@ -3643,7 +3642,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (analyzed)
       return analyzed;
     let str = fn.toString(), pos = 0, token = "", paramPos = 0, requiredCount;
-    let name = fn.name, params = [], restParam, valueTemplate, bodyTemplate, native = false, printParams, printBody;
+    let name = fn.name, params = [], restParam, valueTemplate, bodyTemplate, native = false, printParams, printBody, usesThis = false;
     parse: {
       if (nextToken() === 'function') {
         paramPos = pos;
@@ -3678,7 +3677,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       requiredCount = params.length;
     if (native)
       requiredCount = 0;
-    let res = { name, params, restParam, valueTemplate, bodyTemplate, printBody, printParams, native, requiredCount };
+    let res = { name, params, restParam, valueTemplate, bodyTemplate, printBody, printParams, native, requiredCount, usesThis };
     analyzedFunctions.set(fn, res);
     return res;
 
@@ -3715,6 +3714,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         while (WSNL[str[pos]]) ++pos;
         let bodyPos = pos, returnPos = pos, nTok = 0;
         while (nextToken() && token !== 'return') {
+          if (token === 'this')
+            usesThis = true;
           returnPos = pos;
           if (nTok++ === 0 && token === '[') {
             if (nextToken() === 'native' && nextToken() === 'code' &&
@@ -3735,6 +3736,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           if (nextToken() !== '') return;
           valueTemplate = possibleValue;
           bodyTemplate = str.substring(bodyPos, returnPos);
+          if (valueTemplate.includes('this'))
+            usesThis = true;
         }
       }
     }
@@ -3745,7 +3748,20 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // The assumption is that what JS returns is well-formed, so it takes a lot of liberties.
       if (pos >= str.length) return token = '';
       let ch = str[pos]; // ch is always str[pos]
-      while (WSNL[ch]) ch = str[++pos];
+      do {
+        while (WSNL[ch]) ch = str[++pos];
+        if (ch === '/' && str[pos+1] === '/') {
+          ch = str[pos += 2];
+          while (ch && ch !== '\n') ch = str[pos++];
+          continue;
+        }
+        if (ch === '/' && str[pos+1] === '*') {
+          ch = str[pos += 2];
+          while (ch && !(ch === '*' && str[pos+1] === '/')) ch = str[pos++];
+          ch = str[pos += 2];
+          continue;
+        }
+      } while (false);
       if (JSIDENT1[ch]) {
         let tok = ch;
         ch = str[++pos];
@@ -3992,7 +4008,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         }
         return ssaValue;
       }
-      ssaScope.dynamicScopeUsed = true;
       return `resolveUnbound(${use(bind(sym))})`;
     }
     if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
@@ -4016,13 +4031,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
         let ssaResult = newTemp(fName+'_result');
         let ssaArgList = use(bind(args, `${fName}_args`));
-        ssaScope.dynamicScopeUsed = true;
         emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
         return ssaResult;
       }
       let requiredCount = functionDescriptor.requiredCount;
       let evalCount = functionDescriptor.evalCount;
-      let fName = functionDescriptor.name;
+      let fName = functionDescriptor.name ?? "anon";
       let params = functionDescriptor.params;
       let restParam = functionDescriptor.restParam;
       let compileHook = functionDescriptor.compileHook;
@@ -4103,7 +4117,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let name = fName + '_closure';
       let ssaResult = newTemp(name), ssaTmpScope = newTemp("tmp_scope")
       // If we had a compile hook but didn't use it because we're making a closure
-      // we assume it  needs a scope when invoked.
+      // we assume it needs a scope when invoked.
       if (compileHook)
         usesDynamicScope = true;
       ssaScope.dynamicScopeUsed = true;

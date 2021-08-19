@@ -2318,7 +2318,7 @@
         };
 
         defineGlobalSymbol("line-to-stashed", line_to_stashed, { compileHook: WidgetFunctionHook('line_to_stashed'), group: "web-gfx" });
-        function line_to_stashed(x, y) {
+        function line_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeWidget = contextToSchemeWidget(ctx);
           schemeWidget.line_to_stashed();
