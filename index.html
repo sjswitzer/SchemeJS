@@ -2197,13 +2197,13 @@
           return canvasRenderingContext;
         }
 
-        function CRCfunction(scope, fn) {
+        function CanvasRenderingContextfunction(scope, fn) {
           let canvasRenderingContext = scope[gfxContextAtom];
           fn(canvasRenderingContext);
           return canvasRenderingContext;
         }
 
-        function CRCFunctionHook(fName) {
+        function CanvasRenderingContextFunctionHook(fName) {
           return function crcHookFn(args, ssaScope, tools) {
             let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
             let ssaCRC = ssaScope[gfxContextAtom];
@@ -2217,7 +2217,7 @@
           }
         }
 
-        function CRCProperty(property) {
+        function CanvasRenderingContextProperty(property) {
           return function get_set_crc_property(newValue = optional) {
             let canvasRenderingContext = this[gfxContextAtom];
             let value = canvasRenderingContext[property];
@@ -2227,7 +2227,7 @@
           }
         }
 
-        function CRCPropertyHook(propName) {
+        function CanvasRenderingContextPropertyHook(propName) {
           return function crcHookProp(args, ssaScope, tools) {
             let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
             let ssaCRC = ssaScope[gfxContextAtom];
@@ -2244,11 +2244,11 @@
           }
         }
 
-        defineGlobalSymbol("save-context", save_context, { compileHook: CRCFunctionHook('save'), group: "web-gfx" });
-        function save_context() { return CRCfunction(this, ctx => ctx.save()) }
+        defineGlobalSymbol("save-context", save_context, { compileHook: CanvasRenderingContextFunctionHook('save'), group: "web-gfx" });
+        function save_context() { return CanvasRenderingContextfunction(this, ctx => ctx.save()) }
 
-        defineGlobalSymbol("restore-context", restore_context, { compileHook: CRCFunctionHook('restore'), group: "web-gfx" });
-        function restore_context() { return CRCfunction(this, ctx => ctx.restore()) }
+        defineGlobalSymbol("restore-context", restore_context, { compileHook: CanvasRenderingContextFunctionHook('restore'), group: "web-gfx" });
+        function restore_context() { return CanvasRenderingContextfunction(this, ctx => ctx.restore()) }
 
         defineGlobalSymbol("canvas-width", canvas_width, { compileHook: WidgetPropertyHook('width'), group: "web-gfx" });
         function canvas_width() {
@@ -2347,173 +2347,173 @@
           return ctx;
         };
 
-        defineGlobalSymbol("fill-rect", fill_rect, { compileHook: CRCFunctionHook('fillRect'), group: "web-gfx" });
-        function fill_rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.fillRect(x, y, width, height)) }
+        defineGlobalSymbol("fill-rect", fill_rect, { compileHook: CanvasRenderingContextFunctionHook('fillRect'), group: "web-gfx" });
+        function fill_rect(x, y, width, height) { return CanvasRenderingContextfunction(this, ctx => ctx.fillRect(x, y, width, height)) }
         
-        defineGlobalSymbol("clear-rect", clear_rect, { compileHook: CRCFunctionHook('clearRect'), group: "web-gfx" });
-        function clear_rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.clearRect(x, y, width, height)) }
+        defineGlobalSymbol("clear-rect", clear_rect, { compileHook: CanvasRenderingContextFunctionHook('clearRect'), group: "web-gfx" });
+        function clear_rect(x, y, width, height) { return CanvasRenderingContextfunction(this, ctx => ctx.clearRect(x, y, width, height)) }
         
-        defineGlobalSymbol("stroke-rect", stroke_rect, { compileHook: CRCFunctionHook('strokeRect'), group: "web-gfx" });
+        defineGlobalSymbol("stroke-rect", stroke_rect, { compileHook: CanvasRenderingContextFunctionHook('strokeRect'), group: "web-gfx" });
         function stroke_rect(x, y, width, height) {
-          return CRCfunction(this, ctx => ctx.strokeRect(x, y, width, height))
+          return CanvasRenderingContextfunction(this, ctx => ctx.strokeRect(x, y, width, height))
         }
 
-        defineGlobalSymbol("fill-text", fill_text, { compileHook: CRCFunctionHook('fillText'), group: "web-gfx" });
+        defineGlobalSymbol("fill-text", fill_text, { compileHook: CanvasRenderingContextFunctionHook('fillText'), group: "web-gfx" });
         function fill_text(text, x, y , maxWidth = optional) {
-          return CRCfunction(this, ctx => ctx.fillText(text, x, y , maxWidth))
+          return CanvasRenderingContextfunction(this, ctx => ctx.fillText(text, x, y , maxWidth))
         }
 
-        defineGlobalSymbol("measure-text", measure_text, { compileHook: CRCFunctionHook('measureText'), group: "web-gfx" });
-        function measure_text(text) { return CRCfunction(this, ctx => ctx.measureText(text)) }
+        defineGlobalSymbol("measure-text", measure_text, { compileHook: CanvasRenderingContextFunctionHook('measureText'), group: "web-gfx" });
+        function measure_text(text) { return CanvasRenderingContextfunction(this, ctx => ctx.measureText(text)) }
 
-        const line_width = CRCProperty("lineWidth");
-        defineGlobalSymbol("line-width", line_width, { compileHook: CRCPropertyHook('lineWidth'), group: "web-gfx" });
+        const line_width = CanvasRenderingContextProperty("lineWidth");
+        defineGlobalSymbol("line-width", line_width, { compileHook: CanvasRenderingContextPropertyHook('lineWidth'), group: "web-gfx" });
 
-        const line_cap = CRCProperty("lineCap");
-        defineGlobalSymbol("line-cap", line_cap, { compileHook: CRCPropertyHook('lineCap'), group: "web-gfx" });
+        const line_cap = CanvasRenderingContextProperty("lineCap");
+        defineGlobalSymbol("line-cap", line_cap, { compileHook: CanvasRenderingContextPropertyHook('lineCap'), group: "web-gfx" });
 
-        const line_join = CRCProperty("lineJoin");
-        defineGlobalSymbol("line-join", line_join, { compileHook: CRCPropertyHook('lineJoin'), group: "web-gfx" });
+        const line_join = CanvasRenderingContextProperty("lineJoin");
+        defineGlobalSymbol("line-join", line_join, { compileHook: CanvasRenderingContextPropertyHook('lineJoin'), group: "web-gfx" });
 
-        const miter_limit = CRCProperty("miterLimit");
-        defineGlobalSymbol("miter-limit", miter_limit, { compileHook: CRCPropertyHook('miterLimit'), group: "web-gfx" });
+        const miter_limit = CanvasRenderingContextProperty("miterLimit");
+        defineGlobalSymbol("miter-limit", miter_limit, { compileHook: CanvasRenderingContextPropertyHook('miterLimit'), group: "web-gfx" });
 
-        defineGlobalSymbol("get-line-dash", get_line_dash, { compileHook: CRCFunctionHook('getLineDash'), group: "web-gfx" });
-        function get_line_dash() { return CRCfunction(this, ctx => ctx.getLineDash) }
+        defineGlobalSymbol("get-line-dash", get_line_dash, { compileHook: CanvasRenderingContextFunctionHook('getLineDash'), group: "web-gfx" });
+        function get_line_dash() { return CanvasRenderingContextfunction(this, ctx => ctx.getLineDash) }
 
-        defineGlobalSymbol("set-line-dash", set_line_dash, { compileHook: CRCFunctionHook('setLineDash'), group: "web-gfx" });
-        function set_line_dash(segments) { CRCfunction(this, ctx => ctx.setLineDash(segments)) }
+        defineGlobalSymbol("set-line-dash", set_line_dash, { compileHook: CanvasRenderingContextFunctionHook('setLineDash'), group: "web-gfx" });
+        function set_line_dash(segments) { CanvasRenderingContextfunction(this, ctx => ctx.setLineDash(segments)) }
 
-        const line_dash_offset = CRCProperty("lineDashOffset");
-        defineGlobalSymbol("line-dash-offset", line_dash_offset, { compileHook: CRCPropertyHook('lineDashOffset'), group: "web-gfx" });
+        const line_dash_offset = CanvasRenderingContextProperty("lineDashOffset");
+        defineGlobalSymbol("line-dash-offset", line_dash_offset, { compileHook: CanvasRenderingContextPropertyHook('lineDashOffset'), group: "web-gfx" });
         
-        const font = CRCProperty("font");
-        defineGlobalSymbol("font", font, { compileHook: CRCPropertyHook('font'), group: "web-gfx" });
+        const font = CanvasRenderingContextProperty("font");
+        defineGlobalSymbol("font", font, { compileHook: CanvasRenderingContextPropertyHook('font'), group: "web-gfx" });
 
-        const text_align = CRCProperty("textAlign");
-        defineGlobalSymbol("text-align", text_align, { compileHook: CRCPropertyHook('textAlign'), group: "web-gfx" });
+        const text_align = CanvasRenderingContextProperty("textAlign");
+        defineGlobalSymbol("text-align", text_align, { compileHook: CanvasRenderingContextPropertyHook('textAlign'), group: "web-gfx" });
 
-        const text_baseline = CRCProperty("textBaseline");
-        defineGlobalSymbol("text-baseline", text_baseline, { compileHook: CRCPropertyHook('textBaseline'), group: "web-gfx" });
+        const text_baseline = CanvasRenderingContextProperty("textBaseline");
+        defineGlobalSymbol("text-baseline", text_baseline, { compileHook: CanvasRenderingContextPropertyHook('textBaseline'), group: "web-gfx" });
 
-        const direction = CRCProperty("direction");
-        defineGlobalSymbol("direction", direction, { compileHook: CRCPropertyHook('direction'), group: "web-gfx" });
+        const direction = CanvasRenderingContextProperty("direction");
+        defineGlobalSymbol("direction", direction, { compileHook: CanvasRenderingContextPropertyHook('direction'), group: "web-gfx" });
 
-        const fill_style = CRCProperty("fillStyle");
-        defineGlobalSymbol("fill-style", fill_style, { compileHook: CRCPropertyHook('fillStyle'), group: "web-gfx" });
+        const fill_style = CanvasRenderingContextProperty("fillStyle");
+        defineGlobalSymbol("fill-style", fill_style, { compileHook: CanvasRenderingContextPropertyHook('fillStyle'), group: "web-gfx" });
 
-        const stroke_style = CRCProperty("strokeStyle");
-        defineGlobalSymbol("stroke-style", stroke_style, { compileHook: CRCPropertyHook('strokeStyle'), group: "web-gfx" });
+        const stroke_style = CanvasRenderingContextProperty("strokeStyle");
+        defineGlobalSymbol("stroke-style", stroke_style, { compileHook: CanvasRenderingContextPropertyHook('strokeStyle'), group: "web-gfx" });
 
-        defineGlobalSymbol("create-conic-gradient", create_conic_gradient, { compileHook: CRCFunctionHook('createConicGradient'), group: "web-gfx" });
+        defineGlobalSymbol("create-conic-gradient", create_conic_gradient, { compileHook: CanvasRenderingContextFunctionHook('createConicGradient'), group: "web-gfx" });
         function create_conic_gradient(startAngle, x, y) {
-          return CRCfunction(this, ctx => ctx.createConicGradient(startAngle, x, y))
+          return CanvasRenderingContextfunction(this, ctx => ctx.createConicGradient(startAngle, x, y))
         }
 
-        defineGlobalSymbol("create-linear-gradient", create_linear_gradient, { compileHook: CRCFunctionHook('createLinearGradient'), group: "web-gfx" });
+        defineGlobalSymbol("create-linear-gradient", create_linear_gradient, { compileHook: CanvasRenderingContextFunctionHook('createLinearGradient'), group: "web-gfx" });
         function create_linear_gradient(x0, y0, x1, y1) {
-          return CRCfunction(this, ctx => ctx.createLinearGradient(x0, y0, x1, y1))
+          return CanvasRenderingContextfunction(this, ctx => ctx.createLinearGradient(x0, y0, x1, y1))
         }
 
-        defineGlobalSymbol("create-radial-gradient", create_radial_gradient, { compileHook: CRCFunctionHook('createRadialGradient'), group: "web-gfx" });
+        defineGlobalSymbol("create-radial-gradient", create_radial_gradient, { compileHook: CanvasRenderingContextFunctionHook('createRadialGradient'), group: "web-gfx" });
         function create_radial_gradient(x0, y0, r0, x1, y1, r1) {
-          return CRCfunction(this, ctx => ctx.createRadialGradient(x0, y0, r0, x1, y1, r1))
+          return CanvasRenderingContextfunction(this, ctx => ctx.createRadialGradient(x0, y0, r0, x1, y1, r1))
         }
 
-        defineGlobalSymbol("create-pattern", create_pattern, { compileHook: CRCFunctionHook('createPattern'), group: "web-gfx" });
-        function create_pattern(image, repetition) { CRCfunction(this, ctx => ctx.createPattern(image, repetition)) }
+        defineGlobalSymbol("create-pattern", create_pattern, { compileHook: CanvasRenderingContextFunctionHook('createPattern'), group: "web-gfx" });
+        function create_pattern(image, repetition) { CanvasRenderingContextfunction(this, ctx => ctx.createPattern(image, repetition)) }
 
-        const shadow_color = CRCProperty("shadowColor");
-        defineGlobalSymbol("shadow-color", shadow_color, { compileHook: CRCPropertyHook('shadowColor'), group: "web-gfx" });
+        const shadow_color = CanvasRenderingContextProperty("shadowColor");
+        defineGlobalSymbol("shadow-color", shadow_color, { compileHook: CanvasRenderingContextPropertyHook('shadowColor'), group: "web-gfx" });
 
-        const shadow_offset_x = CRCProperty("shadowOffsetX");
-        defineGlobalSymbol("shadow-offset-x", shadow_offset_x, { compileHook: CRCPropertyHook('shadowOffsetX'), group: "web-gfx" });
+        const shadow_offset_x = CanvasRenderingContextProperty("shadowOffsetX");
+        defineGlobalSymbol("shadow-offset-x", shadow_offset_x, { compileHook: CanvasRenderingContextPropertyHook('shadowOffsetX'), group: "web-gfx" });
 
-        const shadow_offset_y = CRCProperty("shadowOffsetY");
-        defineGlobalSymbol("shadow-offset-y", shadow_offset_y, { compileHook: CRCPropertyHook('shadowOffsetY'), group: "web-gfx" });
+        const shadow_offset_y = CanvasRenderingContextProperty("shadowOffsetY");
+        defineGlobalSymbol("shadow-offset-y", shadow_offset_y, { compileHook: CanvasRenderingContextPropertyHook('shadowOffsetY'), group: "web-gfx" });
 
-        defineGlobalSymbol("begin-path", begin_path, { compileHook: CRCFunctionHook('beginPath'), group: "web-gfx" });
-        function begin_path() { return CRCfunction(this, ctx => ctx.beginPath()) }
+        defineGlobalSymbol("begin-path", begin_path, { compileHook: CanvasRenderingContextFunctionHook('beginPath'), group: "web-gfx" });
+        function begin_path() { return CanvasRenderingContextfunction(this, ctx => ctx.beginPath()) }
 
-        defineGlobalSymbol("close-path", close_path, { compileHook: CRCFunctionHook('closePath'), group: "web-gfx" });
-        function close_path() { return CRCfunction(this, ctx => ctx.closePath()) }
+        defineGlobalSymbol("close-path", close_path, { compileHook: CanvasRenderingContextFunctionHook('closePath'), group: "web-gfx" });
+        function close_path() { return CanvasRenderingContextfunction(this, ctx => ctx.closePath()) }
 
-        defineGlobalSymbol("move-to", move_to, { compileHook: CRCFunctionHook('xmoveToxx'), group: "web-gfx" });
-        function move_to(x, y) { return CRCfunction(this, ctx => ctx.moveTo(x, y)) }
+        defineGlobalSymbol("move-to", move_to, { compileHook: CanvasRenderingContextFunctionHook('xmoveToxx'), group: "web-gfx" });
+        function move_to(x, y) { return CanvasRenderingContextfunction(this, ctx => ctx.moveTo(x, y)) }
 
-        defineGlobalSymbol("line-to", line_to, { compileHook: CRCFunctionHook('lineTo'), group: "web-gfx" });
-        function line_to(x, y) { return CRCfunction(this, ctx => ctx.lineTo(x, y)) }
+        defineGlobalSymbol("line-to", line_to, { compileHook: CanvasRenderingContextFunctionHook('lineTo'), group: "web-gfx" });
+        function line_to(x, y) { return CanvasRenderingContextfunction(this, ctx => ctx.lineTo(x, y)) }
 
-        defineGlobalSymbol("bezier-curve-to", bezier_curve_to, { compileHook: CRCFunctionHook('bezierCurveTo'), group: "web-gfx" });
+        defineGlobalSymbol("bezier-curve-to", bezier_curve_to, { compileHook: CanvasRenderingContextFunctionHook('bezierCurveTo'), group: "web-gfx" });
         function bezier_curve_to(cp1x, cp1y, cp2x, cp2y, x, y) {
-          return CRCfunction(this, ctx => ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y))
+          return CanvasRenderingContextfunction(this, ctx => ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y))
         }
 
-        defineGlobalSymbol("quadratic-curve-to", quadratic_curve_to, { compileHook: CRCFunctionHook('quadraticCurveTo'), group: "web-gfx" });
+        defineGlobalSymbol("quadratic-curve-to", quadratic_curve_to, { compileHook: CanvasRenderingContextFunctionHook('quadraticCurveTo'), group: "web-gfx" });
         function quadratic_curve_to(cpx, cpy, x, y) {
-          return CRCfunction(this, ctx => ctx.quadraticCurveTo(cpx, cpy, x, y))
+          return CanvasRenderingContextfunction(this, ctx => ctx.quadraticCurveTo(cpx, cpy, x, y))
         }
 
-        defineGlobalSymbol("arc", arc, { compileHook: CRCFunctionHook('arc'), group: "web-gfx" });
+        defineGlobalSymbol("arc", arc, { compileHook: CanvasRenderingContextFunctionHook('arc'), group: "web-gfx" });
         function arc(x, y, radius, startAngle, endAngle, counterclockwise = false) {
-          return CRCfunction(this, ctx => ctx.arc(x, y, radius, startAngle, endAngle, counterclockwise))
+          return CanvasRenderingContextfunction(this, ctx => ctx.arc(x, y, radius, startAngle, endAngle, counterclockwise))
         }
 
-        defineGlobalSymbol("arc-to", arc_to, { compileHook: CRCFunctionHook('arcTo'), group: "web-gfx" });
-        function arc_to(x1, y1, x2, y2, radius) { return CRCfunction(this, ctx => ctx.arcTo(x1, y1, x2, y2, radius)) }
+        defineGlobalSymbol("arc-to", arc_to, { compileHook: CanvasRenderingContextFunctionHook('arcTo'), group: "web-gfx" });
+        function arc_to(x1, y1, x2, y2, radius) { return CanvasRenderingContextfunction(this, ctx => ctx.arcTo(x1, y1, x2, y2, radius)) }
 
-        defineGlobalSymbol("ellipse", ellipse, { compileHook: CRCFunctionHook('ellipse'), group: "web-gfx" });
+        defineGlobalSymbol("ellipse", ellipse, { compileHook: CanvasRenderingContextFunctionHook('ellipse'), group: "web-gfx" });
         function ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise = false) {
-          return CRCfunction(this, ctx => ctx.ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise))
+          return CanvasRenderingContextfunction(this, ctx => ctx.ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise))
         }
 
-        defineGlobalSymbol("rect", rect, { compileHook: CRCFunctionHook('rect'), group: "web-gfx" });
-        function rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.rect(x, y, width, height)) }
+        defineGlobalSymbol("rect", rect, { compileHook: CanvasRenderingContextFunctionHook('rect'), group: "web-gfx" });
+        function rect(x, y, width, height) { return CanvasRenderingContextfunction(this, ctx => ctx.rect(x, y, width, height)) }
 
-        defineGlobalSymbol("fill", fill, { compileHook: CRCFunctionHook('fill'), group: "web-gfx" });
-        function fill(...params) { return CRCfunction(this, ctx => ctx.fill(...params)) }
+        defineGlobalSymbol("fill", fill, { compileHook: CanvasRenderingContextFunctionHook('fill'), group: "web-gfx" });
+        function fill(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.fill(...params)) }
 
-        defineGlobalSymbol("stroke", stroke, { compileHook: CRCFunctionHook('stroke'), group: "web-gfx" });
-        function stroke(...params) { return CRCfunction(this, ctx => ctx.stroke(...params)) }
+        defineGlobalSymbol("stroke", stroke, { compileHook: CanvasRenderingContextFunctionHook('stroke'), group: "web-gfx" });
+        function stroke(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.stroke(...params)) }
 
-        defineGlobalSymbol("draw-focus-if-needed", draw_focus_if_needed, { compileHook: CRCFunctionHook('drawFocusIfNeeded'), group: "web-gfx" });
-        function draw_focus_if_needed(...params) { return CRCfunction(this, ctx => ctx.drawFocusIfNeeded(...params)) }
+        defineGlobalSymbol("draw-focus-if-needed", draw_focus_if_needed, { compileHook: CanvasRenderingContextFunctionHook('drawFocusIfNeeded'), group: "web-gfx" });
+        function draw_focus_if_needed(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.drawFocusIfNeeded(...params)) }
 
-        defineGlobalSymbol("scroll-path-into-view", scroll_path_into_view, { compileHook: CRCFunctionHook('scrollPathIntoView'), group: "web-gfx" });
-        function scroll_path_into_view(...params) { return CRCfunction(this, ctx => ctx.scrollPathIntoView(...params)) }
+        defineGlobalSymbol("scroll-path-into-view", scroll_path_into_view, { compileHook: CanvasRenderingContextFunctionHook('scrollPathIntoView'), group: "web-gfx" });
+        function scroll_path_into_view(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.scrollPathIntoView(...params)) }
 
-        defineGlobalSymbol("is-point-in-path", is_point_in_path, { compileHook: CRCFunctionHook('isPointInPath'), group: "web-gfx" });
-        function is_point_in_path(...params) { return CRCfunction(this, ctx => ctx.isPointInPath(...params)) }
+        defineGlobalSymbol("is-point-in-path", is_point_in_path, { compileHook: CanvasRenderingContextFunctionHook('isPointInPath'), group: "web-gfx" });
+        function is_point_in_path(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.isPointInPath(...params)) }
 
-        defineGlobalSymbol("is-point-in-stroke", is_point_in_stroke, { compileHook: CRCFunctionHook('isPointInStroke'), group: "web-gfx" });
-        function is_point_in_stroke(...params) { return CRCfunction(this, ctx => ctx.isPointInStroke(...params)) }
+        defineGlobalSymbol("is-point-in-stroke", is_point_in_stroke, { compileHook: CanvasRenderingContextFunctionHook('isPointInStroke'), group: "web-gfx" });
+        function is_point_in_stroke(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.isPointInStroke(...params)) }
 
-        defineGlobalSymbol("clip", clip, { compileHook: CRCFunctionHook('clip'), group: "web-gfx" });
-        function clip(...params) { return CRCfunction(this, ctx => ctx.clip(...params)) }
+        defineGlobalSymbol("clip", clip, { compileHook: CanvasRenderingContextFunctionHook('clip'), group: "web-gfx" });
+        function clip(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.clip(...params)) }
 
-        const global_alpha = CRCProperty("globalAlpha");
-        defineGlobalSymbol("global-alpha", global_alpha, { compileHook: CRCPropertyHook('globalAlpha'), group: "web-gfx" });
+        const global_alpha = CanvasRenderingContextProperty("globalAlpha");
+        defineGlobalSymbol("global-alpha", global_alpha, { compileHook: CanvasRenderingContextPropertyHook('globalAlpha'), group: "web-gfx" });
 
-        const global_composite_operation = CRCProperty("globalCompositeOperation");
-        defineGlobalSymbol("global-composite-operation", global_composite_operation, { compileHook: CRCPropertyHook('globalCompositeOperation'), group: "web-gfx" });
+        const global_composite_operation = CanvasRenderingContextProperty("globalCompositeOperation");
+        defineGlobalSymbol("global-composite-operation", global_composite_operation, { compileHook: CanvasRenderingContextPropertyHook('globalCompositeOperation'), group: "web-gfx" });
 
-        defineGlobalSymbol("draw-image", draw_image, { compileHook: CRCFunctionHook('drawImage'), group: "web-gfx" });
-        function draw_image(...params) { return CRCfunction(this, ctx => ctx.drawImage(...params)) }
+        defineGlobalSymbol("draw-image", draw_image, { compileHook: CanvasRenderingContextFunctionHook('drawImage'), group: "web-gfx" });
+        function draw_image(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.drawImage(...params)) }
 
-        defineGlobalSymbol("createImageData", createImageData, { compileHook: CRCFunctionHook('createImageData'), group: "web-gfx" });
-        function createImageData(...params) { return CRCfunction(this, ctx => ctx.createImageData(...params)) }
+        defineGlobalSymbol("createImageData", createImageData, { compileHook: CanvasRenderingContextFunctionHook('createImageData'), group: "web-gfx" });
+        function createImageData(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.createImageData(...params)) }
 
-        defineGlobalSymbol("get-image-data", get_image_data, { compileHook: CRCFunctionHook('getImageData'), group: "web-gfx" });
-        function get_image_data(sx, sy, sw, sh) { return CRCfunction(this, ctx => ctx.getImageData(sx, sy, sw, sh)) }
+        defineGlobalSymbol("get-image-data", get_image_data, { compileHook: CanvasRenderingContextFunctionHook('getImageData'), group: "web-gfx" });
+        function get_image_data(sx, sy, sw, sh) { return CanvasRenderingContextfunction(this, ctx => ctx.getImageData(sx, sy, sw, sh)) }
 
-        defineGlobalSymbol("put-image-data", put_image_data, { compileHook: CRCFunctionHook('putImageData'), group: "web-gfx" });
-        function put_image_data(...params) { return CRCfunction(this, ctx => ctx.putImageData(...params)) }
+        defineGlobalSymbol("put-image-data", put_image_data, { compileHook: CanvasRenderingContextFunctionHook('putImageData'), group: "web-gfx" });
+        function put_image_data(...params) { return CanvasRenderingContextfunction(this, ctx => ctx.putImageData(...params)) }
 
-        const image_smoothing_enabled = CRCProperty("imageSmoothingEnabled");
-        defineGlobalSymbol("image-smoothing-enabled", image_smoothing_enabled, { compileHook: CRCPropertyHook('imageSmoothingEnabled'), group: "web-gfx" });
+        const image_smoothing_enabled = CanvasRenderingContextProperty("imageSmoothingEnabled");
+        defineGlobalSymbol("image-smoothing-enabled", image_smoothing_enabled, { compileHook: CanvasRenderingContextPropertyHook('imageSmoothingEnabled'), group: "web-gfx" });
 
-        const image_smoothing_quality = CRCProperty("imageSmoothingQuality");
-        defineGlobalSymbol("image-smoothing-quality", image_smoothing_quality, { compileHook: CRCPropertyHook('imageSmoothingQuality'), group: "web-gfx" });
+        const image_smoothing_quality = CanvasRenderingContextProperty("imageSmoothingQuality");
+        defineGlobalSymbol("image-smoothing-quality", image_smoothing_quality, { compileHook: CanvasRenderingContextPropertyHook('imageSmoothingQuality'), group: "web-gfx" });
       }
 
       function handleInput(enterKey) {
