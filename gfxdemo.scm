@@ -48,10 +48,10 @@
   (fill-text "Ship Arriving Too Late to Save a Drowning Witch" 0.1 (canvas-width))
 )
 
-(define shipCanvas (canvas "Too Late!" 300 320))
-(@= shipCanvas 'draw satltsadw)  ;; Set the draw function
-(@= shipCanvas 'animate true)    ;; Enable animation; otherwise just draws initially and when resized
-(@! shipCanvas 'show 20 20)      ;; Move the canvas widget from its default position
+(define ship-canvas (canvas "Too Late!" 300 320))
+(@= ship-canvas 'draw satltsadw)  ;; Set the draw function
+(@= ship-canvas 'animate true)    ;; Enable animation; otherwise just draws initially and when resized
+(@! ship-canvas 'show 20 20)      ;; Move the canvas widget from its default position
 
 ;; Now a lissajous figure
 (define (lissajous gfx-context tick)
@@ -73,13 +73,13 @@
   (stroke-style "green") (line-cap "round") (line-width 1.5) (stroke)
 )
 
-(define lissajousCanvas (canvas "Lissajous"  300 300))
-(@= lissajousCanvas 'draw lissajous)         ;; Set the draw function
-(@= lissajousCanvas 'animate true)           ;; Enable animation
-(@! lissajousCanvas 'show 300 30)            ;; Move the canvas widget from its default position
-;; (@! lissajousCanvas 'backing-buffer 600 600) ;; Use an offscreen-backing buffer
-(@= lissajousCanvas 'clear-canvas false)     ;; And don't clear the canvas before re-drawing
-(@= lissajousCanvas 'clear-color "black")    ;; Well, except initially
+(define lissajous-canvas (canvas "Lissajous"  300 300))
+(@= lissajous-canvas 'draw lissajous)         ;; Set the draw function
+(@= lissajous-canvas 'animate true)           ;; Enable animation
+(@! lissajous-canvas 'show 300 30)            ;; Move the canvas widget from its default position
+(@! lissajous-canvas 'backing-buffer 600 600) ;; Use an offscreen-backing buffer
+(@= lissajous-canvas 'clear-canvas false)     ;; And don't clear the canvas before re-drawing
+(@= lissajous-canvas 'clear-color "black")    ;; Well, except initially
 
 (define pi_2 (/ *pi* 2))  ;; Cosine is sine 90 degress (pi/2 radians) out of phase
 
@@ -101,11 +101,11 @@
   (stroke-style "red") (line-cap "round") (line-width 1.5) (stroke)
 )
 
-(define spirographCanvas (canvas "Spirograph"  300 300))
-(@= spirographCanvas 'draw spirograph)
-(@= spirographCanvas 'animate true)
-(@! spirographCanvas 'show 600 40)
-(@= spirographCanvas 'clear-canvas false)
+(define spirograph-canvas (canvas "Spirograph"  300 300))
+(@= spirograph-canvas 'draw spirograph)
+(@= spirograph-canvas 'animate true)
+(@! spirograph-canvas 'show 600 40)
+(@= spirograph-canvas 'clear-canvas false)
 
 ;; Here's a widget to scribble in interactively
 (define scribble (canvas "Scribble" 300))

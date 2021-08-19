@@ -1761,7 +1761,7 @@
         set clearCanvas(value) { this[clearCanvasAtom] = value }
         get clearColor() { this[clearColorAtom] }
         set clearColor(value) { this[clearColorAtom] = value }
-        backingBuffer(width, height) { return this[backingBufferAtom](width, height) }
+        backingBuffer(width, height = width) { return this[backingBufferAtom](width, height) }
         show(...params) { return this[showAtom](...params) }
         hide() { this[hideAtom]() }
       }
@@ -1914,15 +1914,6 @@
               } else {}
                 ctx.clearRect(0, 0, width, height);
               ctx.restore();
-            },
-            stash_point(x, y) { this.stashX = x; this.stashY = y; },
-            move_to_stashed() {
-            if (this.stashX !== undefined && this.stashY !== undefined)
-              canvas2dRenderingContext.moveTo(this.stashX, this.stashY);
-            },
-            line_to_stashed() {
-            if (this.stashX !== undefined && this.stashY !== undefined)
-              canvas2dRenderingContext.lineTo(this.stashX, this.stashY);
             },
           };
           Object.setPrototypeOf(schemeWidget, SchemeWidget.prototype);
@@ -2305,7 +2296,8 @@
         function stash_point(x, y) {
           let ctx = this[gfxContextAtom];
           let schemeWidget = contextToSchemeWidget(ctx);
-          schemeWidget.stash_point(x, y);
+          schemeWidget.stashX = x;
+          schemeWidget.stashY = y;
           return ctx;
         };
 
@@ -2313,7 +2305,8 @@
         function move_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeWidget = contextToSchemeWidget(ctx);
-          schemeWidget.move_to_stashed();
+          if (schemeWidget && schemeWidget.stashX !== undefined && schemeWidget.stashY !== undefined)
+          ctx.moveTo(schemeWidget.stashX, schemeWidget.stashY);
           return ctx;
         };
 
@@ -2321,7 +2314,8 @@
         function line_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeWidget = contextToSchemeWidget(ctx);
-          schemeWidget.line_to_stashed();
+          if (schemeWidget && schemeWidget.stashX !== undefined && schemeWidget.stashY !== undefined)
+          ctx.lineTo(schemeWidget.stashX, schemeWidget.stashY);
           return ctx;
         };
 
