@@ -33,3 +33,6 @@
 (@= microphoneCanvas 'user-media { "audio": true })
 (@= microphoneCanvas 'clear-color "black")
 
+;; Here's what o-scope compiles into
+(println (String o-scope))
+
