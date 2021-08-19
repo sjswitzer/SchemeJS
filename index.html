@@ -2187,8 +2187,22 @@
           return canvasRenderingContext;
         }
 
+        function CRCFunctionHook(fName) {
+          return function crcHookFn(args, ssaScope, tools) {
+            let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+            let ssaCRC = ssaScope[gfxContextAtom];
+            if (!ssaCRC)
+              ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
+            let ssaArgStr = '', sep = '';
+            for (let arg of args)
+              ssaArgStr += `${sep}${arg}`, sep = ', ';
+            emit(`${ssaCRC}.${fName}(${ssaArgStr});`);
+            return ssaCRC;
+          }
+        }
+
         function CRCProperty(property) {
-          return function get_set_crc_property(newValue = undefined) {
+          return function get_set_crc_property(newValue = optional) {
             let canvasRenderingContext = this[gfxContextAtom];
             let value = canvasRenderingContext[property];
             if (newValue !== undefined)
@@ -2197,12 +2211,29 @@
           }
         }
 
+        function CRCPropertyHook(propName) {
+          return function crcPropHookFn(args, ssaScope, tools) {
+            let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+            let ssaCRC = ssaScope[gfxContextAtom];
+            if (!ssaCRC)
+              ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
+            let ssaRes = newTemp(propName + '_value');
+            emit(`let ${ssaRes} = ${ssaCRC}.${propName};`);
+            if (args.length > 0) {
+              let ssaVal = args[0];
+              emit(`if (${ssaVal} !== undefined)`);
+              emit(`  ${ssaCRC}.${propName} = ${ssaVal};`);
+            }
+            return ssaRes;
+          }
+        }
+
         let commonOptions = { dontInline: true, group: "web-gfx" };  // XXX TODO: remove dontInline when draw2d has a compile hook
 
-        defineGlobalSymbol("save-context", save_context, commonOptions);
+        defineGlobalSymbol("save-context", save_context, { compileHook: CRCFunctionHook('save'), group: "web-gfx" });
         function save_context() { return CRCfunction(this, ctx => ctx.save()) }
 
-        defineGlobalSymbol("restore-context", restore_context, commonOptions);
+        defineGlobalSymbol("restore-context", restore_context, { compileHook: CRCFunctionHook('restore'), group: "web-gfx" });
         function restore_context() { return CRCfunction(this, ctx => ctx.restore()) }
 
         defineGlobalSymbol("canvas-width", canvas_width, commonOptions);
@@ -2264,173 +2295,173 @@
           return NIL;
         };
 
-        defineGlobalSymbol("fill-rect", fill_rect, commonOptions);
+        defineGlobalSymbol("fill-rect", fill_rect, { compileHook: CRCFunctionHook('fillRect'), group: "web-gfx" });
         function fill_rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.fillRect(x, y, width, height)) }
         
-        defineGlobalSymbol("clear-rect", fill_rect, commonOptions);
+        defineGlobalSymbol("clear-rect", fill_rect, { compileHook: CRCFunctionHook('clearRect'), group: "web-gfx" });
         function clear_rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.clearRect(x, y, width, height)) }
         
-        defineGlobalSymbol("stroke-rect", stroke_rect, commonOptions);
+        defineGlobalSymbol("stroke-rect", stroke_rect, { compileHook: CRCFunctionHook('strokeRect'), group: "web-gfx" });
         function stroke_rect(x, y, width, height) {
           return CRCfunction(this, ctx => ctx.strokeRect(x, y, width, height))
         }
 
-        defineGlobalSymbol("fill-text", fill_text, commonOptions);
+        defineGlobalSymbol("fill-text", fill_text, { compileHook: CRCFunctionHook('fillText'), group: "web-gfx" });
         function fill_text(text, x, y , maxWidth = optional) {
           return CRCfunction(this, ctx => ctx.fillText(text, x, y , maxWidth))
         }
 
-        defineGlobalSymbol("measure-text", measure_text, commonOptions);
+        defineGlobalSymbol("measure-text", measure_text, { compileHook: CRCFunctionHook('measureText'), group: "web-gfx" });
         function measure_text(text) { return CRCfunction(this, ctx => ctx.measureText(text)) }
 
         const line_width = CRCProperty("lineWidth");
-        defineGlobalSymbol("line-width", line_width, commonOptions);
+        defineGlobalSymbol("line-width", line_width, { compileHook: CRCPropertyHook('lineWidth'), group: "web-gfx" });
 
         const line_cap = CRCProperty("lineCap");
-        defineGlobalSymbol("line-cap", line_cap, commonOptions);
+        defineGlobalSymbol("line-cap", line_cap, { compileHook: CRCPropertyHook('lineCap'), group: "web-gfx" });
 
         const line_join = CRCProperty("lineJoin");
-        defineGlobalSymbol("line-join", line_join, commonOptions);
+        defineGlobalSymbol("line-join", line_join, { compileHook: CRCPropertyHook('lineJoin'), group: "web-gfx" });
 
         const miter_limit = CRCProperty("miterLimit");
-        defineGlobalSymbol("miter-limit", miter_limit, commonOptions);
+        defineGlobalSymbol("miter-limit", miter_limit, { compileHook: CRCPropertyHook('miterLimit'), group: "web-gfx" });
 
-        defineGlobalSymbol("get-line-dash", get_line_dash, commonOptions);
+        defineGlobalSymbol("get-line-dash", get_line_dash, { compileHook: CRCFunctionHook('getLineDash'), group: "web-gfx" });
         function get_line_dash() { return CRCfunction(this, ctx => ctx.getLineDash) }
 
-        defineGlobalSymbol("set-line-dash", set_line_dash, commonOptions);
+        defineGlobalSymbol("set-line-dash", set_line_dash, { compileHook: CRCFunctionHook('setLineDash'), group: "web-gfx" });
         function set_line_dash(segments) { CRCfunction(this, ctx => ctx.setLineDash(segments)) }
 
         const line_dash_offset = CRCProperty("lineDashOffset");
-        defineGlobalSymbol("line-dash-offset", line_dash_offset, commonOptions);
+        defineGlobalSymbol("line-dash-offset", line_dash_offset, { compileHook: CRCPropertyHook('lineDashOffset'), group: "web-gfx" });
         
         const font = CRCProperty("font");
-        defineGlobalSymbol("font", font, commonOptions);
+        defineGlobalSymbol("font", font, { compileHook: CRCPropertyHook('font'), group: "web-gfx" });
 
         const text_align = CRCProperty("textAlign");
-        defineGlobalSymbol("text-align", text_align, commonOptions);
+        defineGlobalSymbol("text-align", text_align, { compileHook: CRCPropertyHook('textAlign'), group: "web-gfx" });
 
         const text_baseline = CRCProperty("textBaseline");
-        defineGlobalSymbol("text-baseline", text_baseline, commonOptions);
+        defineGlobalSymbol("text-baseline", text_baseline, { compileHook: CRCPropertyHook('textBaseline'), group: "web-gfx" });
 
         const direction = CRCProperty("direction");
-        defineGlobalSymbol("direction", direction, commonOptions);
+        defineGlobalSymbol("direction", direction, { compileHook: CRCPropertyHook('direction'), group: "web-gfx" });
 
         const fill_style = CRCProperty("fillStyle");
-        defineGlobalSymbol("fill-style", fill_style, commonOptions);
+        defineGlobalSymbol("fill-style", fill_style, { compileHook: CRCPropertyHook('fillStyle'), group: "web-gfx" });
 
         const stroke_style = CRCProperty("strokeStyle");
-        defineGlobalSymbol("stroke-style", stroke_style, commonOptions);
+        defineGlobalSymbol("stroke-style", stroke_style, { compileHook: CRCPropertyHook('strokeStyle'), group: "web-gfx" });
 
-        defineGlobalSymbol("create-conic-gradient", create_conic_gradient, commonOptions);
+        defineGlobalSymbol("create-conic-gradient", create_conic_gradient, { compileHook: CRCFunctionHook('createConicGradient'), group: "web-gfx" });
         function create_conic_gradient(startAngle, x, y) {
           return CRCfunction(this, ctx => ctx.createConicGradient(startAngle, x, y))
         }
 
-        defineGlobalSymbol("create-linear-gradient", create_linear_gradient, commonOptions);
+        defineGlobalSymbol("create-linear-gradient", create_linear_gradient, { compileHook: CRCFunctionHook('createLinearGradient'), group: "web-gfx" });
         function create_linear_gradient(x0, y0, x1, y1) {
           return CRCfunction(this, ctx => ctx.createLinearGradient(x0, y0, x1, y1))
         }
 
-        defineGlobalSymbol("create-radial-gradient", create_radial_gradient, commonOptions);
+        defineGlobalSymbol("create-radial-gradient", create_radial_gradient, { compileHook: CRCFunctionHook('createRadialGradient'), group: "web-gfx" });
         function create_radial_gradient(x0, y0, r0, x1, y1, r1) {
           return CRCfunction(this, ctx => ctx.createRadialGradient(x0, y0, r0, x1, y1, r1))
         }
 
-        defineGlobalSymbol("create-pattern", create_pattern, commonOptions);
+        defineGlobalSymbol("create-pattern", create_pattern, { compileHook: CRCFunctionHook('createPattern'), group: "web-gfx" });
         function create_pattern(image, repetition) { CRCfunction(this, ctx => ctx.createPattern(image, repetition)) }
 
         const shadow_color = CRCProperty("shadowColor");
-        defineGlobalSymbol("shadow-color", shadow_color, commonOptions);
+        defineGlobalSymbol("shadow-color", shadow_color, { compileHook: CRCPropertyHook('shadowColor'), group: "web-gfx" });
 
         const shadow_offset_x = CRCProperty("shadowOffsetX");
-        defineGlobalSymbol("shadow-offset-x", shadow_offset_x, commonOptions);
+        defineGlobalSymbol("shadow-offset-x", shadow_offset_x, { compileHook: CRCPropertyHook('shadowOffsetX'), group: "web-gfx" });
 
         const shadow_offset_y = CRCProperty("shadowOffsetY");
-        defineGlobalSymbol("shadow-offset-y", shadow_offset_y, commonOptions);
+        defineGlobalSymbol("shadow-offset-y", shadow_offset_y, { compileHook: CRCPropertyHook('shadowOffsetY'), group: "web-gfx" });
 
-        defineGlobalSymbol("begin-path", begin_path, commonOptions);
+        defineGlobalSymbol("begin-path", begin_path, { compileHook: CRCFunctionHook('beginPath'), group: "web-gfx" });
         function begin_path() { return CRCfunction(this, ctx => ctx.beginPath()) }
 
-        defineGlobalSymbol("close-path", close_path, commonOptions);
+        defineGlobalSymbol("close-path", close_path, { compileHook: CRCFunctionHook('closePath'), group: "web-gfx" });
         function close_path() { return CRCfunction(this, ctx => ctx.closePath()) }
 
-        defineGlobalSymbol("move-to", move_to, commonOptions);
+        defineGlobalSymbol("move-to", move_to, { compileHook: CRCFunctionHook('xmoveToxx'), group: "web-gfx" });
         function move_to(x, y) { return CRCfunction(this, ctx => ctx.moveTo(x, y)) }
 
-        defineGlobalSymbol("line-to", line_to, commonOptions);
+        defineGlobalSymbol("line-to", line_to, { compileHook: CRCFunctionHook('lineTo'), group: "web-gfx" });
         function line_to(x, y) { return CRCfunction(this, ctx => ctx.lineTo(x, y)) }
 
-        defineGlobalSymbol("bezier-curve-to", bezier_curve_to, commonOptions);
+        defineGlobalSymbol("bezier-curve-to", bezier_curve_to, { compileHook: CRCFunctionHook('bezierCurveTo'), group: "web-gfx" });
         function bezier_curve_to(cp1x, cp1y, cp2x, cp2y, x, y) {
           return CRCfunction(this, ctx => ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y))
         }
 
-        defineGlobalSymbol("quadratic-curve-to", quadratic_curve_to, commonOptions);
+        defineGlobalSymbol("quadratic-curve-to", quadratic_curve_to, { compileHook: CRCFunctionHook('quadraticCurveTo'), group: "web-gfx" });
         function quadratic_curve_to(cpx, cpy, x, y) {
           return CRCfunction(this, ctx => ctx.quadraticCurveTo(cpx, cpy, x, y))
         }
 
-        defineGlobalSymbol("arc", arc, commonOptions);
+        defineGlobalSymbol("arc", arc, { compileHook: CRCFunctionHook('arc'), group: "web-gfx" });
         function arc(x, y, radius, startAngle, endAngle, counterclockwise = false) {
           return CRCfunction(this, ctx => ctx.arc(x, y, radius, startAngle, endAngle, counterclockwise))
         }
 
-        defineGlobalSymbol("arc-to", arc_to, commonOptions);
+        defineGlobalSymbol("arc-to", arc_to, { compileHook: CRCFunctionHook('arcTo'), group: "web-gfx" });
         function arc_to(x1, y1, x2, y2, radius) { return CRCfunction(this, ctx => ctx.arcTo(x1, y1, x2, y2, radius)) }
 
-        defineGlobalSymbol("ellipse", ellipse, commonOptions);
+        defineGlobalSymbol("ellipse", ellipse, { compileHook: CRCFunctionHook('ellipse'), group: "web-gfx" });
         function ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise = false) {
           return CRCfunction(this, ctx => ctx.ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise))
         }
 
-        defineGlobalSymbol("rect", rect, commonOptions);
+        defineGlobalSymbol("rect", rect, { compileHook: CRCFunctionHook('rect'), group: "web-gfx" });
         function rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.rect(x, y, width, height)) }
 
-        defineGlobalSymbol("fill", fill, commonOptions);
+        defineGlobalSymbol("fill", fill, { compileHook: CRCFunctionHook('fill'), group: "web-gfx" });
         function fill(...params) { return CRCfunction(this, ctx => ctx.fill(...params)) }
 
-        defineGlobalSymbol("stroke", stroke, commonOptions);
+        defineGlobalSymbol("stroke", stroke, { compileHook: CRCFunctionHook('stroke'), group: "web-gfx" });
         function stroke(...params) { return CRCfunction(this, ctx => ctx.stroke(...params)) }
 
-        defineGlobalSymbol("draw-focus-if-needed", draw_focus_if_needed, commonOptions);
+        defineGlobalSymbol("draw-focus-if-needed", draw_focus_if_needed, { compileHook: CRCFunctionHook('drawFocusIfNeeded'), group: "web-gfx" });
         function draw_focus_if_needed(...params) { return CRCfunction(this, ctx => ctx.drawFocusIfNeeded(...params)) }
 
-        defineGlobalSymbol("scroll-path-into-view", scroll_path_into_view, commonOptions);
+        defineGlobalSymbol("scroll-path-into-view", scroll_path_into_view, { compileHook: CRCFunctionHook('scrollPathIntoView'), group: "web-gfx" });
         function scroll_path_into_view(...params) { return CRCfunction(this, ctx => ctx.scrollPathIntoView(...params)) }
 
-        defineGlobalSymbol("is-point-in-path", is_point_in_path, commonOptions);
+        defineGlobalSymbol("is-point-in-path", is_point_in_path, { compileHook: CRCFunctionHook('isPointInPath'), group: "web-gfx" });
         function is_point_in_path(...params) { return CRCfunction(this, ctx => ctx.isPointInPath(...params)) }
 
-        defineGlobalSymbol("is-point-in-stroke", is_point_in_stroke, commonOptions);
+        defineGlobalSymbol("is-point-in-stroke", is_point_in_stroke, { compileHook: CRCFunctionHook('isPointInStroke'), group: "web-gfx" });
         function is_point_in_stroke(...params) { return CRCfunction(this, ctx => ctx.isPointInStroke(...params)) }
 
-        defineGlobalSymbol("clip", clip, commonOptions);
+        defineGlobalSymbol("clip", clip, { compileHook: CRCFunctionHook('clip'), group: "web-gfx" });
         function clip(...params) { return CRCfunction(this, ctx => ctx.clip(...params)) }
 
         const global_alpha = CRCProperty("globalAlpha");
-        defineGlobalSymbol("global-alpha", global_alpha, commonOptions);
+        defineGlobalSymbol("global-alpha", global_alpha, { compileHook: CRCPropertyHook('globalAlpha'), group: "web-gfx" });
 
         const global_composite_operation = CRCProperty("globalCompositeOperation");
-        defineGlobalSymbol("global-composite-operation", global_composite_operation, commonOptions);
+        defineGlobalSymbol("global-composite-operation", global_composite_operation, { compileHook: CRCPropertyHook('globalCompositeOperation'), group: "web-gfx" });
 
-        defineGlobalSymbol("draw-image", draw_image, commonOptions);
+        defineGlobalSymbol("draw-image", draw_image, { compileHook: CRCFunctionHook('drawImage'), group: "web-gfx" });
         function draw_image(...params) { return CRCfunction(this, ctx => ctx.drawImage(...params)) }
 
-        defineGlobalSymbol("createImageData", createImageData, commonOptions);
+        defineGlobalSymbol("createImageData", createImageData, { compileHook: CRCFunctionHook('createImageData'), group: "web-gfx" });
         function createImageData(...params) { return CRCfunction(this, ctx => ctx.createImageData(...params)) }
 
-        defineGlobalSymbol("get-image-data", get_image_data, commonOptions);
+        defineGlobalSymbol("get-image-data", get_image_data, { compileHook: CRCFunctionHook('getImageData'), group: "web-gfx" });
         function get_image_data(sx, sy, sw, sh) { return CRCfunction(this, ctx => ctx.getImageData(sx, sy, sw, sh)) }
 
-        defineGlobalSymbol("put-image-data", put_image_data, commonOptions);
+        defineGlobalSymbol("put-image-data", put_image_data, { compileHook: CRCFunctionHook('putImageData'), group: "web-gfx" });
         function put_image_data(...params) { return CRCfunction(this, ctx => ctx.putImageData(...params)) }
 
         const image_smoothing_enabled = CRCProperty("imageSmoothingEnabled");
-        defineGlobalSymbol("image-smoothing-enabled", image_smoothing_enabled, commonOptions);
+        defineGlobalSymbol("image-smoothing-enabled", image_smoothing_enabled, { compileHook: CRCPropertyHook('imageSmoothingEnabled'), group: "web-gfx" });
 
         const image_smoothing_quality = CRCProperty("imageSmoothingQuality");
-        defineGlobalSymbol("image-smoothing-quality", image_smoothing_quality, commonOptions);
+        defineGlobalSymbol("image-smoothing-quality", image_smoothing_quality, { compileHook: CRCPropertyHook('imageSmoothingQuality'), group: "web-gfx" });
       }
 
       let printBoxElement;
