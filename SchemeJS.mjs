@@ -397,24 +397,23 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
     }
     // Is a scope needed to call the function?
-    let usesScope = true;  // conservative default
+    let usesDynamicScope = true;  // conservative default
     if (fnInfo.valueTemplate) { 
-      usesScope = false;  // templates generally don't use the scope, unless they use "this"
+      usesDynamicScope = false;  // templates generally don't use the scope, unless they use "this"
       if (fnInfo.valueTemplate.includes("this"))
-        usesScope = true;
+        usesDynamicScope = true;
       else if (fnInfo.bodyTemplate && fnInfo.bodyTemplate.includes("this"))
-        usesScope = true;
+        usesDynamicScope = true;
     }
-    // XXXTODO: this is going to take another careful pass to ensure scopes are properly accounted for
-    //  if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
-    //    usesScope = false;
+    if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
+      usesDynamicScope = false;
     if (fnInfo.native)  // native functions don't need a scope
-      usesScope = false;
+      usesDynamicScope = false;
     // Closures dont need scope either and it's theoretically possible to call
     // this utility with a compiled Scheme function
     if (isClosure(fn))
-      usesScope = false;
-    fnInfo.usesScope = usesScope;
+      usesDynamicScope = false;
+    fnInfo.usesDynamicScope = usesDynamicScope;
     fn[COMPILE_INFO] = fnInfo;
   }
 
@@ -1930,13 +1929,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (args.length < 2) throw new SchemeCompileError(`Bad letrec`);
     let bindings = args[0];
     let ssaResult = newTemp("letrec");
+    let saveSsaScope = ssaScope, scopeLines = [];
     ssaScope = newScope(ssaScope, "compiler-letrec-scope");
     let ssaTmpScope = newTemp("scope_tmp");
-    emit(`let ${ssaTmpScope} = scope;`);
+    scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
     emit(`let ${ssaResult} = NIL; { // letrec`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    emit(`let scope = newScope(${ssaTmpScope}, "compiled-letrec-scope");`);
+    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-letrec-scope");`));
     for( ; isCons(bindings); bindings = bindings[CDR]) {
       let binding = bindings[CAR];
       if (!isCons(binding))
@@ -1952,7 +1952,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       let paramAtom = use(bind(boundVar));
       ssaScope[boundVar] = ssaBoundVar;
-      emit(`scope[${paramAtom}] = ${ssaBoundVar};`);
+      scopeLines.push(emit(`scope[${paramAtom}] = ${ssaBoundVar};`));
     }
     for (let i = 1; i < args.length; ++i) {
       let ssaVal = compileEval(args[i], ssaScope, tools);
@@ -1960,6 +1960,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     tools.indent = saveIndent;
     emit(`}`);
+    if (ssaScope.dynamicScopeUsed)
+      saveSsaScope.dynamicScopeUsed = true;
+    else
+      tools.deleteEmitted(scopeLines);
     return ssaResult;
   }
 
@@ -2001,7 +2005,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let ssaIndexVarAtom = use(bind(indexVar)), ssaValueVarAtom  = use(bind(valueVar));
     let ssaObj = compileEval(args[2], ssaScope, tools);
     let ssaTmpScope = newTemp("scope_tmp");
-    emit(`let ${ssaTmpScope} = scope;`);
+    let saveSsaScope = ssaScope, scopeLines = [];
+    scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
     ssaScope = newScope(ssaScope, "compiler-for-in-scope");
     let ssaIndexVar = newTemp("key"), ssaValueVar = newTemp("value");
     ssaScope[indexVar] = ssaIndexVar;
@@ -2010,9 +2015,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (for-in ${string(indexVar)} ${string(valueVar)} ...)`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`);
-    emit(`scope[${ssaIndexVarAtom}] = ${ssaIndexVar};`)
-    emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`)
+    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`));
+    scopeLines.push(emit(`scope[${ssaIndexVarAtom}] = ${ssaIndexVar};`));
+    scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
     for (let i = 3; i < args.length; ++i)
       compileEval(args[i], ssaScope, tools);
     tools.indent = saveIndent;
@@ -2028,6 +2033,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`  for (let key in ${ssaObj})`);
     emit(`    ${ssaFn}(kxey, ${ssaObj}[key]);`);
     emit(`}`);
+    if (ssaScope.dynamicScopeUsed)
+      saveSsaScope.dynamicScopeUsed = true;
+    else
+      tools.deleteEmitted(scopeLines);
     return 'NIL';
   }
 
@@ -2485,8 +2494,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
     let ssaCatchSym = newTemp(catchVar);
     let ssaResult = newTemp('js_catch'), ssaValue = 'NIL';
+    let saveSSaScope = ssaScope, scopeLines = [];
     let ssaTmpScope = newTemp('tmp_scope');
-    emit(`let ${ssaTmpScope} = scope;`);
+    scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
     emit(`let ${ssaResult};`);
     emit(`try {`);
     let saveIndent = tools.indent;
@@ -2499,15 +2509,19 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     tools.indent += '  ';
     ssaScope = newScope(ssaScope, "compiled-js-catch-scope")
     ssaScope[catchVar] = ssaCatchSym;
-    emit(`let scope = newScope(${ssaTmpScope}, "compiled-js-catch-scope");`);
+    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-js-catch-scope");`));
     let ssaCatchAtom = use(bind(catchVar));
-    emit(`scope[${ssaCatchAtom}] = ${ssaCatchSym};`);
+    scopeLines.push(emit(`scope[${ssaCatchAtom}] = ${ssaCatchSym};`));
     let ssaCatchVal = 'NIL';
     for (let form of catchForms)
       ssaCatchVal = compileEval(form, ssaScope, tools);
     emit(`${ssaResult} = ${ssaCatchVal};`);
     tools.indent = saveIndent;
     emit(`}`);
+    if (ssaScope.dynamicScopeUsed)
+      saveSSaScope.dynamicScopeUsed = true;
+    else
+      tools.deleteEmitted(scopeLines);
     return ssaResult;
   }
 
@@ -3976,13 +3990,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             fnInfo.requiredCount = requiredCount;
             fnInfo.evalCount = evalCount;
             fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-            fnInfo.usesScope = !isClosure(fn) && !fnInfo.native;
+            fnInfo.usesDynamicScope = !isClosure(fn) && !fnInfo.native;
           }
           // Everything you need to know about invoking a JS function is right here
           tools.functionDescriptors[ssaValue] = fnInfo;
         }
         return ssaValue;
       }
+      ssaScope.dynamicScopeUsed = true;
       return `resolveUnbound(${use(bind(sym))})`;
     }
     if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
@@ -4006,7 +4021,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
         let ssaResult = newTemp(fName+'_result');
         let ssaArgList = use(bind(args, `${fName}_args`));
-        ssaScope.used = true;
+        ssaScope.dynamicScopeUsed = true;
         emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
         return ssaResult;
       }
@@ -4018,13 +4033,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let compileHook = functionDescriptor.compileHook;
       let valueTemplate = functionDescriptor.valueTemplate;
       let bodyTemplate = functionDescriptor.bodyTemplate;
-      let usesScope = functionDescriptor.usesScope;
-      if (usesScope)
-        ssaScope.used = true;
-      if (typeof fName === 'symbol')
-        fName = fName.description;
-      if (!fName)
-        fName = 'anon';
+      let usesDynamicScope = functionDescriptor.usesDynamicScope;
+      if (usesDynamicScope)
+        ssaScope.dynamicScopeUsed = true;
 
       // Run through the arg list evaluating args
       let ssaArgv = [], ssaArgStr = '', sep = '', argCount = 0;
@@ -4076,7 +4087,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
-        if (usesScope) {
+        if (usesDynamicScope) {
           if (ssaArgStr) ssaArgStr = `, ${ssaArgStr}`;
           emit(`let ${ssaResult} = ${ssaFunction}.call(scope${ssaArgStr});`);
         } else {
@@ -4099,8 +4110,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       // If we had a compile hook but didn't use it because we're making a closure
       // we assume it  needs a scope when invoked.
       if (compileHook)
-        usesScope = true;
-      ssaScope.used = true;
+        usesDynamicScope = true;
+      ssaScope.dynamicScopeUsed = true;
       ssaScope = newScope(ssaScope, "compiler-closure-scope");
       emit(`let ${ssaTmpScope} = scope;`);
       emit(`let ${ssaResult}; {`);
@@ -4176,7 +4187,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         paramStr += `${sep}...${newTemp(innerParams)}`;
       use(ssaFunction);
       let displayName;
-      if (usesScope) {
+      if (usesDynamicScope) {
         emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
         displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       } else {
@@ -4256,7 +4267,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (!isList(params)) throwBadCompiledLambda(lambda);
     let ssaParamv = [], ssaRestParam, paramv = [], restParam;
-    let originalSsaScope = ssaScope;
+    let originalSsaScope = ssaScope, scopeLines = [];
     ssaScope = newScope(ssaScope, "compiler-lambda-scope");
     let paramCount = 0, requiredCount, optionalFormsVec = [];
     for (; isCons(params); ++paramCount, params = params[CDR]) {
@@ -4296,7 +4307,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (ssaRestParam)
       ssaParamStr += `${delim}...${ssaRestParam}`;
-    let ssaScopeTmp = newTemp("tmp_scope"), scopeLines = [];
+    let ssaScopeTmp = newTemp("tmp_scope");
     scopeLines.push(emit(`let ${ssaScopeTmp} = scope;`));
     emit(`function ${ssaFunction}(${ssaParamStr}) { // COMPILED ${displayName}, req: ${requiredCount}, eval: ${evalCount === MAX_INTEGER ? 'MAX_INTEGER' : evalCount}`);
     let saveIndent = tools.indent;
@@ -4333,9 +4344,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let ssaResult = 'NIL';
     for ( ; isCons(forms); forms = forms[CDR])
       ssaResult = compileEval(forms[CAR], ssaScope, tools);
-    if (ssaScope.used)
-      originalSsaScope.used = true;
-    if (!ssaScope.used || (paramCount === 0 && !restParam))
+    if (ssaScope.dynamicScopeUsed)
+      originalSsaScope.dynamicScopeUsed = true;
+    if (!ssaScope.dynamicScopeUsed || (paramCount === 0 && !restParam))
       tools.deleteEmitted(scopeLines);
     use(ssaResult);
     emit(`return ${ssaResult};`);

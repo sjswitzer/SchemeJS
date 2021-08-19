@@ -31,7 +31,7 @@
 )
 
 ;; Ship Arriving Too Late to Save a Drowning Witch
-(define (satltsadw gfx-context)
+(compile (satltsadw gfx-context)
   (gfx-save ;; Saves then restores the graphics state (scale, colors, etc) afterwards
     (scale (/ (canvas-width) 10))  ;; Scale to a 10 x 10 coordinate system
     (line-width .2)
@@ -54,7 +54,7 @@
 (@! shipCanvas 'show 20 20)      ;; Move the canvas widget from its default position
 
 ;; Now a lissajous figure
-(define (lissajous gfx-context tick)
+(compile (lissajous gfx-context tick)
   ;; Fade the canvas by drawing over it with black and a very low alpha every several ticks
   ;; If the alpha is too low, things won't fade things completely; they just converge on light
   ;; gray. So instead use a slightly higer alpha and only apply it every several frames.
@@ -84,7 +84,7 @@
 (define pi_2 (/ *pi* 2))  ;; Cosine is sine 90 degress (pi/2 radians) out of phase
 
 ;; Spirograph/Epicycle is not so very different from a lissajous
-(define (spirograph gfx-context tick)
+(compile (spirograph gfx-context tick)
   ;; Fade the canvas by drawing over it with white and a very low alpha every several ticks
   (fill-style "#ffffff0c")
   (? (== 0 (% tick 20))

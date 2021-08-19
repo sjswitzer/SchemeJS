@@ -2146,17 +2146,22 @@
           emit(`${ssaGfxContext}.save();`);
           ssaScope = newScope(ssaScope, 'gfx-save-scope');
           ssaScope[gfxContextAtom] = ssaGfxContext;
+          let saveSsaScope = ssaScope, scopeLines = [];
           let ssaTmpScope = newTemp("scope_tmp");
-          emit(`let ${ssaTmpScope} = scope;`);
+          scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
           emit(`try {`);
           let saveIndent = tools.indent;
           tools.indent += '  ';
-          emit(`let scope = ${ssaTmpScope};`);
-          emit(`scope[${ssaGfxContextAtom}] = ${ssaGfxContext};`);
+          scopeLines.push(emit(`let scope = ${ssaTmpScope};`));
+          scopeLines.push(emit(`scope[${ssaGfxContextAtom}] = ${ssaGfxContext};`));
           for (let arg of args)
             compileEval(arg, ssaScope, tools);
           tools.indent = saveIndent;
           emit(`} finally { ${ssaGfxContext}.restore() }`);
+          if (ssaScope.dynamicScopeUsed)
+            saveSsaScope.dynamicScopeUsed = true;
+          else
+            tools.deleteEmitted(scopeLines);
           return ssaGfxContext;
         }
 
