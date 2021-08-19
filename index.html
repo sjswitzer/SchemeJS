@@ -382,8 +382,6 @@
       .canvas-frame .title-bar close-button:hover {
         --close-button-box-color: #f00;
       }
-      .canvas-frame .title-bar {
-      }
       .canvas-frame {
         display: flex;
         flex-flow: column nowrap;
@@ -1374,7 +1372,7 @@
       const userMediaTemplateElement = document.getElementById("user-media-template");
       let globalScope, SCHEME_VERSION;
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, SchemeEvalError;
-      let NIL, Atom, string, defineGlobalSymbol, originalLoad;
+      let NIL, Atom, string, newScope, defineGlobalSymbol, originalLoad;
       let varNo = 0, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
       const optional = undefined;  // so that parameters show up pretty when printed
@@ -1395,6 +1393,7 @@
         NIL = globalScope.NIL;
         string = globalScope.string;
         Atom = globalScope.Atom;
+        newScope = globalScope.newScope;
         defineGlobalSymbol = globalScope.defineGlobalSymbol;
         defineGraphicsFunctions();
         let loadAtom = Atom("load")
@@ -2126,7 +2125,7 @@
         }
 
         // When there are macros, this can be rewritten as a LET binding, probably
-        defineGlobalSymbol("gfx-save", gfx_save, { evalArgs: 0, dontInline: true, group: "web-gfx" });
+        defineGlobalSymbol("gfx-save", gfx_save, { evalArgs: 0, compileHook: gfx_save_hook, group: "web-gfx" });
         function gfx_save(...forms) {
           let scope = this, canvasRenderingContext = scope[gfxContextAtom];
           canvasRenderingContext.save();
@@ -2139,6 +2138,26 @@
             canvasRenderingContext.restore();
           }
           return canvasRenderingContext;
+        }
+        function gfx_save_hook(args, ssaScope, tools) {
+          let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+          let ssaGfxContext = compileEval(gfxContextAtom, ssaScope, tools);
+          let ssaGfxContextAtom = use(bind(gfxContextAtom));
+          emit(`${ssaGfxContext}.save();`);
+          ssaScope = newScope(ssaScope, 'gfx-save-scope');
+          ssaScope(gfxContextAtom, ssaGfxContext);
+          let ssaTmpScope = newTemp("scope_tmp");
+          emit(`let ${ssaTmpScope} = scope;`);
+          emit(`try {`);
+          let saveIndent = tools.indent;
+          tools.indent += '  ';
+          emit(`let scope = ${ssaTmpScope};`);
+          emit(`scope[${ssaGfxContextAtom}] = ${ssaGfxContext};`);
+          for (let arg of args)
+            compileEval(arg, ssaScope, tools);
+          tools.indent = saveIndent;
+          emit(`} finally { ${ssaGfxContext}.restore() }`);
+          return ssaGfxContext;
         }
 
         defineGlobalSymbol("translate", translate, {dontInline: true, group: "web-gfx" });

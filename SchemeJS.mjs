@@ -1963,7 +1963,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   // (for-in key value obj form forms...)
-  defineGlobalSymbol("for-in", for_in, { evalArgs: 0, XXXcompileHook: for_in_hook, group: "core", schemeOnly: true });
+  defineGlobalSymbol("for-in", for_in, { evalArgs: 0, compileHook: for_in_hook, group: "core", schemeOnly: true });
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope)
