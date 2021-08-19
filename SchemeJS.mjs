@@ -2002,6 +2002,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let ssaTmpScope = newTemp("scope_tmp");
     emit(`let ${ssaTmpScope} = scope;`);
     ssaScope = newScope(ssaScope, "compiler-for-in-scope");
+    let ssaIndexVar = newTemp("key"), ssaValueVar = newTemp("value");
     ssaScope[indexVar] = ssaIndexVar;
     ssaScope[valueVar] = ssaValueVar;
     let ssaFn = newTemp('for-in-fn)');
@@ -3797,7 +3798,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let bindSymToObj = {}, guardedSymbols = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
     let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 100,
-      bindLiterally, functionDescriptors };
+      bindLiterally, functionDescriptors, compileEval };
     let ssaScope = new Scope();
     // Well-known names
     bindLiterally(string, "string");

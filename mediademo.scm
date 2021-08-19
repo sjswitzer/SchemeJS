@@ -2,7 +2,7 @@
 ;; Media Demo
 ;;
 
-(define (o-scope gfx-context)
+(compile (o-scope gfx-context)
   (let ( (time-domain-data (@ microphoneCanvas 'time-domain-data))
          (frequency-domain-data (@ microphoneCanvas 'frequency-domain-data)) )
     (gfx-save  ;; Draw spectrum

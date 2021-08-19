@@ -2140,12 +2140,12 @@
           return canvasRenderingContext;
         }
         function gfx_save_hook(args, ssaScope, tools) {
-          let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+          let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
           let ssaGfxContext = compileEval(gfxContextAtom, ssaScope, tools);
           let ssaGfxContextAtom = use(bind(gfxContextAtom));
           emit(`${ssaGfxContext}.save();`);
           ssaScope = newScope(ssaScope, 'gfx-save-scope');
-          ssaScope(gfxContextAtom, ssaGfxContext);
+          ssaScope[gfxContextAtom] = ssaGfxContext;
           let ssaTmpScope = newTemp("scope_tmp");
           emit(`let ${ssaTmpScope} = scope;`);
           emit(`try {`);
