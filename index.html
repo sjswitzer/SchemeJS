@@ -2174,7 +2174,7 @@
           return canvasRenderingContext;
         }
 
-        defineGlobalSymbol("scale", scale, { compileHook: CanvasRenderingContextFunctionHook('scale'), group: "web-gfx" });
+        defineGlobalSymbol("scale", scale, { compileHook: CanvasRenderingContextFunctionHook('scale', { dup1: true }), group: "web-gfx" });
         function scale(width, height = width) {
           let scope = this, canvasRenderingContext = scope[gfxContextAtom];
           canvasRenderingContext.scale(width, height);
@@ -2194,13 +2194,20 @@
           return canvasRenderingContext;
         }
 
-        function CanvasRenderingContextFunctionHook(fName) {
+        function CanvasRenderingContextFunctionHook(fName, opts = {}) {
+          let dup1 = opts.dup1 ?? false;
           return function crcHookFn(args, ssaScope, tools) {
             let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
             let ssaCRC = ssaScope[gfxContextAtom];
             if (!ssaCRC)
               ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
             let ssaArgStr = '', sep = '';
+            if (dup1) {
+              let ssaArg1Val = newTemp('dupFirst');
+              emit(`let ${ssaArg1Val} = ${args[1]};`);
+              emit(`if (${ssaArg1Val} === undefined) ${ssaArg1Val} = ${args[0]}`);
+              args[1] = ssaArg1Val;
+            }
             for (let arg of args)
               ssaArgStr += `${sep}${arg}`, sep = ', ';
             emit(`${ssaCRC}.${fName}(${ssaArgStr});`);
@@ -2256,7 +2263,7 @@
               ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
             let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
             let ssaWidget = newTemp("canvas_widget");
-            emil(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
+            emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
             let ssaArgStr = '', sep = '';
             for (let arg of args)
               ssaArgStr += `${sep}${arg}`, sep = ', ';
@@ -2292,7 +2299,7 @@
           return schemeWidget.height;
         };
 
-        defineGlobalSymbol("stash-point", stash_point, { compileHook: WidgetFunctionHook('stash_point'), group: "web-gfx" });
+        defineGlobalSymbol("stash-point", stash_point, { compileHook: stash_point_hook, group: "web-gfx" });
         function stash_point(x, y) {
           let ctx = this[gfxContextAtom];
           let schemeWidget = contextToSchemeWidget(ctx);
@@ -2300,8 +2307,22 @@
           schemeWidget.stashY = y;
           return ctx;
         };
+        function stash_point_hook(args, ssaScope, tools) {
+          let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+          let ssaCRC = ssaScope[gfxContextAtom];
+          if (!ssaCRC)
+            ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
+          let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
+          let ssaWidget = newTemp("canvas_widget");
+          let ssaX = compileEval(args[0], ssaScope, tools);
+          let ssaY = compileEval(args[1], ssaScope, tools);
+          emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
+          emit(`${ssaWidget}.stashX = ${ssaX};`);
+          emit(`${ssaWidget}.stashY = ${ssaY};`);
+          return ssaCRC;
+        }
 
-        defineGlobalSymbol("move-to-stashed", move_to_stashed, { compileHook: WidgetFunctionHook('move_to_stashed'), group: "web-gfx" });
+        defineGlobalSymbol("move-to-stashed", move_to_stashed, { compileHook: MoveLineStashHook('moveTo'), group: "web-gfx" });
         function move_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeWidget = contextToSchemeWidget(ctx);
@@ -2309,8 +2330,21 @@
           ctx.moveTo(schemeWidget.stashX, schemeWidget.stashY);
           return ctx;
         };
+        function MoveLineStashHook(op) {
+          return function move_or_line_to_stashed(args, ssaScope, tools) {
+            let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+            let ssaCRC = ssaScope[gfxContextAtom];
+            if (!ssaCRC)
+              ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
+            let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
+            let ssaWidget = newTemp("canvas_widget");
+            emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
+            emit(`${ssaCRC}.${op}(${ssaWidget}.stashX, ${ssaWidget}.stashY)`)
+            return ssaCRC;
+          }
+        }
 
-        defineGlobalSymbol("line-to-stashed", line_to_stashed, { compileHook: WidgetFunctionHook('line_to_stashed'), group: "web-gfx" });
+        defineGlobalSymbol("line-to-stashed", line_to_stashed, { compileHook: MoveLineStashHook('lineTo'), group: "web-gfx" });
         function line_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeWidget = contextToSchemeWidget(ctx);
@@ -2432,7 +2466,7 @@
         defineGlobalSymbol("close-path", close_path, { compileHook: CanvasRenderingContextFunctionHook('closePath'), group: "web-gfx" });
         function close_path() { return CanvasRenderingContextFunction(this, ctx => ctx.closePath()) }
 
-        defineGlobalSymbol("move-to", move_to, { compileHook: CanvasRenderingContextFunctionHook('xmoveToxx'), group: "web-gfx" });
+        defineGlobalSymbol("move-to", move_to, { compileHook: CanvasRenderingContextFunctionHook('moveTo'), group: "web-gfx" });
         function move_to(x, y) { return CanvasRenderingContextFunction(this, ctx => ctx.moveTo(x, y)) }
 
         defineGlobalSymbol("line-to", line_to, { compileHook: CanvasRenderingContextFunctionHook('lineTo'), group: "web-gfx" });

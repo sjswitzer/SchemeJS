@@ -665,12 +665,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return a;
   }
   function add_hook(args, ssaScope, tools) {
+    return n_ary_hooks(args, ssaScope, tools, '+', 'add');
+  }
+  function n_ary_hooks(args, ssaScope, tools, op, name) {
     if (args.length === 0) return 'NaN';
+    let ssaResult = tools.newTemp(name);
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
-      str += ` + ${args[i]}`;
+      str += ` ${op} ${args[i]}`;
     str += `)`;
-    return str;
+    tools.emit(`let ${ssaResult} = ${str}`);
+    return ssaResult;
   }
 
   defineGlobalSymbol("-", sub, { compileHook: sub_hook, group: "var-op" }, "sub");
@@ -684,11 +689,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (args.length === 0) return 'NaN';
     if (args.length === 1)
       return `(-${args[0]})`;
-    let str = `(${args[0]}`;
-    for (let i = 1; i < args.length; ++i)
-      str += ` - ${args[i]}`;
-    str += `)`;
-    return str;
+    return n_ary_hooks(args, ssaScope, tools, '-', 'sub');
   }
 
   defineGlobalSymbol("*", mul, { compileHook: mul_hook, group: "var-op" }, MUL, "mul");
@@ -699,12 +700,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return a;
   }
   function mul_hook(args, ssaScope, tools) {
-    if (args.length === 0) return 'NaN';
-    let str = `(${args[0]}`;
-    for (let i = 1; i < args.length; ++i)
-      str += ` * ${args[i]}`;
-    str += `)`;
-    return str;
+    return n_ary_hooks(args, ssaScope, tools, '*', 'mul');
   }
 
   defineGlobalSymbol('/', div, { compileHook: div_hook, group: "var-op" }, DIV, "div");
@@ -718,6 +714,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (args.length === 0) return 'NaN';
     if (args.length === 1)
       return `(1 / ${args[0]})`;
+    return n_ary_hooks(args, ssaScope, tools, '/', 'div');
     let str = `(${args[0]}`;
     for (let i = 1; i < args.length; ++i)
       str += ` / ${args[i]}`;
@@ -734,11 +731,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function bit_and_hook(args, ssaScope, tools) {
     if (args.length < 2) return 0;
-    let str = `(${args[0]}`;
-    for (let i = 1; i < args.length; ++i)
-      str += ` & ${args[i]}`;
-    str += `)`;
-    return str;
+    return n_ary_hooks(args, ssaScope, tools, '&', 'bitAnd');
   }
 
   defineGlobalSymbol("|", bit_or, { compileHook: bit_or_hook, group: "var-op" }, "bit-or");
@@ -750,11 +743,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function bit_or_hook(args, ssaScope, tools) {
     if (args.length < 2) return 0;
-    let str = `(${args[0]}`;
-    for (let i = 1; i < args.length; ++i)
-      str += ` | ${args[i]}`;
-    str += `)`;
-    return str;
+    return n_ary_hooks(args, ssaScope, tools, '|', 'bitOr');
   }
 
   defineGlobalSymbol("^", bit_xor, { compileHook: bit_xor_hook, group: "var-op" }, "bit-xor");
@@ -766,10 +755,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function bit_xor_hook(args, ssaScope, tools) {
     if (args.length < 2) return 0;
-    let str = `(${args[0]}`;
-    for (let i = 1; i < args.length; ++i)
-      str += ` ^ ${args[i]}`;
-    str += `)`;
+    return n_ary_hooks(args, ssaScope, tools, '^', 'bitXor');
     return str;
   }
 
@@ -2563,13 +2549,13 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { evalArgs: 0, dontInline: true });
-  function compile(nameAndParams, forms) {
+  function compile(nameAndParams, form, ...forms) {
     if (!isCons(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[CAR]);
     let args = nameAndParams[CDR];
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
-    let form = list(LAMBDA_ATOM, args, forms);
-    let compiledFunction = compile_lambda.call(this, name, name.description, form);
+    let lambda = list(LAMBDA_ATOM, args, form, ...forms);
+    let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
     namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
