@@ -3796,22 +3796,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let binder = new Function("bound", "resolveUnbound", "invokeUnbound", code);
     let compiledFunction = binder.call(this, bindSymToObj, resolveUnbound, invokeUnbound);
     return compiledFunction;
-    function resolveUnbound(x) {
-      return _eval(x, scope);
+    function resolveUnbound(symbol) {
+      let val = scope[symbol];
+      if (val === undefined) checkUndefinedInScope(symbol, scope);
+      return val;
     }
     function invokeUnbound(fn, args) {
-      // This is _almost_ apply, but it evaluates its arguments first.
-      let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-      let requiredCount = parameterDescriptor & 0xffff;
-      let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-      let argv = [], argCount = 0;
-      for (; isCons(args); ++argCount, args = args[CDR]) {
-        let arg = args[CAR];
-        if (argCount < evalCount)
-          arg = _eval(arg, scope);
-        argv.push(arg);
-      }
-      return fn.apply(scope, argv);
+      let list = cons(fn, to_list(args));
+      return _eval(list, scope);
     }
   }
 
