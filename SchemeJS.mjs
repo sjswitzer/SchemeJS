@@ -3862,14 +3862,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit('"use strict";')
     emit(`// params: (bound, resolveUnbound, invokeUnbound)`);
     emit(`let scope = this;`);
-    for (let bindingName in bindSymToObj) {
-      if (usedSsaValues[bindingName]) {
-        let bindingDesc = string(bindSymToObj[bindingName]);
-        if (bindingDesc.length > 30)
-          bindingDesc = `${bindingDesc.substr(0, 30)}...`;
-        emit(`let ${bindingName} = bound[${string(bindingName)}]; // ${bindingDesc}`);
-      }
-    }
+    for (let bindingName in bindSymToObj)
+      if (usedSsaValues[bindingName])
+        emit(`let ${bindingName} = bound[${string(bindingName)}];`);
     emitted = emitted.concat(saveEmitted);
     let code = '';
     for (let emittedLine of emitted)
