@@ -27,7 +27,7 @@
 ;; period (in seconds) and phase.
 ;; (Date.now) is the number of milliseconds since midnight Jan 1, 1970 (the Unix epoch).
 (compile (sinusoidal (? magnitude 1) (? period 1) (? phase 0))
-  (* magnitude (sin (+ phase (* *2pi* (/ (Date-now) period 1000)))))
+  (* magnitude (sin (+ phase (* 2 *pi* (/ (Date-now) period 1000)))))
 )
 
 ;; Ship Arriving Too Late to Save a Drowning Witch
@@ -84,25 +84,30 @@
 ;; What it looks like compiled
 (println (String lissajous))
 
-(define pi_2 (/ *pi* 2))  ;; Cosine is sine 90 degress (pi/2 radians) out of phase
-
-;; Spirograph/Epicycle is not so very different from a lissajous
+;; Spirograph
 (compile (spirograph gfx-context tick)
-  ;; Fade the canvas by drawing over it with white and a very low alpha every several ticks
-  (fill-style "#ffffff0c")
-  (? (== 0 (% tick 20))
-    (fill-rect 0 0 (canvas-width) (canvas-height))
+  (let ((angle (* 2 *pi* (/ (Date-now) 1000 period))))
+    ;; Fade the canvas by drawing over it with white and a very low alpha every several ticks
+    (fill-style "#ffffff0c")
+    (? (== 0 (% tick 30))
+      (fill-rect 0 0 (canvas-width) (canvas-height))
+    )
+    ;; Scale to a 100 x 100 coordinate system with the origin in the center
+    (scale (/ (canvas-width) 100) (/ (canvas-height) 100))
+    (translate 50 50)
+    (move-to-stashed)
+    (stash-point
+      (+ (* r1 (cos angle)) (* r3 (cos (* angle (- (/ r1 r2))))))
+      (+ (* r1 (sin angle)) (* r3 (sin (* angle (- (/ r1 r2)))))))
+    (line-to-stashed)
+    (stroke-style sc) (stroke)
   )
-  ;; Scale to a 100 x 100 coordinate system with the origin in the center
-  (scale (/ (canvas-width) 100) (/ (canvas-height) 100))
-  (translate 50 50)
-  (move-to-stashed)
-  (stash-point  ;; This is just the sum of points on two rotating circles
-    (+ (sinusoidal 10 4.7     ) (sinusoidal 35 -1.3     ))
-    (+ (sinusoidal 10 4.7 pi_2) (sinusoidal 35 -1.3 pi_2)))
-  (line-to-stashed)
-  (stroke-style "red") (line-cap "round") (line-width 1.5) (stroke)
 )
+(define period 2)  ;; You can play with these numbers in the console!
+(define r1 25)
+(define r2 14)
+(define r3 20)
+(define sc "magenta")
 
 (define spirograph-canvas (canvas "Spirograph"  300 300))
 (@= spirograph-canvas 'draw spirograph)
@@ -125,3 +130,4 @@
 (stroke-style "blue")
 (stroke-rect 10 10 40 40)
 (fill-text "Try it! Just enter drawing commands below." 10 65)
+

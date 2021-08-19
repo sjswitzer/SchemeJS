@@ -593,7 +593,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
       defineGlobalSymbol(obj.name, obj, { schemeOnly: true });
     defineGlobalSymbol("Date-now", Date.now, { schemeOnly: true });
-    defineGlobalSymbol("*2pi*", 2*Math.PI, { schemeOnly: true });
   }
 
   defineGlobalSymbol("eval-string", eval_string, { dontInline: true });
@@ -3822,7 +3821,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let scope = this;
     let bindSymToObj = {}, guardedSymbols = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
-    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 100,
+    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 1000000,
       bindLiterally, functionDescriptors, compileEval };
     let ssaScope = new Scope();
     // Well-known names
