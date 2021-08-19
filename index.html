@@ -1377,6 +1377,7 @@
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
       const optional = undefined;  // so that parameters show up pretty when printed
       let traceCompilerCode = true, traceInterpreter = false;
+      let printBoxElement;
 
       onload = importSchemeAndRunREPL();
       async function importSchemeAndRunREPL() {
@@ -1738,7 +1739,8 @@
       let showAtom, hideAtom, clearColorAtom;
       let xAtom, yAtom, widthAtom, heightAtom;
       let userMediaAtom;
-      let contextToSchemeWidget = new WeakMap();
+      let contextToSchemeWidgetMap = new WeakMap();
+      function contextToSchemeWidget(ctx) { return contextToSchemeWidgetMap.get(ctx) }
 
       class SchemeWidget {
         get x() { return this[xAtom] }
@@ -1771,6 +1773,7 @@
         showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
         xAtom = Atom("x"), yAtom = Atom("y"), widthAtom = Atom("width"), heightAtom = Atom("height");
         userMediaAtom = Atom("user-media");
+        globalScope.contextToSchemeWidget = contextToSchemeWidget;
 
         defineGlobalSymbol("canvas", canvas, { dontInline: true, group: "web-gfx" });
         function canvas(name = "canvas", width = 200, height = width) { 
@@ -1890,16 +1893,6 @@
               setGain();
               return this;
             },
-            clear_canvas() {
-              let ctx = backing2dRenderingContext ?? canvas2dRenderingContext;
-              ctx.save();
-              if (clearColor) {
-                ctx.fillStyle = clearColor;
-                ctx.fillRect(0, 0, width, width);
-              } else {}
-                ctx.clearRect(0, 0, width, height);
-              ctx.restore();
-            },
             get [Atom('frequency-domain-data')]() {
               if (!audioAnalyser) attachAnalyzer();
               if (audioAnalyser && frequencyDataArray.length !== 1)
@@ -1912,9 +1905,28 @@
                 audioAnalyser.getByteTimeDomainData(timeDomainDataArray);
               return timeDomainDataArray;
             },
+            clear_canvas() {
+              let ctx = backing2dRenderingContext ?? canvas2dRenderingContext;
+              ctx.save();
+              if (clearColor) {
+                ctx.fillStyle = clearColor;
+                ctx.fillRect(0, 0, width, width);
+              } else {}
+                ctx.clearRect(0, 0, width, height);
+              ctx.restore();
+            },
+            stash_point(x, y) { this.stashX = x; this.stashY = y; },
+            move_to_stashed() {
+            if (this.stashX !== undefined && this.stashY !== undefined)
+              canvas2dRenderingContext.moveTo(this.stashX, this.stashY);
+            },
+            line_to_stashed() {
+            if (this.stashX !== undefined && this.stashY !== undefined)
+              canvas2dRenderingContext.lineTo(this.stashX, this.stashY);
+            },
           };
           Object.setPrototypeOf(schemeWidget, SchemeWidget.prototype);
-          contextToSchemeWidget.set(canvas2dRenderingContext, schemeWidget);
+          contextToSchemeWidgetMap.set(canvas2dRenderingContext, schemeWidget);
           let drawTime = Date.now();
           let tickCount = 0;
           function _doRedraw() {
@@ -1937,7 +1949,7 @@
                 backingCanvas.width = neededWidth;
                 backingCanvas.height = neededHeight;
                 backing2dRenderingContext = backingCanvas.getContext('2d');
-                contextToSchemeWidget.set(backing2dRenderingContext, schemeWidget);
+                contextToSchemeWidgetMap.set(backing2dRenderingContext, schemeWidget);
                 // Clear to the clearColor, if any
                 if (clearColor) {
                   backing2dRenderingContext.save();
@@ -1951,7 +1963,7 @@
                   if (neededWidth < w) w = neededWidth;
                   if (neededHeight < h) h = neededHeight;
                   backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0, w, h, 0, 0, w, h);
-                  contextToSchemeWidget.delete(oldBacking2dRenderingContext);
+                  contextToSchemeWidgetMap.delete(oldBacking2dRenderingContext);
                 } else {
                   let w = canvasElement.width, h = canvasElement.height;
                   if (neededWidth < w) w = neededWidth;
@@ -2120,8 +2132,7 @@
 
         defineGlobalSymbol("canvas-gfx-context", canvas_gfx_context, { dontInline: true, group: "web-gfx" });
         function canvas_gfx_context(schemeWidget) {
-          let canvasRenderingContext = schemeWidget.canvas2dRenderingContext;
-          return canvasRenderingContext;
+          return schemeWidget.canvas2dRenderingContext;
         }
 
         // When there are macros, this can be rewritten as a LET binding, probably
@@ -2217,7 +2228,7 @@
         }
 
         function CRCPropertyHook(propName) {
-          return function crcPropHookFn(args, ssaScope, tools) {
+          return function crcHookProp(args, ssaScope, tools) {
             let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
             let ssaCRC = ssaScope[gfxContextAtom];
             if (!ssaCRC)
@@ -2233,71 +2244,107 @@
           }
         }
 
-        let commonOptions = { dontInline: true, group: "web-gfx" };  // XXX TODO: remove dontInline when draw2d has a compile hook
-
         defineGlobalSymbol("save-context", save_context, { compileHook: CRCFunctionHook('save'), group: "web-gfx" });
         function save_context() { return CRCfunction(this, ctx => ctx.save()) }
 
         defineGlobalSymbol("restore-context", restore_context, { compileHook: CRCFunctionHook('restore'), group: "web-gfx" });
         function restore_context() { return CRCfunction(this, ctx => ctx.restore()) }
 
-        defineGlobalSymbol("canvas-width", canvas_width, commonOptions);
+        defineGlobalSymbol("canvas-width", canvas_width, { compileHook: WidgetPropertyHook('width'), group: "web-gfx" });
         function canvas_width() {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget.get(ctx);
+          let schemeWidget = contextToSchemeWidget(ctx);
           return schemeWidget.width;
         };
 
-        defineGlobalSymbol("canvas-height", canvas_height, commonOptions);
+        function WidgetFunctionHook(fName) {
+          return function widgetHookFn(args, ssaScope, tools) {
+            let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+            let ssaCRC = ssaScope[gfxContextAtom];
+            if (!ssaCRC)
+              ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
+            let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
+            let ssaWidget = newTemp("canvas_widget");
+            emil(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
+            let ssaArgStr = '', sep = '';
+            for (let arg of args)
+              ssaArgStr += `${sep}${arg}`, sep = ', ';
+            emit(`${ssaWidget}.${fName}(${ssaArgStr});`);
+            return ssaCRC;
+          }
+        }
+
+        function WidgetPropertyHook(propName) {
+          return function widgetHookProp(args, ssaScope, tools) {
+            let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+            let ssaCRC = ssaScope[gfxContextAtom];
+              if (!ssaCRC)
+                ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
+              let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
+              let ssaWidget = newTemp("canvas_widget");
+              emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
+              let ssaRes = newTemp(propName + '_value');
+              emit(`let ${ssaRes} = ${ssaWidget}.${propName};`);
+              if (args.length > 0) {
+                let ssaVal = args[0];
+                emit(`if (${ssaVal} !== undefined)`);
+                emit(`  ${ssaWidget}.${propName} = ${ssaVal};`);
+              }
+              return ssaRes;
+          }
+        }
+
+        defineGlobalSymbol("canvas-height", canvas_height, { compileHook: WidgetPropertyHook('height'), group: "web-gfx" });
         function canvas_height() {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget.get(ctx);
+          let schemeWidget = contextToSchemeWidget(ctx);
           return schemeWidget.height;
         };
 
-        defineGlobalSymbol("stash-point", stash_point, commonOptions);
+        defineGlobalSymbol("stash-point", stash_point, { compileHook: WidgetFunctionHook('stash_point'), group: "web-gfx" });
         function stash_point(x, y) {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget.get(ctx);
-          schemeWidget.stashX = x;
-          schemeWidget.stashY = y;
+          let schemeWidget = contextToSchemeWidget(ctx);
+          schemeWidget.stash_point(x, y);
+          return ctx;
         };
 
-        defineGlobalSymbol("move-to-stashed", move_to_stashed, commonOptions);
-        function move_to_stashed(x, y) {
+        defineGlobalSymbol("move-to-stashed", move_to_stashed, { compileHook: WidgetFunctionHook('move_to_stashed'), group: "web-gfx" });
+        function move_to_stashed() {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget.get(ctx);
-          if (schemeWidget.stashX !== undefined && schemeWidget.stashY !== undefined)
-            ctx.moveTo(schemeWidget.stashX, schemeWidget.stashY);
+          let schemeWidget = contextToSchemeWidget(ctx);
+          schemeWidget.move_to_stashed();
+          return ctx;
         };
 
-        defineGlobalSymbol("line-to-stashed", line_to_stashed, commonOptions);
+        defineGlobalSymbol("line-to-stashed", line_to_stashed, { compileHook: WidgetFunctionHook('line_to_stashed'), group: "web-gfx" });
         function line_to_stashed(x, y) {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget.get(ctx);
-          if (schemeWidget.stashX !== undefined && schemeWidget.stashY !== undefined)
-            ctx.lineTo(schemeWidget.stashX, schemeWidget.stashY);
+          let schemeWidget = contextToSchemeWidget(ctx);
+          schemeWidget.line_to_stashed();
+          return ctx;
         };
 
-        defineGlobalSymbol("clear-canvas", clear_canvas, commonOptions);
+        defineGlobalSymbol("clear-canvas", clear_canvas, { compileHook: WidgetFunctionHook('clear_canvas'), group: "web-gfx" });
         function clear_canvas() {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget.get(ctx);
+          let schemeWidget = contextToSchemeWidget(ctx);
           schemeWidget.clear_canvas();
+          return ctx;
         };
 
-        defineGlobalSymbol("show-canvas", show_canvas, commonOptions);
+        defineGlobalSymbol("show-canvas", show_canvas, { compileHook: WidgetFunctionHook('show_canvas'), group: "web-gfx" });
         function show_canvas(x = optional, y = optional, width = optional, height = optional) {
-          let ctx = this[gfxContextAtom], schemeWidget = contextToSchemeWidget.get(ctx);
+          let ctx = this[gfxContextAtom], schemeWidget = contextToSchemeWidget(ctx);
           schemeWidget.show(x, y, width, height);
-          return NIL;
+          return ctx;
         };
 
-        defineGlobalSymbol("hide-canvas", hide_canvas, commonOptions);
+        defineGlobalSymbol("hide-canvas", hide_canvas, { compileHook: WidgetFunctionHook('hide_canvas'), group: "web-gfx" });
         function hide_canvas() {
-          let ctx = this[gfxContextAtom], schemeWidget = contextToSchemeWidget.get(ctx);
+          let ctx = this[gfxContextAtom], schemeWidget = contextToSchemeWidget(ctx);
           schemeWidget.hide();
-          return NIL;
+          return ctx;
         };
 
         defineGlobalSymbol("fill-rect", fill_rect, { compileHook: CRCFunctionHook('fillRect'), group: "web-gfx" });
@@ -2468,8 +2515,6 @@
         const image_smoothing_quality = CRCProperty("imageSmoothingQuality");
         defineGlobalSymbol("image-smoothing-quality", image_smoothing_quality, { compileHook: CRCPropertyHook('imageSmoothingQuality'), group: "web-gfx" });
       }
-
-      let printBoxElement;
 
       function handleInput(enterKey) {
         let parseContext = [], assignSyntax = true;
