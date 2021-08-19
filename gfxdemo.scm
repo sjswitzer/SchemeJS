@@ -81,6 +81,9 @@
 (@= lissajous-canvas 'clear-canvas false)     ;; And don't clear the canvas before re-drawing
 (@= lissajous-canvas 'clear-color "black")    ;; Well, except initially
 
+;; What it looks like compiled
+(println (String lissajous))
+
 (define pi_2 (/ *pi* 2))  ;; Cosine is sine 90 degress (pi/2 radians) out of phase
 
 ;; Spirograph/Epicycle is not so very different from a lissajous
@@ -106,6 +109,9 @@
 (@= spirograph-canvas 'animate true)
 (@! spirograph-canvas 'show 600 40)
 (@= spirograph-canvas 'clear-canvas false)
+
+;; What it looks like compiled
+(println (String spirograph))
 
 ;; Here's a widget to scribble in interactively
 (define scribble (canvas "Scribble" 300))

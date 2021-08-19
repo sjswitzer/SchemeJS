@@ -2314,11 +2314,9 @@
             ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
           let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
           let ssaWidget = newTemp("canvas_widget");
-          let ssaX = compileEval(args[0], ssaScope, tools);
-          let ssaY = compileEval(args[1], ssaScope, tools);
           emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
-          emit(`${ssaWidget}.stashX = ${ssaX};`);
-          emit(`${ssaWidget}.stashY = ${ssaY};`);
+          emit(`${ssaWidget}.stashX = ${args[0] ?? undefined};`);
+          emit(`${ssaWidget}.stashY = ${args[1] ?? undefined};`);
           return ssaCRC;
         }
 
@@ -2337,9 +2335,10 @@
             if (!ssaCRC)
               ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
             let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
-            let ssaWidget = newTemp("canvas_widget");
+            let ssaWidget = newTemp("canvas_widget"), ssaX = newTemp('stashedX'),ssaY = newTemp('stashedY');
             emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
-            emit(`${ssaCRC}.${op}(${ssaWidget}.stashX, ${ssaWidget}.stashY)`)
+            emit(`let ${ssaX} = ${ssaWidget}.stashX, ${ssaY} = ${ssaWidget}.stashY;`);
+            emit(`if (${ssaX} !== undefined && ${ssaY} !== undefined) ${ssaCRC}.${op}(${ssaX}, ${ssaY});`);
             return ssaCRC;
           }
         }
