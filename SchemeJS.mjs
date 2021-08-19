@@ -1990,7 +1990,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       return NIL;
     }
     if (obj == null || typeof obj !== 'object')
-      throw new SchemeEvalError(`for-in requires iterable or object ${string(obj)}`)
+      throwForInTypeError(obj);
     for (let key in obj) {
       let value = obj[key];
       scope[keySymbol] = key;
@@ -2028,21 +2028,25 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     tools.indent = saveIndent;
     emit('}');
     tools.bindLiterally(isIterable, "isIterable");
+    tools.bindLiterally(throwForInTypeError, "throwForInTypeError");
     emit(`if (isIterable(${ssaObj})) {`);
     emit(`  let key = 0;`);
     emit(`  for (let value of ${ssaObj})`);
     emit(`    ${ssaFn}(key++, value);`);
     emit(`} else {`);
     emit(`  if (${ssaObj} == null || typeof ${ssaObj} !== 'object')`);
-    emit(`    throw new SchemeEvalError(\`for-in requires iterable or object \${string(${ssaObj})}\`);`);
+    emit(`    throwForInTypeError(${ssaObj});`);
     emit(`  for (let key in ${ssaObj})`);
-    emit(`    ${ssaFn}(kxey, ${ssaObj}[key]);`);
+    emit(`    ${ssaFn}(key, ${ssaObj}[key]);`);
     emit(`}`);
     if (ssaScope.dynamicScopeUsed)
       saveSsaScope.dynamicScopeUsed = true;
     else
       tools.deleteEmitted(scopeLines);
     return 'NIL';
+  }
+  function throwForInTypeError(obj) {
+    throw new TypeError(`for-in requires iterable or object ${string(obj)}`);
   }
 
   // Something like this would be nice, but it's not quite right

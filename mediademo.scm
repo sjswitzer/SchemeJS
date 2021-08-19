@@ -6,19 +6,19 @@
   (let ( (time-domain-data (@ o-scope-canvas 'time-domain-data))
          (frequency-domain-data (@ o-scope-canvas 'frequency-domain-data)) )
     (gfx-save  ;; Draw spectrum
-      (fill-style "#a22")
       ;; Scale to the number of samples + one (one is the width of the rectangles) along the x axis,
       ;; and 256 (the range of values) along the y axis.
       (scale (/ (canvas-width) (+ 1 (@ frequency-domain-data "length"))) (/ (canvas-height) 256))
+      (fill-style "#a22")
       (for-in i value frequency-domain-data
         (fill-rect i (- 256 value) 2 value) ;; make one pixel wider to overdraw a bit and not leave gaps
       )
     )
     (gfx-save  ;; Draw waveform
-      (stroke-style "#8f8") (begin-path)
       ;; Scale to the number of samples along the x axis,
       ;; and 256 along the y axis.
       (scale (/ (canvas-width) (+ 1 (@ time-domain-data "length"))) (/ (canvas-height) 256))
+      (stroke-style "#8f8") (begin-path)
       (for-in i value time-domain-data
         (line-to i value)
       )
