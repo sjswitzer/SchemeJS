@@ -3,8 +3,8 @@
 ;;
 
 (compile (o-scope gfx-context)
-  (let ( (time-domain-data (@ microphoneCanvas 'time-domain-data))
-         (frequency-domain-data (@ microphoneCanvas 'frequency-domain-data)) )
+  (let ( (time-domain-data (@ o-scope-canvas 'time-domain-data))
+         (frequency-domain-data (@ o-scope-canvas 'frequency-domain-data)) )
     (gfx-save  ;; Draw spectrum
       (fill-style "#a22")
       ;; Scale to the number of samples + one (one is the width of the rectangles) along the x axis,
@@ -27,11 +27,11 @@
   )
 )
 
-(define microphoneCanvas (canvas "Microphone"  600 400))
-(@= microphoneCanvas 'draw o-scope)
-(@= microphoneCanvas 'animate true)
-(@= microphoneCanvas 'user-media { "audio": true })
-(@= microphoneCanvas 'clear-color "black")
+(define o-scope-canvas (canvas "Oscilloscope"  800 300))
+(@= o-scope-canvas 'draw o-scope)
+(@= o-scope-canvas 'animate true)
+(@= o-scope-canvas 'user-media { "audio": true })
+(@= o-scope-canvas 'clear-color "black")
 
 ;; Here's what o-scope compiles into
 (println (String o-scope))
