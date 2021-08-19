@@ -2298,7 +2298,7 @@
         defineGlobalSymbol("fill-rect", fill_rect, { compileHook: CRCFunctionHook('fillRect'), group: "web-gfx" });
         function fill_rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.fillRect(x, y, width, height)) }
         
-        defineGlobalSymbol("clear-rect", fill_rect, { compileHook: CRCFunctionHook('clearRect'), group: "web-gfx" });
+        defineGlobalSymbol("clear-rect", clear_rect, { compileHook: CRCFunctionHook('clearRect'), group: "web-gfx" });
         function clear_rect(x, y, width, height) { return CRCfunction(this, ctx => ctx.clearRect(x, y, width, height)) }
         
         defineGlobalSymbol("stroke-rect", stroke_rect, { compileHook: CRCFunctionHook('strokeRect'), group: "web-gfx" });
