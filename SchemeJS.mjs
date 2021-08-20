@@ -12,7 +12,7 @@ export const VERSION = "1.1 (alpha)";
 // Creates a SchemeJS instance.
 //
 // Instances are distinct to the bones; they do not even recognize each other's
-// Cons cells or NIL values. This is by design. People should be able
+// Pairs or NIL values. This is by design. People should be able
 // to poke things into class definitions to experiment with different ideas
 // but that should only affect that specific SchemeJS instance; others should
 // be unaffected.
@@ -37,16 +37,33 @@ export function createInstance(schemeOpts = {}) {
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
-  const optional = undefined;  // so that parameters show up pretty when printed
+  const optional = undefined;  // so that optional parameters show up pretty when printed
 
-  // Creating a Cons should be as cheap as possible, so no subclassing
+  //
+  // Unlike most Lisps, the Cons cell (Pair) is not central to this design, but a _list_ is.
+  // A list is like an iterator and a list is iterable, but a list is different
+  // form an iterator in that accessing the "next" element does not "consume"
+  // an item and change the state of the list; a list is stateless and its "next"
+  // can always be accessed.
+  //
+  // Cons cells (pairs) are a kind of list but are no more a list than any other
+  // kind. To be a list requires only to implement the list protocol.
+  // Arrays and generator functions implement the list protocol and through a nefarious
+  // (optional) fallback, any iterable object automatically implements the list
+  // protocol.
+  //
+
+  // Creating a Pair should be as cheap as possible, so no subclassing
   // or calls to super. But people should be able to be able to define their
-  // own specialized or tricky Cons cells.
-  // This means that identifying the "class" of Cons
+  // own specialized or tricky lists.
+  // This means that identifying the "class" of Pairs
   // cells can't use "instanceof AbstractCons" or whatever.
   //
   // Instead, the method is:
   //    obj != null && obj[PAIR] === true
+  //
+  // Or, more generally, for lists:
+  //    obj != null && obj[LIST] === true
   //
   // Fetching properties is something JITs really optimize.
   // It's probably as fast as or faster than "instanceof".
@@ -58,15 +75,15 @@ export function createInstance(schemeOpts = {}) {
   // and although lists are conventionally NIL-terminated, the final "cdr"
   // could be anything at all.
 
-  const CAR = Symbol("CAR"), CDR = Symbol("CDR");
+  const FIRST = Symbol("FIRST"), REST = Symbol("REST");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
-  const LAZYCAR = Symbol("LAZYCAR"), LAZYCDR = Symbol("LAZYCDR"), SUPERLAZY = Symbol("SUPERLAZY");
+  const LAZYFIRST = Symbol("LAZYFIRST"), LAZYREST = Symbol("LAZYREST"), SUPERLAZY = Symbol("SUPERLAZY");
   const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JITCOMPILED");
-  // Since these symbols are tagged on external JS functions and objects,label it as ours as a courtesy.
+  // Since these symbols are tagged on external JS functions and objects,label them as ours as a courtesy.
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR'), EQUAL_FUNCTION = Symbol('SchemeJS-EQUAL');
 
   // I trust JITs to inline these
-  const isCons = obj => obj != null && obj[PAIR] === true;
+  const isPair = obj => obj != null && obj[PAIR] === true;
   const isNil = obj => obj != null && obj[NULLSYM] === true;
   const isList = obj => obj != null && obj[LIST] === true;
 
@@ -78,18 +95,18 @@ export function createInstance(schemeOpts = {}) {
       (typeof obj !== 'symbol' && typeof obj !== 'object' && typeof obj !== 'function')
       || obj[NULLSYM] === true;
 
-  class Cons {
-    [CAR]; [CDR];
-    constructor(car, cdr) {
-      this[CAR] = car;
-      this[CDR] = cdr;
+  class Pair {
+    [FIRST]; [REST];
+    constructor(first, rest) {
+      this[FIRST] = first;
+      this[REST] = rest;
     }
     toString() { return string(this); }
     [Symbol.iterator] = pairIterator;
     // static [PAIR] = true;  // Hmm; Shouldn't this work?
   }
-  Cons.prototype[PAIR] = true;
-  Cons.prototype[LIST] = true;
+  Pair.prototype[PAIR] = true;
+  Pair.prototype[LIST] = true;
 
   function pairIterator() {
     let current = this;
@@ -97,8 +114,8 @@ export function createInstance(schemeOpts = {}) {
       next() {
         if (isNil(current))
           return { done: true, value: current };  // value is whatever wasn't a cons cell
-        let value = current[CAR];
-        current = current[CDR];
+        let value = current[FIRST];
+        current = current[REST];
         return { done: false, value };
       },
       // So that the iterator itself is iterable, with a fresh iterator at the current position
@@ -110,19 +127,20 @@ export function createInstance(schemeOpts = {}) {
   // reference it or to instantiate it it more than once. Leaving it visible
   // just invites errors. But it's good to have a distinct class for NIL
   // for various reasons including that it looks better in a JS debugger
-  // and provides a way to trap attempts to get or set [CAR] and [CDR].
+  // and provides a way to trap attempts to get or set [FIRST] and [REST].
   const NIL = new ((() => {
     let nilClass = class NIL {
       [Symbol.iterator]() { return { next: () => ({ done: true }) } }
-      get [CAR]() { throw new SchemeEvalError("car of nil") }
-      set [CAR](_) { throw new SchemeEvalError("set car of nil") }
-      get [CDR]() { throw new SchemeEvalError("cdr of nil") }
-      set [CDR](_) { throw new SchemeEvalError("set cdr of nil") }
+      get [FIRST]() { throw new SchemeEvalError("car of nil") }
+      set [FIRST](_) { throw new SchemeEvalError("set car of nil") }
+      get [REST]() { throw new SchemeEvalError("cdr of nil") }
+      set [REST](_) { throw new SchemeEvalError("set cdr of nil") }
       [NULLSYM] = true;  // probably a _tiny_ bit faster if defined here too
       [LIST] = true;
     }
     nilClass.prototype[NULLSYM] = true;
     nilClass.prototype[LIST] = true;
+    // Ain't nobody modifyin' NIL
     Object.freeze(nilClass);
     Object.freeze(nilClass.prototype);
     return nilClass;
@@ -149,7 +167,7 @@ export function createInstance(schemeOpts = {}) {
     return scope;
   }
 
-  exportAPI("isCons", isCons);
+  exportAPI("isCons", isPair);
   exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
 
   const isArray = Array.isArray;
@@ -424,10 +442,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   exportAPI("PAIR_SYMBOL", PAIR);
   exportAPI("LIST_SYMBOL", LIST);
-  exportAPI("CAR_SYMBOL", CAR);
-  exportAPI("CDR_SYMBOL", CDR);
-  exportAPI("LAZYCAR_SYMBOL", LAZYCAR);
-  exportAPI("LAZYCDR_SYMBOL", LAZYCDR);
+  exportAPI("FIRST_SYMBOL", FIRST);
+  exportAPI("REST_SYMBOL", REST);
+  exportAPI("LAZYFIRST_SYMBOL", LAZYFIRST);
+  exportAPI("LAZYREST_SYMBOL", LAZYREST);
   exportAPI("SUPERLAZY_SYMBOL", SUPERLAZY);
 
   defineGlobalSymbol("VERSION", VERSION);
@@ -508,9 +526,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   const schemeTrue = a => a === true || (a !== false && a != null && !isNil(a));
   exportAPI("schemeTrue", schemeTrue);
 
-  const cons = (car, cdr) => new Cons(car, cdr);
-  const car = a => a[CAR];
-  const cdr = a => a[CDR];
+  const cons = (car, cdr) => new Pair(car, cdr);
+  const car = a => a[FIRST];
+  const cdr = a => a[REST];
   const caaar = a => car(car(car(a)));
   const caadr = a => car(car(cdr(a)));
   const caar = a => car(car(a));
@@ -524,7 +542,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
 
-  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[CAR], { usesDynamicScope: false, evalArgs: 0 }, "quote");
+  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { usesDynamicScope: false, evalArgs: 0 }, "quote");
   
   defineGlobalSymbol("scope", function() { return this });
 
@@ -1083,9 +1101,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return conditionalHooks(args, ssaScope, tools, 'is_undefined', `* === undefined`);
   }
 
-  defineGlobalSymbol("pair?", isCons, { evalArgs: 1, compileHook: is_pair_hook, group: "pred-op" }, "is-pair", "is-cons");
+  defineGlobalSymbol("pair?", isPair, { evalArgs: 1, compileHook: is_pair_hook, group: "pred-op" }, "is-pair", "is-cons");
   function is_pair(a, t = true, f = false) {
-    if (isCons(a))
+    if (isPair(a))
       return isPrimitive(t) ? t : _eval(t, this);
     else
       return isPrimitive(f) ? f : _eval(f, this);
@@ -1290,17 +1308,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     // Prescan for errors; the compiler needs to do it so the interpreter should too
     for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
       let clause = clauses[i];
-      if (!isCons(clause))
+      if (!isPair(clause))
         throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
     }
     for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
       let clause = clauses[i];
-      let predicateForm = clause[CAR], forms = clause[CDR];
+      let predicateForm = clause[FIRST], forms = clause[REST];
       let evaled = _eval(predicateForm, this);
       if (schemeTrue(evaled)) {
         let res = NIL;
-        for ( ; isCons(forms); forms = forms[CDR])
-          res = _eval(forms[CAR], this);
+        for ( ; isPair(forms); forms = forms[REST])
+          res = _eval(forms[FIRST], this);
         return res;
       }
     }
@@ -1315,7 +1333,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for (let clause of clauses) {
       if (!isList(clause))
         throw new SchemeCompileError(`Bad cond clause${string(clause)}`);
-      let predicateForm = clause[CAR], forms = clause[CDR];
+      let predicateForm = clause[FIRST], forms = clause[REST];
       let ssaPredicateValue = compileEval(predicateForm, ssaScope, tools);
       tools.emit(`if (schemeTrue(${ssaPredicateValue})) {`)
       let saveIndent = tools.indent;
@@ -1369,7 +1387,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (!expr) break;
         reportLoadInput(expr);
         if (noEval) {
-          if (last) last = last[CDR] = cons(expr, NIL);
+          if (last) last = last[REST] = cons(expr, NIL);
           else result = last = cons(expr, NIL);
         } else {
           let value = _eval(expr, scope);
@@ -1400,14 +1418,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for (let list of lists) {
       if (isList(list)) {
         // Could handle as iterable, but faster not to
-        for ( ; isCons(list); list = list[CDR])
-          if (last) last = last[CDR] = cons(list[CAR], NIL);
-          else res = last = cons(list[CAR], NIL);
+        for ( ; isPair(list); list = list[REST])
+          if (last) last = last[REST] = cons(list[FIRST], NIL);
+          else res = last = cons(list[FIRST], NIL);
       } else {
         if (!isIterable(list)) throw new SchemeEvalError(`Not a list or iterable ${list}`);
         for (let value of list) {
           let item = cons(value, NIL);
-          if (last) last = last[CDR] = item;
+          if (last) last = last[REST] = item;
           else res = last = item;
         }
       }
@@ -1419,9 +1437,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function last(list) {
     let res = NIL;
     if (!list || isNil(list)) return NIL; // XXX check this.
-    if (isCons(list)) {
-      for ( ; isCons(list); list = list[CDR])
-        res = list[CAR];
+    if (isPair(list)) {
+      for ( ; isPair(list); list = list[REST])
+        res = list[FIRST];
     } else {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
       if (isArray(list)) {
@@ -1440,16 +1458,16 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function butlast(list) {
     let res = NIL, last;
     if (isList(list)) {
-      for ( ; isCons(list) && isCons(list[CDR]); list = list[CDR])
-        if (last) last = last[CDR] = cons(list[CAR], NIL);
-        else res = last = cons(list[CAR], NIL);
+      for ( ; isPair(list) && isPair(list[REST]); list = list[REST])
+        if (last) last = last[REST] = cons(list[FIRST], NIL);
+        else res = last = cons(list[FIRST], NIL);
     } else {
       if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
       let previous, first = true;;
       for (let value of list) {
         if (!first) {
           let item = cons(previous, NIL);
-          if (last) last = last[CDR] = item;
+          if (last) last = last[REST] = item;
           else res = last = item;
         }
         first = false;
@@ -1463,7 +1481,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function length(list) {
     let n = 0;
     if (isList(list)) {
-      for ( ; isCons(list); list = list[CDR])
+      for ( ; isPair(list); list = list[REST])
         n += 1;
     } else {
       // Don't special-case string. Its iterator returns code points by combining surrogate pairs
@@ -1497,17 +1515,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("reverse", reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function reverse(list) {
     let res = NIL;
-    for ( ; isCons(list); list = list[CDR])
-      res = cons(list[CAR], res)
+    for ( ; isPair(list); list = list[REST])
+      res = cons(list[FIRST], res)
     return res;
   }
 
   defineGlobalSymbol("nreverse", in_place_reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // Name from SIOD
   function in_place_reverse(list) {
     let res = NIL;
-    while (isCons(list)) {
-      let next = list[CDR];
-      list[CDR] = res;
+    while (isPair(list)) {
+      let next = list[REST];
+      list[REST] = res;
       res = list;
       list = next;
     }
@@ -1518,10 +1536,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function copy_list(list) {
     let res = NIL, last;
     if (isNil(list)) return NIL;
-    if (isCons(list)) {
-      for ( ; isCons(list); list = list[CDR]) {
-        let item = cons(list[CAR], NIL);
-        if (last) last = last[CDR] = item;
+    if (isPair(list)) {
+      for ( ; isPair(list); list = list[REST]) {
+        let item = cons(list[FIRST], NIL);
+        if (last) last = last[REST] = item;
         else res = last = item;
       }
       return res;
@@ -1529,9 +1547,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (isIterable(list)) {
       for (let item of list) {
         item = cons(item, NIL);
-        if (last) last = last[CDR] = item;
+        if (last) last = last[REST] = item;
         else res = last = item;
-        list = list[CDR];
+        list = list[REST];
       }
       return res;
     }
@@ -1543,8 +1561,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //     Returns the portion of the list where the car is equal to the key, or () if none found.
   defineGlobalSymbol("member", member, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function member(key, list) {
-    for ( ; isCons(list); list = list[CDR])
-      if (key === list[CAR])   // TODO: == or ===?
+    for ( ; isPair(list); list = list[REST])
+      if (key === list[FIRST])   // TODO: == or ===?
         return list;
     return NIL;
   }
@@ -1553,8 +1571,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //     Returns the portion of the list where the car is eq to the key, or () if none found.
   defineGlobalSymbol("memq", memq, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function memq(key, list) {
-    for ( ; isCons(list); list = list[CDR])
-      if (key === list[CAR])
+    for ( ; isPair(list); list = list[REST])
+      if (key === list[FIRST])
         return list;
     return NIL;
   }
@@ -1567,10 +1585,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       throw new TypeError(`Not an integer ${string(index)}`);
     if (index < 0) throw new RangeError(`nth`);
     if (isList(list)) {
-      for ( ; index > 0 && isCons(list); list = list[CDR])
+      for ( ; index > 0 && isPair(list); list = list[REST])
         index -= 1;
-      if (isCons(list))
-        return list[CAR];
+      if (isPair(list))
+        return list[FIRST];
   ``} else if (isArray(list)) {
       if (index < list.length)
         return list[index];
@@ -1585,7 +1603,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     throw new RangeError(`nth`);
   }
 
-  // (apropos substring) -- Returns a list of all symbols containing the given substring
+  // (apropos substring) -- Returns a list of all atoms containing the given substring in their names
   defineGlobalSymbol("apropos", apropos, { dontInline: true });
   function apropos(substring) {
     if (!substring) substring = "";
@@ -1613,11 +1631,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (isList(list)) {
         // Could just let the list iterator handle it but might as well just follow the Cons chain
         // and not have to manufacture an iterator.
-        for ( ; isCons(list); list = list[CDR]) {
-          let item = list[CAR];
+        // TODO: the special cases should be for lists that are not naturally iterable
+        for ( ; isPair(list); list = list[REST]) {
+          let item = list[FIRST];
           item = fn.call(this, item);
           item = cons(item, NIL)
-          if (last) last = last[CDR] = item;
+          if (last) last = last[REST] = item;
           else result = last = item;
         }
       } else {
@@ -1625,7 +1644,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         for (let item of list) {
           item =  fn.call(this, item);
           item = cons(item, NIL);
-          if (last) last = last[CDR] = item;
+          if (last) last = last[REST] = item;
           else result = last = item;
         }
       }
@@ -1657,11 +1676,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (isList(list)) {
         // Could just let the list iterator handle it but might as well just follow the Cons chain
         // and not have to manufacture an iterator.
-        for ( ; isCons(list); list = list[CDR]) {
-          let item = list[CAR];
+        for ( ; isPair(list); list = list[REST]) {
+          let item = list[FIRST];
           if (schemeTrue(predicateFn(item))) {
             item = cons(item, NIL);
-            if (last) last = last[CDR] = item;
+            if (last) last = last[REST] = item;
             else result = last = item;
           }
         }
@@ -1670,7 +1689,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         for (let item of list) {
           if(schemeTrue(predicateFn(item))) {
             item = cons(item, NIL);
-            if (last) last = last[CDR] = item;
+            if (last) last = last[REST] = item;
             else result = last = item;
           }
         }
@@ -1683,22 +1702,22 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // Lazy lists by decaying down to ordinary Cons cells as evaluated
   //
   class LazyCarList {
-    [LAZYCAR]; [CDR];
+    [LAZYFIRST]; [REST];
     constructor(getCar, cdr) {
-      this[LAZYCAR] = getCar;
-      this[CDR] = cdr;
+      this[LAZYFIRST] = getCar;
+      this[REST] = cdr;
     }
     toString() { return string(this) }
-    get [CAR]() {
-      let car = this[LAZYCAR]();
-      delete this[LAZYCAR];
-      Object.setPrototypeOf(this, Cons.prototype);
-      return this[CAR] = car;
+    get [FIRST]() {
+      let car = this[LAZYFIRST]();
+      delete this[LAZYFIRST];
+      Object.setPrototypeOf(this, Pair.prototype);
+      return this[FIRST] = car;
     }
-    set [CAR](val) {
-      delete this[LAZYCAR];
-      Object.setPrototypeOf(this, Cons.prototype);
-      this[CAR] = val;
+    set [FIRST](val) {
+      delete this[LAZYFIRST];
+      Object.setPrototypeOf(this, Pair.prototype);
+      this[FIRST] = val;
     }
     [Symbol.iterator] = pairIterator();
   }
@@ -1706,22 +1725,22 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   LazyCarList.prototype[LIST] = true;
 
   class LazyCdrList {
-    [CAR]; [LAZYCDR];
+    [FIRST]; [LAZYREST];
     constructor(car, getCdr) {
-      this[CAR] = car;
-      this[LAZYCDR] = getCdr;
+      this[FIRST] = car;
+      this[LAZYREST] = getCdr;
     }
     toString() { return string(this) }
-    get [CDR]() {
-      let cdr = this[LAZYCDR]();
-      delete this[LAZYCDR];
-      Object.setPrototypeOf(this, Cons.prototype);
-      return this[CDR] = cdr;
+    get [REST]() {
+      let cdr = this[LAZYREST]();
+      delete this[LAZYREST];
+      Object.setPrototypeOf(this, Pair.prototype);
+      return this[REST] = cdr;
     }
-    set [CDR](val) {
-      delete this[LAZYCDR];
-      Object.setPrototypeOf(this, Cons.prototype);
-      this[CDR] = val;
+    set [REST](val) {
+      delete this[LAZYREST];
+      Object.setPrototypeOf(this, Pair.prototype);
+      this[REST] = val;
     }
     [Symbol.iterator] = pairIterator();
   }
@@ -1729,33 +1748,33 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   LazyCdrList.prototype[LIST] = true;
 
   class LazyCarCdrList {
-    [LAZYCAR]; [LAZYCDR];
+    [LAZYFIRST]; [LAZYREST];
     constructor(getCar, getCdr) {
-      this[LAZYCAR] = getCar;
-      this[LAZYCDR] = getCdr;
+      this[LAZYFIRST] = getCar;
+      this[LAZYREST] = getCdr;
     }
     toString() { return string(this) }
-    get [CAR]() {
-      let car = this[LAZYCAR]();
-      delete this[LAZYCAR];
+    get [FIRST]() {
+      let car = this[LAZYFIRST]();
+      delete this[LAZYFIRST];
       Object.setPrototypeOf(this, LazyCdrList.prototype);
-      return this[CAR] = car;
+      return this[FIRST] = car;
     }
-    set [CAR](val) {
-      delete this[LAZYCAR];
+    set [FIRST](val) {
+      delete this[LAZYFIRST];
       Object.setPrototypeOf(this, LazyCdrList.prototype);
-      this[CAR] = val;
+      this[FIRST] = val;
     }
-    get [CDR]() {
-      let cdr = this[LAZYCDR]();
-      delete this[LAZYCDR];
+    get [REST]() {
+      let cdr = this[LAZYREST]();
+      delete this[LAZYREST];
       Object.setPrototypeOf(this, LazyCarList.prototype);
-      return this[CDR] = cdr;
+      return this[REST] = cdr;
     }
-    set [CDR](val) {
-      delete this[LAZYCDR];
+    set [REST](val) {
+      delete this[LAZYREST];
       Object.setPrototypeOf(this, LazyCarList.prototype);
-      this[CDR] = val;
+      this[REST] = val;
     }
     [Symbol.iterator] = pairIterator();
   }
@@ -1766,64 +1785,64 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // Doesn't even know if it's a cons cell or null yet!
   //
   class LazyIteratorList {
-    [LAZYCAR]; [LAZYCDR];
+    [LAZYFIRST]; [LAZYREST];
     constructor(iterator, mapper) {
-      this[LAZYCAR] = mapper;
-      this[LAZYCDR] = iterator;
+      this[LAZYFIRST] = mapper;
+      this[LAZYREST] = iterator;
     }
-    get [CAR]() {
+    get [FIRST]() {
       if (!this[PAIR]) throw new TypeError(`car of nil`);
-      return this[CAR];
+      return this[FIRST];
     }
-    set [CAR](val) {
-      let mapper = this[LAZYCAR];
+    set [FIRST](val) {
+      let mapper = this[LAZYFIRST];
       if (!this[PAIR]) throw new TypeError(`set car of nil`);
       if (mapper)
-        Object.setPrototypeOf(this, Cons.prototype);
-      this[CAR] = val;
+        Object.setPrototypeOf(this, Pair.prototype);
+      this[FIRST] = val;
     }
-    get [CDR]() {
+    get [REST]() {
       if (!this[PAIR]) throw new TypeError(`cdr of nil`);
-      return this[CDR];
+      return this[REST];
     }
-    set [CDR](val) {
+    set [REST](val) {
       if (!this[PAIR]) throw new TypeError(`set cdr of nil`);
-      this[CDR] = val;
+      this[REST] = val;
     }
     get [NULLSYM]() { return !this[PAIR] }
     get [PAIR]() { // Doesn't even know whether it's a cons or nil yet!
-      let iterator = this[LAZYCDR], mapper = this[LAZYCAR];
+      let iterator = this[LAZYREST], mapper = this[LAZYFIRST];
       let { done, value: car } = iterator.next();
       if (done) {
         Object.setPrototypeOf(this, Object.getPrototypeOf(NIL));
-        delete this[LAZYCDR];
-        delete this[LAZYCAR];
-        delete this[CAR];
-        delete this[CDR];
+        delete this[LAZYREST];
+        delete this[LAZYFIRST];
+        delete this[FIRST];
+        delete this[REST];
         this[NULLSYM] = true;
         return false;
       }
       let cdr = new LazyIteratorList(iterator, mapper);
       if (mapper) {
         Object.setPrototypeOf(this, LazyCarList.prototype);
-        delete this[LAZYCDR];
-        delete this[LAZYCAR];
-        this[LAZYCAR] = () => mapper(car);
+        delete this[LAZYREST];
+        delete this[LAZYFIRST];
+        this[LAZYFIRST] = () => mapper(car);
       } else {
-        Object.setPrototypeOf(this, Cons.prototype);
-        delete this[LAZYCDR];
-        delete this[LAZYCAR];
-        this[CAR] = car;
+        Object.setPrototypeOf(this, Pair.prototype);
+        delete this[LAZYREST];
+        delete this[LAZYFIRST];
+        this[FIRST] = car;
       }
-      this[CDR] = cdr;
+      this[REST] = cdr;
       return true;
     }
     toString() { return string(this) }
     [Symbol.iterator] = pairIterator();
   }
   LazyIteratorList.prototype[SUPERLAZY] = true;
-  LazyIteratorList.prototype[LAZYCAR] = true;
-  LazyIteratorList.prototype[LAZYCDR] = true;
+  LazyIteratorList.prototype[LAZYFIRST] = true;
+  LazyIteratorList.prototype[LAZYREST] = true;
   LazyIteratorList.prototype[LIST] = true;
 
   defineGlobalSymbol("list-view", list_view, { usesDynamicScope: false, dontInline: true, group: "list-op" });
@@ -1844,15 +1863,15 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("to-list", to_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function to_list(obj, depth = 1) {
     if (depth <= 0) return obj;
-    if (isNil(obj) || isCons(obj)) return obj;
+    if (isNil(obj) || isPair(obj)) return obj;
     if (typeof obj === 'object') {
-      if (isCons(obj)) return obj;  // Careful; Cons is iterable itself
+      if (isList(obj)) return obj;
       let list = NIL, last;
       if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
       for (let value of obj) {
         if (depth > 1 && isIterable(value))
           value = to_list.call(this, value, depth-1);
-        if (last) last = last[CDR] = cons(value, NIL);
+        if (last) last = last[REST] = cons(value, NIL);
         else list = last = cons(value, NIL);
       }
       return list;
@@ -1892,16 +1911,16 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook, group: "core", schemeOnly: true }, "let", "let*");
   function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
-    for ( ; isCons(bindings); bindings = bindings[CDR]) {
-      let binding = bindings[CAR];
-      if (!isCons(binding))
+    for ( ; isPair(bindings); bindings = bindings[REST]) {
+      let binding = bindings[FIRST];
+      if (!isPair(binding))
         throw new SchemeEvalError(`Bad binding ${string(binding)}`);
-      let boundVar = binding[CAR], bindingForms = binding[CDR];
+      let boundVar = binding[FIRST], bindingForms = binding[REST];
       if (typeof boundVar !== 'symbol')
         throw new SchemeEvalError(`Bad binding ${string(binding)}`);
       let val = NIL;
-      for ( ; isCons(bindingForms); bindingForms = bindingForms[CDR])
-        val = _eval(bindingForms[CAR], scope);
+      for ( ; isPair(bindingForms); bindingForms = bindingForms[REST])
+        val = _eval(bindingForms[FIRST], scope);
       scope[boundVar] = val;
     }
     let res = _eval(form, scope);
@@ -1927,17 +1946,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let saveIndent = tools.indent;
     tools.indent += '  ';
     scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-letrec-scope");`));
-    for( ; isCons(bindings); bindings = bindings[CDR]) {
-      let binding = bindings[CAR];
-      if (!isCons(binding))
+    for( ; isPair(bindings); bindings = bindings[REST]) {
+      let binding = bindings[FIRST];
+      if (!isPair(binding))
         throw new SchemeCompileError(`Bad binding ${string(binding)}`)
-      let boundVar = binding[CAR], bindingForms = binding[CDR];
+      let boundVar = binding[FIRST], bindingForms = binding[REST];
       if (typeof boundVar !== 'symbol')
         throw new SchemeEvalError(`Bad binding ${string(binding)}`);
       let ssaBoundVar = newTemp(boundVar);
       emit(`let ${ssaBoundVar} = NIL;`);
-      for ( ; isCons(bindingForms); bindingForms = bindingForms[CDR]) {
-        let ssaVal = compileEval(bindingForms[CAR], ssaScope, tools);
+      for ( ; isPair(bindingForms); bindingForms = bindingForms[REST]) {
+        let ssaVal = compileEval(bindingForms[FIRST], ssaScope, tools);
         emit(`${ssaBoundVar} = ${ssaVal};`);
       }
       let paramAtom = use(bind(boundVar));
@@ -2050,9 +2069,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function setq_hook(body, ssaScope, tools) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    if (!isCons(body))
+    if (!isPair(body))
       throw new SchemeCompileError(`Bad setq params ${body}`);
-    let varSym = body[CAR], valForms = body[CDR];
+    let varSym = body[FIRST], valForms = body[REST];
     let ssaValue = 'NIL';
     for (let form of valForms)
       ssaValue = compileEval(form, ssaScope, tools);
@@ -2094,13 +2113,13 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (isArray(list))
       return in_place_mergesort(list.slice(0), predicateFn, accessFn);
     // Lists and other iterables are sorted as lists
-    if (isCons(list))
+    if (isPair(list))
       return in_place_mergesort(copy_list(list), predicateFn, accessFn);
     let copied = NIL, last;
     if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
     for (let item of list) {
       item = cons(item, NIL);
-      if (last) last = last[CDR] = item;
+      if (last) last = last[REST] = item;
       else copied = last = item;
     }
     return in_place_mergesort(copied, predicateFn, accessFn);
@@ -2133,7 +2152,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       list.sort((a,b) => before.call(scope, a, b) ? -1 : 1);
       return list;
     }
-    if (isCons(list)) {
+    if (isPair(list)) {
       return llsort.call(this, list, before);
     }
     throw new TypeError(`Not a list or array ${string(list)}`);
@@ -2155,19 +2174,19 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
   function llsort(list, before) {
     let stack = [];
-    while (isCons(list)) {
+    while (isPair(list)) {
       // Accumulate a run that's already sorted.
       let run = list, runTail = list;
-      list = list[CDR];
-      while (isCons(list)) {
-        let listNext = list[CDR];
-        runTail[CDR] = NIL;
-        if (before.call(this, list[CAR], run[CAR])) {
-          list[CDR] = run;
+      list = list[REST];
+      while (isPair(list)) {
+        let listNext = list[REST];
+        runTail[REST] = NIL;
+        if (before.call(this, list[FIRST], run[FIRST])) {
+          list[REST] = run;
           run = list;
         } else {
-          if (!before.call(this, list[CAR], runTail[CAR])) {
-            runTail[CDR] = list;
+          if (!before.call(this, list[FIRST], runTail[FIRST])) {
+            runTail[REST] = list;
             runTail = list;
           } else {
             break;
@@ -2209,28 +2228,28 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     function merge(left, right) {
       // When equal, left goes before right
       let merged = NIL, last;
-      while (isCons(left) && isCons(right)) {
-        if (before.call(this, right[CAR], left[CAR])) {
-          let next = right[CDR];
-          if (last) last[CDR] = right;
+      while (isPair(left) && isPair(right)) {
+        if (before.call(this, right[FIRST], left[FIRST])) {
+          let next = right[REST];
+          if (last) last[REST] = right;
           else merged = right;
           last = right;
           right = next;
         } else {
-          let next = left[CDR];
-          if (last) last[CDR] = left;
+          let next = left[REST];
+          if (last) last[REST] = left;
           else merged = left;
           last = left;
           left = next;
         }
-        last[CDR] = NIL;
+        last[REST] = NIL;
       }
       // Can't both be Cons cells; the loop above ensures it
-      if (isCons(left)) {
-        if (last) last[CDR] = left;
+      if (isPair(left)) {
+        if (last) last[REST] = left;
         else merged = left;
-      } else if (isCons(right)) {
-        if (last) last[CDR] = right;
+      } else if (isPair(right)) {
+        if (last) last[REST] = right;
         else merged = right;
       }
       return merged;
@@ -2313,10 +2332,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           return false;
         }
         let i = 0, aRest = a, bRest = b;
-        for ( ; isCons(aRest) && isCons(bRest); ++i, ++length, aRest = aRest[CDR], bRest = bRest[CDR]) {
-          let res = deep_eq(aRest[CAR], bRest[CAR], depth+1, length);
+        for ( ; isPair(aRest) && isPair(bRest); ++i, ++length, aRest = aRest[REST], bRest = bRest[REST]) {
+          let res = deep_eq(aRest[FIRST], bRest[FIRST], depth+1, length);
           if (!res) {
-            report.list = a, report.a = aRest[CAR], report.b = bRest[CAR];
+            report.list = a, report.a = aRest[FIRST], report.b = bRest[FIRST];
             report.elementsDiffer = i;
             report = { reason: report };
             return res;
@@ -2389,8 +2408,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   function makeConsImposter(fn, form) {
     fn[PAIR] = fn[LIST] = true;
-    fn[CAR] = form[CAR];
-    fn[CDR] = form[CDR];
+    fn[FIRST] = form[FIRST];
+    fn[REST] = form[REST];
     return fn;
   }
 
@@ -2459,12 +2478,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // (catch (var forms) forms) -- JavaScript style
   defineGlobalSymbol("catch", js_catch, { evalArgs: 0, compileHook: js_catch_hook });
   function js_catch(catchClause, form, ...forms) {
-    if (!isCons(catchClause))
+    if (!isPair(catchClause))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
-    let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
-    if (!isCons(catchForms))
+    let catchVar = catchClause[FIRST], catchForms = catchClause[REST];
+    if (!isPair(catchForms))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
-    if (!isCons(catchForms))
+    if (!isPair(catchForms))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
     let val;
     try {
@@ -2474,8 +2493,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     } catch (e) {
       let scope = newScope(this, "js-catch-scope");
       scope[catchVar] = e;
-      for ( ; isCons(catchForms); catchForms = catchForms[CDR])
-        val = _eval(catchForms[CAR], scope);
+      for ( ; isPair(catchForms); catchForms = catchForms[REST])
+        val = _eval(catchForms[FIRST], scope);
     }
     return val;
   }
@@ -2483,9 +2502,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (args.length < 2) throw new LogicError(`Bad js_catch`);
     let catchClause = args[0];
-    if (!isCons(catchClause) && isCons(catchClause[CDR]))
+    if (!isPair(catchClause) && isPair(catchClause[REST]))
       throw new SchemeCompileError(`Bad catch clause ${string(catchClause)}`);
-    let catchVar = catchClause[CAR], catchForms = catchClause[CDR];
+    let catchVar = catchClause[FIRST], catchForms = catchClause[REST];
     let ssaCatchSym = newTemp(catchVar);
     let ssaResult = newTemp('js_catch'), ssaValue = 'NIL';
     let saveSSaScope = ssaScope, scopeLines = [];
@@ -2524,9 +2543,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("define", define, { evalArgs: 0, dontInline: true });
   function define(defined, value, ...rest) {
     let scope = this, name = defined;
-    if (isCons(defined)) {
-      name = defined[CAR];
-      let params = defined[CDR];
+    if (isPair(defined)) {
+      name = defined[FIRST];
+      let params = defined[REST];
       value = lambda.call(scope, params, value, ...rest);
     } else {
       value = _eval(value, scope);
@@ -2549,9 +2568,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { evalArgs: 0, dontInline: true });
   function compile(nameAndParams, form, ...forms) {
-    if (!isCons(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
-    let name = Atom(nameAndParams[CAR]);
-    let args = nameAndParams[CDR];
+    if (!isPair(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
+    let name = Atom(nameAndParams[FIRST]);
+    let args = nameAndParams[REST];
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
     let lambda = list(LAMBDA_ATOM, args, form, ...forms);
     let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
@@ -2584,11 +2603,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (TRACE_INTERPRETER)
       console.log("EVAL", string(form));
-    if (isCons(form)) {
-      let fn = form[CAR];
+    if (isPair(form)) {
+      let fn = form[FIRST];
       if (fn === QUOTE_ATOM) { // QUOTE is a special function that will do this but catch it here anyway.
-        if (!isCons(form)) throwBadForm();
-        return form[CDR][CAR];
+        if (!isPair(form)) throwBadForm();
+        return form[REST][FIRST];
       }
       fn = _eval(fn, scope);
       if (typeof fn !== 'function') throwBadForm();
@@ -2597,18 +2616,18 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
       let requiredCount = parameterDescriptor & 0xffff;
       let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-      if (fn[CAR] === SCLOSURE_ATOM) {
-        let fnCdr = fn[CDR];
-        if (!isCons(fnCdr)) throwBadForm();
-        scope = fnCdr[CAR];
+      if (fn[FIRST] === SCLOSURE_ATOM) {
+        let fnCdr = fn[REST];
+        if (!isPair(fnCdr)) throwBadForm();
+        scope = fnCdr[FIRST];
       }
       // Run through the arg list evaluating args
-      let  args = form[CDR], argCount = 0;
-      for (let tmp = args; isCons(tmp); tmp = tmp[CDR])
+      let  args = form[REST], argCount = 0;
+      for (let tmp = args; isPair(tmp); tmp = tmp[REST])
         ++argCount;
       let argv = new Array(argCount);
-      for (let i = 0; isCons(args); ++i, args = args[CDR]) {
-        let item = args[CAR];
+      for (let i = 0; isPair(args); ++i, args = args[REST]) {
+        let item = args[FIRST];
         if (i < evalCount)
           item = _eval(item, scope);
         argv[i] = item;
@@ -2648,21 +2667,21 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let bindingClosure = (...args) => boundFunction.call(scope, ...boundArgv, ...args);
       // A closure function leads a double life: as a closure function but also a closure form!
       // Dig out the original function's closure, if it had one.
-      let closureBody = fn[CDR];
+      let closureBody = fn[REST];
       let closureParams = NIL, closureForms;
       if (closureBody) {
-        scope = closureBody[CAR];
+        scope = closureBody[FIRST];
         scope = newScope(scope, "closure-scope");
-        let lambdaBody = closureBody[CDR];
-        if (fn[CAR] === SCLOSURE_ATOM)  // Skip the evalCount param
-          lambdaBody = lambdaBody[CDR];
-        closureParams = lambdaBody[CAR];
-        closureForms = lambdaBody[CDR];
-        for (let i = 0; i < argCount; ++i, closureParams = closureParams[CDR]) {
-          if (!isCons(closureParams)) throw new LogicError(`Shouldn't happen`);
-          let param = closureParams[CAR];
-          if (isCons(param) && param[CAR] === QUESTION_ATOM && isCons(param[CDR]))
-            param = param[CDR][CAR];
+        let lambdaBody = closureBody[REST];
+        if (fn[FIRST] === SCLOSURE_ATOM)  // Skip the evalCount param
+          lambdaBody = lambdaBody[REST];
+        closureParams = lambdaBody[FIRST];
+        closureForms = lambdaBody[REST];
+        for (let i = 0; i < argCount; ++i, closureParams = closureParams[REST]) {
+          if (!isPair(closureParams)) throw new LogicError(`Shouldn't happen`);
+          let param = closureParams[FIRST];
+          if (isPair(param) && param[FIRST] === QUESTION_ATOM && isPair(param[REST]))
+            param = param[REST][FIRST];
           if (typeof param !== 'symbol') throw new LogicError(`Shouldn't happen`);
           scope[param] = argv[i];
         }
@@ -2686,11 +2705,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         evalCount -= argCount;
         if (evalCount < 0)
           evalCount = 0;
-        bindingClosure[CAR] = SCLOSURE_ATOM;
-        bindingClosure[CDR] = cons(scope, cons(evalCount, cons(closureParams, closureForms)));
+        bindingClosure[FIRST] = SCLOSURE_ATOM;
+        bindingClosure[REST] = cons(scope, cons(evalCount, cons(closureParams, closureForms)));
       } else {
-        bindingClosure[CAR] = CLOSURE_ATOM;
-        bindingClosure[CDR] = cons(scope, cons(closureParams, closureForms));
+        bindingClosure[FIRST] = CLOSURE_ATOM;
+        bindingClosure[REST] = cons(scope, cons(closureParams, closureForms));
       }
       bindingClosure[LIST] = bindingClosure[PAIR] = true;
       bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
@@ -2760,8 +2779,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("apply", apply, { dontInline: true });
   function apply(fn, args, scope = this) {
     let argv = [];
-    for ( ;isCons(args); args = args[CDR])
-      argv.push(args[CAR])
+    for ( ;isPair(args); args = args[REST])
+      argv.push(args[FIRST])
     let fName;
     if (TRACE_INTERPRETER) {
       fName = namedObjects.get(fn) ?? fn.name;
@@ -2782,7 +2801,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       body = cons(forms[i-1], body);
     let lambda = cons(LAMBDA_ATOM, cons(params, body));
     let scope = this;
-    let schemeClosure = cons(CLOSURE_ATOM, cons(scope, lambda[CDR]));
+    let schemeClosure = cons(CLOSURE_ATOM, cons(scope, lambda[REST]));
     return makeLambdaClosure(scope, params, lambda, body, schemeClosure);
   }
 
@@ -2793,9 +2812,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for (let i = forms.length; i > 0; --i)
       body = cons(forms[i-1], body);
     let lambda = cons(SLAMBDA_ATOM, cons(evalCount, cons(params, body)));
-    if (!isCons(body)) throwBadLambda(lambda);
+    if (!isPair(body)) throwBadLambda(lambda);
     let scope = this;
-    let schemeClosure = cons(SCLOSURE_ATOM, cons(scope, lambda[CDR]));
+    let schemeClosure = cons(SCLOSURE_ATOM, cons(scope, lambda[REST]));
     return makeLambdaClosure(scope, params, lambda, body, schemeClosure, evalCount);
   }
 
@@ -2804,7 +2823,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // here, you almost certainly need to make a change there. "string" also
   // has special handling for "printing" closures. In particular, closures are
   // decorated with a CLOSURE_ATOM symbol to clue the string function to print
-  // it as a closure. Closures are also decorated with CAR, CDR, LIST and PAIR
+  // it as a closure. Closures are also decorated with FIRST, REST, LIST and PAIR
   // so that they look exactly like lists to the SchemeJS runtime.
   //
   function makeLambdaClosure(scope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
@@ -2816,14 +2835,14 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     let params = lambdaParams, paramCount = 0, requiredCount;
     let paramv = [], restParam;
-    for ( ; isCons(params); params = params[CDR]) {
-      let param = params[CAR];
-      if (isCons(param)) {
-        if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] === 'symbol'))
+    for ( ; isPair(params); params = params[REST]) {
+      let param = params[FIRST];
+      if (isPair(param)) {
+        if (!param[FIRST] === QUESTION_ATOM && isPair(param[REST] && typeof param[REST][FIRST] === 'symbol'))
           throwBadLambda(lambda, `what's this?  ${string(param)}`);
         if (!requiredCount)
           requiredCount = paramCount;
-        param = param[CDR][CAR];
+        param = param[REST][FIRST];
       } else if (typeof param !== 'symbol') {
         throwBadLambda(lambda, `parameter ${string(param)} not an atom`);
       }
@@ -2851,19 +2870,19 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       scope = newScope(scope, "lambda-scope");
       let params = lambdaParams, i = 0, argLength = args.length;
-      for ( ; isCons(params); ++i, params = params[CDR]) {
-        let param = params[CAR], optionalForms, arg;
-        if (isCons(param) && param[CAR] === QUESTION_ATOM) {
-          let paramCdr = param[CDR];
-          param = paramCdr[CAR];
-          optionalForms = paramCdr[CDR];
+      for ( ; isPair(params); ++i, params = params[REST]) {
+        let param = params[FIRST], optionalForms, arg;
+        if (isPair(param) && param[FIRST] === QUESTION_ATOM) {
+          let paramCdr = param[REST];
+          param = paramCdr[FIRST];
+          optionalForms = paramCdr[REST];
         }
         arg = args[i];  // undefined if i >= length OR if deliberately undefined
         if (arg === undefined) {
           arg = NIL;
           if (optionalForms) {
-          for ( ; isCons(optionalForms); optionalForms = optionalForms[CDR])
-            arg = _eval(optionalForms[CAR], scope);
+          for ( ; isPair(optionalForms); optionalForms = optionalForms[REST])
+            arg = _eval(optionalForms[FIRST], scope);
           }
         }
         scope[param] = arg;
@@ -2880,8 +2899,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       return result;
     }
     lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
-    lambdaClosure[CAR] = schemeClosure[CAR];
-    lambdaClosure[CDR] = schemeClosure[CDR];
+    lambdaClosure[FIRST] = schemeClosure[FIRST];
+    lambdaClosure[REST] = schemeClosure[REST];
     lambdaClosure[LIST] = lambdaClosure[PAIR] = true;
     lambdaClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
     // Because the closure has a generic (...args) parameter, the compiler needs more info
@@ -2902,7 +2921,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   exportAPI("isClosure", isClosure);
   function isClosure(obj) {
-    return isCons(obj) && (obj[CAR] === CLOSURE_ATOM || obj[CAR] === SCLOSURE_ATOM);
+    return isPair(obj) && (obj[FIRST] === CLOSURE_ATOM || obj[FIRST] === SCLOSURE_ATOM);
   }
 
   const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\', '\n': '' };
@@ -2973,34 +2992,34 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
           }
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
-        if (obj[LAZYCDR]) {
+        if (obj[LAZYREST]) {
           put("(");
           sep = "";
-          if (obj[LAZYCAR])
+          if (obj[LAZYFIRST])
             put("..");  // .. signifies a lazy car
           else
-            toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
+            toString(obj[FIRST], maxCarDepth-1, maxCdrDepth);
           sep = " ";
           return put("...)", true);
         }
-        if (isCons(obj)) {
+        if (isPair(obj)) {
           put("(");
           indent += indentMore;
           sep = "";
-          if (!obj[LAZYCAR]) {
-            let objCar = obj[CAR];
+          if (!obj[LAZYFIRST]) {
+            let objCar = obj[FIRST];
             if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
                 objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
-                  && isCons(obj[CDR])) {
+                  && isPair(obj[REST])) {
               // Specal treatment of lambdas and closures with curry notation
               if (objCar === CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
-                if (isCons(obj[CDR][CDR])) {
-                  let evalCount, scopeCons = obj[CDR];
+                if (isPair(obj[REST][REST])) {
+                  let evalCount, scopeCons = obj[REST];
                   if (objCar === SCLOSURE_ATOM) {
-                    evalCount = obj[CDR][CAR];
-                    scopeCons = obj[CDR][CDR];
+                    evalCount = obj[REST][FIRST];
+                    scopeCons = obj[REST][REST];
                   }
-                  let params = scopeCons[CDR][CAR];
+                  let params = scopeCons[REST][FIRST];
                   if (typeof params === 'symbol') {
                     sep = "";
                     if (objCar === SCLOSURE_ATOM) {
@@ -3011,17 +3030,17 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
                     sep = "";
                     if (obj[COMPILED]) put(`{*compiled-${obj[COMPILED]}*}`);
                     sep = " ";
-                    toString(scopeCons[CAR], maxCarDepth-1, maxCdrDepth-2);  // scope
+                    toString(scopeCons[FIRST], maxCarDepth-1, maxCdrDepth-2);  // scope
                     sep = " ";
                     toString(params, maxCarDepth-1, maxCdrDepth-2);  // actually the atom
                     sep = ""; put(".");
-                    toString(scopeCons[CDR][CDR], maxCarDepth, maxCdrDepth-3);  // the form
+                    toString(scopeCons[REST][REST], maxCarDepth, maxCdrDepth-3);  // the form
                     sep = ""; put(")");
                     return;
                   }
                 }
               }
-              let str = '', params = obj[CDR][CAR], forms = obj[CDR][CDR];
+              let str = '', params = obj[REST][FIRST], forms = obj[REST][REST];
               if (objCar === LAMBDA_ATOM) str += lambdaStr;
               if (objCar === SLAMBDA_ATOM) str += lambdaStr + '#';
               if (typeof params === 'symbol') {  // curry notation
@@ -3035,21 +3054,21 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
               }
             }
           }
-          while (isCons(obj)) {
-            if (obj[LAZYCAR]) {
+          while (isPair(obj)) {
+            if (obj[LAZYFIRST]) {
               put("..");  // .. signifies a lazy car
             } else if (obj[COMPILED]) {
-              toString(obj[CAR])
+              toString(obj[FIRST])
               sep = "";
               put(`{*compiled-${obj[COMPILED]}*}`);
               sep = " ";
             } else {
-              toString(obj[CAR], maxCarDepth-1, maxCdrDepth);
+              toString(obj[FIRST], maxCarDepth-1, maxCdrDepth);
             }
             sep = " ";
-            if (obj[LAZYCDR])
+            if (obj[LAZYREST])
               return put("...)", true);
-            obj = obj[CDR];
+            obj = obj[REST];
             maxCdrDepth -= 1;
             if (maxCdrDepth < 0)
               return put("....)", true);
@@ -3472,7 +3491,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
               parseContext.pop();
               if (token().type !== ')') throwSyntaxError();
               consumeToken();
-              if (tail) tail[CDR] = val;
+              if (tail) tail[REST] = val;
               else head = val;
               return head;
             }
@@ -3481,7 +3500,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
             if (token().type === 'garbage') throwSyntaxError();
             let item = parseExpr();
             item = cons(item, NIL);
-            if (tail) tail = tail[CDR] = item;
+            if (tail) tail = tail[REST] = item;
             else head = tail = item;
           }
         }
@@ -3792,7 +3811,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   exportAPI("compile_lambda", compile_lambda)
   function compile_lambda(name, displayName, lambdaForm, jitFunction) {
     let scope = this;
-    if (!isCons(lambdaForm) && typeof lambdaForm === 'symbol' ) throw new SchemeEvalError(`Bad lambda ${string(lambda)}`);
+    if (!isPair(lambdaForm) && typeof lambdaForm === 'symbol' ) throw new SchemeEvalError(`Bad lambda ${string(lambda)}`);
     let { code, bindSymToObj } = lambda_compiler.call(this, name, displayName, lambdaForm, jitFunction);
     if (TRACE_COMPILER || TRACE_COMPILER_CODE)
       console.log("COMPILED", name, code, bindSymToObj);
@@ -3823,19 +3842,19 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     bindLiterally(string, "string");
     bindLiterally(NIL, "NIL");
     bindLiterally(schemeTrue, "schemeTrue");
-    bindLiterally(Cons, "Cons");
+    bindLiterally(Pair, "Pair");
     bindLiterally(car, "car");
     bindLiterally(cdr, "cdr");
     bindLiterally(Atom, "Atom");
     bindLiterally(newScope, "newScope");
-    bindLiterally(CAR, "CAR");
-    bindLiterally(CDR, "CDR");
+    bindLiterally(FIRST, "FIRST");
+    bindLiterally(REST, "REST");
     bindLiterally(PAIR, "PAIR");
     bindLiterally(LIST, "LIST");
     bindLiterally(COMPILED, "COMPILED");
     // For template bodies
     bindLiterally(isList, "isList");
-    bindLiterally(isCons, "isCons");
+    bindLiterally(isPair, "isPair");
     bindLiterally(cons, "cons");
     bindLiterally(CLOSURE_ATOM, "CLOSURE_ATOM");
     let ssaFunction = compileLambda(nameAtom, displayName, lambdaForm, ssaScope, tools);
@@ -4000,11 +4019,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
       console.log("COMPILE EVAL", string(form));
-    if (isCons(form)) {
-      let fn = form[CAR];
+    if (isPair(form)) {
+      let fn = form[FIRST];
       if (fn === QUOTE_ATOM) {
-        if (!isCons(form)) throwBadForm();
-        let quotedVal = form[CDR][CAR];
+        if (!isPair(form)) throwBadForm();
+        let quotedVal = form[REST][FIRST];
         if (isAtom(quotedVal))
           return bind(quotedVal);
         return bind(quotedVal, 'quoted');
@@ -4012,7 +4031,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
         return compileLambda(null, fn.description, form, ssaScope, tools);
       let ssaFunction = compileEval(fn, ssaScope, tools);
-      let args = form[CDR];
+      let args = form[REST];
       let functionDescriptor = tools.functionDescriptors[ssaFunction];
       if (!functionDescriptor) {
         use(ssaFunction);
@@ -4036,8 +4055,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
       // Run through the arg list evaluating args
       let ssaArgv = [], ssaArgStr = '', sep = '', argCount = 0;
-      for ( ; isCons(args) ; ++argCount, args = args[CDR]) {
-        let arg = args[CAR], ssaArg;
+      for ( ; isPair(args) ; ++argCount, args = args[REST]) {
+        let arg = args[FIRST], ssaArg;
         if (argCount < evalCount)
           arg = ssaArg  = use(compileEval(arg, ssaScope, tools));
         else if (!compileHook)  // hooks get unbound unevaluated args
@@ -4120,12 +4139,12 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       let innerParams = NIL, innerForms = NIL;
       requiredCount -= argCount;
       if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
-      if (fn[CAR] === CLOSURE_ATOM || fn[CAR] === SCLOSURE_ATOM) {
-        closureBody = fn[CDR];
-        if (fn[CAR] === SCLOSURE_ATOM) // Skip the evalCount param
-          closureBody = closureBody[CDR];
-        innerParams = closureBody[CAR];
-        innerForms = closureBody[CDR];
+      if (fn[FIRST] === CLOSURE_ATOM || fn[FIRST] === SCLOSURE_ATOM) {
+        closureBody = fn[REST];
+        if (fn[FIRST] === SCLOSURE_ATOM) // Skip the evalCount param
+          closureBody = closureBody[REST];
+        innerParams = closureBody[FIRST];
+        innerForms = closureBody[REST];
       } else {
         if (restParam)
           innerParams = Atom(restParam);
@@ -4135,11 +4154,11 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       // Peel off the number of parameters we have arguments for
       let capturedParams = NIL, last;
-      for (let i = argCount; i > 0; --i, innerParams = innerParams[CDR]) {
-        if (!isCons(innerParams))
+      for (let i = argCount; i > 0; --i, innerParams = innerParams[REST]) {
+        if (!isPair(innerParams))
           throw new LogicError(`There should be enough params`);
-        let item = cons(innerParams[CAR], NIL);
-        if (last) last = last[CDR] = item;
+        let item = cons(innerParams[FIRST], NIL);
+        if (last) last = last[REST] = item;
         else capturedParams = last = item;
       }
       if (!last) throw new LogicError(`There should be at least one param`);
@@ -4149,21 +4168,21 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         evalCount -= argCount;
         if (evalCount < 0)
           evalCount = 0;
-        closureForm[CAR] = SCLOSURE_ATOM;
-        closureForm[CDR] = cons("PATCH", cons(evalCount, closureBody));
+        closureForm[FIRST] = SCLOSURE_ATOM;
+        closureForm[REST] = cons("PATCH", cons(evalCount, closureBody));
       } else {
-        closureForm[CAR] = CLOSURE_ATOM;
-        closureForm[CDR] = cons("PATCH", closureBody);
+        closureForm[FIRST] = CLOSURE_ATOM;
+        closureForm[REST] = cons("PATCH", closureBody);
       }
       let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
       // and to the scope.
       let closedArgStr = '';
       sep = '';
-      for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[CDR]) {
+      for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[REST]) {
         let arg = ssaArgv[i];
-        if (isCons(tmp)) {
-          let param = tmp[CAR];
+        if (isPair(tmp)) {
+          let param = tmp[FIRST];
           let ssaParam = newTemp(param);
           ssaScope[params[i]] = ssaParam;
           let ssaParamName = use(bind((param)));
@@ -4174,8 +4193,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       let paramStr = '';
       sep = '';
-      for (; isCons(innerParams); innerParams = innerParams[CDR]) {
-        let param = innerParams[CAR];
+      for (; isPair(innerParams); innerParams = innerParams[REST]) {
+        let param = innerParams[FIRST];
         let ssaParam = newTemp(param);
         paramStr += sep + ssaParam;
         sep = ', ';
@@ -4244,20 +4263,20 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //
   function compileLambda(nameAtom, displayName, lambda, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
-    if (!isCons(lambda)) throwBadCompiledLambda(lambda);
-    let body = lambda[CDR];
+    if (!isPair(lambda)) throwBadCompiledLambda(lambda);
+    let body = lambda[REST];
     let evalCount = MAX_INTEGER;
-    if (lambda[CAR] === SLAMBDA_ATOM) {
-      if (!isCons(lambda)) throwBadCompiledLambda(lambda);
-      evalCount = body[CAR];
+    if (lambda[FIRST] === SLAMBDA_ATOM) {
+      if (!isPair(lambda)) throwBadCompiledLambda(lambda);
+      evalCount = body[FIRST];
       if (typeof evalCount !== 'number') throwBadCompiledLambda(lambda);
-      body = body[CDR];
+      body = body[REST];
     }
     if (!displayName) displayName = nameAtom ? nameAtom.description : evalCount === MAX_INTEGER ? `lambda` : `slambda#${evalCount}`;
     let ssaFunction = newTemp(displayName);
-    if (!isCons(body)) throwBadCompiledLambda(lambda);
-    let params = body[CAR];
-    let forms = body[CDR];
+    if (!isPair(body)) throwBadCompiledLambda(lambda);
+    let params = body[FIRST];
+    let forms = body[REST];
     if (typeof params === 'symbol') { // Curry notation
       params = cons(params, NIL);
       forms = cons(forms, NIL);
@@ -4267,13 +4286,13 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let originalSsaScope = ssaScope, scopeLines = [];
     ssaScope = newScope(ssaScope, "compiler-lambda-scope");
     let paramCount = 0, requiredCount, optionalFormsVec = [];
-    for (; isCons(params); ++paramCount, params = params[CDR]) {
-      let param = params[CAR], ssaParam;
-      if (isCons(param)) {
-        if (!param[CAR] === QUESTION_ATOM && isCons(param[CDR] && typeof param[CDR][CAR] === 'symbol'))
+    for (; isPair(params); ++paramCount, params = params[REST]) {
+      let param = params[FIRST], ssaParam;
+      if (isPair(param)) {
+        if (!param[FIRST] === QUESTION_ATOM && isPair(param[REST] && typeof param[REST][FIRST] === 'symbol'))
           throwBadCompiledLambda(lambda, `Bad param ${string(param)}`);
-        optionalFormsVec.push(param[CDR][CDR]);
-        param = param[CDR][CAR]
+        optionalFormsVec.push(param[REST][REST]);
+        param = param[REST][FIRST]
         ssaParam = newTemp(param);
         if (requiredCount === undefined)
           requiredCount = paramCount;
@@ -4339,8 +4358,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       scopeLines.push(emit(`scope[${ssaParamName}] =${ssaTmp};`));
     }
     let ssaResult = 'NIL';
-    for ( ; isCons(forms); forms = forms[CDR])
-      ssaResult = compileEval(forms[CAR], ssaScope, tools);
+    for ( ; isPair(forms); forms = forms[REST])
+      ssaResult = compileEval(forms[FIRST], ssaScope, tools);
     if (ssaScope.dynamicScopeUsed)
       originalSsaScope.dynamicScopeUsed = true;
     if (!ssaScope.dynamicScopeUsed || (paramCount === 0 && !restParam))
@@ -4373,16 +4392,16 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let closureStr = string(closureForm);
     for (let str of closureStr.split('\n'))
       emit(`// ${str}`);
-    emit(`${ssaClosure}[CAR] = ${ssaClosureForm}[CAR];`);
-    emit(`${ssaClosure}[CDR] = new Cons(scope, ${ssaClosureForm}[CDR][CDR]);`);
+    emit(`${ssaClosure}[FIRST] = ${ssaClosureForm}[FIRST];`);
+    emit(`${ssaClosure}[REST] = new Pair(scope, ${ssaClosureForm}[REST][REST]);`);
     emit(`${ssaClosure}[COMPILED] = ${string(displayName)}`);
     // Mark object as a list, a pair, and a closure.
     emit(`${ssaClosure}[PAIR] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
   }
 
   function redecorateCompiledClosure(ssaToFn, ssaFromFn, emit) {
-    emit(`${ssaToFn}[CAR] = ${ssaFromFn}[CAR];`);
-    emit(`${ssaToFn}[CDR] = ${ssaFromFn}[CDR];`);
+    emit(`${ssaToFn}[FIRST] = ${ssaFromFn}[FIRST];`);
+    emit(`${ssaToFn}[REST] = ${ssaFromFn}[REST];`);
     emit(`${ssaToFn}[COMPILED] = ${ssaFromFn}[COMPILED];`);
     // Mark object as a list, a pair, and a closure.
     emit(`${ssaToFn}[PAIR] = ${ssaToFn}[LIST] = ${ssaToFn}[CLOSURE_ATOM] = true;`);
