@@ -70,7 +70,7 @@
   (move-to-stashed)
   (stash-point (sinusoidal 45 2.19) (sinusoidal 45 1.53))
   (line-to-stashed)
-  (stroke-style "green") (line-cap "round") (line-width 1.5) (stroke)
+  (stroke-style "green") (line-width 1.5) (stroke)
 )
 
 (define lissajous-canvas (canvas "Lissajous"  300 300))
