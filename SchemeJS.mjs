@@ -143,8 +143,11 @@ export function createInstance(schemeOpts = {}) {
       get: () => { throw new SchemeEvalError(`${restName} of ${nilName}`) },
       set: _ => { throw new SchemeEvalError(`set ${restName} of ${nilName}`) }
     },
-    [Symbol.iterator]: {
-      value: _ => { next: () => { done: true } }
+    [Symbol.iterator]: { value: function createNilIterator() {
+      return {
+        next() { return { done: true, value: NIL } },
+        [Symbol.iterator]() { return current[Symbol.iterator]() }
+      } }
     },
     [LIST]: { value: true },
     [ITERATE_AS_LIST]: { value: true },
@@ -3857,6 +3860,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     bindLiterally(NIL, "NIL");
     bindLiterally(schemeTrue, "schemeTrue");
     bindLiterally(isList, "isList");
+    bindLiterally(Pair, "Pair");
     bindLiterally(cons, "cons");
     bindLiterally(car, "car");
     bindLiterally(cdr, "cdr");
