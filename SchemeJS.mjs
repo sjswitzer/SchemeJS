@@ -95,7 +95,7 @@ export function createInstance(schemeOpts = {}) {
     let current = this;
     return {
       next() {
-        if (!isCons(current))
+        if (isNil(current))
           return { done: true, value: current };  // value is whatever wasn't a cons cell
         let value = current[CAR];
         current = current[CDR];
