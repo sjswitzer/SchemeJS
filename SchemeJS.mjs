@@ -2725,7 +2725,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         bindingClosure[FIRST] = CLOSURE_ATOM;
         bindingClosure[REST] = cons(scope, cons(closureParams, closureForms));
       }
-      bindingClosure[LIST] = bindingClosure[LIST] = true;
+      bindingClosure[LIST] = bindingClosure[MORELIST] = bindingClosure[ITERATE_AS_LIST] = true;
       bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
       requiredCount -= argCount;
       if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
