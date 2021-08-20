@@ -2645,7 +2645,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
       // OK, now create a closure.
       const boundArgv = argv, boundFunction = fn;
-      let closure = (...args) => boundFunction.call(scope, ...boundArgv, ...args);
+      let bindingClosure = (...args) => boundFunction.call(scope, ...boundArgv, ...args);
       // A closure function leads a double life: as a closure function but also a closure form!
       // Dig out the original function's closure, if it had one.
       let closureBody = fn[CDR];
@@ -2686,18 +2686,18 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         evalCount -= argCount;
         if (evalCount < 0)
           evalCount = 0;
-        closure[CAR] = SCLOSURE_ATOM;
-        closure[CDR] = cons(scope, cons(evalCount, cons(closureParams, closureForms)));
+        bindingClosure[CAR] = SCLOSURE_ATOM;
+        bindingClosure[CDR] = cons(scope, cons(evalCount, cons(closureParams, closureForms)));
       } else {
-        closure[CAR] = CLOSURE_ATOM;
-        closure[CDR] = cons(scope, cons(closureParams, closureForms));
+        bindingClosure[CAR] = CLOSURE_ATOM;
+        bindingClosure[CDR] = cons(scope, cons(closureParams, closureForms));
       }
-      closure[LIST] = closure[PAIR] = true;
-      closure[CLOSURE_ATOM] = true; // marks closure for special "printing"
+      bindingClosure[LIST] = bindingClosure[PAIR] = true;
+      bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
       requiredCount -= argCount;
       if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
-      closure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
-      return closure;
+      bindingClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
+      return bindingClosure;
     }
 
     // Special eval for JS arrays and objects:
@@ -2783,7 +2783,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     let lambda = cons(LAMBDA_ATOM, cons(params, body));
     let scope = this;
     let schemeClosure = cons(CLOSURE_ATOM, cons(scope, lambda[CDR]));
-    return makeJsClosure(scope, params, lambda, body, schemeClosure);
+    return makeLambdaClosure(scope, params, lambda, body, schemeClosure);
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
@@ -2796,7 +2796,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (!isCons(body)) throwBadLambda(lambda);
     let scope = this;
     let schemeClosure = cons(SCLOSURE_ATOM, cons(scope, lambda[CDR]));
-    return makeJsClosure(scope, params, lambda, body, schemeClosure, evalCount);
+    return makeLambdaClosure(scope, params, lambda, body, schemeClosure, evalCount);
   }
 
   //
@@ -2807,7 +2807,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // it as a closure. Closures are also decorated with CAR, CDR, LIST and PAIR
   // so that they look exactly like lists to the SchemeJS runtime.
   //
-  function makeJsClosure(scope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
+  function makeLambdaClosure(scope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
     // Examine property list and throw any errors now rather than later.
     // In general, do more work here so the closure can do less work when executed.
     if (typeof lambdaParams === 'symbol') { // curry notation; normalize to classic
@@ -2837,19 +2837,19 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (!requiredCount)
       requiredCount = paramCount;
     let jitCount = jitThreshold != null ? jitThreshold|0 : undefined;
-    function jsClosure(...args) {
-      scope = newScope(scope, "lambda-scope");
+    function lambdaClosure(...args) {
+      let jitFn = lambdaClosure[JITCOMPILED];
+      if (jitFn)
+        return jitFn.apply(this, args);
       if (jitThreshold != null) {  // Disable by optioning jitThreshold as undefined
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
-        let jitFn = jsClosure[JITCOMPILED];
-        if (jitFn)
-          return jitFn.apply(this, args);
         if (--jitCount < 0) {
           jitCount = jitThreshold;
-          jitFn = jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, namedObjects.get(jsClosure), lambda, jsClosure);
+          jitFn = lambdaClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, namedObjects.get(lambdaClosure), lambda, lambdaClosure);
           return jitFn.apply(this, args);
         }
       }
+      scope = newScope(scope, "lambda-scope");
       let params = lambdaParams, i = 0, argLength = args.length;
       for ( ; isCons(params); ++i, params = params[CDR]) {
         let param = params[CAR], optionalForms, arg;
@@ -2879,15 +2879,15 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         result = _eval(form, scope);
       return result;
     }
-    jsClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
-    jsClosure[CAR] = schemeClosure[CAR];
-    jsClosure[CDR] = schemeClosure[CDR];
-    jsClosure[LIST] = jsClosure[PAIR] = true;
-    jsClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
+    lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
+    lambdaClosure[CAR] = schemeClosure[CAR];
+    lambdaClosure[CDR] = schemeClosure[CDR];
+    lambdaClosure[LIST] = lambdaClosure[PAIR] = true;
+    lambdaClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
     // Because the closure has a generic (...args) parameter, the compiler needs more info
     // to be able to create binding closures over it.
-    jsClosure[COMPILE_INFO] = { params: paramv, restParam, requiredCount, evalCount };
-    return jsClosure;
+    lambdaClosure[COMPILE_INFO] = { params: paramv, restParam, requiredCount, evalCount };
+    return lambdaClosure;
   }
 
   function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
@@ -3981,7 +3981,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         ssaValue = bind(fn, newTemp(name), guardSym);
         if (!tools.functionDescriptors[ssaValue]) {
           let fnInfo = fn[COMPILE_INFO];
-          if (!fnInfo) {  // Neither a builtin nor a jsClosure
+          if (!fnInfo) {  // Neither a builtin nor a lambdaClosure
             let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
             let requiredCount = parameterDescriptor & 0xffff;
             let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
@@ -4239,7 +4239,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   //
-  // This function parallels makeJsClosure as closely as possible. If you make a change
+  // This function parallels makeLambdaClosure as closely as possible. If you make a change
   // there, you almost certainly have to make a corresponding change here.
   //
   function compileLambda(nameAtom, displayName, lambda, ssaScope, tools) {
