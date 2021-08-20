@@ -92,7 +92,7 @@ export function createInstance(schemeOpts = {}) {
   // tag-bit inspection that they're probably already doing.
   // (Except for the NIL check, which is last for that reason.)
   const isPrimitive = obj => obj == null ||
-      (typeof obj !== 'symbol' && typeof obj !== 'object' && typeof obj !== 'function')
+      (typeof obj !== 'symbol' && typeof obj !== 'object')
       || obj[NULLSYM] === true;
 
   class Pair {
