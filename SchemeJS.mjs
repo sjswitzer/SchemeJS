@@ -3068,7 +3068,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
               }
             }
           }
-          while (moreList(obj)) {
+          // iterateAsList here so that hybrid lists will print as "(a b . [c d])"
+          while (moreList(obj) && iterateAsList(obj)) {
             if (obj[LAZYFIRST]) {
               put("..");  // .. signifies a lazy FIRST
             } else if (obj[COMPILED]) {
