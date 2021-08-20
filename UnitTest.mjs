@@ -65,12 +65,13 @@ export function run(opts = {}) {
   evalTestString = compileThenEvalString;
   testSuite();
 
-  // TODO: Test JIT
-  /*
-  let { succeeded: jitSucceeded, failed: jitFailed } = run({ justTestJIT: true, jitThreshold: 0 });
+  // This is kinda hacky, but the only way to change the JIT params is instantiate a new Scheme instance.
+  // Calling run() recursively, with new parameters, accomplishes that. But it should be reworked
+
+  let jitThreshold = 0;  // Means: JIT immediately (zero iterations of the interpreter)
+  let { succeeded: jitSucceeded, failed: jitFailed } = run({ justTestJIT: true, jitThreshold });
   succeeded += jitSucceeded;
   failed += jitFailed;
-  */
 
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
   console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
@@ -647,6 +648,16 @@ export function run(opts = {}) {
       // Factoral should be undefined now
       EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
     }
+
+    { // Test that when a when a bound function changes, the JIT's guards catch it.
+      let savedScope = beginTestScope();
+      EXPECT(` (define op +) `, ` 'op `);
+      EXPECT(` (define (run-op a b c) (op a b c))`, ` 'run-op `);
+      EXPECT(` (run-op 2 3 4) `, 9);
+      EXPECT(` (define op *) `, ` 'op `);
+      EXPECT(` (run-op 2 3 4) `, 24);
+      endTestScope(savedScope);
+     }
   }
 
   function internalsSuite() {

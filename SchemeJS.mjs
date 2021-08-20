@@ -2615,7 +2615,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
       let fName = namedObjects.get(fn) ?? fn.name;
       let jitCompiled = fn[JITCOMPILED];
-      if (jitCompiled) fn = jitCompiled;
+      if (jitCompiled)
+        fn = jitCompiled;
       if (argCount >= requiredCount) {
         if (TRACE_INTERPRETER) {
           let logArgs = [ "APPLY (eval)", fName, ...argv ];
@@ -2835,17 +2836,19 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       throwBadLambda(`bad "rest" parameter ${string(params)}`);
     if (!requiredCount)
       requiredCount = paramCount;
-    let jitCount = jitThreshold ? jitThreshold|0 : undefined;
+    let jitCount = jitThreshold != null ? jitThreshold|0 : undefined;
     function jsClosure(...args) {
       scope = newScope(scope, "lambda-scope");
-      if (jitThreshold !== undefined) {  // Disable by optioning jitThreshold as undefined
+      if (jitThreshold != null) {  // Disable by optioning jitThreshold as undefined
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
         let jitFn = jsClosure[JITCOMPILED];
-        if (!jitFn && --jitCount < 0) {
+        if (jitFn)
+          return jitFn.apply(this, args);
+        if (--jitCount < 0) {
           jitCount = jitThreshold;
           jitFn = jsClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, namedObjects.get(jsClosure), lambda, jsClosure);
+          return jitFn.apply(this, args);
         }
-        return jitFn.apply(this, args);
       }
       let params = lambdaParams, i = 0, argLength = args.length;
       for ( ; isCons(params); ++i, params = params[CDR]) {
@@ -3836,7 +3839,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     bindLiterally(cons, "cons");
     bindLiterally(CLOSURE_ATOM, "CLOSURE_ATOM");
     let ssaFunction = compileLambda(nameAtom, displayName, lambdaForm, ssaScope, tools);
-    if (jitFunction && guardedSymbols.length > 0) {
+    if (jitFunction && Object.getOwnPropertyNames(guardedSymbols).length > 0) {
       let ssaGuardFunction = newTemp(displayName + '_guard');
       emit(`function ${ssaGuardFunction}(...params) {`);
       emit(`  if (false`)
@@ -3846,10 +3849,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         emit(`      || ${sym} !== scope[${ssaAtom}]`);
       }
       emit(`      ) {`);
-      let ssaBoundJittedFn = bind(jitFunction);
-      let ssaJITCOMPILD = use(bind(JITCOMPILED));
-      emit(`    ${ssaBoundJittedFn}[${ssaJITCOMPILD}] = undefined;`);
-      emit(`    ${ssaBoundJittedFn}(...params);`)
+      let ssaBoundJittedFn = use(bind(jitFunction));
+      let ssaJITCOMPILED = use(bind(JITCOMPILED));
+      emit(`    ${ssaBoundJittedFn}[${ssaJITCOMPILED}] = undefined;`);
+      emit(`    return ${ssaBoundJittedFn}(...params);`)
       emit(`  }`)
       emit(`  return ${ssaFunction}(...params);`)
       emit(`}`);
