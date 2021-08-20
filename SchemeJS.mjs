@@ -4081,7 +4081,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
       console.log("COMPILE EVAL", string(form));
-    if (isList(form)) {
+    if (isList(form) && !isArray(form)) {
       let fn = form[FIRST];
       if (fn === QUOTE_ATOM) {
         if (!isList(form)) throwBadForm();
