@@ -150,7 +150,8 @@ export function run(opts = {}) {
     EXPECT(` (! 1n) `, false);
     EXPECT(` (! null) `, true);
     EXPECT(` (! {}) `, false);
-    EXPECT(` (! []) `, false);
+    EXPECT(` (! []) `, true); // [] is NIL!
+    EXPECT(` (! [1]) `, false); 
     EXPECT(` (~ 3) `, ~3);
     EXPECT(` (** 5 7) `, 5**7);
     EXPECT(` (% 1235 37) `, 1235%37);
@@ -254,7 +255,8 @@ export function run(opts = {}) {
     EXPECT(` (? cons true false) `, true );
     EXPECT(` (? {a: 1} true false) `, true );
     EXPECT(` (? {} true false) `, true );
-    EXPECT(` (? [] true false) `, true );
+    EXPECT(` (? [] true false) `, false ); // [] is nil
+    EXPECT(` (? [1] true false) `, true );
     EXPECT(` (? [1 2 3] true false) `, true );
     EXPECT(` (? true 1 2 (oops!)) `, 1);
     EXPECT(` (? false 1 2 (oops!)) `, 2);
@@ -462,10 +464,11 @@ export function run(opts = {}) {
     EXPECT(` (list 'a 'b 'c) `, ` '(a b c) `);
     EXPECT(` (list 'a '(b c) 'd) `, ` '(a (b c) d) `);
     EXPECT(` (reverse) `, NIL);
-    EXPECT(` (reverse 'a) `, NIL); // not a list. XXX maybe should be exception?
+    EXPECT_ERROR(` (reverse 'a) `, TypeError);
     EXPECT(` (reverse '(a)) `, ` '(a) `);
     EXPECT(` (reverse '(a b)) `, ` '(b a) `);
     EXPECT(` (reverse '(a b c)) `, ` '(c b a) `);
+    EXPECT(` (reverse '(a b c) '(d e f)) `, ` '(f e d c b a) `);
 
     EXPECT(` (memq) `, NIL);
     EXPECT(` (memq 'a) `, isClosure);

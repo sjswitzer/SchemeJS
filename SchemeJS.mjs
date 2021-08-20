@@ -100,6 +100,45 @@ export function createInstance(schemeOpts = {}) {
       (typeof obj !== 'symbol' && typeof obj !== 'object')
       || obj[MORELIST] === false;
 
+  //
+  // First off, Arrays are lists.
+  //
+  Object.defineProperties(Array.prototype, {
+    [LIST]: { value: true },
+    // [ITERATE_AS_LIST] : { value: false },  // not really necessary since it's default
+    [MORELIST]: { get: function() { return this.length > 0 } },
+    [FIRST]: { get: function() {
+      if (this.length > 0) return this[0];
+      throw new SchemeEvalError(`${firstName} of []`);
+    } },
+    [REST]: { get: function() {
+      return new ArrayList(this, 1);
+    } },
+  });
+
+  class ArrayList {
+    _array; _pos; _max;
+    constructor(array, pos, max = MAX_INTEGER) {
+      this._array = array;
+      this._pos = pos;
+      this._max = max;
+    }
+    get [FIRST]() {
+      let array = this._array, pos = this._pos;
+      if (pos < this._max && pos < array.length)
+        return array[n];
+      throw new SchemeEvalError(`${firstName} beyond end of array`);
+    }
+    get [REST]() {
+      return new ArrayList(this._array, this._pos + 1, this._max);
+    }
+    get [MORELIST]() {
+      let pos = this._pos;
+      return pos < this._max && pos < this._array.length;
+    }
+  };
+  ArrayList.prototype[LIST] = true;
+
   class Pair {
     [FIRST]; [REST];
     constructor(first, rest) {
@@ -110,7 +149,6 @@ export function createInstance(schemeOpts = {}) {
     [Symbol.iterator] = pairIterator;
     // static [LIST] = true;  // Hmm; Shouldn't this work?
   }
-  Pair.prototype[LIST] = true;
   Pair.prototype[LIST] = true;
   Pair.prototype[ITERATE_AS_LIST] = true;
   Pair.prototype[MORELIST] = true;
@@ -1429,7 +1467,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
-      if (isList(list)) {
+      if (iterateAsList(list)) {
         // Could handle as iterable, but faster not to
         for ( ; moreList(list); list = list[REST])
           if (last) last = last[REST] = cons(list[FIRST], NIL);
@@ -1448,15 +1486,15 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   defineGlobalSymbol("last", last, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function last(list) {
-    if (!isList(list) && !isIterable(list))  // XXX DECONS
-      throw new TypeError(`not a list ${string(list)}`);
+    if (!isIterable(list))
+      throw new TypeError(`not a list or iterable ${string(list)}`);
     let res = NIL;
     if (!list || isNil(list)) return NIL; // XXX check this.
-    if (isList(list)) {
+    if (iterateAsList(list)) {
       for ( ; moreList(list); list = list[REST])
         res = list[FIRST];
     } else {
-      // Don't special-case string. Its iterator returns code points by combining surrogate pairs
+      // Don't special-case string; its iterator returns code points by combining surrogate pairs
       if (isArray(list)) {
         if (list.length > 0)
           return list[list.length-1];
@@ -1495,7 +1533,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   defineGlobalSymbol("length", length, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function length(list) {
     let n = 0;
-    if (isList(list)) {
+    if (iterateAsList(list)) {
       for ( ; moreList(list); list = list[REST])
         n += 1;
     } else {
@@ -1528,16 +1566,25 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   defineGlobalSymbol("reverse", reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });
-  function reverse(list) {
+  function reverse(...lists) {
     let res = NIL;
-    for ( ; moreList(list); list = list[REST])
-      res = cons(list[FIRST], res)
+    for (let list of lists) {
+      if (iterateAsList(list)) {
+        for ( ; moreList(list); list = list[REST])
+          res = cons(list[FIRST], res)
+      } else {
+        for (item of list)
+          res = cons(item, res);
+      }
+    }
     return res;
   }
 
   defineGlobalSymbol("nreverse", in_place_reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // Name from SIOD
   function in_place_reverse(list) {
     let res = NIL;
+    if (!iterateAsList)
+      throw new SchemeEvalError(`not in-place-reversable`);
     while (isList(list)) {
       let next = list[REST];
       list[REST] = res;
@@ -1548,27 +1595,28 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   defineGlobalSymbol("copy-list", copy_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // TODO: unit tests!
-  function copy_list(list) {
+  function copy_list(...lists) {
     let res = NIL, last;
-    if (isNil(list)) return NIL;
-    if (iterateAsList(list)) {
-      for ( ; moreList(list); list = list[REST]) {
-        let item = cons(list[FIRST], NIL);
-        if (last) last = last[REST] = item;
-        else res = last = item;
+    for (let list of lists) {
+      if (isNil(list)) return NIL;
+      if (iterateAsList(list)) {
+        for ( ; moreList(list); list = list[REST]) {
+          let item = cons(list[FIRST], NIL);
+          if (last) last = last[REST] = item;
+          else res = last = item;
+        }
+      } else if (isIterable(list)) {
+        for (let item of list) {
+          item = cons(item, NIL);
+          if (last) last = last[REST] = item;
+          else res = last = item;
+          list = list[REST];
+        }
+      } else {
+        throw new TypeError(`Not a list or iterable ${list}`);
       }
-      return res;
     }
-    if (isIterable(list)) {
-      for (let item of list) {
-        item = cons(item, NIL);
-        if (last) last = last[REST] = item;
-        else res = last = item;
-        list = list[REST];
-      }
-      return res;
-    }
-    throw new TypeError(`Not a list or iterable ${list}`);
+    return res;
   }
 
   // XXX TODO: member and memq are almost certainly wrong. Need to find out about SIOD equality.
@@ -2365,7 +2413,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
         if (isNil(aRest) && isNil(bRest))
           return true;
         return deep_eq(aRest, bRest, depth+1, length+1);
-      } else if (isList(b)) {
+      } else if (iterateAsList(b)) {
         report.a = a, report.b = b;
         report.valuesDiffer = true;
         return false;
@@ -2617,7 +2665,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (TRACE_INTERPRETER)
       console.log("EVAL", string(form));
-    if (isList(form)) {
+    if (isList(form) && !isArray(form)) {
       let fn = form[FIRST];
       if (fn === QUOTE_ATOM) { // QUOTE is a special function that will do this but catch it here anyway.
         if (!isList(form)) throwBadForm();
