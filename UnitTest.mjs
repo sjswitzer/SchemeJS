@@ -8,7 +8,10 @@
 
 import * as SchemeJS from './SchemeJS.mjs';
 
+export let succeeded = 0, failed = 0;
+
 let string; // So that TestFailure Error can access it
+
 export class TestFailureError extends Error {
   constructor(message, test, result, expected, report) {
     super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
@@ -26,7 +29,6 @@ export function run(opts = {}) {
       console.error("FAILED", message, test, result, expected, report));
   let reportTestSucceeded = opts.reportTestSucceeded ?? ((test, result, expected) =>
       console.info("SUCCEEDED", test, result, expected));
-  let succeeded = 0, failed = 0;
 
   let globalScope = SchemeJS.createInstance(opts);
   let testScope = globalScope;
@@ -66,12 +68,10 @@ export function run(opts = {}) {
   testSuite();
 
   // This is kinda hacky, but the only way to change the JIT params is instantiate a new Scheme instance.
-  // Calling run() recursively, with new parameters, accomplishes that. But it should be reworked
+  // Calling run() recursively, with new parameters, accomplishes that. But it should probably be reworked.
 
   let jitThreshold = 0;  // Means: JIT immediately (zero iterations of the interpreter)
-  let { succeeded: jitSucceeded, failed: jitFailed } = run({ justTestJIT: true, jitThreshold });
-  succeeded += jitSucceeded;
-  failed += jitFailed;
+  run({ justTestJIT: true, jitThreshold });
 
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
   console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);

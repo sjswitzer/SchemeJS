@@ -96,13 +96,13 @@ export function createInstance(schemeOpts = {}) {
     return {
       next() {
         if (!isCons(current))
-        return { done: true, value: current };  // value is whatever wasn't a cons cell
+          return { done: true, value: current };  // value is whatever wasn't a cons cell
         let value = current[CAR];
         current = current[CDR];
         return { done: false, value };
       },
       // So that the iterator itself is iterable, with a fresh iterator at the current position
-      [Symbol.iterator]() { return pairIterator.call(current); }
+      [Symbol.iterator]() { return current[Symbol.iterator]() }
     }
   }
   
