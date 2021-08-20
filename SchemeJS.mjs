@@ -78,6 +78,10 @@ export function createInstance(schemeOpts = {}) {
   const FIRST = Symbol("FIRST"), REST = Symbol("REST");
   const PAIR = Symbol("PAIR"), LIST = Symbol("LIST"), NULLSYM = Symbol("NULLSYM");
   const LAZYFIRST = Symbol("LAZYFIRST"), LAZYREST = Symbol("LAZYREST"), SUPERLAZY = Symbol("SUPERLAZY");
+  // Sometimes lists are implemented based on iterators and sometimes iterators
+  // are implemented over lists. To avoid unnecessary overhead in performance-critical
+  // code, this tag tells you it's better to iterate a list as a list.
+  let ITERATE_AS_LIST = Symbol("ITERATE-AS-LIST");
   const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JITCOMPILED");
   // Since these symbols are tagged on external JS functions and objects,label them as ours as a courtesy.
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR'), EQUAL_FUNCTION = Symbol('SchemeJS-EQUAL');
@@ -107,6 +111,7 @@ export function createInstance(schemeOpts = {}) {
   }
   Pair.prototype[PAIR] = true;
   Pair.prototype[LIST] = true;
+  Pair.prototype[ITERATE_AS_LIST] = true;
 
   function pairIterator() {
     let current = this;
@@ -123,28 +128,22 @@ export function createInstance(schemeOpts = {}) {
     }
   }
   
-  // Hide the NIL class because there's never any reason to
-  // reference it or to instantiate it it more than once. Leaving it visible
-  // just invites errors. But it's good to have a distinct class for NIL
-  // for various reasons including that it looks better in a JS debugger
-  // and provides a way to trap attempts to get or set [FIRST] and [REST].
-  const NIL = new ((() => {
-    let nilClass = class NIL {
-      [Symbol.iterator]() { return { next: () => ({ done: true }) } }
-      get [FIRST]() { throw new SchemeEvalError("car of nil") }
-      set [FIRST](_) { throw new SchemeEvalError("set car of nil") }
-      get [REST]() { throw new SchemeEvalError("cdr of nil") }
-      set [REST](_) { throw new SchemeEvalError("set cdr of nil") }
-      [NULLSYM] = true;  // probably a _tiny_ bit faster if defined here too
-      [LIST] = true;
-    }
-    nilClass.prototype[NULLSYM] = true;
-    nilClass.prototype[LIST] = true;
-    // Ain't nobody modifyin' NIL
-    Object.freeze(nilClass);
-    Object.freeze(nilClass.prototype);
-    return nilClass;
-  })());
+  // NIL is an utter degenerate that signals errors when accessed incorrectly
+  const NIL = Object.create( null, {
+    [FIRST]: {
+      get: () => { throw new SchemeEvalError("car of nil") },
+      set: _ => { throw new SchemeEvalError("set car of nil") }
+    },
+    [REST]: {
+      get: () => { throw new SchemeEvalError("cdr of nil") },
+      set: _ => { throw new SchemeEvalError("set cdr of nil") }
+    },
+    [Symbol.iterator]: {
+      value: _ => { next: () => { done: true } }
+    },
+    [NULLSYM]: { value: true },
+    [LIST]: { value: true }
+  });
   Object.freeze(NIL);
   
   // Create a new scope with newScope(oldScope, "description").
@@ -364,7 +363,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   function subclassOf(cls, supercls) {
-    while (cls.__proto__) {
+    while (cls != null) {
       if (cls === supercls) return true;
       cls = cls.__proto__;
     }
@@ -1435,6 +1434,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   defineGlobalSymbol("last", last, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function last(list) {
+    if (!isList(list) && !isIterable(list))  // XXX DECONS
+      throw new TypeError(`not a list ${string(list)}`);
     let res = NIL;
     if (!list || isNil(list)) return NIL; // XXX check this.
     if (isPair(list)) {

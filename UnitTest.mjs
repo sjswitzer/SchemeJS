@@ -429,7 +429,7 @@ export function run(opts = {}) {
     EXPECT(` (append '[a b c] '[d e f]) ` , ` '(a b c d e f) `);
     EXPECT(` (append '(a b c) '(d e f)) ` , ` '(a b c d e f) `);
     EXPECT(` (append '(a b c) '[d e f] "ghi") ` , ` '(a b c d e f "g" "h" "i") `);
-    EXPECT(` (last) `, TypeError);
+    EXPECT_ERROR(` (last) `, TypeError);
     EXPECT_ERROR(` (last 'a) `, TypeError);
     EXPECT(` (last ()) `, NIL);  // XXX whay should this really do?
     EXPECT(` (last '(a)) `, ` 'a `);
@@ -805,7 +805,9 @@ export function run(opts = {}) {
       else
         testFailed("test is neither function nor string", test, undefined, expected, report);
       try {
-        if (typeof expected === 'function') {
+        if (subclassOf(expected, Error)) {
+          ok = result instanceof expected;
+        } else if (typeof expected === 'function') {
           ok = expected.call(testScope, result);
         } else {
           if (typeof expected === 'string')
@@ -862,7 +864,7 @@ export function run(opts = {}) {
   }
 
   function subclassOf(cls, supercls) {
-    while (cls.__proto__) {
+    while (cls != null) {
       if (cls === supercls) return true;
       cls = cls.__proto__;
     }
