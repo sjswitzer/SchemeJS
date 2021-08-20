@@ -136,8 +136,10 @@ export function createInstance(schemeOpts = {}) {
       let pos = this._pos;
       return pos < this._max && pos < this._array.length;
     }
+    [Symbol.iterator] = pairIterator;
   };
   ArrayList.prototype[LIST] = true;
+  ArrayList.prototype[ITERATE_AS_LIST] = true;
 
   class Pair {
     [FIRST]; [REST];
