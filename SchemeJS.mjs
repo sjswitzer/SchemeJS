@@ -126,7 +126,7 @@ export function createInstance(schemeOpts = {}) {
     get [FIRST]() {
       let array = this._array, pos = this._pos;
       if (pos < this._max && pos < array.length)
-        return array[n];
+        return array[pos];
       throw new SchemeEvalError(`${firstName} beyond end of array`);
     }
     get [REST]() {
