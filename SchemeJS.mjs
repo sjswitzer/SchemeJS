@@ -65,9 +65,6 @@ export function createInstance(schemeOpts = {}) {
   // Instead, the method is:
   //    obj != null && obj[LIST] === true
   //
-  // Or, more generally, for lists:
-  //    obj != null && obj[LIST] === true
-  //
   // Fetching properties is something JITs really optimize.
   // It's probably as fast as or faster than "instanceof".
   // I presume that typeof checks are very cheap to free because the runtime
@@ -2918,7 +2915,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
     lambdaClosure[FIRST] = schemeClosure[FIRST];
     lambdaClosure[REST] = schemeClosure[REST];
-    lambdaClosure[LIST] = lambdaClosure[LIST] = true;
+    lambdaClosure[LIST] = lambdaClosure[ITERATE_AS_LIST] = lambdaClosure[MORELIST] = true;
     lambdaClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
     // Because the closure has a generic (...args) parameter, the compiler needs more info
     // to be able to create binding closures over it.
@@ -3869,7 +3866,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     bindLiterally(FIRST, "FIRST");
     bindLiterally(REST, "REST");
     bindLiterally(LIST, "LIST");
-    bindLiterally(LIST, "LIST");
+    bindLiterally(ITERATE_AS_LIST, "ITERATE_AS_LIST");
+    bindLiterally(MORELIST, "MORELIST");
     bindLiterally(COMPILED, "COMPILED");
     bindLiterally(CLOSURE_ATOM, "CLOSURE_ATOM");
     let ssaFunction = compileLambda(nameAtom, displayName, lambdaForm, ssaScope, tools);
@@ -4411,7 +4409,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`${ssaClosure}[REST] = new Pair(scope, ${ssaClosureForm}[REST][REST]);`);
     emit(`${ssaClosure}[COMPILED] = ${string(displayName)}`);
     // Mark object as a list, a pair, and a closure.
-    emit(`${ssaClosure}[LIST] = ${ssaClosure}[LIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
+    emit(`${ssaClosure}[LIST] = ${ssaClosure}[ITERATE_AS_LIST] = ${ssaClosure}[MORELIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
   }
 
   function redecorateCompiledClosure(ssaToFn, ssaFromFn, emit) {
@@ -4419,7 +4417,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     emit(`${ssaToFn}[REST] = ${ssaFromFn}[REST];`);
     emit(`${ssaToFn}[COMPILED] = ${ssaFromFn}[COMPILED];`);
     // Mark object as a list, a pair, and a closure.
-    emit(`${ssaToFn}[LIST] = ${ssaToFn}[LIST] = ${ssaToFn}[CLOSURE_ATOM] = true;`);
+    emit(`${ssaToFn}[LIST] = ${ssaToFn}[ITERATE_AS_LIST] = ${ssaToFn}[CLOSURE_ATOM] = true;`);
   }
   
   const JS_IDENT_REPLACEMENTS = {
