@@ -438,7 +438,9 @@ export function createInstance(schemeOpts = {}) {
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%closure#");
   const QUESTION_ATOM = Atom("?");
+  exportAPI("LAMBDA_CHAR", LAMBDA_CHAR);
 
+  exportAPI("iteratorFor", iteratorFor);
   function iteratorFor(obj, throwException = TypeError) {
     if (obj != null) {
       if (typeof obj[Symbol.iterator] === 'function') return obj[Symbol.iterator]();
@@ -447,92 +449,21 @@ export function createInstance(schemeOpts = {}) {
     if (throwException) throw new throwException(`Not an iterable or list ${obj}`);
   }
 
-  //
-  // Character clases for parsing
-  //
-  const NBSP = '\u00a0', VTAB = '\u000b', FORMFEED = '\u000c', ELIPSIS = '\u0085';
-  const MUL = '\u00d7', DIV = '\u00f7';
-  const NL = {}, SINGLE_CHAR_TOKENS = {}, QUOTES = {}, DIGITS = {}, NUM1 = {}, NUM2 = {};
-  const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1);
-  // IDENT2 includes IDENT1 by inheritence, as does WSNL WS.
-  const IDENT1 = {}, IDENT2 = Object.create(IDENT1), WS = {}, WSNL = Object.create(WS);
+  // Why are these initialized here, you ask?
+  // Because they're indirectly refernced by defineGlobalSymbol is why.
+  const COMPILE_INFO = Symbol("COMPILE-INFO");
+  const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
+  const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
+  let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to implement help.
+  const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
     JSIDENT1[ch] = ch.codePointAt(0);
-  for (let ch of `0123456789`)
-    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = JSIDENT2[ch] = ch.codePointAt(0);
-  for (let ch of `+-.`)
-    NUM1[ch] = NUM2[ch] = ch.codePointAt(0);
-  for (let ch of `eEoOxXbBn`)
-    NUM2[ch] = ch.codePointAt(0);
-  for (let ch of ` \t${VTAB}${FORMFEED}${NBSP}`) WS[ch] = ch.codePointAt(0);
-  for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
-  for (let ch of `()[]{}'.:,`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
-  for (let ch of `\`"`) QUOTES[ch] = ch.codePointAt(0);
-  globalScope.WS = WS;
-  globalScope.NL = NL;
-
-  // Drag Unicode character properties out of the RegExp engine.
-  // This can take a bit of time and a LOT of memory, but people should
-  // be able to use their own languages. By default it includes the
-  // the Basic Multilingual Plane, but you can option it down to Latin-1
-  // or up to include all the supplemental planes.
-  // In addition to the memory used by the table I suspect the RegExp engine
-  // drags in some libraries dynamically when the "u" flag is specified.
-  // And for that matter using RegExp at all probably drags in a dynammic library
-  // so, to reduce memory footprint, don't use it for Latin-1.
-
-  // Basic Latin (ASCII)
-  for (let codePoint = 0x21; codePoint < 0x7f; ++codePoint) {
-    let ch = String.fromCodePoint(codePoint)
-     // All printable charactes except single-char tokens, digits and quotes
-    if (!SINGLE_CHAR_TOKENS[ch] && !DIGITS[ch] && !QUOTES[ch] &&!ch !== ';')
-      IDENT1[ch] = codePoint;
-  }
-  // Latin-1 Supplement (all printable characters)
-  for (let codePoint = 0xa1; codePoint <= 0xff; ++codePoint)
-    if (codePoint !== 0xad)  // Exclude invisible soft-hyphen
-      IDENT1[String.fromCodePoint(codePoint)] = codePoint;
-
-  if (!latin1) {
-    for (let codePoint = 0x100; codePoint < 0xD800; ++codePoint)
-      analyzeCodepoint(codePoint);
-    for (let codePoint = 0xE000; codePoint < 0x10000; ++codePoint)
-      analyzeCodepoint(codePoint);
-    if (supplemental) {
-      for (let codePoint = 0x10000; codePoint < 0x110000; ++codePoint)
-        analyzeCodepoint(codePoint);
-    }
-  }
-
-  function analyzeCodepoint(codePoint) {
-    let ch = String.fromCodePoint(codePoint);
-    if (ch.match( /^\p{Alphabetic}$/u )) IDENT1[ch] = codePoint;
-    if (ch.match( /^\p{Math}$/u )) IDENT1[ch] = codePoint;
-    if (!NL[ch] && ch !== ELIPSIS && ch.match( /^\p{White_Space}$/u )) WS[ch] = codePoint;
-  }
-
-  if (dumpIdentifierMap) {
-    if (typeof dumpIdentifierMap !== 'function')
-      dumpIdentifierMap = console.info;
-    showCodepoints("NL", NL);
-    showCodepoints("WS", WS);
-    showCodepoints("IDENT1", IDENT1);
-    function showCodepoints(tableName, table) {
-      let characters = Object.getOwnPropertyNames(table);
-      process.stdout.write(`Table ${tableName}, ${characters.length} characters\n`);
-      for (let ch of characters) {
-        let charCode = table[ch];
-        dumpIdentifierMap("CHARTAB", tableName, charCode, ch, jsChar(charCode));
-      }
-    }
-  }
-
-// Why are these initialized here, you ask?
-// Because they're indirectly refernced by defineGlobalSymbol is why.
-const COMPILE_INFO = Symbol("COMPILE-INFO");
-const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
-const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
-let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to implement help.
+  for (let ch of "0123456789")
+    JSIDENT2[ch] = ch.codePointAt(0);
+  for (let ch of " \t")
+    WS[ch] = ch.codePointAt(0);
+  for (let ch of "\n\r")
+    WSNL[ch] = ch.codePointAt(0);
 
   //
   // Unlike exportAPI, which exports an API to clients, defineGlobalSymbol
@@ -726,6 +657,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       this.value = value;
     }
   }
+  exportAPI("EvaluateKeyValue", EvaluateKeyValue);
 
   //
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
@@ -758,7 +690,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   const cddr = a => cdr(cdr(a));
 
   const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { dontInline: true, usesDynamicScope: false, evalArgs: 0 }, "quote");
-  
+  exportAPI("QUOTE_ATOM", QUOTE_ATOM);
+
   defineGlobalSymbol("scope", function() { return this });
 
   exportAPI("NIL", NIL);
@@ -827,12 +760,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
       defineGlobalSymbol(obj.name, obj, { schemeOnly: true });
     defineGlobalSymbol("Date-now", Date.now, { schemeOnly: true });
-  }
-
-  defineGlobalSymbol("eval-string", eval_string, { dontInline: true });
-  function eval_string(str, scope = this) {
-    let expr = parseSExpr(str);
-    return _eval(expr, scope);
   }
 
   defineGlobalSymbol("globalScope", globalScope);
@@ -906,6 +833,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return n_ary_hooks(args, ssaScope, tools, '-', 'sub');
   }
 
+  const MUL = '\u00d7', DIV = '\u00f7';
   defineGlobalSymbol("*", mul, { compileHook: mul_hook, group: "var-op" }, MUL, "mul");
   function mul(a, b, ...rest) {
     a *= b;
@@ -2610,456 +2538,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return `\\u{${hex}}`;
   }
 
-  defineGlobalSymbol("to-string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
-
-  //
-  // S-epression tokenizer and parser
-  //
-  defineGlobalSymbol("scheme-token-generator", schemeTokenGenerator, { dontInline: true });
-  function* schemeTokenGenerator(characterSource, opts = {}) {
-    let parseContext = opts.parseContext ?? [];
-    let characterGenerator = iteratorFor(characterSource, LogicError);
-    let ch = '', _peek = [], _done = false;
-    let position = 0, charCount = 0, line = 0, lineCount = 0, lineChar = 0, lineCharCount = 0;
-    if (!parseContext) parseContext = [];
-    nextc();
-
-    getToken:
-    while (ch) {
-      while (WS[ch])
-        nextc();
-      position = charCount-1;
-      line = lineCount+1;
-      lineChar = lineCharCount-1;
-
-      if (NL[ch]) {
-        yield { type: 'newline', position, line, lineChar };
-        nextc();
-        continue;
-      }
-
-      if (ch === ';') {  // ; begins a comment
-        parseContext.push({ type: 'comment', value: ch === ';' ? ch : '//', position, line, lineChar });
-        while (ch && !NL[ch])
-          nextc();
-        parseContext.currentToken = { type: 'endcomment', value: ';', endPosition: charCount-1, endWidth: 1, line, lineChar };
-        parseContext.pop();
-        yield { type: (ch ? 'newline': 'newline'), position, line, lineChar };
-        continue;
-      }
-
-      if (ch === '/' && peekc() === '*') {
-        parseContext.push({ type: 'comment', value: '/*', position, line, lineChar });
-        nextc(); nextc();
-        while (ch && !(ch === '*' && peekc() === '/'))
-          nextc();
-        parseContext.currentToken = { type: 'endcomment', value: '*/', endPosition: charCount-2, endWidth: 2, line, lineChar };
-        parseContext.pop();
-        if (!ch)
-          yield { type: 'partial', position, line, lineChar };
-        nextc(); nextc();
-        continue;
-      }
-
-      if (ch === '"') {
-        let str = '', multiline = false;
-        let popped = false, tok = { type: 'string', value: '"', position, line, lineChar };
-        parseContext.push(tok);
-        parseContext.currentToken = tok;
-        nextc();
-        while (ch && ch !== '"' && (multiline || !NL[ch])) {
-          if (ch === '\\') {
-            nextc();
-            if (NL[ch]) {  // traditional string continuation
-              nextc();
-              continue;
-            } else if (ch === '\\' && NL[peekc()]) {  // Extended string continuation!
-              nextc();
-              multiline = true;
-            } else if (ch === '') {
-              break;
-            } else {
-              ch = ESCAPE_STRINGS[ch] ?? ch;
-            }
-          }
-          // Traditional string continuation begins when a string hits a newline and the last char
-          // is a "\""; the "\"" is ignored and the string continues at the beginning of the
-          // next line. Multiline string continuation begins when a the line ends in "\\". In that
-          // case initial whitespace is skipped on the next line(s) and the string continues
-          // after a "+", which simply appends the following text, or a "|", which appends a newline
-          // then the following text. The line does _not_ need to be terminateed with a "\"
-          // or "\\" and parsing continues until an unescaped "\".
-          if (NL[ch]) {
-            if (multiline) {
-              nextc();
-              while (WS[nextc()]) {}  // skips WS
-              if (ch === '') break;
-              if (ch === '+') {  // + continues
-                nextc();
-                continue;
-              }
-              if (ch === '|') {  // : newline then continues
-                nextc();
-                str += '\n';
-                continue;
-              }
-              if (ch === '"') {  // " ends string
-                break;
-              }
-            }
-            parseContext.pop();
-            popped = true;
-            yield { type: 'garbage', value: '"' + str,  position, line, lineChar };
-            continue getToken;  
-          }
-          str += ch;
-          nextc();
-        }
-        if (!popped) {
-          parseContext.pop();
-        }
-        if (!ch) {
-          yield { type: 'partial', value: `"${str}`,  position, line, lineChar };
-          return;
-        }
-        if (ch === '"') {
-          yield { type: 'string', value: str, position, endPosition: charCount-1, endWidth: 1, line, lineChar };
-          nextc();
-        }
-        continue;
-      }
-
-      if (ch === '.' && !DIGITS[peekc()]) {
-        yield { type: ch, position, line, lineChar };
-        nextc();
-        continue;
-      }
-
-      // JS numbers are weird. The strategy here is to match anything that looks vaguely like a number
-      // then let JS sort it all out.
-      if (NUM1[ch]) {
-        // Keep + and - from having to jump through unnecessary hoops
-        let pc = peekc(), falsePlusMinus = (ch === '+' || ch === '-') && !(pc !== '.' || DIGITS[pc]);
-        if (!falsePlusMinus) {
-          let pos = 0, str = ch, value;
-          for (;;) {
-            let ch = peekc(pos++);
-            if (!NUM2[ch])
-              break;
-            str += ch;
-          }
-          if (str.endsWith('n')) {
-            str = str.substr(0, str.length-1);
-            try {  // maybe it's a BigInt?
-              value = BigInt(str);
-            } catch (e) {
-              // eat it
-            }
-          } else {
-            let numVal = Number(str);
-            if (!isNaN(numVal))
-              value = numVal;
-          }
-          if (value !== undefined) {
-            // Consume all the characters that we peeked and succeed
-            while (pos-- > 0) nextc();
-            yield { type: 'literal', value, position, line, lineChar };
-            continue;
-          }
-        }
-      }
-
-      if (SINGLE_CHAR_TOKENS[ch]) {
-        yield { type: ch, position, line, lineChar };
-        nextc();
-        continue;
-      }
-
-      if (IDENT1[ch]) {
-        let str = '';
-        while (ch && IDENT2[ch]) {
-          // lambda symbols are special so we can parse \x as \ x
-          if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && IDENT1[ch] && ch !== '#')
-            break;
-          str += ch, nextc();
-        }
-        if (str === 'true')
-          yield { type: 'literal', value: true, position, line, lineChar };
-        else if (str === 'false')
-          yield { type: 'literal', value: false, position, line, lineChar };
-        else if (str === 'undefined')
-          yield { type: 'literal', value: undefined, position, line, lineChar };
-        else if (str === 'null')
-          yield { type: 'literal', value: null, position, line, lineChar };
-        else
-          yield { type: 'atom', value: Atom(str), position, line, lineChar };
-        continue;
-      }
-
-      if (!ch) break;
-      yield { type: 'garbage', value: ch, position, line, lineChar };
-      nextc();
-    }
-    yield { type: 'end', position, line, lineChar };
-    return;
-
-    function nextc() {
-      if (_peek.length > 0)
-        return ch = _peek.shift();
-      if (_done) return ch = '';
-      let { done, value } = characterGenerator.next();
-      if (done) {
-        _done = true;
-        return ch = '';
-      }
-      charCount += 1;
-      lineCharCount += 1;
-      // Among the [NL] chars, only use '\n' in the line count;
-      // there may still be CRLFs in the wild.
-      if (ch === '\n') {
-        lineCount += 1;
-        lineCharCount = 0;
-      }
-      return ch = value;
-    }
-
-    function peekc(n = 0) {
-      for (let get = n - _peek.length + 1; get > 0; --get) {
-        let { done, value } = characterGenerator.next();
-        if (done) {
-          _done = true;
-          return '';
-        }
-        charCount += 1;
-        lineCharCount += 1;
-        if (NL[ch]) {
-          lineCount += 1;
-          lineCharCount = 0;
-        }
-        _peek.push(value);
-      }
-      return _peek[n];
-    }
-  }
-
-  defineGlobalSymbol("parse", parseSExpr, { dontInline: true });
-  exportAPI("parseSExpr", parseSExpr);
-  function parseSExpr(characterSource, opts = {}) {
-    opts = { ...schemeOpts, ...opts };
-    let parseContext = opts.parseContext ?? [];
-    opts.parseContext = parseContext;
-    parseContext.length = 0;
-    let path = opts.path;
-    let assignSyntax = opts.assignSyntax ?? false;
-    let _tokens = [], _done = false;
-    if (typeof characterSource === 'string')
-      characterSource = iteratorFor(characterSource);
-    let tokenGenerator = schemeTokenGenerator(characterSource, opts);
-    let expr;
-    if (assignSyntax && token().type === 'atom' &&
-        token(1).type === 'atom' && token(1).value === Atom('=')) {
-      // Allows the REPL to select a mode where, at the top-level only,
-      //    a = expr
-      // is the same as
-      //    (define a expr)
-      // It might or might not be a good idea. It isn't worse than "evalquote", if anyone
-      // else remembers that. In any case it's opt-in.
-      let sym = token().value;
-      parseContext.push({ type: 'assign', value: sym });
-      consumeToken(), consumeToken();
-      let assigned = parseExpr();
-      parseContext.pop();
-      expr = list(Atom("define"), sym, assigned);
-    } else {
-      expr = parseExpr(0);
-    }
-    let initialNewlineOK = true;
-    let tok = token(0, initialNewlineOK);
-    if (tok.type === 'newline' || tok.type === 'end')
-      return expr;
-    throwSyntaxError();
-
-    function parseExpr() {
-      if (token().type === 'string' || token().type === 'literal') {
-        let thisToken = consumeToken();
-        return thisToken.value;
-      }
-
-      if (token().type === 'atom') {
-        let thisToken = consumeToken();
-        return thisToken.value;
-      }
-
-      if (token().type === '(') {
-        parseContext.push(token());
-        consumeToken();
-        return parseListBody();
-        function parseListBody() {
-          let head = NIL, tail;
-          for (;;) {
-            if (token().type === ')') {
-              parseContext.pop();
-              consumeToken();
-              return head;
-            } else if (token().type === '.') {
-              consumeToken();
-              let val = parseExpr();
-              parseContext.pop();
-              if (token().type !== ')') throwSyntaxError();
-              consumeToken();
-              if (tail) tail[REST] = val;
-              else head = val;
-              return head;
-            }
-            if (token().type === 'end' || token().type === 'partial')
-              throw new SchemeParseIncompleteError(path, token(), parseContext);
-            if (token().type === 'garbage') throwSyntaxError();
-            let item = parseExpr();
-            item = cons(item, NIL);
-            if (tail) tail = tail[REST] = item;
-            else head = tail = item;
-          }
-        }
-      }
-
-      if (token().type === '[') {  // JavaScript Array
-        let res = [];
-        parseContext.push(token());
-        consumeToken();
-        for (;;) {
-          if (token().type === ']') {
-            parseContext.pop();
-            consumeToken();
-            return res;
-          }
-          let item = parseExpr();
-          res.push(item);
-          if (token().type === ',')  // Comma is optional
-            consumeToken();
-          if (token().type === 'end' || token().type === 'partial')
-            throw new SchemeParseIncompleteError(path, token(), parseContext);
-        }
-      }
-
-      if (token().type === '{') {  // JavaScript Object
-        let res = {}, evalCount = 0;
-        parseContext.push(token());
-        consumeToken();
-        for (;;) {
-          if (token().type === '}') {
-            parseContext.pop();
-            consumeToken();
-            break;
-          }
-          let gotIt = false;
-          if (token().type === 'atom' || token().type === 'string'
-                || token().type === 'literal' || token().type === '[') {
-            let evaluatedKey = false, sym;
-            if (token().type === '[') {
-              parseContext.push(token());
-              consumeToken();
-              sym = parseExpr();
-              parseContext.pop();
-              if (token().type !== ']') break;
-              evaluatedKey = true;
-              consumeToken();
-            } else {
-              sym = token().value;
-              // Don't convert symbols to strings; symbols can be keys.
-              if (!(typeof sym === 'string' || typeof sym === 'symbol'))
-                sym = String(sym);
-              consumeToken();
-            }
-            if (token().type === ':') {
-              parseContext.push(token());
-              consumeToken();
-              let val = parseExpr();
-              parseContext.pop();
-              if (evaluatedKey)
-                res[sym] = new EvaluateKeyValue(sym, val);
-              else
-                res[sym] = val;
-            }
-            gotIt = true;
-            if (token().type === ',')  // Comma is optional
-              consumeToken();
-            if (token().type === 'end'|| token().type === 'partial')
-              throw new SchemeParseIncompleteError(path, token(), parseContext);
-          }
-          if (!gotIt) throwSyntaxError();
-        }
-        return res;
-      }
-
-      if (token().type === "'") {
-        consumeToken();
-        parseContext.push(token());
-        let quoted = parseExpr();
-        return cons(QUOTE_ATOM, cons(quoted, NIL));
-      }
-      if (token().type === 'end')
-        return null;
-      throwSyntaxError();
-    }
-
-    function token(n = 0, initialNewlineOK) {
-      // Two main ideas here, mostly in support of the REPL:
-      // (1) Don't read anything until absolutely necessary.
-      // (2) Foil attempts to peek for tokens across a line boundary by leaving
-      //     'newline' tokens in the peek buffer. But to simplify the parser,
-      //      token(0) skips past any newline tokens.
-      for (;;) {
-        for (let get_minus_1 = n - _tokens.length; get_minus_1 >= 0 && !_done; --get_minus_1) {
-          let { done, value } = tokenGenerator.next();
-          if (done) {
-            _done = true;
-          } else {
-            _tokens.push(value);
-            parseContext.currentToken = value;
-          }
-        }
-        // Never return a 'newline' as the current token (unless told otherwise)
-        if (!initialNewlineOK) {
-          while (_tokens.length > 0 && _tokens[0].type === 'newline')
-            _tokens.shift();
-        }
-        if (n < _tokens.length)
-          return _tokens[n];
-        if (_done)
-          return { type: 'end' };
-      }
-    }
-
-    function consumeToken() {
-      return _tokens.shift();
-    }
-
-    function throwSyntaxError() {
-      let str = "", errorToken = token();
-      if (errorToken.type === 'partial')
-        throw new SchemeParseIncompleteError(path, errorToken, parseContext)
-      let newline = false;
-      while (_tokens.length > 0) {
-        // "detokenize" any lookahead tokens
-        let token = _tokens.pop();
-        newline = (token.type === 'newline');
-        str += (token.value !== undefined ? string(token.value) : token.type);
-        str += " ";
-      }
-      while (!newline) {
-        if (_done) break;
-        let { done, value: ch } = characterSource.next();
-        if (done) {
-          _done = true;
-          break;
-        }
-        if (NL[ch]) break;
-        str += ch;
-      }
-      throw new SchemeSyntaxError(str, path, errorToken);
-    }
-  }
-
   exportAPI("analyzeJSFunction", analyzeJSFunction);
   function analyzeJSFunction(fn) {
     // The idea here is to use the intrinsic functions themselves as code generation
@@ -3873,56 +3351,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     newName += fragment;
     return newName;
-  }
-
-  let quitRepl = false;
-  const quit = _ => quitRepl = true;
-  defineGlobalSymbol("quit", quit);
-
-  exportAPI("REPL", REPL);
-  function REPL(readline, opts = {}) {  // readline(prompt) => str | nullish
-    let scope = this;
-    opts = { ...schemeOpts, ...opts };
-    let name = opts.name ?? "SchemeJS";
-    let prompt = opts.prompt ?? name + " > ";
-    let print = opts.print ?? (x => console.log(string(x)));
-    let reportSchemeError = opts.reportSchemeError ?? (x => console.log(String(x)));;
-    let reportSystemError = opts.reportSystemError ?? (x => console.log(name + " internal error:", String(x), x));;
-    let endTest = opts.endTest ?? (_ => false);
-    let parseContext = opts.parseContext = [];
-    quitRepl = false;
-    defineGlobalSymbol("readline", (...prompt) => readline(prompt[0] ?? "? "));
-    function* charStreamPromptInput() {
-      for(;;) {
-        let indent = "";
-        if (parseContext.currentToken?.type !== 'string' && parseContext.length > 0)
-          indent =  " ".repeat(parseContext[parseContext.length-1].lineChar + 1);
-        let line = readline(prompt + indent);
-        if (line == null || endTest(line)) {
-          quitRepl = true;
-          return;
-        }
-        // Feed the charachers
-        for (let ch of line)
-          yield ch;
-        // And then a newline
-        yield '\n';
-      }
-    }
-    let charStream = charStreamPromptInput();
-    while (!quitRepl) {
-      try {
-        let expr = parseSExpr(charStream, opts);
-        if (!expr) break;
-        let evaluated = _eval(expr, scope);
-        print(evaluated);
-      } catch (error) {
-        if (error instanceof SchemeError)
-          reportSchemeError(error);
-        else
-          reportSystemError(error);
-      }
-    }
   }
 
   exportAPI("_setGlobalScope_test_hook_", _setGlobalScope_test_hook_)
