@@ -706,6 +706,82 @@ export function createInstance(schemeOpts = {}) {
     return n;
   }
 
+  defineGlobalSymbol("reverse", reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  function reverse(...lists) {
+    let res = NIL;
+    for (let list of lists) {
+      if (iterateAsList(list)) {
+        for ( ; moreList(list); list = list[REST])
+          res = cons(list[FIRST], res)
+      } else {
+        for (item of list)
+          res = cons(item, res);
+      }
+    }
+    return res;
+  }
+
+  defineGlobalSymbol("nreverse", in_place_reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // Name from SIOD
+  function in_place_reverse(list) {
+    let res = NIL;
+    if (!iterateAsList)
+      throw new SchemeEvalError(`not in-place-reversable`);
+    while (isList(list)) {
+      let next = list[REST];
+      list[REST] = res;
+      res = list;
+      list = next;
+    }
+    return res;
+  }
+
+  // XXX TODO: member and memq are almost certainly wrong. Need to find out about SIOD equality.
+  // (member key list)
+  //     Returns the portion of the list where FIRST is equal to the key, or () if none found.
+  defineGlobalSymbol("member", member, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  function member(key, list) {
+    for ( ; moreList(list); list = list[REST])
+      if (key === list[FIRST])   // TODO: == or ===?
+        return list;
+    return NIL;
+  }
+
+  // (memq key list)
+  //     Returns the portion of the list where FIRST is eq to the key, or () if none found.
+  defineGlobalSymbol("memq", memq, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  function memq(key, list) {
+    for ( ; moreList(list); list = list[REST])
+      if (key === list[FIRST])
+        return list;
+    return NIL;
+  }
+
+  // (nth index list)
+  //     Reference the list using index, with the first element being index 0.
+  defineGlobalSymbol("nth", nth, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  function nth(index, list) {
+    if (typeof index !== 'number' || Math.trunc(index) !== index)
+      throw new TypeError(`not an integer ${string(index)}`);
+    if (index < 0) throw new RangeError(`negative index`);
+    if (iterateAsList(list)) {
+      for ( ; index > 0 && moreList(list); list = list[REST])
+        index -= 1;
+      if (moreList(list))
+        return list[FIRST];
+  ``} else if (isArray(list)) {
+      if (index < list.length)
+        return list[index];
+    } else {
+      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+      for (let value of list) {
+        if (index <= 0)
+          return value;
+        index -= 1;
+      }
+    }
+    throw new RangeError(`nth`);
+  }
+
   return globalScope;
 
 }
