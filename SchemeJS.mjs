@@ -40,7 +40,9 @@ export function createInstance(schemeOpts = {}) {
   const firstName = schemeOpts.firstName ?? "first";
   const restName = schemeOpts.firstName ?? "rest";
   const nilName = schemeOpts.nilName ?? "NIL";
+
   const optional = undefined;  // so that optional parameters show up pretty when printed
+  const LogicError = Error;
 
   //
   // Unlike most Lisps, the Cons cell (Pair) is not central to this design, but a _list_ is.
@@ -141,6 +143,58 @@ export function createInstance(schemeOpts = {}) {
   ArrayList.prototype[LIST] = true;
   ArrayList.prototype[ITERATE_AS_LIST] = true;
 
+  //
+  // Second of all, all generators are lists:
+  //
+  function* dummyGenerator() {}
+  let gen = dummyGenerator();
+  for ( ; ; gen = Object.getPrototypeOf(gen)) {
+    if (gen == null) throw new LogicError(`generator has no iterator`);
+    if (gen.hasOwnProperty(Symbol.iterator)) {
+      Object.defineProperties(gen, {
+        [LIST]: { value: true },
+        [ITERATE_AS_LIST]: { value: true },
+        [SUPERLAZY]: { value: true },
+        [FIRST]: { get: function() {
+          this[MORELIST];
+          return this[FIRST];
+        } },
+        [REST]: { get: function() {
+          this[MORELIST];
+          return this[REST];
+        } },
+        [MORELIST]: { get: function iterableMoreList() {
+          let iter = this[Symbol.iterator]();
+          let { done, value } = iter.next();
+          if (done) {
+            Object.defineProperties(this, {
+              [FIRST]: { get: function() { throw new SchemeEvalError(`${firstName} on exhausted iterator`)} },
+              [REST]: { value },
+              [MORELIST]: { value: false },
+            });
+            return false;
+          }
+          Object.defineProperties(this, {
+            [FIRST]: { value },
+            [REST]: { value: new LazyIteratorList(iter) },
+            [MORELIST]: { value: true },
+            [SUPERLAZY]: { value: false },
+          });
+          return true;
+        } },
+      });
+      break;
+    }
+  }
+
+  //
+  // TODO: cover Set, Map, TypedArray, etc. that also have iterators OR
+  // make a backstop in Object for any bject with an iterator
+  //
+
+  //
+  // Finally, a Pair is a list too but not one of any special status.
+  //
   class Pair {
     [FIRST]; [REST];
     constructor(first, rest) {
@@ -458,8 +512,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
     if (opts.dontInline) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-    }
-    else if (fnInfo.native) {
+    } else if (fnInfo.native) {
       // not an error
     } else if (!compileHook && evalCount !== MAX_INTEGER) {
       console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
@@ -553,7 +606,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   SchemeParseIncompleteError.prototype.name = "SchemeParseIncompleteError";
   defineGlobalSymbol("SchemeParseIncompleteError", SchemeParseIncompleteError);
 
-  const LogicError = Error;
   defineGlobalSymbol("LogicError", LogicError);
 
   class EvaluateKeyValue {
@@ -594,7 +646,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
 
-  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { usesDynamicScope: false, evalArgs: 0 }, "quote");
+  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { dontInline: true, usesDynamicScope: false, evalArgs: 0 }, "quote");
   
   defineGlobalSymbol("scope", function() { return this });
 
@@ -2602,6 +2654,10 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return ssaResult;
   }
 
+  let gensym_count = 0;
+  const gensym = (name = `*gensym-${gensym_count++}*`) => Symbol(name);
+  defineGlobalSymbol("gensym", gensym);
+
   // (define variable value)
   // (define (fn args) forms)
   defineGlobalSymbol("define", define, { evalArgs: 0, dontInline: true });
@@ -3261,7 +3317,8 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //
   // S-epression tokenizer and parser
   //
-  function* schemeTokenGenerator(characterSource, opts) {
+  defineGlobalSymbol("scheme-token-generator", schemeTokenGenerator, { dontInline: true });
+  function* schemeTokenGenerator(characterSource, opts = {}) {
     let parseContext = opts.parseContext ?? [];
     let characterGenerator = iteratorFor(characterSource, LogicError);
     let ch = '', _peek = [], _done = false;
@@ -3486,10 +3543,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       return _peek[n];
     }
   }
-
-  let gensym_count = 0;
-  const gensym = (name = `*gensym-${gensym_count++}*`) => Symbol(name);
-  defineGlobalSymbol("gensym", gensym);
 
   defineGlobalSymbol("parse", parseSExpr, { dontInline: true });
   exportAPI("parseSExpr", parseSExpr);
