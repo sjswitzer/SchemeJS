@@ -609,44 +609,6 @@ export function createInstance(schemeOpts = {}) {
   SchemeCompileError.prototype.name = "SchemeCompileError";
   defineGlobalSymbol("SchemeCompileError", SchemeCompileError);
 
-  class SchemeParseError extends SchemeError {};
-  SchemeParseError.prototype.name = "SchemeParseError";
-  defineGlobalSymbol("SchemeParseError", SchemeParseError);
-
-  class SchemeSyntaxError extends SchemeParseError {
-    path; errorToken; position; line; lineChar
-    constructor(msg, path, errorToken) {
-      let position = errorToken.position, line = errorToken.line, lineChar = errorToken.lineChar;
-      if (path) msg = `${path}(${line},${lineChar}) ${msg}`;
-      super(msg);
-      this.path = path;
-      this.errorToken = errorToken;
-      this.position = position;
-      this.line = line;
-      this.lineChar = lineChar;
-    }
-  };
-  SchemeSyntaxError.prototype.name = "SchemeSyntaxError";
-  defineGlobalSymbol("SchemeSyntaxError", SchemeSyntaxError);
-
-  class SchemeParseIncompleteError extends SchemeParseError {
-    path; token; parseContext; position; line; lineChar;
-    constructor(path, token, parseContext) {
-      let position = token.position, line = token.line, lineChar = token.lineChar;
-      let msg = "";
-        if (path) msg = `${path}(${line},${lineChar}) ${msg}`;
-      super(msg);
-      this.path = path;
-      this.token = token;
-      this.parseContext = parseContext;
-      this.position = position;
-      this.line = line;
-      this.lineChar = lineChar
-    }
-  };
-  SchemeParseIncompleteError.prototype.name = "SchemeParseIncompleteError";
-  defineGlobalSymbol("SchemeParseIncompleteError", SchemeParseIncompleteError);
-
   defineGlobalSymbol("LogicError", LogicError);
 
   class EvaluateKeyValue {
@@ -2173,10 +2135,6 @@ export function createInstance(schemeOpts = {}) {
   function makeLambdaClosure(scope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
     // Examine property list and throw any errors now rather than later.
     // In general, do more work here so the closure can do less work when executed.
-    if (typeof lambdaParams === 'symbol') { // curry notation; normalize to classic
-      lambdaParams = cons(lambdaParams, NIL);
-      forms = cons(forms, NIL);
-    }
     let params = lambdaParams, paramCount = 0, requiredCount;
     let paramv = [], restParam;
     for ( ; moreList(params); params = params[REST]) {
@@ -2317,7 +2275,7 @@ export function createInstance(schemeOpts = {}) {
         // a LazyIteratorList, cause it to call next() and mutate into something else.
         if (obj[SUPERLAZY])
           return put("(...)");
-        if (isNil(obj)) return put("()");
+        if (isNil(obj) && iterateAsList(obj)) return put("()"); // Be careful about []!
         if (obj[SCOPE_IS_SYMBOL]) {
           let symStrs = "";
           if (obj !== globalScope) {
@@ -2352,48 +2310,32 @@ export function createInstance(schemeOpts = {}) {
           if (!obj[LAZYFIRST]) {
             let objCar = obj[FIRST];
             if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
-                objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)
-                  && isList(obj[REST])) {
-              // Specal treatment of lambdas and closures with curry notation
-              if (objCar === CLOSURE_ATOM|| objCar === SCLOSURE_ATOM) {
-                if (isList(obj[REST][REST])) {
-                  let evalCount, scopeCons = obj[REST];
-                  if (objCar === SCLOSURE_ATOM) {
-                    evalCount = obj[REST][FIRST];
-                    scopeCons = obj[REST][REST];
-                  }
-                  let params = scopeCons[REST][FIRST];
-                  if (typeof params === 'symbol') {
-                    sep = "";
-                    if (objCar === SCLOSURE_ATOM) {
-                      toString(evalCount, maxCarDepth, maxCdrDepth-1);
-                      sep = " ";
-                    }
-                    toString(objCar);  // %%closure or %%%closure
-                    sep = "";
-                    if (obj[COMPILED]) put(`{*compiled-${obj[COMPILED]}*}`);
-                    sep = " ";
-                    toString(scopeCons[FIRST], maxCarDepth-1, maxCdrDepth-2);  // scope
-                    sep = " ";
-                    toString(params, maxCarDepth-1, maxCdrDepth-2);  // actually the atom
-                    sep = ""; put(".");
-                    toString(scopeCons[REST][REST], maxCarDepth, maxCdrDepth-3);  // the form
-                    sep = ""; put(")");
-                    return;
-                  }
-                }
+                objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)) {
+              if (objCar === LAMBDA_ATOM)
+                put(lambdaStr)
+              else if (objCar === SLAMBDA_ATOM)
+                put(lambdaStr + "#");
+              else
+                toString(objCar); //%%closure or %%%closure
+              sep = " ";
+              obj = obj[REST];
+              if (isList(obj) && (objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)) {
+                toString(obj[FIRST]);  // scope
+                sep = " ";
+                obj = obj[REST]
               }
-              let str = '', params = obj[REST][FIRST], forms = obj[REST][REST];
-              if (objCar === LAMBDA_ATOM) str += lambdaStr;
-              if (objCar === SLAMBDA_ATOM) str += lambdaStr + '#';
-              if (typeof params === 'symbol') {  // curry notation
-                str += `${params.description}.`;
-                put(str);
-                indent += indentMore;
-                toString(forms, maxCarDepth, maxCdrDepth-1);
-                sep = ""; put(")");
-                indent = saveIndent;
-                return;
+              if (isList(obj) && (objCar === SLAMBDA_ATOM || objCar === SCLOSURE_ATOM)) {
+                toString(obj[FIRST]);  // evalCount
+                sep = " ";
+                obj = obj[REST]
+              }
+              if (isList(obj)) {
+                if (typeof obj[FIRST] === 'symbol')
+                  put(`(. ${obj[FIRST].description})`); // Special printing for initial "rest" param
+                else
+                  toString(obj[FIRST])
+                sep = " ";
+                obj = obj[REST]
               }
             }
           }
@@ -3188,10 +3130,6 @@ export function createInstance(schemeOpts = {}) {
     if (!isList(body)) throwBadCompiledLambda(lambda);
     let params = body[FIRST];
     let forms = body[REST];
-    if (typeof params === 'symbol') { // Curry notation
-      params = cons(params, NIL);
-      forms = cons(forms, NIL);
-    }
     if (!isList(params)) throwBadCompiledLambda(lambda);
     let ssaParamv = [], ssaRestParam, paramv = [], restParam;
     let originalSsaScope = ssaScope, scopeLines = [];

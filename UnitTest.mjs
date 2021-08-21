@@ -597,8 +597,7 @@ export function run(opts = {}) {
       EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
       EXPECT(` add-4 `, isClosure);
       EXPECT(` (add-4 3) `, 7);
-      // While we're at it, test notation
-      EXPECT(` (define (increment-by n) (\\x.(+ x n))) `, ` 'increment-by `);
+      EXPECT(` (define (increment-by n) (\\(x)(+ x n))) `, ` 'increment-by `);
       EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
       EXPECT(` increment-by-3 `, isClosure);
       EXPECT(` (increment-by-3 4) `, 7);
@@ -607,7 +606,7 @@ export function run(opts = {}) {
 
     { // Partial application returning closures, compiled
       let savedScope = beginTestScope();
-      EXPECT(` (compile (increment-by n) (\\x.(+ x n))) `, ` 'increment-by `);
+      EXPECT(` (compile (increment-by n) (\\(x)(+ x n))) `, ` 'increment-by `);
       EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
       EXPECT(` increment-by-3 `, isClosure);
       EXPECT(` (increment-by-3 4) `, 7);

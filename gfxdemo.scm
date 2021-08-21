@@ -26,7 +26,7 @@
 ;; Animation helper: a sinusoidal time-varying value of a given magintude,
 ;; period (in seconds) and phase.
 ;; (Date.now) is the number of milliseconds since midnight Jan 1, 1970 (the Unix epoch).
-(compile (sinusoidal (? magnitude 1) (? period 1) (? phase 0))
+(compile (sinusoidal (magnitude 1) (period 1) (phase 0))
   (* magnitude (sin (+ phase (* 2 *pi* (/ (Date-now) period 1000)))))
 )
 

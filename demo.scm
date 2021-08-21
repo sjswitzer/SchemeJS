@@ -110,8 +110,7 @@ b
 b
 
 ;; Partial evaluation binds a closure
-;;   (define (increment-by n) (\(x) (+ x n))) ;; You can define it like this
-(define (increment-by n) (\x.(+ x n)))        ;; But I'm using Curry notation here
+(define (increment-by n) (\(x) (+ x n)))
 increment-by
 (define increment-by-3 (increment-by 3))
 increment-by-3  ;; Again, note the binding in the closure scope

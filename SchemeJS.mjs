@@ -909,6 +909,44 @@ export function createInstance(schemeOpts = {}) {
   //
   // S-epression tokenizer and parser
   //
+  
+  class SchemeParseError extends SchemeError {};
+  SchemeParseError.prototype.name = "SchemeParseError";
+  defineGlobalSymbol("SchemeParseError", SchemeParseError);
+
+  class SchemeSyntaxError extends SchemeParseError {
+    path; errorToken; position; line; lineChar
+    constructor(msg, path, errorToken) {
+      let position = errorToken.position, line = errorToken.line, lineChar = errorToken.lineChar;
+      if (path) msg = `${path}(${line},${lineChar}) ${msg}`;
+      super(msg);
+      this.path = path;
+      this.errorToken = errorToken;
+      this.position = position;
+      this.line = line;
+      this.lineChar = lineChar;
+    }
+  };
+  SchemeSyntaxError.prototype.name = "SchemeSyntaxError";
+  defineGlobalSymbol("SchemeSyntaxError", SchemeSyntaxError);
+
+  class SchemeParseIncompleteError extends SchemeParseError {
+    path; token; parseContext; position; line; lineChar;
+    constructor(path, token, parseContext) {
+      let position = token.position, line = token.line, lineChar = token.lineChar;
+      let msg = "";
+        if (path) msg = `${path}(${line},${lineChar}) ${msg}`;
+      super(msg);
+      this.path = path;
+      this.token = token;
+      this.parseContext = parseContext;
+      this.position = position;
+      this.line = line;
+      this.lineChar = lineChar
+    }
+  };
+  SchemeParseIncompleteError.prototype.name = "SchemeParseIncompleteError";
+  defineGlobalSymbol("SchemeParseIncompleteError", SchemeParseIncompleteError);
 
   //
   // Character clases for parsing
