@@ -837,6 +837,37 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   defineGlobalSymbol("globalScope", globalScope);
 
+  // Pokemon gotta catch 'em' all!
+  defineGlobalSymbol("!", a => !schemeTrue(a), { group: "logical-op" });
+  defineGlobalSymbol("~", a => ~a, { group: "bitwise-op" }, "bit-not");
+  defineGlobalSymbol("**", (a,b) => a ** b, { /* classification? */ }, "pow");  // overrides Math.pow
+  defineGlobalSymbol("%", (a,b) => a % b, { /* classification? */ }, "rem");
+  defineGlobalSymbol("<<", (a,b) => a << b, { group: "bitwise-op" }, "bit-shl");
+  defineGlobalSymbol(">>", (a,b) => a >> b, { group: "bitwise-op" }, "bit-shr");
+  defineGlobalSymbol(">>>", (a,b) => a >>> b, { group: "bitwise-op" }, "bit-ushr");
+  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "bitwise-op" });  // SIOD
+  defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("@", (a, b) => a[b], { group: "js-op" }, "aref");  // indexing and member access (SIOD: aref)
+  defineGlobalSymbol("@@", (a, b, c) => a[b][c], { group: "js-op" });
+  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d], { group: "js-op" });
+  defineGlobalSymbol("@?", (a, b) => a?.[b], { group: "js-op" });  // conditional indexing and member access
+  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { group: "js-op" });
+  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { group: "js-op" });
+  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { group: "js-op" });
+  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { group: "js-op" });
+  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { group: "js-op" });
+  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { group: "js-op" });
+  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { group: "js-op" });
+  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { group: "js-op" });
+  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { group: "js-op" }, "js-assign");
+  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d), { group: "js-op" };
+  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { group: "js-op" });
+  defineGlobalSymbol("delete", (a, b) => delete a[b]), { schemeOnly: true, group: "js-op" };
+  defineGlobalSymbol("void", _ => undefined, { schemeOnly: true, group: "js-op" });
+  defineGlobalSymbol("not", a => typeof a === 'function' ? ((...params) => !a(...params)) : !a), { group: "logical-op" };
+
   //
   // Variable args definitions
   //
@@ -1083,24 +1114,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return `(!${eeq})`;
   }
 
-  defineGlobalSymbol("max", max, { group: "var-op" });
-  function max(a, b, ...rest) {
-    let val = a;
-    if (val < b) val = b;
-    for (b of rest)
-      if (val < b) val = b;
-    return val;
-  }
-
-  defineGlobalSymbol("min", min, { group: "var-op" });
-  function min(a, b, ...rest) {
-    let val = a;
-    if (val > b) val = b;
-    for (b of rest)
-      if (val > b) val = b;
-    return val;
-  }
-
   // Logical & Conditional
 
   defineGlobalSymbol("&&", and, { evalArgs: 0, compileHook: and_hook, group: "logical-op" }, "and");
@@ -1173,9 +1186,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   //
-  // "?" can be partially-applied.
-  //    (? true) returns a function that evaluates its first parameter.
-  //    (? false) returns a function that evaluates its second parameter.
+  // Conditionals
   //
   defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook, group: "core", schemeOnly: true }, "if");
   function ifelse(p, t = true, f = false) {
@@ -1249,17 +1260,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function is_undefined_hook(args, ssaScope, tools) {
     return conditionalHooks(args, ssaScope, tools, 'is_undefined', `* === undefined`);
-  }
-
-  defineGlobalSymbol("pair?", isList, { evalArgs: 1, compileHook: is_pair_hook, group: "pred-op" }, "is-pair", "is-cons");
-  function is_pair(a, t = true, f = false) {
-    if (isList(a))
-      return isPrimitive(t) ? t : _eval(t, this);
-    else
-      return isPrimitive(f) ? f : _eval(f, this);
-  }
-  function is_pair_hook(args, ssaScope, tools) {
-    return conditionalHooks(args, ssaScope, tools, 'is_pair', `is_Cons(*)`);
   }
 
   defineGlobalSymbol("list?", isList, { evalArgs: 1, compileHook: is_list_hook, group: "pred-op" }, "is-list");
@@ -1429,221 +1429,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     for (let i = 0; i < args.length; ++i)
       ssaResult = compileEval(args[i], ssaScope, tools);
     return ssaResult;
-  }
-
-  // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", prog1, { evalArgs: 0, compileHook: prog1_hook, group: "core" });
-  function prog1(...forms) {
-    let res = NIL;
-    for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
-      let val = _eval(forms[i], this);
-      if (i === 0)
-        res = val;
-    }
-    return res;
-  }
-  function prog1_hook(args, ssaScope, tools) {
-    let ssaResult = 'NIL';
-    for (let i = 0; i< args.length; ++i) {
-      let res = compileEval(args[i], ssaScope, tools);
-      if (i === 0)
-        ssaResult = res;
-    }
-    return ssaResult;
-  }
-
-  // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  defineGlobalSymbol("cond", cond, { evalArgs: 0, compileHook: cond_hook, group: "core", schemeOnly: true });
-  function cond(...clauses) {
-    // Prescan for errors; the compiler needs to do it so the interpreter should too
-    for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
-      let clause = clauses[i];
-      if (!isList(clause))
-        throw new SchemeEvalError(`Bad clause in "cond" ${string(clause)}`);
-    }
-    for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
-      let clause = clauses[i];
-      let predicateForm = clause[FIRST], forms = clause[REST];
-      let evaled = _eval(predicateForm, this);
-      if (schemeTrue(evaled)) {
-        let res = NIL;
-        for ( ; moreList(forms); forms = forms[REST])
-          res = _eval(forms[FIRST], this);
-        return res;
-      }
-    }
-    return NIL;
-  }
-  function cond_hook(args, ssaScope, tools) {
-    let clauses = args;
-    let ssaResult = tools.newTemp('cond');
-    tools.emit(`let ${ssaResult} = NIL; ${ssaResult}: {`);
-    let saveIndent = tools.indent;
-    tools.indent += '  ';
-    for (let clause of clauses) {
-      if (!isList(clause))
-        throw new SchemeCompileError(`Bad cond clause${string(clause)}`);
-      let predicateForm = clause[FIRST], forms = clause[REST];
-      let ssaPredicateValue = compileEval(predicateForm, ssaScope, tools);
-      tools.emit(`if (schemeTrue(${ssaPredicateValue})) {`)
-      let saveIndent = tools.indent;
-      tools.indent += '  ';
-      let ssaValue = 'NIL';
-      for (let form of forms) {
-        ssaValue = compileEval(form, ssaScope, tools);
-      }
-      tools.emit(`${ssaResult} = ${ssaValue};`);  // Another PHI node
-      tools.emit(`break ${ssaResult};`)
-      tools.indent = saveIndent;
-      tools.emit(`}`);
-    }
-    tools.indent = saveIndent;
-    tools.emit(`}`);
-    return ssaResult;
-  }
-
-  defineGlobalSymbol("require", require_, { dontInline: true });
-  function require_(path) {
-    let sym = Atom(`*${path}-loaded*`);
-    if (!schemeTrue(globalScope[sym])) {
-      this.load(path);
-      globalScope[sym] = true;
-      return sym;
-    }
-    return NIL;
-  }
-
-  // (load fname noeval-flag)
-  //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
-  defineGlobalSymbol("load", load, { dontInline: true });
-  function load(path, noEval = false) {
-    let scope = this, result = NIL, last;
-    let fileContent;
-    try {
-      if (!readFile) throw new SchemeEvalError("No file reader defined");
-      fileContent = readFile(path);
-    } catch (error) {
-      let loadError = new SchemeEvalError(`Load failed ${string(path)}`);
-      loadError.cause = error;
-      loadError.path = path;
-      return false;
-    }
-    let characterGenerator = iteratorFor(fileContent, LogicError);
-    let assignSyntax = false;  // NEVER allow assign syntax in loaded files.
-    for(;;) {
-      let expr;
-      try {
-        expr = parseSExpr(characterGenerator, { path, assignSyntax });
-        if (!expr) break;
-        reportLoadInput(expr);
-        if (noEval) {
-          if (last) last = last[REST] = cons(expr, NIL);
-          else result = last = cons(expr, NIL);
-        } else {
-          let value = _eval(expr, scope);
-          reportLoadResult(value, expr);
-        }
-      } catch (error) {
-        if (error instanceof SchemeError)
-          reportSchemeError(error, expr);
-        else
-          reportSystemError(error, expr);
-      }
-    }
-    return result;
-  }
-
-  // Provisional but useful
-  defineGlobalSymbol("println", println);
-  function println(...lines) {
-    for (let line of lines)
-      linePrinter(line);
-    return true;
-  }
-
-  // Can be inlined (if isList, isIterator, isList, etc. are bound), but doesn't seem wise
-  defineGlobalSymbol("append", append, { usesDynamicScope: false, dontInline: true, group: "list-op" });
-  function append(...lists) {
-    let res = NIL, last;
-    for (let list of lists) {
-      if (iterateAsList(list)) {
-        // Could handle as iterable, but faster not to
-        for ( ; moreList(list); list = list[REST])
-          if (last) last = last[REST] = cons(list[FIRST], NIL);
-          else res = last = cons(list[FIRST], NIL);
-      } else {
-        if (!isIterable(list)) throw new SchemeEvalError(`Not a list or iterable ${list}`);
-        for (let value of list) {
-          let item = cons(value, NIL);
-          if (last) last = last[REST] = item;
-          else res = last = item;
-        }
-      }
-    }
-    return res;
-  }
-
-  defineGlobalSymbol("last", last, { usesDynamicScope: false, dontInline: true, group: "list-op" });
-  function last(list) {
-    if (!isIterable(list))
-      throw new TypeError(`not a list or iterable ${string(list)}`);
-    let res = NIL;
-    if (!list || isNil(list)) return NIL; // XXX check this.
-    if (iterateAsList(list)) {
-      for ( ; moreList(list); list = list[REST])
-        res = list[FIRST];
-    } else {
-      // Don't special-case string; its iterator returns code points by combining surrogate pairs
-      if (isArray(list)) {
-        if (list.length > 0)
-          return list[list.length-1];
-        return NIL;
-      }
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
-      for (let value of list)
-        res = value;
-    }
-    return res;
-  }
-
-  defineGlobalSymbol("butlast", butlast, { usesDynamicScope: false, dontInline: true, group: "list-op" }); // TODO: needs unit test!
-  function butlast(list) {
-    let res = NIL, last;
-    if (iterateAsList(list)) {
-      for ( ; moreList(list) && moreList(list[REST]); list = list[REST])
-        if (last) last = last[REST] = cons(list[FIRST], NIL);
-        else res = last = cons(list[FIRST], NIL);
-    } else {
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
-      let previous, first = true;;
-      for (let value of list) {
-        if (!first) {
-          let item = cons(previous, NIL);
-          if (last) last = last[REST] = item;
-          else res = last = item;
-        }
-        first = false;
-        previous = value;
-      }
-    }
-    return res;
-  }
-
-  defineGlobalSymbol("length", length, { usesDynamicScope: false, dontInline: true, group: "list-op" });
-  function length(list) {
-    let n = 0;
-    if (iterateAsList(list)) {
-      for ( ; moreList(list); list = list[REST])
-        n += 1;
-    } else {
-      // Don't special-case string. Its iterator returns code points by combining surrogate pairs
-      if (isArray(list) && list.length > 0)
-        return list.length;
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
-      for (let _ of list)
-        n += 1;
-    }
-    return n;
   }
 
   defineGlobalSymbol("list", list, { group: "list-op", compileHook: list_hook });
@@ -3791,6 +3576,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   // This function parallels "_eval" as closely as possible. If you make a change there
   // you almost certainly have to make a corresponding one here.
   //
+  exportAPI("compileEval", compileEval);
   function compileEval(form, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
     if (--tools.evalLimit < 0)
