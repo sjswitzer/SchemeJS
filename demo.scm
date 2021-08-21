@@ -153,3 +153,13 @@ times-3
   (+ 1 2)
   (+ 3 (throw "ha ha!"))
 )
+
+;; Fungibility of list types
+(cadr [1, 2, 3, 4])
+(define foo (cons 'a '[b c d e]))
+foo
+(length foo)
+(nth 3 foo)
+(car foo)
+(cdr foo)
+(cddr foo)
