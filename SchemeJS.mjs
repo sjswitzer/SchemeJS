@@ -43,6 +43,7 @@ export function createInstance(schemeOpts = {}) {
   const restName = schemeOpts.firstName ?? "rest";
   const nilName = schemeOpts.nilName ?? "NIL";
 
+  let string = globalScope.string ?? required();
   let exportAPI = globalScope.exportAPI ?? required();
   let defineGlobalSymbol = globalScope.defineGlobalSymbol ?? required();
   let isList = globalScope.isList ?? required();
@@ -57,7 +58,11 @@ export function createInstance(schemeOpts = {}) {
   let NIL = globalScope.NIL ?? required();
   let _eval = globalScope._eval ?? required();
   let compare_hooks = globalScope.compare_hooks ?? required();
-  let copy_list = globalScope.copy_list ?? required();
+  let Atom = globalScope.Atom ?? required();
+  let isAtom = globalScope.isAtom ?? required();
+  let cons = globalScope.cons ?? required();
+  let car = globalScope.car ?? required();
+  let cdr = globalScope.cdr ?? required();
   function required() { throw "required" }
 
   //
@@ -395,7 +400,55 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
+  //
+  // Lispy stuff
+  //
 
+  defineGlobalSymbol("intern", Atom, { usesDynamicScope: false, dontInline: true });
+
+  defineGlobalSymbol("copy-list", copy_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // TODO: unit tests!
+  function copy_list(...lists) {
+    let res = NIL, last;
+    for (let list of lists) {
+      if (isNil(list)) return NIL;
+      if (iterateAsList(list)) {
+        for ( ; moreList(list); list = list[REST]) {
+          let item = cons(list[FIRST], NIL);
+          if (last) last = last[REST] = item;
+          else res = last = item;
+        }
+      } else if (isIterable(list)) {
+        for (let item of list) {
+          item = cons(item, NIL);
+          if (last) last = last[REST] = item;
+          else res = last = item;
+          list = list[REST];
+        }
+      } else {
+        throw new TypeError(`Not a list or iterable ${list}`);
+      }
+    }
+    return res;
+  }
+
+  // (apropos substring) -- Returns a list of all atoms containing the given substring in their names
+  defineGlobalSymbol("apropos", apropos, { dontInline: true });
+  function apropos(substring) {
+    if (!substring) substring = "";
+    substring = substring.toLowerCase();
+    let matches = NIL, scope = this;
+    for ( ; scope && scope !== Object; scope = Object.getPrototypeOf(scope)) {
+      let symbols = Object.getOwnPropertySymbols(scope);
+      for (let symbol of symbols) {
+        if (!isAtom(symbol)) continue;
+        let name = string(symbol);
+        if (name.toLowerCase().includes(substring))
+          matches = cons(symbol, matches);
+      }
+    }
+    return this.nsort(matches,
+      (a,b) => a.description.toLowerCase() < b.description.toLowerCase());
+  }
 
   return globalScope;
 

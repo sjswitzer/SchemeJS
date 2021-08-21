@@ -411,14 +411,14 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("FIRST", FIRST);
   exportAPI("REST", REST);
   
-
   //
   // Atoms are Symbols that are in the ATOMS object
   //
   const ATOMS = {};
-
   const isAtom = obj => typeof obj === 'symbol' && ATOMS[obj.description] === obj;
+  exportAPI("isAtom", isAtom);
 
+  exportAPI("Atom", Atom);
   function Atom(name) {
     // If they pass in an atom, just return it
     if (isAtom(name)) return name;
@@ -666,7 +666,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   defineGlobalSymbol("VERSION", VERSION);
-  defineGlobalSymbol("intern", Atom, { usesDynamicScope: false, dontInline: true }, "Atom");
 
   class SchemeError extends Error {};
   SchemeError.prototype.name = "SchemeError";
@@ -1744,31 +1743,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return res;
   }
 
-  defineGlobalSymbol("copy-list", copy_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // TODO: unit tests!
-  function copy_list(...lists) {
-    let res = NIL, last;
-    for (let list of lists) {
-      if (isNil(list)) return NIL;
-      if (iterateAsList(list)) {
-        for ( ; moreList(list); list = list[REST]) {
-          let item = cons(list[FIRST], NIL);
-          if (last) last = last[REST] = item;
-          else res = last = item;
-        }
-      } else if (isIterable(list)) {
-        for (let item of list) {
-          item = cons(item, NIL);
-          if (last) last = last[REST] = item;
-          else res = last = item;
-          list = list[REST];
-        }
-      } else {
-        throw new TypeError(`Not a list or iterable ${list}`);
-      }
-    }
-    return res;
-  }
-
   // XXX TODO: member and memq are almost certainly wrong. Need to find out about SIOD equality.
   // (member key list)
   //     Returns the portion of the list where FIRST is equal to the key, or () if none found.
@@ -1814,25 +1788,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       }
     }
     throw new RangeError(`nth`);
-  }
-
-  // (apropos substring) -- Returns a list of all atoms containing the given substring in their names
-  defineGlobalSymbol("apropos", apropos, { dontInline: true });
-  function apropos(substring) {
-    if (!substring) substring = "";
-    substring = substring.toLowerCase();
-    let matches = NIL, scope = this;
-    for ( ; scope && scope !== Object; scope = Object.getPrototypeOf(scope)) {
-      let symbols = Object.getOwnPropertySymbols(scope);
-      for (let symbol of symbols) {
-        if (!isAtom(symbol)) continue;
-        let name = string(symbol);
-        if (name.toLowerCase().includes(substring))
-          matches = cons(symbol, matches);
-      }
-    }
-    return this.nsort(matches,
-      (a,b) => a.description.toLowerCase() < b.description.toLowerCase());
   }
 
   // (map fn list1 list2 ...)
