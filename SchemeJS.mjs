@@ -67,6 +67,7 @@ export function createInstance(schemeOpts = {}) {
   let parseSExpr = globalScope.parseSExpr ?? required();
   let SchemeEvalError = globalScope.SchemeEvalError ?? required();
   let compileEval = globalScope.compileEval ?? required();
+  let SchemeError = globalScope.SchemeError ?? required();
   let SchemeCompileError = globalScope.SchemeCompileError ?? required();
   function required() { throw "required" }
 
@@ -780,6 +781,68 @@ export function createInstance(schemeOpts = {}) {
       }
     }
     throw new RangeError(`nth`);
+  }
+
+  let gensym_count = 0;
+  const gensym = (name = `*gensym-${gensym_count++}*`) => Symbol(name);
+  defineGlobalSymbol("gensym", gensym);
+
+  //
+  // SIOD-style try/catch
+  //
+  class SchemeJSThrow extends SchemeError {
+    constructor(tag, value, msg) {
+      value;
+      super(msg);
+      this.tag = tag;
+      this.value = value;
+    }
+    toString() {
+      return `${super.toString()} ${string(this.tag)} ${string(this.value)}`;
+    }
+  };
+  SchemeJSThrow.prototype.name = "SchemeJSThrow";
+
+  // (*throw tag value) -- SIOD style
+  defineGlobalSymbol("*throw", schemeThrow, { usesDynamicScope: false, dontInline: true });
+  function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
+
+  // (*catch tag form ...) -- SIOD style
+  defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1, compileHook: siod_catch_hook });
+  function schemeCatch(tag, form, ...forms) {  // XXX order of args?
+    let val;
+    try {
+      val = _eval(form, this);
+      for (let i = 0, formsLength = forms.length; i < forms.length; ++i)
+        val = _eval(forms[i], this);
+    } catch (e) {
+      if (!(e instanceof SchemeJSThrow)) throw e;  // rethrow
+      if (e.tag !== tag) throw e;
+      val = e.value;
+    }
+    return val;
+  }
+  function siod_catch_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    if (args.length < 2) throw new LogicError(`Bad catch`);
+    let ssaTag = args[0];
+    let ssaResult = newTemp('siod_catch'), ssaValue = 'NIL';
+    emit(`let ${ssaResult};`);
+    emit(`try {`);
+    let saveIndent = tools.indent;
+    tools.indent += '  ';
+    for (let i = 1; i < args.length; ++i)
+      ssaValue = compileEval(args[i], ssaScope, tools);
+    emit(`${ssaResult} = ${ssaValue};`);
+    tools.indent = saveIndent;
+    emit(`} catch (e) {`);
+    tools.indent += '  ';
+    let ssaSchemeJSThrow = use(bind(SchemeJSThrow));
+    emit(`if (!(e instanceof ${ssaSchemeJSThrow}) || e.tag !== ${ssaTag}) throw e;`)
+    emit(`${ssaResult} = e.value;`);
+    tools.indent = saveIndent;
+    emit(`}`);
+    return ssaResult;
   }
 
   return globalScope;

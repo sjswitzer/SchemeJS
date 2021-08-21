@@ -1449,6 +1449,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return ssaResult;
   }
 
+  // Too generally useful to move to the Scheme-specific module
   // (map fn list1 list2 ...)
   defineGlobalSymbol("map", map, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
   function map(fn, ...lists) {
@@ -1692,39 +1693,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
 
   // TODO: lazy-filter?
 
-  // Turns iterable objects like arrays into lists, recursively to "depth" (default 1) deep.
-  defineGlobalSymbol("to-list", to_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });
-  function to_list(obj, depth = 1) {
-    if (depth <= 0) return obj;
-    if (isNil(obj) || isList(obj)) return obj;
-    if (typeof obj === 'object') {
-      if (isList(obj)) return obj;
-      let list = NIL, last;
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
-      for (let value of obj) {
-        if (depth > 1 && isIterable(value))
-          value = to_list.call(this, value, depth-1);
-        if (last) last = last[REST] = cons(value, NIL);
-        else list = last = cons(value, NIL);
-      }
-      return list;
-    }
-    return NIL;
-  }
-
-  // Turns iterable objects like lists into arrays, recursively to "depth"
-  defineGlobalSymbol("to-array", to_array, { usesDynamicScope: false, dontInline: true, group: "list-op" });
-  function to_array(obj, depth = 1) {
-    if (depth <= 0) return obj;
-    res = [];
-    for (let item of obj) {
-      if (depth > 1 && isIterable(item))
-        value = to_array.call(this, item, depth-1);
-      res.push(item);
-    }
-    return res;
-  }
-
   // (let (binding1 binding2 ...) form1 form2 ...) -- let* behavior
   //     (let ((x 10)
   //           (y 20))
@@ -1937,64 +1905,9 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   //
-  // try/catch/finally.
+  // try/catch
   //
-  class SchemeJSThrow extends SchemeError {
-    constructor(tag, value, msg) {
-      value;
-      super(msg);
-      this.tag = tag;
-      this.value = value;
-    }
-    toString() {
-      return `${super.toString()} ${string(this.tag)} ${string(this.value)}`;
-    }
-  };
-  SchemeJSThrow.prototype.name = "SchemeJSThrow";
 
-  // (*throw tag value) -- SIOD style
-  defineGlobalSymbol("*throw", schemeThrow, { usesDynamicScope: false, dontInline: true });
-  function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
-
-  // (*catch tag form ...) -- SIOD style
-  defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1, compileHook: siod_catch_hook });
-  function schemeCatch(tag, form, ...forms) {  // XXX order of args?
-    let val;
-    try {
-      val = _eval(form, this);
-      for (let i = 0, formsLength = forms.length; i < forms.length; ++i)
-        val = _eval(forms[i], this);
-    } catch (e) {
-      if (!(e instanceof SchemeJSThrow)) throw e;  // rethrow
-      if (e.tag !== tag) throw e;
-      val = e.value;
-    }
-    return val;
-  }
-  function siod_catch_hook(args, ssaScope, tools) {
-    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    if (args.length < 2) throw new LogicError(`Bad catch`);
-    let ssaTag = args[0];
-    let ssaResult = newTemp('siod_catch'), ssaValue = 'NIL';
-    emit(`let ${ssaResult};`);
-    emit(`try {`);
-    let saveIndent = tools.indent;
-    tools.indent += '  ';
-    for (let i = 1; i < args.length; ++i)
-      ssaValue = compileEval(args[i], ssaScope, tools);
-    emit(`${ssaResult} = ${ssaValue};`);
-    tools.indent = saveIndent;
-    emit(`} catch (e) {`);
-    tools.indent += '  ';
-    let ssaSchemeJSThrow = use(bind(SchemeJSThrow));
-    emit(`if (!(e instanceof ${ssaSchemeJSThrow}) || e.tag !== ${ssaTag}) throw e;`)
-    emit(`${ssaResult} = e.value;`);
-    tools.indent = saveIndent;
-    emit(`}`);
-    return ssaResult;
-  }
-
-  // (throw value) -- JavaScript style
   defineGlobalSymbol("throw", js_throw);
   function js_throw(value) { throw value; return undefined; } // "return" lets compiler use template
 
@@ -2060,10 +1973,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       tools.deleteEmitted(scopeLines);
     return ssaResult;
   }
-
-  let gensym_count = 0;
-  const gensym = (name = `*gensym-${gensym_count++}*`) => Symbol(name);
-  defineGlobalSymbol("gensym", gensym);
 
   // (define variable value)
   // (define (fn args) forms)
