@@ -54,7 +54,7 @@ _factoral
 (_factoral 50n)
 
 ;; Optional parameters
-(define (opt a b (? c (+ 2 3))) (list a b c))
+(define (opt a b (c (+ 2 3))) (list a b c))
 (opt 1 2 3)
 (opt 1 2)
 (opt 1)  ;; Note the binding in the closure scope
@@ -64,7 +64,7 @@ _factoral
 ((opt 1) 8)
 
 ;; Let's compile a function with optional parameters
-(compile (opt a b (? c (+ 2 3))) (list a b c))
+(compile (opt a b (c (+ 2 3))) (list a b c))
 ;; And see what we get
 (println (String opt))
 

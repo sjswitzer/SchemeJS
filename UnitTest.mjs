@@ -550,7 +550,7 @@ export function run(opts = {}) {
 
     { // optional paramaters
       let savedScope = beginTestScope();
-      EXPECT(` (define (opt a b (? c (+ 2 3))) (list a b c)) `, ` 'opt `)
+      EXPECT(` (define (opt a b (c (+ 2 3))) (list a b c)) `, ` 'opt `)
       EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
       EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
       EXPECT(` (opt 1) `, isClosure);
@@ -560,7 +560,7 @@ export function run(opts = {}) {
 
     { // optional paramaters, compiled
       let savedScope = beginTestScope();
-      EXPECT(` (compile (opt a b (? c (+ 2 3))) (list a b c)) `, ` 'opt `)
+      EXPECT(` (compile (opt a b (c (+ 2 3))) (list a b c)) `, ` 'opt `)
       EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
       EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
       EXPECT(` (opt 1) `, isClosure);

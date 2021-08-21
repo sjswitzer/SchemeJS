@@ -437,7 +437,6 @@ export function createInstance(schemeOpts = {}) {
   ATOMS["\\#"] = ATOMS[LAMBDA_CHAR+"#"] = ATOMS[lambdaStr+"#"] = SLAMBDA_ATOM;
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%closure#");
-  const QUESTION_ATOM = Atom("?");
   exportAPI("LAMBDA_CHAR", LAMBDA_CHAR);
 
   exportAPI("iteratorFor", iteratorFor);
@@ -2026,9 +2025,8 @@ export function createInstance(schemeOpts = {}) {
         for (let i = 0; i < argCount; ++i, closureParams = closureParams[REST]) {
           if (!isList(closureParams)) throw new LogicError(`Shouldn't happen`);
           let param = closureParams[FIRST];
-          if (isList(param) && param[FIRST] === QUESTION_ATOM && isList(param[REST]))
-            param = param[REST][FIRST];
-          if (typeof param !== 'symbol') throw new LogicError(`Shouldn't happen`);
+          if (isList(param) && typeof param[FIRST] === 'symbol')
+            param = [FIRST];
           scope[param] = argv[i];
         }
       } else {
@@ -2184,11 +2182,11 @@ export function createInstance(schemeOpts = {}) {
     for ( ; moreList(params); params = params[REST]) {
       let param = params[FIRST];
       if (isList(param)) {
-        if (!param[FIRST] === QUESTION_ATOM && isList(param[REST] && typeof param[REST][FIRST] === 'symbol'))
+        if (typeof param[FIRST] !== 'symbol')
           throwBadLambda(lambda, `what's this?  ${string(param)}`);
         if (!requiredCount)
           requiredCount = paramCount;
-        param = param[REST][FIRST];
+        param = param[FIRST];
       } else if (typeof param !== 'symbol') {
         throwBadLambda(lambda, `parameter ${string(param)} not an atom`);
       }
@@ -2218,10 +2216,9 @@ export function createInstance(schemeOpts = {}) {
       let params = lambdaParams, i = 0, argLength = args.length;
       for ( ; moreList(params); ++i, params = params[REST]) {
         let param = params[FIRST], optionalForms, arg;
-        if (isList(param) && param[FIRST] === QUESTION_ATOM) {
-          let paramCdr = param[REST];
-          param = paramCdr[FIRST];
-          optionalForms = paramCdr[REST];
+        if (isList(param) && typeof param[FIRST] === 'symbol') {
+          optionalForms = param[REST];
+          param = param[FIRST];
         }
         arg = args[i];  // undefined if i >= length OR if deliberately undefined
         if (arg === undefined) {
@@ -3203,10 +3200,10 @@ export function createInstance(schemeOpts = {}) {
     for (; moreList(params); ++paramCount, params = params[REST]) {
       let param = params[FIRST], ssaParam;
       if (isList(param)) {
-        if (!param[FIRST] === QUESTION_ATOM && isList(param[REST] && typeof param[REST][FIRST] === 'symbol'))
+        if (typeof param[FIRST] !== 'symbol')
           throwBadCompiledLambda(lambda, `Bad param ${string(param)}`);
-        optionalFormsVec.push(param[REST][REST]);
-        param = param[REST][FIRST]
+        optionalFormsVec.push(param[REST]);
+        param = param[FIRST];
         ssaParam = newTemp(param);
         if (requiredCount === undefined)
           requiredCount = paramCount;
