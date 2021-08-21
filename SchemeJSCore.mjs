@@ -80,7 +80,7 @@ export function createInstance(schemeOpts = {}) {
   // by an object:
   //
   //   MORELIST -- A property which, if true, says that there are FIRST and REST
-  //               properties. If not true, the list is a NIL VALUE.
+  //               properties. If false (exactly), the list is a NIL VALUE.
   //   FIRST    -- The first item in the list ("car," if you will).
   //   REST     -- The remainder of the list.
   //   LIST     -- If true, the item is a list (null is also a list... of nothing)
@@ -342,7 +342,9 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
-  // NIL is an utter degenerate that signals errors when accessed incorrectly
+  // NIL is an utter degenerate that signals errors when accessed incorrectly,
+  // NIL inherits from null rather than Object so that, once frozen, there is literally
+  // no way that NIL can be changed.
   //
   const NIL = Object.create( null, {
     [FIRST]: {
@@ -372,12 +374,12 @@ export function createInstance(schemeOpts = {}) {
   });
   Object.freeze(NIL);
   
-  // Create a new scope with newScope(oldScope, "description").
+  // Create a new scope with newScope(enclosingScope, "description").
   // A new scope's prototype is the enclosing scope.
   // This way, a scope chain is a prototype chain and resolving
   // a symbol is as simple as "scope[sym]"!
   //
-  // SCOPE_IS_SYMBOL hints the printer that it's a scope and what kind.
+  // SCOPE_IS_SYMBOL hints the printer that it's a scope... and what kind.
   const SCOPE_IS_SYMBOL = Symbol("SCOPE_IS");
 
   let globalScope = new Object();
@@ -390,8 +392,7 @@ export function createInstance(schemeOpts = {}) {
     return scope;
   }
 
-  exportAPI("isCons", isList);
-  exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
+  exportAPI("isList", isList);
 
   const isArray = Array.isArray;
 
@@ -1633,7 +1634,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return true;
   }
 
-  // Can be inlined (if isList, isIterator, isCons, etc. are bound), but doesn't seem wise
+  // Can be inlined (if isList, isIterator, isList, etc. are bound), but doesn't seem wise
   defineGlobalSymbol("append", append, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function append(...lists) {
     let res = NIL, last;
@@ -2496,17 +2497,24 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
   }
 
+  //
   // Because lists can be circular and stack depths are finite, equal
   // must have bounds on its recursion and looping. The bounds are large and
   // user-optionble, but they are finite. If the bounds are exceeded, deep_eq
   // returns "undefined," which is "falsey" but distinguishable from
   // "false."
+  //
   // A client can pass in a "report" object which is filled-in with a report
   // on where and how objects differ. This has proved useful for unit testing
   // but can be generally useful. The report can also contain a strCmp
   // property that determines how strings are compared, for instance you can ignore case
   // or leading and trailing whitespace. Sometimes you're playing horseshoes.
   // You can also opt that NaNs are considered equal.
+  //
+  // An EQUAL_FUNCTION can be attached to any object or class to define how equal
+  // compares the object.
+  //
+  exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
   exportAPI("equal", equal);
   defineGlobalSymbol("equal?", equal, { usesDynamicScope: false, dontInline: true });
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
