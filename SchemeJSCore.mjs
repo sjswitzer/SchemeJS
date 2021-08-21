@@ -9,6 +9,7 @@
 export const VERSION = "1.1 (alpha)";
 
 export const LogicError = Error;
+const isArray = Array.isArray;
 
 // So that optional parameters show up pretty when printed
 const optional = undefined;
@@ -123,7 +124,7 @@ export function createInstance(schemeOpts = {}) {
   let ITERATE_AS_LIST = Symbol("ITERATE-AS-LIST");
   const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JITCOMPILED");
   // Since these symbols are tagged on external JS functions and objects,label them as ours as a courtesy.
-  const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR'), EQUAL_FUNCTION = Symbol('SchemeJS-EQUAL');
+  const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
 
   // I trust JITs to inline these
   const isList = obj => obj != null && obj[LIST] === true;
@@ -392,9 +393,22 @@ export function createInstance(schemeOpts = {}) {
     return scope;
   }
 
-  exportAPI("isList", isList);
+  exportAPI("exportAPI", exportAPI)
+  function exportAPI(name, value, ...aliases) {
+    globalScope[name] = value;
+    for (let alias in aliases)
+      globalScope[alias] = value;
+  }
 
-  const isArray = Array.isArray;
+  exportAPI("isList", isList);
+  exportAPI("isNil", isNil);
+  exportAPI("iterateAsList", iterateAsList);
+  exportAPI("moreList", moreList);
+  exportAPI("LIST", LIST);
+  exportAPI("MORELIST", MORELIST);
+  exportAPI("FIRST", FIRST);
+  exportAPI("REST", REST);
+  
 
   //
   // Atoms are Symbols that are in the ATOMS object
@@ -511,18 +525,6 @@ export function createInstance(schemeOpts = {}) {
         dumpIdentifierMap("CHARTAB", tableName, charCode, ch, jsChar(charCode));
       }
     }
-  }
-
-  //
-  // Everything is encapsulated in a function scope because JITs
-  // should be able to resolve lexically-scoped references most efficiently.
-  // Since "this" is used as the current scope, a SchemeJS instance
-  // is the global scope itself!
-  //
-  function exportAPI(name, value, ...aliases) {
-    globalScope[name] = value;
-    for (let alias in aliases)
-      globalScope[alias] = value;
   }
 
 // Why are these initialized here, you ask?
@@ -662,14 +664,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
       fnInfo.usesDynamicScope = usesDynamicScope;
     fn[COMPILE_INFO] = fnInfo;
   }
-
-  exportAPI("PAIR_SYMBOL", LIST);
-  exportAPI("LIST_SYMBOL", LIST);
-  exportAPI("FIRST_SYMBOL", FIRST);
-  exportAPI("REST_SYMBOL", REST);
-  exportAPI("LAZYFIRST_SYMBOL", LAZYFIRST);
-  exportAPI("LAZYREST_SYMBOL", LAZYREST);
-  exportAPI("SUPERLAZY_SYMBOL", SUPERLAZY);
 
   defineGlobalSymbol("VERSION", VERSION);
   defineGlobalSymbol("intern", Atom, { usesDynamicScope: false, dontInline: true }, "Atom");
@@ -1014,6 +1008,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     return compare_hooks(args, ssaScope, tools, 'A < B', 'lt');
   }
 
+  exportAPI("compare_hooks", compare_hooks)
   function compare_hooks(args, ssaScope, tools, op, name) {
     if (args.length < 2) return 'false'; // individual invokers need to override this
     if (args.length === 2) {
@@ -1086,23 +1081,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
   function ge_hook(args, ssaScope, tools) {
     return compare_hooks(args, ssaScope, tools, 'A >= B', 'ge');
-  }
-
-  defineGlobalSymbol("=", scheme_eq, { evalArgs: 2, compileHook: scheme_eq_hook, group: "compare-op" });
-  function scheme_eq(a, b, ...rest) {
-    let i = 0, restLength = rest.length;
-    for (;;) {
-      if (!equal(a, b)) return false;
-      if (i >= restLength) break;
-      a = b;
-      b = _eval(rest[i++], this);
-    }
-    return true;
-  }
-  function scheme_eq_hook(args, ssaScope, tools) {
-    if (args.length < 2) return 'true';
-    tools.use(tools.bind(equal, "equal"));
-    return compare_hooks(args, ssaScope, tools, 'equal(A, B)', 'scheme_eq');
   }
 
   defineGlobalSymbol("==", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" });
@@ -2386,7 +2364,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     if (isArray(list)) {
       // ES10 stipulates that it only cares whether the compare function
       // returns > 0, which means move "b"  before "a," or <= zero,
-      // which means leave "a" before "b". There's no ned to distinguish
+      // which means leave "a" before "b". There's no need to distinguish
       // the "equal" case. Which is nice for us because the "before"
       // predicate doesn't distinguish that case (without a second call
       // with reversed arguments.)
@@ -2497,162 +2475,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
     }
   }
 
-  //
-  // Because lists can be circular and stack depths are finite, equal
-  // must have bounds on its recursion and looping. The bounds are large and
-  // user-optionble, but they are finite. If the bounds are exceeded, deep_eq
-  // returns "undefined," which is "falsey" but distinguishable from
-  // "false."
-  //
-  // A client can pass in a "report" object which is filled-in with a report
-  // on where and how objects differ. This has proved useful for unit testing
-  // but can be generally useful. The report can also contain a strCmp
-  // property that determines how strings are compared, for instance you can ignore case
-  // or leading and trailing whitespace. Sometimes you're playing horseshoes.
-  // You can also opt that NaNs are considered equal.
-  //
-  // An EQUAL_FUNCTION can be attached to any object or class to define how equal
-  // compares the object.
-  //
-  exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
-  exportAPI("equal", equal);
-  defineGlobalSymbol("equal?", equal, { usesDynamicScope: false, dontInline: true });
-  function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
-    if (a === b) return true;
-    let stringCompare = report.stringCompare ?? ((a, b) => a === b);
-    let NaNsEqual = report.NaNsEqual;
-    let res = deep_eq(a, b, 0, 0), originalReport = report;
-    if (report !== originalReport)
-      originalReport.reason = report;
-    return res;
-    function deep_eq(a, b, depth, length) {
-      if (a === b) return true;
-      if (depth > maxDepth) {
-        report.maxedOut = report.maxDepth = depth;
-        return undefined;
-      }
-      if (length > maxLength) {
-        report.maxedOut = report.maxLength = length;
-        return undefined;
-      }
-      // Any object or class can have an EQUAL_FUNCTION
-      // The EQUAL_FUNCTION can deem objects of different types equal if it chooses,
-      // So this precedes the type check.
-      let equalFunction = (a != null && a[EQUAL_FUNCTION]) ?? (b != null && b[EQUAL_FUNCTION]);
-      if (equalFunction) {
-        let res = equalFunction(a, b);
-        // If nullish, continue with other tests!
-        if (res != null) {
-          report.a = a, report.b = b;
-          report.equalFunction = equalFunction;
-          return res;
-        }
-      }
-      if (typeof a !== typeof b) {
-        report.a = a, report.b = b;
-        report.typesDiffer = true;
-        return false;
-      }
-      // Both types same now so no need to test typeof b
-      if (typeof a === 'string') {
-        let res = stringCompare(a, b);
-        if (!res) {
-          report.a = a, report.b = b;
-          report.stringsDiffer = true;
-        }
-        return res;
-      }
-      // Normally NaNs are not equal to anything, but we can opt that they are
-      if (typeof a === 'number' && NaNsEqual && isNaN(a) && isNaN(b))
-        return true;
-      if ((a == null || b == null) || typeof a !== 'object') { // this includes Functions, which are strangely not 'object'
-        let res = a === b;
-        if (!res) {
-          report.a = a, report.b = b;
-          report.valuesDiffer = true;
-        }
-        return res;
-      }
-      if (iterateAsList(a)) {
-        if (!iterateAsList(b)) {
-          report.a = a, report.b = b;
-          report.valuesDiffer = true;
-          return false;
-        }
-        let i = 0, aRest = a, bRest = b;
-        for ( ; moreList(aRest) && moreList(bRest); ++i, ++length, aRest = aRest[REST], bRest = bRest[REST]) {
-          let res = deep_eq(aRest[FIRST], bRest[FIRST], depth+1, length);
-          if (!res) {
-            report.list = a, report.a = aRest[FIRST], report.b = bRest[FIRST];
-            report.elementsDiffer = i;
-            report = { reason: report };
-            return res;
-          }
-        }
-        if (isNil(aRest) && isNil(bRest))
-          return true;
-        return deep_eq(aRest, bRest, depth+1, length+1);
-      } else if (iterateAsList(b)) {
-        report.a = a, report.b = b;
-        report.valuesDiffer = true;
-        return false;
-      }
-      if (Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) {
-        report.a = a, report.b = b;
-        report.prototypesDiffer = true;
-        return false;
-      }
-      // Since the protos are the same; if either is an array, both are.
-      // But I might change my mind about the prototype check, so leave the additional
-      // tests in for now.
-      if (isArray(a)) {
-        if (a.length != b.length) {
-          report.a = a, report.b = b;
-          report.aVal = a.length, report.bVal = b.length;
-          report.property = 'length';
-          report.valuesDiffer = true;
-          return false;
-        }
-        // Array elements are also properties so fall through to Object comparison.
-        // This also distinguishes Arrays that have missing elements.
-      }
-      // Object compare, symbols first (since Scheme is symbol-oriented), then names.
-      let res = compareProps(Object.getOwnPropertySymbols(a), Object.getOwnPropertySymbols(b));
-      if (!res) return res;
-      return compareProps(Object.getOwnPropertyNames(a), Object.getOwnPropertyNames(b));
-
-      function compareProps(aProps, bProps) {
-        for (let property of aProps) {
-          if (!b.hasOwnProperty(property)) {
-            report.a = a, report.b = b;
-            report.aVal = a[property];
-            report.bMissingProperty = property;
-            report = { reason: report };
-            return false;
-          }
-        }
-        for (let property of bProps) {
-          if (!a.hasOwnProperty(property)) {
-            report.a = a, report.b = b;
-            report.bVal = b[property];
-            report.aMissingProperty = property;
-            report = { reason: report };
-            return false;
-          }
-          let res = deep_eq(a[property], b[property], depth+1, length);
-          if (!res) {
-            report.a = a, report.b = b;
-            report.aVal = a[property], report.bVal = b[property];
-            report.elementsDiffer = property;
-            report.valuesDiffer = true;
-            report = { reason: report };
-            return res;
-          }
-        }
-        return true;
-      }
-    }
-  }
 
   //
   // try/catch/finally.
@@ -2836,6 +2658,7 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   //
 
   defineGlobalSymbol("eval", _eval, { dontInline: true });
+  exportAPI("_eval", _eval);
   function _eval(form, scope = this) {
     // Can't be called "eval" because "eval", besides being a global definition,
     // is effectively a keyword in JavaScript.

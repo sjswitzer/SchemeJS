@@ -45,8 +45,8 @@ export function run(opts = {}) {
   const list = globalScope.list ?? required();
   const Atom = globalScope.Atom ?? required();
   const compile_lambda = globalScope.compile_lambda ?? required();
-  function required() { throw "required" }
   const justTestJIT = opts.justTestJIT;
+  function required() { throw "required" }
 
   const isCompileOrEvalError = e => (e instanceof SchemeCompileError) || (e instanceof SchemeEvalError);
   const evalString = str => testScope.eval_string(str);
