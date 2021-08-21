@@ -36,6 +36,10 @@ export function createInstance(schemeOpts = {}) {
   const reportLoadInput = schemeOpts.reportLoadInput ?? (expr => undefined);
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
+  const arraysAreLists = schemeOpts.arraysAreLists ?? true;
+  const generatorsAreLists = schemeOpts.generatorsAreLists ?? true;
+  const standardIteratorsAreLists = schemeOpts.standardIteratorsAreLists ?? true;
+  const allIteratorsAreLists = schemeOpts.standardIteratorsAreLists ?? false;
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
   const firstName = schemeOpts.firstName ?? "first";
   const restName = schemeOpts.firstName ?? "rest";
@@ -100,64 +104,39 @@ export function createInstance(schemeOpts = {}) {
   // (Except for the NIL check, which is last for that reason.)
   const isPrimitive = obj => obj == null ||
       (typeof obj !== 'symbol' && typeof obj !== 'object')
-      || obj[MORELIST] === false;
+      || obj[MORELIST] === false;   // NIL test
 
   //
-  // First off, Arrays are lists
+  // First off, Arrays are lists (subject to arraysAreLists)
   //
-  Object.defineProperties(Array.prototype, {
-    [LIST]: { value: true },
-    // [ITERATE_AS_LIST] : { value: false },  // not really necessary since it's default
-    [MORELIST]: { get: function() { return this.length > 0 } },
-    [FIRST]: { get: function() {
-      if (this.length > 0) return this[0];
-      throw new SchemeEvalError(`${firstName} of []`);
-    } },
-    [REST]: { get: function() {
-      return new ArrayList(this, 1);
-    } },
-  });
-
-  class ArrayList {
-    _array; _pos; _max;
-    constructor(array, pos, max = MAX_INTEGER) {
-      this._array = array;
-      this._pos = pos;
-      this._max = max;
-    }
-    get [FIRST]() {
-      let array = this._array, pos = this._pos;
-      if (pos < this._max && pos < array.length)
-        return array[pos];
-      throw new SchemeEvalError(`${firstName} beyond end of array`);
-    }
-    get [REST]() {
-      return new ArrayList(this._array, this._pos + 1, this._max);
-    }
-    get [MORELIST]() {
-      let pos = this._pos;
-      return pos < this._max && pos < this._array.length;
-    }
-    [Symbol.iterator] = pairIterator;
-  };
-  ArrayList.prototype[LIST] = true;
-  ArrayList.prototype[ITERATE_AS_LIST] = true;
-
-  //
-  // Second of all, all generators are lists
-  //
-  function* dummyGenerator() {}
-  let gen = dummyGenerator();
-  for ( ; ; gen = Object.getPrototypeOf(gen)) {
-    if (gen == null) throw new LogicError(`generator has no iterator`);
-    if (gen.hasOwnProperty(Symbol.iterator)) {
-      patchPrototypeWithIteratorListProtocol(gen);
-      break;
-    }
+  if (arraysAreLists || standardIteratorsAreLists || allIteratorsAreLists) {
+    Object.defineProperties(Array.prototype, {
+      [LIST]: { value: true },
+      [ITERATE_AS_LIST] : { value: false },  // not really necessary since it's default
+      [MORELIST]: { get: function() { return this.length > 0 } },
+      [FIRST]: { get: function() {
+        if (this.length > 0) return this[0];
+        throw new SchemeEvalError(`${firstName} of []`);
+      } },
+      [REST]: { get: function() {
+        return new ArrayList(this, 1);
+      } },
+    });
   }
 
   //
-  // Thirdly, patch Map, Set, and TypedArray(s) to support the list protocol.
+  // Secondly, all generators can be lists (subject to generatorsAreLists)
+  //
+  if (generatorsAreLists) {
+    function* dummyGenerator() {}
+    monkeyPatchListProtocolForGenerators(dummyGenerator());
+    // TODO: I need to understand async generators better
+    //   async function* dummyAsyncGenerator() {}
+    //   monkeyPatchListProtocolForGenerators(dummyAsyncGenerator());
+  }
+
+  //
+  // Thirdly, Map, Set, and TypedArray(s) are lists (subject to standardIteratorsAreLists).
   // For some reason, WeakMap and WeakSet do not currently (Aug 2021) support iteration.
   //
   // TODO: Maybe this could be simpler and more general but I need to think about
@@ -165,51 +144,31 @@ export function createInstance(schemeOpts = {}) {
   // objert happens to be iterable. The assumption has always been that the LIST and related
   // properties are trivial and (almost always) very cheap. Patching Object threatens that assumption.
   //
-  for (let cls of [Map, Set,
+  if (standardIteratorsAreLists || allIteratorsAreLists) {
+    for (let cls of [Map, Set,
       Int8Array, Uint8Array, Uint8ClampedArray,
       Int16Array, Uint16Array,
       Int32Array, Uint32Array,
       Float32Array, Float64Array,
       BigInt64Array, BigUint64Array,
-    ]) patchPrototypeWithIteratorListProtocol(cls.prototype);
-
-  function patchPrototypeWithIteratorListProtocol(proto) {
-    Object.defineProperties(proto, {
-      [LIST]: { value: true },
-      [ITERATE_AS_LIST]: { value: true },
-      [SUPERLAZY]: { value: true },
-      [FIRST]: { get: function() {
-        this[MORELIST];
-        return this[FIRST];
-      } },
-      [REST]: { get: function() {
-        this[MORELIST];
-        return this[REST];
-      } },
-      [MORELIST]: { get: function iterableMoreList() {
-        let iter = this[Symbol.iterator]();
-        let { done, value } = iter.next();
-        if (done) {
-          Object.defineProperties(this, {
-            [FIRST]: { get: function() { throw new SchemeEvalError(`${firstName} on exhausted iterator`)} },
-            [REST]: { value },
-            [MORELIST]: { value: false },
-          });
-          return false;
-        }
-        Object.defineProperties(this, {
-          [FIRST]: { value },
-          [REST]: { value: new LazyIteratorList(iter) },
-          [MORELIST]: { value: true },
-          [SUPERLAZY]: { value: false },
-        });
-        return true;
-      } },
-    });
+    ])
+      monkeyPatchListProtocolForIterable(cls.prototype);
   }
 
   //
+  // If you're feeling adventurous, all iterators can be lists.
+  // I haven't evaluated the performance consquwnces of this.
+  // On the one hand, it makes testing whether something is a list potentially
+  // more expensive than I'd like. On the other hand maybe it doesn't
+  // matter because the user is intent on doing listy things with the object,
+  // so why not?
+  //
+  if (allIteratorsAreLists)
+    monkeyPatchListProtocolForIterable(Object.prototype);
+
+  //
   // Finally, a Pair is a list too but not one of any special status.
+  // (But sometimes you just need to make a list, so cons *is* handy to have around.)
   //
   class Pair {
     [FIRST]; [REST];
@@ -240,6 +199,114 @@ export function createInstance(schemeOpts = {}) {
     }
   }
   
+
+  class ArrayList {
+    _array; _pos; _max;
+    constructor(array, pos, max = MAX_INTEGER) {
+      this._array = array;
+      this._pos = pos;
+      this._max = max;
+    }
+    get [FIRST]() {
+      let array = this._array, pos = this._pos;
+      if (pos < this._max && pos < array.length)
+        return array[pos];
+      throw new SchemeEvalError(`${firstName} beyond end of array`);
+    }
+    get [REST]() {
+      return new ArrayList(this._array, this._pos + 1, this._max);
+    }
+    get [MORELIST]() {
+      let pos = this._pos;
+      return pos < this._max && pos < this._array.length;
+    }
+    [Symbol.iterator] = pairIterator;
+  };
+  ArrayList.prototype[LIST] = true;
+  // Once we get into the tail of the array, use list iteration
+  ArrayList.prototype[ITERATE_AS_LIST] = true;
+
+  function monkeyPatchListProtocolForIterable(prototype) {
+    Object.defineProperties(prototype, {
+      [LIST]: { value: true },
+      [ITERATE_AS_LIST]: { value: false }, // this is default bahavior, but might as well be explicit
+      [SUPERLAZY]: { value: true },
+      [FIRST]: { get: function() {
+        if (this[MORELIST])
+          return this._value;
+        throw new SchemeEvalError(`${firstName} on exhausted iterator`);
+      } },
+      [REST]: { get: function() {
+        if (this[MORELIST])
+          return this._rest;
+        throw new SchemeEvalError(`${restName} on exhausted iterator`);
+      } },
+      [MORELIST]: { get: function iterableMoreList() {
+        // Note that typical loops will first test whether something is a list or try accessing
+        // FIRST before traversing to the REST. So that ends up inetantiating the iterator
+        // two or three times. But there's nothing that can be done about it because the underlying
+        // collection can change from time to time and we need to see the current values at the
+        // time of iteration. To take a specific example, FIRST should always be the current
+        // value of the first item in the collection.
+        // There might be a gimmick to get around it but I dunno.
+        // The alternative is to opt out of this feature and ask users to invoke lazy_list explicitly
+        // on non-array iterators.
+        let iter = this[Symbol.iterator]();
+        let { done, value } = iter.next();
+        this._value = value;
+        if (!done)
+          _rest = new LazyIteratorList(iter);
+        return !done;
+      } },
+    });
+  }
+
+  function monkeyPatchListProtocolForGenerators(gen) {
+    for ( ; ; gen = Object.getPrototypeOf(gen)) {
+      if (gen == null)
+        throw new LogicError(`generator has no iterator`);
+      if (gen.hasOwnProperty(Symbol.iterator)) {
+        if (typeof gen[Symbol.iterator] !== 'function')
+          throw new LogicError(`generator has bad iterator`);
+        Object.defineProperties(gen, {
+          [LIST]: { value: true },
+          [ITERATE_AS_LIST]: { value: false },
+          [SUPERLAZY]: { value: true },
+          [FIRST]: { get: function() {
+            this[MORELIST];
+            return this[FIRST];
+          } },
+          [REST]: { get: function() {
+            this[MORELIST];
+            return this[REST];
+          } },
+          [MORELIST]: { get: function iterableMoreList() {
+            let iter = this[Symbol.iterator]();
+            if (typeof iter.next !== 'function')
+              return false;  
+            let { done, value } = iter.next();
+            if (done) {
+              Object.defineProperties(this, {
+                [FIRST]: { get: function() { throw new SchemeEvalError(`${firstName} on exhausted iterator`)} },
+                [REST]: { value },
+                [MORELIST]: { value: false },
+              });
+              return false;
+            }
+            Object.defineProperties(this, {
+              [FIRST]: { value },
+              [REST]: { value: new LazyIteratorList(iter) },
+              [MORELIST]: { value: true },
+              [SUPERLAZY]: { value: false },
+            });
+            return true;
+          } },
+        });
+        break;
+      }
+    }
+  }
+
   // NIL is an utter degenerate that signals errors when accessed incorrectly
   const NIL = Object.create( null, {
     [FIRST]: {
