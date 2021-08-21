@@ -103,7 +103,7 @@ export function createInstance(schemeOpts = {}) {
       || obj[MORELIST] === false;
 
   //
-  // First off, Arrays are lists.
+  // First off, Arrays are lists
   //
   Object.defineProperties(Array.prototype, {
     [LIST]: { value: true },
@@ -144,53 +144,69 @@ export function createInstance(schemeOpts = {}) {
   ArrayList.prototype[ITERATE_AS_LIST] = true;
 
   //
-  // Second of all, all generators are lists:
+  // Second of all, all generators are lists
   //
   function* dummyGenerator() {}
   let gen = dummyGenerator();
   for ( ; ; gen = Object.getPrototypeOf(gen)) {
     if (gen == null) throw new LogicError(`generator has no iterator`);
     if (gen.hasOwnProperty(Symbol.iterator)) {
-      Object.defineProperties(gen, {
-        [LIST]: { value: true },
-        [ITERATE_AS_LIST]: { value: true },
-        [SUPERLAZY]: { value: true },
-        [FIRST]: { get: function() {
-          this[MORELIST];
-          return this[FIRST];
-        } },
-        [REST]: { get: function() {
-          this[MORELIST];
-          return this[REST];
-        } },
-        [MORELIST]: { get: function iterableMoreList() {
-          let iter = this[Symbol.iterator]();
-          let { done, value } = iter.next();
-          if (done) {
-            Object.defineProperties(this, {
-              [FIRST]: { get: function() { throw new SchemeEvalError(`${firstName} on exhausted iterator`)} },
-              [REST]: { value },
-              [MORELIST]: { value: false },
-            });
-            return false;
-          }
-          Object.defineProperties(this, {
-            [FIRST]: { value },
-            [REST]: { value: new LazyIteratorList(iter) },
-            [MORELIST]: { value: true },
-            [SUPERLAZY]: { value: false },
-          });
-          return true;
-        } },
-      });
+      patchPrototypeWithIteratorListProtocol(gen);
       break;
     }
   }
 
   //
-  // TODO: cover Set, Map, TypedArray, etc. that also have iterators OR
-  // make a backstop in Object for any bject with an iterator
+  // Thirdly, patch Map, Set, and TypedArray(s) to support the list protocol.
+  // For some reason, WeakMap and WeakSet do not currently (Aug 2021) support iteration.
   //
+  // TODO: Maybe this could be simpler and more general but I need to think about
+  // the consquences--performance and otherwise--of patching Object to check whether the
+  // objert happens to be iterable. The assumption has always been that the LIST and related
+  // properties are trivial and (almost always) very cheap. Patching Object threatens that assumption.
+  //
+  for (let cls of [Map, Set,
+      Int8Array, Uint8Array, Uint8ClampedArray,
+      Int16Array, Uint16Array,
+      Int32Array, Uint32Array,
+      Float32Array, Float64Array,
+      BigInt64Array, BigUint64Array,
+    ]) patchPrototypeWithIteratorListProtocol(cls.prototype);
+
+  function patchPrototypeWithIteratorListProtocol(proto) {
+    Object.defineProperties(proto, {
+      [LIST]: { value: true },
+      [ITERATE_AS_LIST]: { value: true },
+      [SUPERLAZY]: { value: true },
+      [FIRST]: { get: function() {
+        this[MORELIST];
+        return this[FIRST];
+      } },
+      [REST]: { get: function() {
+        this[MORELIST];
+        return this[REST];
+      } },
+      [MORELIST]: { get: function iterableMoreList() {
+        let iter = this[Symbol.iterator]();
+        let { done, value } = iter.next();
+        if (done) {
+          Object.defineProperties(this, {
+            [FIRST]: { get: function() { throw new SchemeEvalError(`${firstName} on exhausted iterator`)} },
+            [REST]: { value },
+            [MORELIST]: { value: false },
+          });
+          return false;
+        }
+        Object.defineProperties(this, {
+          [FIRST]: { value },
+          [REST]: { value: new LazyIteratorList(iter) },
+          [MORELIST]: { value: true },
+          [SUPERLAZY]: { value: false },
+        });
+        return true;
+      } },
+    });
+  }
 
   //
   // Finally, a Pair is a list too but not one of any special status.
