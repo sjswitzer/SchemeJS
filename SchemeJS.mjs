@@ -12,7 +12,6 @@ export const VERSION = SchemeJS.VERSION;
 export const LogicError = SchemeJS.LogicError;
 const isArray = Array.isArray;
 
-
 // So that optional parameters show up pretty when printed
 const optional = undefined;
 
@@ -49,13 +48,16 @@ export function createInstance(schemeOpts = {}) {
   let isList = globalScope.isList ?? required();
   let isNil = globalScope.isNil ?? required();
   let iterateAsList = globalScope.iterateAsList ?? required();
+  let isIterable = globalScope.isIterable ?? required();
   let moreList = globalScope.moreList ?? required();
   let LIST = globalScope.LIST ?? required();
   let MORELIST = globalScope.MORELIST ?? required();
   let FIRST = globalScope.FIRST ?? required();
   let REST = globalScope.REST ?? required();
+  let NIL = globalScope.NIL ?? required();
   let _eval = globalScope._eval ?? required();
   let compare_hooks = globalScope.compare_hooks ?? required();
+  let copy_list = globalScope.copy_list ?? required();
   function required() { throw "required" }
 
   //
@@ -235,6 +237,165 @@ export function createInstance(schemeOpts = {}) {
     tools.use(tools.bind(equal, "equal"));
     return compare_hooks(args, ssaScope, tools, 'equal(A, B)', 'scheme_eq');
   }
+
+  //
+  // Sorting
+  //
+
+  // (qsort list predicate-fcn access-fcn)
+  //   "qsort" is a lie for API compatibility with SIOD, but this sort has
+  //   comparable performance and is excellent with partially-sorted lists.
+  defineGlobalSymbol("mergesort", mergesort, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "sort", "qsort");
+  function mergesort(list, predicateFn = optional, accessFn = optional) {
+    if (isNil(list)) return NIL;
+    // Sort Arrays as Arrays
+    if (isArray(list))
+      return in_place_mergesort(list.slice(0), predicateFn, accessFn);
+    // Lists and other iterables are sorted as lists
+    if (isList(list))
+      return in_place_mergesort(copy_list(list), predicateFn, accessFn);
+    let copied = NIL, last;
+    if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+    for (let item of list) {
+      item = cons(item, NIL);
+      if (last) last = last[REST] = item;
+      else copied = last = item;
+    }
+    return in_place_mergesort(copied, predicateFn, accessFn);
+  }
+
+  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "in-place-sort", "nsort");
+  function in_place_mergesort(list, predicateFn = optional, accessFn = optional) {
+    if (isNil(list)) return NIL;
+    // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
+    let before = predicateFn, scope = this;
+    if (predicateFn) {
+      if (accessFn) {
+        before = (a, b) => predicateFn.call(scope, accessFn.call(scope, a), accessFn.call(scope, b));
+      }
+    } else {
+      if (accessFn) {
+        before = (a, b) => accessFn.call(scope, a) <  accessFn.call(scope, b);
+      } else {
+        before = (a, b) => a < b
+      }
+    }
+    // Sort arrays as arrays
+    if (isArray(list)) {
+      // ES10 stipulates that it only cares whether the compare function
+      // returns > 0, which means move "b"  before "a," or <= zero,
+      // which means leave "a" before "b". There's no need to distinguish
+      // the "equal" case. Which is nice for us because the "before"
+      // predicate doesn't distinguish that case (without a second call
+      // with reversed arguments.)
+      list.sort((a,b) => before.call(scope, a, b) ? -1 : 1);
+      return list;
+    }
+    if (isList(list)) {
+      return llsort.call(this, list, before);
+    }
+    throw new TypeError(`Not a list or array ${string(list)}`);
+  }
+  
+  // A bottom-up mergesort that coalesces runs of ascending or descending items.
+  // Runs are extended on either end, so runs include more than strictly ascending
+  // or descending sequences. The upshot is that it executes in O(n log m) where "m"
+  // is the number of runs. Lists that are mostly or partly ordered sort MUCH faster
+  // and already-sorted or even reverse-sorted lists sort in linear time because
+  // there's only one run. Sorting a few new items into an already sorted list
+  // is particularly fast.
+  //
+  // This combines run-accumulation from TimSort with the well-known (bottom-up) mergesort.
+  // A run will always be at least two elements long (as long as there are two elements
+  // remaining) but will often be much longer. As far as I know, this is novel.
+  //    https://en.wikipedia.org/wiki/Merge_sort#Bottom-up_implementation_using_lists
+  //    https://gist.github.com/sjswitzer/1dc76dc0b4dcf67a7fef
+  //    https://gist.github.com/sjswitzer/b98cd3647b7aa0ef9ecd
+  function llsort(list, before) {
+    let stack = [];
+    while (moreList(list)) {
+      // Accumulate a run that's already sorted.
+      let run = list, runTail = list;
+      list = list[REST];
+      while (moreList(list)) {
+        let listNext = list[REST];
+        runTail[REST] = NIL;
+        if (before.call(this, list[FIRST], run[FIRST])) {
+          list[REST] = run;
+          run = list;
+        } else {
+          if (!before.call(this, list[FIRST], runTail[FIRST])) {
+            runTail[REST] = list;
+            runTail = list;
+          } else {
+            break;
+          }
+        }
+        list = listNext;
+      }
+
+      // The number of runs at stack[i] is either zero or 2^i and the stack size is bounded by 1+log2(nruns).
+      // There's a passing similarity to Timsort here, though Timsort maintains its stack using
+      // something like a Fibonacci sequence where this uses powers of two.
+      //
+      // It's instructive--and kinda fun--to put a breakpoint right here, "watch" these
+      // expressions then invoke (apropos), which uses sort internally:
+      //     string(list)
+      //     string(run)
+      //     string(stack[0])
+      //     string(stack[1])
+      //     etc.
+      let i = 0;
+      for ( ; i < stack.length; ++i) {
+        if (isNil(stack[i])) {
+          stack[i] = run;
+          run = NIL;
+          break;
+        };
+        run = merge(stack[i], run);
+        stack[i] = NIL;
+      }
+      if (!isNil(run))
+        stack.push(run);
+    }
+    // Merge all remaining stack elements
+    let run = NIL;
+    for (let i = 0; i < stack.length; ++i)
+      run = merge(stack[i], run);
+    return run;
+
+    function merge(left, right) {
+      // When equal, left goes before right
+      let merged = NIL, last;
+      while (moreList(left) && moreList(right)) {
+        if (before.call(this, right[FIRST], left[FIRST])) {
+          let next = right[REST];
+          if (last) last[REST] = right;
+          else merged = right;
+          last = right;
+          right = next;
+        } else {
+          let next = left[REST];
+          if (last) last[REST] = left;
+          else merged = left;
+          last = left;
+          left = next;
+        }
+        last[REST] = NIL;
+      }
+      // Can't both be Cons cells; the loop above ensures it
+      if (moreList(left)) {
+        if (last) last[REST] = left;
+        else merged = left;
+      } else if (moreList(right)) {
+        if (last) last[REST] = right;
+        else merged = right;
+      }
+      return merged;
+    }
+  }
+
+
 
   return globalScope;
 
