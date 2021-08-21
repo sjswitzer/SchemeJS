@@ -529,7 +529,7 @@ export function createInstance(schemeOpts = {}) {
 
 // Why are these initialized here, you ask?
 // Because they're indirectly refernced by defineGlobalSymbol is why.
-const COMPILE_INFO = Symbol("BUILTIN-COMPILE-INFO");
+const COMPILE_INFO = Symbol("COMPILE-INFO");
 const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
 const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
 let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to implement help.
@@ -836,56 +836,6 @@ let helpGroups = globalScope._helpgroups_ = {};  // For clients that want to imp
   }
 
   defineGlobalSymbol("globalScope", globalScope);
-
-  // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("!", a => !schemeTrue(a), { group: "logical-op" });
-  defineGlobalSymbol("~", a => ~a, { group: "bitwise-op" }, "bit-not");
-  defineGlobalSymbol("**", (a,b) => a ** b, { /* classification? */ }, "pow");  // overrides Math.pow
-  defineGlobalSymbol("%", (a,b) => a % b, { /* classification? */ }, "rem");
-  defineGlobalSymbol("<<", (a,b) => a << b, { group: "bitwise-op" }, "bit-shl");
-  defineGlobalSymbol(">>", (a,b) => a >> b, { group: "bitwise-op" }, "bit-shr");
-  defineGlobalSymbol(">>>", (a,b) => a >>> b, { group: "bitwise-op" }, "bit-ushr");
-  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "bitwise-op" });  // SIOD
-  defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@", (a, b) => a[b], { group: "js-op" }, "aref");  // indexing and member access (SIOD: aref)
-  defineGlobalSymbol("@@", (a, b, c) => a[b][c], { group: "js-op" });
-  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d], { group: "js-op" });
-  defineGlobalSymbol("@?", (a, b) => a?.[b], { group: "js-op" });  // conditional indexing and member access
-  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { group: "js-op" });
-  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { group: "js-op" });
-  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { group: "js-op" });
-  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { group: "js-op" });
-  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { group: "js-op" });
-  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { group: "js-op" });
-  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { group: "js-op" });
-  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { group: "js-op" });
-  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { group: "js-op" }, "js-assign");
-  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d), { group: "js-op" };
-  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { group: "js-op" });
-  defineGlobalSymbol("delete", (a, b) => delete a[b]), { schemeOnly: true, group: "js-op" };
-  defineGlobalSymbol("void", _ => undefined, { schemeOnly: true, group: "js-op" });
-
-  defineGlobalSymbol("not", a => typeof a === 'function' ? ((...params) => !a(...params)) : !a), { group: "logical-op" };
-
-  defineGlobalSymbol("to-lower-case", to_lower_case);
-  function to_lower_case(str, locale = optional) {
-    if (typeof str !== 'string') throw new TypeError(`${string(str)} is not a string}`);
-    let result;  // write this way so that it can be a compiler template
-    if (locale === undefined) result = str.toLowerCase();
-    else result = str.toLocaleLowerCase(locale);
-    return result;
-  }
-
-  defineGlobalSymbol("to-upper-case", to_upper_case);
-  function to_upper_case(str, locale = optional) {
-    if (typeof str !== 'string') throw new TypeError(`${string(str)} is not a string}`);
-    let result;  // write this way so that it can be a compiler template
-    if (locale === undefined) result = str.toUpperCase();
-    else result = str.toLocaleUpperCase(locale);
-    return result;
-  }
 
   //
   // Variable args definitions
