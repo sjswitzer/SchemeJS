@@ -470,19 +470,21 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("apropos", apropos, { usesDynamicScope: true, dontInline: true });
   function apropos(substring) {
     if (!substring) substring = "";
-    substring = substring.toLowerCase();
+    // Normalize to upper case because some localles have squirreley
+    // lower-case rules.
+    substring = substring.toUpperCase();
     let matches = NIL, scope = this;
     for ( ; scope && scope !== Object; scope = Object.getPrototypeOf(scope)) {
       let symbols = Object.getOwnPropertySymbols(scope);
       for (let symbol of symbols) {
         if (!isAtom(symbol)) continue;
         let name = string(symbol);
-        if (name.toLowerCase().includes(substring))
+        if (name.toUpperCase().includes(substring))
           matches = cons(symbol, matches);
       }
     }
     return this.nsort(matches,
-      (a,b) => a.description.toLowerCase() < b.description.toLowerCase());
+      (a,b) => a.description.toUpperCase() < b.description.toUpperCase());
   }
 
   defineGlobalSymbol("to-lower-case", to_lower_case);

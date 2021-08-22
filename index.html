@@ -1656,7 +1656,7 @@
 
         function keyFor(atom) {
           let key = atom.description, alpha = "abcdefghijklmnopqrstuvwxyz", stripPrefixSyms = "*#!?";
-          key = key.toLowerCase();
+          key = key.toUpperCase();
           // Strip certain special symbols before alpha (mostly for *catch and *throw)
           if (stripPrefixSyms.includes(key[0]) && alpha.includes(key[1]))
             key = key.substr(1);
