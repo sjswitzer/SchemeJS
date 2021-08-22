@@ -65,6 +65,7 @@ export function createInstance(schemeOpts = {}) {
   let cons = globalScope.cons ?? required();
   let car = globalScope.car ?? required();
   let cdr = globalScope.cdr ?? required();
+  let list = globalScope.list ?? required();
   let iteratorFor = globalScope.iteratorFor ?? required();
   let schemeTrue = globalScope.schemeTrue ?? required();
   let SchemeEvalError = globalScope.SchemeEvalError ?? required();

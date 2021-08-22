@@ -56,7 +56,6 @@ export function createInstance(schemeOpts = {}) {
   const arraysAreLists = schemeOpts.arraysAreLists ?? true;
   const generatorsAreLists = schemeOpts.generatorsAreLists ?? true;
   const standardIteratorsAreLists = schemeOpts.standardIteratorsAreLists ?? true;
-  const allIteratorsAreLists = schemeOpts.standardIteratorsAreLists ?? false;
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
   const firstName = schemeOpts.firstName ?? "first";
   const restName = schemeOpts.firstName ?? "rest";
@@ -77,7 +76,8 @@ export function createInstance(schemeOpts = {}) {
   // own specialized or tricky lists.
   //
   // The list protocol is defined by a set of properties implemented (or not)
-  // by an object:
+  // by an object. It's a lot of peroperties, but the idea is that property access
+  // is cheap but still I want each predicate to test one and only one property.
   //
   //   MORELIST -- A property which, if true, says that there are FIRST and REST
   //               properties. If false (exactly), the list is a NIL VALUE.
@@ -89,10 +89,11 @@ export function createInstance(schemeOpts = {}) {
   // Additionally, some optional properties that mostly hint the printer
   // to keep it from doing bad things like invoking iterators behind your back
   //
-  //   LAZYFIRST -- The FIRST property is dynamically evaluated.
-  //   LAZYREST  -- The REST property is dynamically evaluated.
+  //   LAZYFIRST -- The dynamic evaluator for the FIRST property.
+  //   LAZYREST  -- The dynamic evaluator for the REST property.
   //   SUPERLAZY -- Even the MORELIST property is dynamically evaluated.
   //                The list doesn't even know yet whether it is null or not.
+  //   DISPLAY_AS_LIST -- Display the object using list notation "( ... )"
   //
   // Finally, since all lists are iterable and all iterables are (can be) lists,
   // a property to indicate which is the "natural" iteration strategy for that object.
@@ -120,7 +121,7 @@ export function createInstance(schemeOpts = {}) {
   const FIRST = Symbol("FIRST"), REST = Symbol("REST");
   const LIST = Symbol("LIST"), MORELIST = Symbol("MORELIST");
   const LAZYFIRST = Symbol("LAZYFIRST"), LAZYREST = Symbol("LAZYREST"), SUPERLAZY = Symbol("SUPERLAZY");
-  let ITERATE_AS_LIST = Symbol("ITERATE-AS-LIST");
+  let ITERATE_AS_LIST = Symbol("ITERATE-AS-LIST"), DISPLAY_AS_LIST = Symbol("DISPLAY-AS-LIST");
   const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JITCOMPILED");
   // Since these symbols are tagged on external JS functions and objects,label them as ours as a courtesy.
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
@@ -129,6 +130,7 @@ export function createInstance(schemeOpts = {}) {
   const isList = obj => obj != null && obj[LIST] === true;
   const isNil = obj => obj != null && obj[MORELIST] === false;
   const iterateAsList = obj => obj != null && obj[ITERATE_AS_LIST] === true;
+  const displayAsList = obj => obj != null && obj[DISPLAY_AS_LIST] === true;
   const moreList = obj => obj != null && obj[MORELIST] === true;
 
   // Objects that "eval" to themselves
@@ -142,7 +144,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // First off, Arrays are lists (subject to arraysAreLists)
   //
-  if (arraysAreLists || standardIteratorsAreLists || allIteratorsAreLists) {
+  if (arraysAreLists || standardIteratorsAreLists) {
     Object.defineProperties(Array.prototype, {
       [LIST]: { value: true },
       [ITERATE_AS_LIST] : { value: false },  // not really necessary since it's default
@@ -172,7 +174,7 @@ export function createInstance(schemeOpts = {}) {
   // Thirdly, Map, Set, and TypedArray(s) are lists (subject to standardIteratorsAreLists).
   // For some reason, WeakMap and WeakSet do not currently (Aug 2021) support iteration.
   //
-  if (standardIteratorsAreLists || allIteratorsAreLists) {
+  if (standardIteratorsAreLists) {
     for (let cls of [Map, Set,
       Int8Array, Uint8Array, Uint8ClampedArray,
       Int16Array, Uint16Array,
@@ -182,17 +184,6 @@ export function createInstance(schemeOpts = {}) {
     ])
       monkeyPatchListProtocolForIterable(cls.prototype);
   }
-
-  //
-  // If you're feeling adventurous, ALL iterators can be lists.
-  // I haven't evaluated the performance consquwnces of this.
-  // On the one hand, it makes testing whether something is a list potentially
-  // more expensive than I'd like. On the other hand maybe it doesn't
-  // matter because the user is intent on doing listy things with the object,
-  // so why not? Currently off by default.
-  //
-  if (allIteratorsAreLists)
-    monkeyPatchListProtocolForIterable(Object.prototype);
 
   //
   // Finally, a Pair is a list too but has no special status.
@@ -210,6 +201,7 @@ export function createInstance(schemeOpts = {}) {
   }
   Pair.prototype[LIST] = true;
   Pair.prototype[ITERATE_AS_LIST] = true;
+  Pair.prototype[DISPLAY_AS_LIST] = true;
   Pair.prototype[MORELIST] = true;
 
   function pairIterator() {
@@ -252,6 +244,9 @@ export function createInstance(schemeOpts = {}) {
   ArrayList.prototype[LIST] = true;
   // Once we get into the tail of the array, use list iteration
   ArrayList.prototype[ITERATE_AS_LIST] = true;
+  ArrayList.prototype[DISPLAY_AS_LIST] = true;
+
+  const FIRSTVAL = Symbol("FIRSTVAL"), RESTVAL = Symbol("RESTVAL");
 
   function monkeyPatchListProtocolForIterable(prototype) {
     Object.defineProperties(prototype, {
@@ -260,12 +255,12 @@ export function createInstance(schemeOpts = {}) {
       [SUPERLAZY]: { value: true },
       [FIRST]: { get: function() {
         if (this[MORELIST])
-          return this._value;
+          return this[FIRSTVAL];
         throw new SchemeEvalError(`${firstName} on exhausted iterator`);
       } },
       [REST]: { get: function() {
         if (this[MORELIST])
-          return this._rest;
+          return this[RESTVAL];
         throw new SchemeEvalError(`${restName} on exhausted iterator`);
       } },
       [MORELIST]: { get: function iterableMoreList() {
@@ -284,9 +279,10 @@ export function createInstance(schemeOpts = {}) {
         if (typeof iter.next !== 'function')
           throw new TypeError(`bad iterator`);
         let { done, value } = iter.next();
-        this._value = value;
-        if (!done)
-          _rest = new LazyIteratorList(iter);
+        if (!done) {
+          this[FIRSTVAL] = value;
+          this[RESTVAL] = new LazyIteratorList(iter);
+        }
         return !done;
       } },
     });
@@ -363,6 +359,7 @@ export function createInstance(schemeOpts = {}) {
     },
     [LIST]: { value: true },
     [ITERATE_AS_LIST]: { value: true },
+    [DISPLAY_AS_LIST]: { value: true },
     [MORELIST]: { value: false },
     // Make sure it has Object methods to keep from blowing up the universe
     toString: { value: function NILtoString() { return nilName } },
@@ -1441,6 +1438,7 @@ export function createInstance(schemeOpts = {}) {
   LazyFirstList.prototype[LIST] = true;
   LazyFirstList.prototype[LAZYFIRST] = true;
   LazyFirstList.prototype[ITERATE_AS_LIST] = true;
+  LazyFirstList.prototype[DISPLAY_AS_LIST] = true;
   LazyFirstList.prototype[MORELIST] = true;
 
   class LazyRestList {
@@ -1466,6 +1464,7 @@ export function createInstance(schemeOpts = {}) {
   LazyRestList.prototype[LIST] = true;
   LazyRestList.prototype[LAZYREST] = true;
   LazyRestList.prototype[ITERATE_AS_LIST] = true;
+  LazyRestList.prototype[DISPLAY_AS_LIST] = true;
   LazyRestList.prototype[MORELIST] = true;
 
   class LazyFirstRestList {
@@ -1503,6 +1502,7 @@ export function createInstance(schemeOpts = {}) {
   LazyFirstRestList.prototype[LAZYFIRST] = true;
   LazyFirstRestList.prototype[LAZYREST] = true;
   LazyFirstRestList.prototype[ITERATE_AS_LIST] = true;
+  LazyFirstRestList.prototype[DISPLAY_AS_LIST] = true;
   LazyFirstRestList.prototype[MORELIST] = true;
   
   //
@@ -1567,6 +1567,7 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[LAZYFIRST] = true;
   LazyIteratorList.prototype[LAZYREST] = true;
   LazyIteratorList.prototype[ITERATE_AS_LIST] = true;
+  LazyIteratorList.prototype[DISPLAY_AS_LIST] = true;
 
   defineGlobalSymbol("list-view", list_view, { usesDynamicScope: false, dontInline: true, group: "list-op" });
   function list_view(obj) {
@@ -2017,7 +2018,7 @@ export function createInstance(schemeOpts = {}) {
         bindingClosure[FIRST] = CLOSURE_ATOM;
         bindingClosure[REST] = cons(scope, cons(closureParams, closureForms));
       }
-      bindingClosure[LIST] = bindingClosure[MORELIST] = bindingClosure[ITERATE_AS_LIST] = true;
+      bindingClosure[LIST] = bindingClosure[MORELIST] = bindingClosure[ITERATE_AS_LIST] = bindingClosure[DISPLAY_AS_LIST] = true;
       bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
       requiredCount -= argCount;
       if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
@@ -2202,7 +2203,7 @@ export function createInstance(schemeOpts = {}) {
     lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
     lambdaClosure[FIRST] = schemeClosure[FIRST];
     lambdaClosure[REST] = schemeClosure[REST];
-    lambdaClosure[LIST] = lambdaClosure[ITERATE_AS_LIST] = lambdaClosure[MORELIST] = true;
+    lambdaClosure[LIST] = lambdaClosure[ITERATE_AS_LIST] = lambdaClosure[DISPLAY_AS_LIST]  = lambdaClosure[MORELIST] = true;
     lambdaClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
     // Because the closure has a generic (...args) parameter, the compiler needs more info
     // to be able to create binding closures over it.
@@ -2273,7 +2274,7 @@ export function createInstance(schemeOpts = {}) {
       if (obj[CLOSURE_ATOM] || objType === 'object') {
         // MUST check SUPERLAZY before the isNil test, which will cause eager evaluation of
         // a LazyIteratorList, cause it to call next() and mutate into something else.
-        if (obj[SUPERLAZY])
+        if (obj[SUPERLAZY] && displayAsList(obj))
           return put("(...)");
         if (obj[SCOPE_IS_SYMBOL]) {
           let symStrs = "";
@@ -2292,7 +2293,7 @@ export function createInstance(schemeOpts = {}) {
           }
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
-        if (isNil(obj) && iterateAsList(obj)) return put("()"); // Be careful about []!
+        if (isNil(obj) && displayAsList(obj)) return put("()"); // Be careful about []!
         if (obj[LAZYREST]) {
           put("(");
           sep = "";
@@ -2303,7 +2304,7 @@ export function createInstance(schemeOpts = {}) {
           sep = " ";
           return put("...)", true);
         }
-        if (iterateAsList(obj)) {
+        if (displayAsList(obj)) {
           put("(");
           indent += indentMore;
           sep = "";
@@ -2339,8 +2340,8 @@ export function createInstance(schemeOpts = {}) {
               }
             }
           }
-          // iterateAsList here so that hybrid lists will print as "(a b . [c d])"
-          while (moreList(obj) && iterateAsList(obj)) {
+          // displayAsList here so that hybrid lists will print as "(a b . [c d])"
+          while (moreList(obj) && displayAsList(obj)) {
             if (obj[LAZYFIRST]) {
               put("..");  // .. signifies a lazy FIRST
             } else if (obj[COMPILED]) {
@@ -2394,6 +2395,7 @@ export function createInstance(schemeOpts = {}) {
           indent += indentMore;
           sep = "";
           for (let name of [ ...Object.getOwnPropertyNames(obj), ...Object.getOwnPropertySymbols(obj) ]) {
+            if (name === FIRSTVAL || name === RESTVAL) continue; // Hide this mechanic;
             let item = obj[name];
             if (item instanceof EvaluateKeyValue) {
               prefix = "[";
@@ -2706,6 +2708,7 @@ export function createInstance(schemeOpts = {}) {
     bindLiterally(REST, "REST");
     bindLiterally(LIST, "LIST");
     bindLiterally(ITERATE_AS_LIST, "ITERATE_AS_LIST");
+    bindLiterally(DISPLAY_AS_LIST, "DISPLAY_AS_LIST");
     bindLiterally(MORELIST, "MORELIST");
     bindLiterally(COMPILED, "COMPILED");
     bindLiterally(CLOSURE_ATOM, "CLOSURE_ATOM");
@@ -3248,7 +3251,7 @@ export function createInstance(schemeOpts = {}) {
     emit(`${ssaClosure}[REST] = new Pair(scope, ${ssaClosureForm}[REST][REST]);`);
     emit(`${ssaClosure}[COMPILED] = ${string(displayName)}`);
     // Mark object as a list, a pair, and a closure.
-    emit(`${ssaClosure}[LIST] = ${ssaClosure}[ITERATE_AS_LIST] = ${ssaClosure}[MORELIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
+    emit(`${ssaClosure}[LIST] = ${ssaClosure}[ITERATE_AS_LIST] = ${ssaClosure}[DISPLAY_AS_LIST] = ${ssaClosure}[MORELIST] = ${ssaClosure}[CLOSURE_ATOM] = true;`);
   }
 
   function redecorateCompiledClosure(ssaToFn, ssaFromFn, emit) {
@@ -3256,7 +3259,7 @@ export function createInstance(schemeOpts = {}) {
     emit(`${ssaToFn}[REST] = ${ssaFromFn}[REST];`);
     emit(`${ssaToFn}[COMPILED] = ${ssaFromFn}[COMPILED];`);
     // Mark object as a list, a pair, and a closure.
-    emit(`${ssaToFn}[LIST] = ${ssaToFn}[ITERATE_AS_LIST] = ${ssaToFn}[CLOSURE_ATOM] = true;`);
+    emit(`${ssaToFn}[LIST] = ${ssaToFn}[ITERATE_AS_LIST] = ${ssaToFn}[DISPLAY_AS_LIST] = ${ssaToFn}[CLOSURE_ATOM] = true;`);
   }
   
   const JS_IDENT_REPLACEMENTS = {
