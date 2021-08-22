@@ -616,6 +616,9 @@ export function createInstance(schemeOpts = {}) {
   const cons = (car, cdr) => new Pair(car, cdr);
   const car = a => a[FIRST];
   const cdr = a => a[REST];
+  defineGlobalSymbol("cons", cons);
+  defineGlobalSymbol("car", car, "first");
+  defineGlobalSymbol("cdr", cdr, "rest");
 
   const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { dontInline: true, usesDynamicScope: false, evalArgs: 0 }, "quote");
   exportAPI("QUOTE_ATOM", QUOTE_ATOM);
@@ -628,9 +631,6 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("null", null, { schemeOnly: true });
   defineGlobalSymbol("true", true, { schemeOnly: true }, "t", "#t"); // SIOD: t, MIT Scheme: #t
   defineGlobalSymbol("false", false, { schemeOnly: true });
-  defineGlobalSymbol("cons", cons);
-  defineGlobalSymbol("car", car, "first");
-  defineGlobalSymbol("cdr", cdr, "rest");
   defineGlobalSymbol("typeof", a => typeof a, { schemeOnly: true });
 
   // Hoist a bunch of JavaScript definitions into the global scope
