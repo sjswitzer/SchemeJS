@@ -132,9 +132,11 @@ export function createInstance(schemeOpts = {}) {
   //      let current = obj;
   //      for ( ; iterateAsList(current); current = current[REST])
   //         ...;
-  //      if (!isIterable(current)) throw ...;
-  //      for (let tmp of obj)
-  //         ...;
+  //      if (!isNil(current)) {
+  //        if (!isIterable(current)) throw TypeError(...);
+  //        for (let tmp of obj)
+  //          ...;
+  //      }
   // Because a list can start out list iterable and end up normally iterable,
   // for example, (cons 1 [2 4 4])) is a perfectly good list. See the implementation
   // of "length" for an example.
@@ -1277,7 +1279,22 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  // Too generally useful to move to the Scheme-specific module
+  defineGlobalSymbol("length", length, { dontInline: true, group: "list-op" });
+  function length(list) {
+    let n = 0;
+    for ( ; iterateAsList(list); list = list[REST])
+      n += 1;
+    // This is tricky... a list can begin as list-iterable but fall into soething normally-iterable.
+    // Don't special-case string. Its iterator returns code points by combining surrogate pairs
+    if (isArray(list) && list.length > 0)
+      return list.length + n;
+    if (isNil(list)) return n;
+      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
+    for (let _ of list)
+      n += 1;
+    return n;
+  }
+
   // (map fn list1 list2 ...)
   defineGlobalSymbol("map", map, { dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
   function map(fn, ...lists) {
@@ -1867,15 +1884,20 @@ export function createInstance(schemeOpts = {}) {
         scope = fnCdr[FIRST];
       }
       // Run through the arg list evaluating args
-      let  args = form[REST], argCount = 0;
-      for (let tmp = args; moreList(tmp); tmp = tmp[REST])
-        ++argCount;
+      let  args = form[REST], argCount = length(args);
       let argv = new Array(argCount);
-      for (let i = 0; moreList(args); ++i, args = args[REST]) {
+      for (let i = 0; iterateAsList(args); ++i, args = args[REST]) {
         let item = args[FIRST];
         if (i < evalCount)
           item = _eval(item, scope);
         argv[i] = item;
+      }
+      if (!isNil(args)) {
+        if (!isIterable(args)) throw new TypeError(`not iterable ${args}`);
+        for (let item of args) {
+          item = _eval(item, scope);
+          argv[i] = item;
+        }
       }
       let fName = namedObjects.get(fn) ?? fn.name;
       let jitCompiled = fn[JITCOMPILED];

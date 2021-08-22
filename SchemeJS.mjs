@@ -681,10 +681,9 @@ export function createInstance(schemeOpts = {}) {
       throw new TypeError(`not a list or iterable ${string(list)}`);
     let res = NIL;
     if (!list || isNil(list)) return NIL; // XXX check this.
-    if (iterateAsList(list)) {
-      for ( ; moreList(list); list = list[REST])
+      for ( ; iterateAsList(list); list = list[REST])
         res = list[FIRST];
-    } else {
+    if (!isNil(list)) {
       // Don't special-case string; its iterator returns code points by combining surrogate pairs
       if (isArray(list)) {
         if (list.length > 0)
@@ -701,11 +700,10 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("butlast", butlast, { dontInline: true, group: "list-op" }); // TODO: needs unit test!
   function butlast(list) {
     let res = NIL, last;
-    if (iterateAsList(list)) {
-      for ( ; moreList(list) && moreList(list[REST]); list = list[REST])
-        if (last) last = last[REST] = cons(list[FIRST], NIL);
-        else res = last = cons(list[FIRST], NIL);
-    } else {
+    for ( ; iterateAsList(list) && moreList(list[REST]); list = list[REST])
+      if (last) last = last[REST] = cons(list[FIRST], NIL);
+      else res = last = cons(list[FIRST], NIL);
+    if (!isNil(list)) {
       if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
       let previous, first = true;;
       for (let value of list) {
@@ -719,22 +717,6 @@ export function createInstance(schemeOpts = {}) {
       }
     }
     return res;
-  }
-
-  defineGlobalSymbol("length", length, { dontInline: true, group: "list-op" });
-  function length(list) {
-    let n = 0;
-    for ( ; iterateAsList(list); list = list[REST])
-      n += 1;
-    // This is tricky... a list can begin as list-iterable but fall into soething normally-iterable.
-    // Don't special-case string. Its iterator returns code points by combining surrogate pairs
-    if (isArray(list) && list.length > 0)
-      return list.length + n;
-    if (isNil(list)) return n;
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
-    for (let _ of list)
-      n += 1;
-    return n;
   }
 
   defineGlobalSymbol("reverse", reverse, { dontInline: true, group: "list-op" });
