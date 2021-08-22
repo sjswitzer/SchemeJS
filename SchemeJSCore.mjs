@@ -2060,26 +2060,19 @@ export function createInstance(schemeOpts = {}) {
   // (\ (params) (form1) (form2) ...)
   defineGlobalSymbol(LAMBDA_CHAR, lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\", "lambda");
   function lambda(params, ...forms) {
-    let body = NIL;
-    for (let i = forms.length; i > 0; --i)
-      body = cons(forms[i-1], body);
-    let lambda = cons(LAMBDA_ATOM, cons(params, body));
+    let lambda = cons(LAMBDA_ATOM, cons(params, forms));
     let scope = this;
     let schemeClosure = cons(CLOSURE_ATOM, cons(scope, lambda[REST]));
-    return makeLambdaClosure(scope, params, lambda, body, schemeClosure);
+    return makeLambdaClosure(scope, params, lambda, forms, schemeClosure);
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
   defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\\\");
   function special_lambda(evalCount, params, ...forms) {
-    let body = NIL;
-    for (let i = forms.length; i > 0; --i)
-      body = cons(forms[i-1], body);
-    let lambda = cons(SLAMBDA_ATOM, cons(evalCount, cons(params, body)));
-    if (!isList(body)) throwBadLambda(lambda);
+    let lambda = cons(SLAMBDA_ATOM, cons(evalCount, cons(params, forms)));
     let scope = this;
     let schemeClosure = cons(SCLOSURE_ATOM, cons(scope, lambda[REST]));
-    return makeLambdaClosure(scope, params, lambda, body, schemeClosure, evalCount);
+    return makeLambdaClosure(scope, params, lambda, forms, schemeClosure, evalCount);
   }
 
   //
@@ -2152,12 +2145,9 @@ export function createInstance(schemeOpts = {}) {
           rest = cons(args[j-1], rest);
         scope[params] = rest;
       }
-      let result = NIL, current = forms;
-      for ( ; iterateAsList(current); current = current[REST])
-        result = _eval(current[FIRST], scope);
-      if (!isNil(current))
-        for (let form of current)
-          result = _eval(form, scope);
+      let result = NIL;
+      for (let form of forms)
+        result = _eval(form, scope);
       return result;
     }
     lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
