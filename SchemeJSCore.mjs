@@ -264,21 +264,21 @@ export function createInstance(schemeOpts = {}) {
   // Once we get into the tail of the array, use list iteration
   ArrayList.prototype[ITERATE_AS_LIST] = true;
 
-  const FIRSTVAL = Symbol("SchemeJS-FIRSTVAL"), RESTVAL = Symbol("SchemeJS-RESTVAL");
-
   function monkeyPatchListProtocolForIterable(prototype) {
     Object.defineProperties(prototype, {
       [LIST]: { value: true },
       [ITERATE_AS_LIST]: { value: false }, // this is default bahavior, but might as well be explicit
       [SUPERLAZY]: { value: true },
       [FIRST]: { get: function() {
-        if (this[MORELIST])
-          return this[FIRSTVAL];
+        let moreList = this[MORELIST];
+        if (moreList)
+          return moreList[0];
         throw new SchemeEvalError(`${firstName} on exhausted iterator`);
       } },
       [REST]: { get: function() {
-        if (this[MORELIST])
-          return this[RESTVAL];
+        let moreList = this[MORELIST];
+        if (moreList)
+          return moreList[1];
         throw new SchemeEvalError(`${restName} on exhausted iterator`);
       } },
       [MORELIST]: { get: function iterableMoreList() {
@@ -297,11 +297,9 @@ export function createInstance(schemeOpts = {}) {
         if (typeof iter.next !== 'function')
           throw new TypeError(`bad iterator`);
         let { done, value } = iter.next();
-        if (!done) {
-          this[FIRSTVAL] = value;
-          this[RESTVAL] = new LazyIteratorList(iter);
-        }
-        return !done;
+        if (!done)
+          return [value, new LazyIteratorList(iter)];
+        return false;
       } },
     });
   }
@@ -2330,7 +2328,6 @@ export function createInstance(schemeOpts = {}) {
           indent += indentMore;
           sep = "";
           for (let name of [ ...Object.getOwnPropertyNames(obj), ...Object.getOwnPropertySymbols(obj) ]) {
-            if (name === FIRSTVAL || name === RESTVAL) continue; // Hide this mechanic;
             let item = obj[name];
             if (name === EVALUATE_KEY_VALUE) {
               prefix = "[";
