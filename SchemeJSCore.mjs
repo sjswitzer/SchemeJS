@@ -1860,6 +1860,8 @@ export function createInstance(schemeOpts = {}) {
   // here you almost certainly need to make a corresponding one there.
   //
 
+  const RETURN_SYMBOL = Symbol("RETURN");
+
   defineGlobalSymbol("eval", _eval, { usesDynamicScope: true, dontInline: true });
   exportAPI("_eval", _eval);
   function _eval(form, scope = this) {
@@ -2159,8 +2161,11 @@ export function createInstance(schemeOpts = {}) {
       if (typeof params === 'symbol')
         scope[params] = args.slice(i);
       let result = NIL;
-      for (let form of forms)
+      for (let form of forms) {
         result = _eval(form, scope);
+        if (scope.hasOwnProperty(RETURN_SYMBOL))
+          return scope[RETURN_SYMBOL];
+      }
       return result;
     }
     lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
@@ -2175,6 +2180,22 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
+
+  defineGlobalSymbol("return", _return, { usesDynamicScope: true, compileHook: return_hook})
+  function _return(...values) {
+    let scope = this, value = NIL;
+    if (values.length > 0)
+      value = values[values.length-1];
+    scope[RETURN_SYMBOL] = value;
+    return value;
+  }
+  function return_hook(args, ssaScope, tools) {
+    let ssaValue = 'NIL';
+    for (let arg of args)
+      ssaValue = compileEval(arg, ssaScope, tools);
+    tools.emit(`return ${ssaValue};`);
+    return ssaValue;
+  }
 
   defineGlobalSymbol("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
   function is_closure(a, t = true, f = false) {
