@@ -365,12 +365,12 @@ export function createInstance(schemeOpts = {}) {
     [ITERATE_AS_LIST]: { value: true },
     [MORELIST]: { value: false },
     // Make sure it has Object methods to keep from blowing up the universe
-    toString: { value: _ => nilName },
-    toLocaleString: { value: _ => nilName },
-    hasOwnProperty: { value: _ => false },
-    isPrototypeOf: { value: _ => false },
-    propertyIsEnumerable: { value: _=> false },
-    valueOf: { value: _ => false },
+    toString: { value: function NILtoString() { return nilName } },
+    toLocaleString: { value: function NILtoLocaleString() { return nilName } },
+    hasOwnProperty: { value: function NILhasOwnProperty(_) { return false } },
+    isPrototypeOf: { value: function NILisPrototypeOf(_) { return false } },
+    propertyIsEnumerable: { value: function NILpropertyIsEnumerable(_) { return false } },
+    valueOf: { value: function NILvalueOf(_) { return false } },
   });
   Object.freeze(NIL);
 
@@ -1901,7 +1901,7 @@ export function createInstance(schemeOpts = {}) {
   function _eval(form, scope = this) {
     // Can't be called "eval" because "eval", besides being a global definition,
     // is effectively a keyword in JavaScript.
-    if (isNil(form)) return NIL;  // Normalizes NIL imposters to "the" NIL, for no particular reason
+    if (isNil(form)) return form;
     if (isPrimitive(form)) return form;
     if (typeof form === 'symbol') { // atom resolution is the most common case
       let val = scope[form];
@@ -2275,7 +2275,6 @@ export function createInstance(schemeOpts = {}) {
         // a LazyIteratorList, cause it to call next() and mutate into something else.
         if (obj[SUPERLAZY])
           return put("(...)");
-        if (isNil(obj) && iterateAsList(obj)) return put("()"); // Be careful about []!
         if (obj[SCOPE_IS_SYMBOL]) {
           let symStrs = "";
           if (obj !== globalScope) {
@@ -2293,6 +2292,7 @@ export function createInstance(schemeOpts = {}) {
           }
           return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
         }
+        if (isNil(obj) && iterateAsList(obj)) return put("()"); // Be careful about []!
         if (obj[LAZYREST]) {
           put("(");
           sep = "";
@@ -2837,7 +2837,10 @@ export function createInstance(schemeOpts = {}) {
       return string(form);
     if (form === true) return "true";
     if (form === false) return "false";
-    if (isNil(form)) return "NIL";
+    if (isNil(form)) {
+      if (form === NIL) return "NIL";
+      return bind(form, "nil");
+    }
     if (isPrimitive(form)) throw new LogicError(`All primitives should be handled by now`)
     if (typeof form === 'symbol') {
       let sym = form;
