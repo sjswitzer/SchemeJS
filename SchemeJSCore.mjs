@@ -1667,16 +1667,17 @@ export function createInstance(schemeOpts = {}) {
     let scope = this;
     obj = _eval(obj, scope)
     scope = newScope(this, "for-in-scope");
+    let val = NIL;
     if (isIterable(obj)) {
       let key = 0;
       for (let value of obj) {
         scope[keySymbol] = key++;
         scope[valueSymbol] = value;
-        _eval(form, scope);
+        val = _eval(form, scope);
         for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
           _eval(forms[i], scope);  
       }
-      return NIL;
+      return val;
     }
     if (obj == null || typeof obj !== 'object')
       throwForInTypeError(obj);
@@ -1684,11 +1685,11 @@ export function createInstance(schemeOpts = {}) {
       let value = obj[key];
       scope[keySymbol] = key;
       scope[valueSymbol] = value;
-      _eval(form, scope);
+      val = _eval(form, scope);
       for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
         _eval(forms[i], scope);
     }
-    return NIL;
+    return val;
   }
   function for_in_hook(args, ssaScope, tools) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
@@ -1705,7 +1706,8 @@ export function createInstance(schemeOpts = {}) {
     let ssaIndexVar = newTemp("key"), ssaValueVar = newTemp("value");
     ssaScope[indexVar] = ssaIndexVar;
     ssaScope[valueVar] = ssaValueVar;
-    let ssaFn = newTemp('for-in-fn)');
+    let ssaFn = newTemp('for_in_fn)');
+    let ssaResult = 'NIL';
     emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (for-in ${string(indexVar)} ${string(valueVar)} ...)`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
@@ -1713,26 +1715,29 @@ export function createInstance(schemeOpts = {}) {
     scopeLines.push(emit(`scope[${ssaIndexVarAtom}] = ${ssaIndexVar};`));
     scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
     for (let i = 3; i < args.length; ++i)
-      compileEval(args[i], ssaScope, tools);
+      ssaResult = compileEval(args[i], ssaScope, tools);
+    emit(`return ${ssaResult};`)
     tools.indent = saveIndent;
     emit('}');
     tools.bindLiterally(isIterable, "isIterable");
     tools.bindLiterally(throwForInTypeError, "throwForInTypeError");
+    ssaResult = newTemp('for_in');
+    emit(`let ${ssaResult} = NIL;`);
     emit(`if (isIterable(${ssaObj})) {`);
     emit(`  let key = 0;`);
     emit(`  for (let value of ${ssaObj})`);
-    emit(`    ${ssaFn}(key++, value);`);
+    emit(`    ${ssaResult} = ${ssaFn}(key++, value);`);
     emit(`} else {`);
     emit(`  if (${ssaObj} == null || typeof ${ssaObj} !== 'object')`);
     emit(`    throwForInTypeError(${ssaObj});`);
     emit(`  for (let key in ${ssaObj})`);
-    emit(`    ${ssaFn}(key, ${ssaObj}[key]);`);
+    emit(`    ${ssaResult} = ${ssaFn}(key, ${ssaObj}[key]);`);
     emit(`}`);
     if (ssaScope.dynamicScopeUsed)
       saveSsaScope.dynamicScopeUsed = true;
     else
       tools.deleteEmitted(scopeLines);
-    return 'NIL';
+    return ssaResult;
   }
   function throwForInTypeError(obj) {
     throw new TypeError(`for-in requires iterable or object ${string(obj)}`);
