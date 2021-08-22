@@ -559,6 +559,8 @@ export function createInstance(schemeOpts = {}) {
     } else if (!fnInfo.valueTemplate && !fnInfo.compileHook) {
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
     }
+    if (compileHook && usesDynamicScope)
+      throw new LogicError(`TEMPLATED FUNCTIONS SHOULD NOT DECLARE "usesDynamicScope"`);
     fnInfo.usesDynamicScope = usesDynamicScope;
     fn[COMPILE_INFO] = fnInfo;
   }
@@ -2177,7 +2179,7 @@ export function createInstance(schemeOpts = {}) {
 
   function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
 
-  defineGlobalSymbol("return", _return, { usesDynamicScope: true, compileHook: return_hook})
+  defineGlobalSymbol("return", _return, { usesDynamicScope: false, compileHook: return_hook})
   function _return(...values) {
     let scope = this, value = NIL;
     if (values.length > 0)
