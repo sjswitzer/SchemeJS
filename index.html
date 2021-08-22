@@ -2070,6 +2070,7 @@
                 canvasFrameElement.removeChild(userMediaElement);
               let deep = true;
               userMediaElement = userMediaTemplateElement.cloneNode(deep);
+              userMediaElement.removeAttribute('id');
               canvasFrameElement.appendChild(userMediaElement);
               muteElement = userMediaElement.querySelector(".mute-toggle");
               muteElement.addEventListener('input', _ => { setGain() });
