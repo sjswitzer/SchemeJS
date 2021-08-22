@@ -72,7 +72,7 @@ export function createInstance(schemeOpts = {}) {
   let compileEval = globalScope.compileEval ?? required();
   let SchemeError = globalScope.SchemeError ?? required();
   let SchemeCompileError = globalScope.SchemeCompileError ?? required();
-  let EvaluateKeyValue = globalScope.EvaluateKeyValue ?? required();
+  let EVALUATE_KEY_VALUE = globalScope.EVALUATE_KEY_VALUE ?? required();
   function required() { throw "required" }
 
   //
@@ -1386,7 +1386,7 @@ export function createInstance(schemeOpts = {}) {
               let val = parseExpr();
               parseContext.pop();
               if (evaluatedKey)
-                res[sym] = new EvaluateKeyValue(sym, val);
+                res[EVALUATE_KEY_VALUE] = [sym, val];
               else
                 res[sym] = val;
             }

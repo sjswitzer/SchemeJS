@@ -608,14 +608,8 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("LogicError", LogicError);
 
-  class EvaluateKeyValue {
-    key; value;
-    constructor(key, value) {
-      this.key = key;
-      this.value = value;
-    }
-  }
-  exportAPI("EvaluateKeyValue", EvaluateKeyValue);
+  let EVALUATE_KEY_VALUE = Symbol("EVALUATE-KEY-VALUE")
+  exportAPI("EVALUATE_KEY_VALUE", EVALUATE_KEY_VALUE);
 
   //
   // SchemeJS strives to maintain JavaScript consistency wherever possibe but enough is enough.
@@ -2040,9 +2034,9 @@ export function createInstance(schemeOpts = {}) {
         let res = {};
         for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
           let value = form[key];
-          if (value instanceof EvaluateKeyValue) {
-            key = value.key;
-            value = value.value;
+          if (key === EVALUATE_KEY_VALUE) {
+            key = value[0];
+            value = value[1];
             key = _eval(key, scope);
           }
           value = _eval(value, scope);
@@ -2397,11 +2391,11 @@ export function createInstance(schemeOpts = {}) {
           for (let name of [ ...Object.getOwnPropertyNames(obj), ...Object.getOwnPropertySymbols(obj) ]) {
             if (name === FIRSTVAL || name === RESTVAL) continue; // Hide this mechanic;
             let item = obj[name];
-            if (item instanceof EvaluateKeyValue) {
+            if (name === EVALUATE_KEY_VALUE) {
               prefix = "[";
-              toString(item.key, maxCdrDepth, maxCdrDepth);
+              toString(item[0], maxCdrDepth, maxCdrDepth);
               prefix = "]: ";
-              toString(item.value, maxCarDepth, maxCdrDepth);
+              toString(item[1], maxCarDepth, maxCdrDepth);
             } else {
               prefix = `${string(name)}: `;
               toString(item, maxCarDepth-1, maxCdrDepth);
@@ -3096,9 +3090,9 @@ export function createInstance(schemeOpts = {}) {
       for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
         let value = form[key];
         let ssaKey;
-        if (value instanceof EvaluateKeyValue) {
-          ssaKey = compileEval(value.key, ssaScope, tools);
-          value = value.value;
+        if (key === EVALUATE_KEY_VALUE) {
+          ssaKey = compileEval(value[0], ssaScope, tools);
+          value = value[1];
         } else {
           ssaKey = bind(key)
         }
