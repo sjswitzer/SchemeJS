@@ -2275,12 +2275,12 @@ export function createInstance(schemeOpts = {}) {
               if (isList(obj) && (objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)) {
                 toString(obj[FIRST]);  // scope
                 sep = " ";
-                obj = obj[REST]
+                obj = obj[REST];
               }
               if (isList(obj) && (objCar === SLAMBDA_ATOM || objCar === SCLOSURE_ATOM)) {
                 toString(obj[FIRST]);  // evalCount
                 sep = " ";
-                obj = obj[REST]
+                obj = obj[REST];
               }
               if (isList(obj)) {
                 if (typeof obj[FIRST] === 'symbol')
@@ -2288,7 +2288,7 @@ export function createInstance(schemeOpts = {}) {
                 else
                   toString(obj[FIRST])
                 sep = " ";
-                obj = obj[REST]
+                obj = obj[REST];
               }
             }
           }
@@ -2594,7 +2594,7 @@ export function createInstance(schemeOpts = {}) {
     let name = Atom(nameAndParams[FIRST]);
     let args = nameAndParams[REST];
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
-    let lambda = list(LAMBDA_ATOM, args, form, ...forms);
+    let lambda = cons(LAMBDA_ATOM, cons(args, [form, ...forms]));
     let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
     namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
