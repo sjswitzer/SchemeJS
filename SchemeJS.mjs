@@ -414,6 +414,31 @@ export function createInstance(schemeOpts = {}) {
   // Lispy stuff
   //
 
+  const caaar = a => car(car(car(a)));
+  const caadr = a => car(car(cdr(a)));
+  const caar = a => car(car(a));
+  const cadar = a => car(cdr(car(a)));
+  const caddr = a => car(cdr(cdr(a)));
+  const cadr = a => car(cdr(a));
+  const cdaar = a => cdr(car(car(a)));
+  const cdadr = a => cdr(car(cdr(a)));
+  const cdar = a => cdr(car(a));
+  const cddar = a => cdr(cdr(car(a)));
+  const cdddr = a => cdr(cdr(cdr(a)));
+  const cddr = a => cdr(cdr(a));
+  defineGlobalSymbol("caaar", caaar);
+  defineGlobalSymbol("caar", caar);
+  defineGlobalSymbol("caadr", caadr);
+  defineGlobalSymbol("cadar", cadar);
+  defineGlobalSymbol("caddr", caddr);
+  defineGlobalSymbol("cadr", cadr);
+  defineGlobalSymbol("cdaar", cdaar);
+  defineGlobalSymbol("cdadr", cdadr);
+  defineGlobalSymbol("cdar", cdar);
+  defineGlobalSymbol("cddar", cddar);
+  defineGlobalSymbol("cdddr", cdddr);
+  defineGlobalSymbol("cddr", cddr);
+
   defineGlobalSymbol("intern", Atom, { usesDynamicScope: false, dontInline: true });
 
   defineGlobalSymbol("copy-list", copy_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // TODO: unit tests!

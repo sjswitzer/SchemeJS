@@ -517,7 +517,6 @@ export function createInstance(schemeOpts = {}) {
   // (Maybe I just need to undate Node? Well, I can't be the only one, so...)
   // This isn't strictly correct since it blows up if newSubstr contains substr,
   // but it's good enough for our purposes.
-  // Note: A module has no business installing Polyfills, even if they ARE correct.
   function replaceAll(str, substr, newSubstr) {
     let prevStr;
     do {
@@ -617,18 +616,6 @@ export function createInstance(schemeOpts = {}) {
   const cons = (car, cdr) => new Pair(car, cdr);
   const car = a => a[FIRST];
   const cdr = a => a[REST];
-  const caaar = a => car(car(car(a)));
-  const caadr = a => car(car(cdr(a)));
-  const caar = a => car(car(a));
-  const cadar = a => car(cdr(car(a)));
-  const caddr = a => car(cdr(cdr(a)));
-  const cadr = a => car(cdr(a));
-  const cdaar = a => cdr(car(car(a)));
-  const cdadr = a => cdr(car(cdr(a)));
-  const cdar = a => cdr(car(a));
-  const cddar = a => cdr(cdr(car(a)));
-  const cdddr = a => cdr(cdr(cdr(a)));
-  const cddr = a => cdr(cdr(a));
 
   const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { dontInline: true, usesDynamicScope: false, evalArgs: 0 }, "quote");
   exportAPI("QUOTE_ATOM", QUOTE_ATOM);
@@ -644,19 +631,6 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("cons", cons);
   defineGlobalSymbol("car", car, "first");
   defineGlobalSymbol("cdr", cdr, "rest");
-  defineGlobalSymbol("caaar", caaar);
-  defineGlobalSymbol("caar", caar);
-  defineGlobalSymbol("caadr", caadr);
-
-  defineGlobalSymbol("cadar", cadar);
-  defineGlobalSymbol("caddr", caddr);
-  defineGlobalSymbol("cadr", cadr);
-  defineGlobalSymbol("cdaar", cdaar);
-  defineGlobalSymbol("cdadr", cdadr);
-  defineGlobalSymbol("cdar", cdar);
-  defineGlobalSymbol("cddar", cddar);
-  defineGlobalSymbol("cdddr", cdddr);
-  defineGlobalSymbol("cddr", cddr);
   defineGlobalSymbol("typeof", a => typeof a, { schemeOnly: true });
 
   // Hoist a bunch of JavaScript definitions into the global scope
