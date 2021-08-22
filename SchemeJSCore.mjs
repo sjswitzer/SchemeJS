@@ -529,6 +529,7 @@ export function createInstance(schemeOpts = {}) {
   function examineFunctionForCompilerTemplates(name, fn, opts) {
     let evalCount = opts.evalArgs ?? MAX_INTEGER;
     let compileHook = opts.compileHook;
+    let usesDynamicScope = opts.usesDynamicScope;
     examineFunctionForParameterDescriptor(fn, evalCount);
     let fnInfo = analyzeJSFunction(fn);
     fnInfo.evalCount = evalCount;
@@ -554,29 +555,7 @@ export function createInstance(schemeOpts = {}) {
     } else if (!fnInfo.valueTemplate && !fnInfo.compileHook) {
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
     }
-    // Is a scope needed to call the function?
-    let usesDynamicScope = true;  // conservative default
-    if (typeof opts.usesDynamicScope === 'boolean') {
-      usesDynamicScope = opts.usesDynamicScope;
-    } else {
-      if (compileHook) {  // It's up to the hook to say whether it uses dynamic scope
-        usesDynamicScope = false;
-      } else {
-        if (fnInfo.valueTemplate) { 
-          usesDynamicScope = fnInfo.usesThis;
-        }
-        if (fnInfo.compileHook)  // If a hook uses the scope, it can set "used" in the scope itself
-          usesDynamicScope = false;
-        if (fnInfo.native)  // native functions don't need a scope
-          usesDynamicScope = false;
-        // Closures dont need scope either and it's theoretically possible to call
-        // this utility with a compiled Scheme function
-        if (isClosure(fn))
-          usesDynamicScope = false;
-    }
-  }
-    if (usesDynamicScope)
-      fnInfo.usesDynamicScope = usesDynamicScope;
+    fnInfo.usesDynamicScope = usesDynamicScope;
     fn[COMPILE_INFO] = fnInfo;
   }
 
@@ -620,7 +599,7 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("car", car, "first");
   defineGlobalSymbol("cdr", cdr, "rest");
 
-  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { dontInline: true, usesDynamicScope: false, evalArgs: 0 }, "quote");
+  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { dontInline: true, evalArgs: 0 }, "quote");
   exportAPI("QUOTE_ATOM", QUOTE_ATOM);
 
   defineGlobalSymbol("scope", function() { return this });
@@ -644,7 +623,7 @@ export function createInstance(schemeOpts = {}) {
       let {value, get} = propDescs[name];
       if (name === 'eval') name = "js-eval";
       if (!get && value)
-        defineGlobalSymbol(name, value, { schemeOnly: true, usesDynamicScope: false, dontInline: true, group: "imported" });
+        defineGlobalSymbol(name, value, { schemeOnly: true, dontInline: true, group: "imported" });
     }
 
     // Object static methods: Object-getOwnPropertyDescriptors, etc.
@@ -1294,7 +1273,7 @@ export function createInstance(schemeOpts = {}) {
 
   // Too generally useful to move to the Scheme-specific module
   // (map fn list1 list2 ...)
-  defineGlobalSymbol("map", map, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
+  defineGlobalSymbol("map", map, { dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
   function map(fn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
@@ -1324,7 +1303,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Same as map but results in an Array
-  defineGlobalSymbol("array-map", array_map, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("array-map", array_map, { dontInline: true, group: "list-op" });
   function array_map(fn, ...lists) {
     let res = [];
     // TODO: does not currently special-case the list case.
@@ -1339,7 +1318,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (filter fn list1 list2 ...)
-  defineGlobalSymbol("filter", filter, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("filter", filter, { dontInline: true, group: "list-op" });
   function filter(predicateFn, ...lists) {
     // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
@@ -1526,13 +1505,13 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[ITERATE_AS_LIST] = true;
   LazyIteratorList.prototype[DISPLAY_AS_LIST] = true;
 
-  defineGlobalSymbol("list-view", list_view, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("list-view", list_view, { dontInline: true, group: "list-op" });
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator);
   }
 
-  defineGlobalSymbol("lazy-map", lazy_map, { usesDynamicScope: false, dontInline: true });
+  defineGlobalSymbol("lazy-map", lazy_map, { dontInline: true });
   function lazy_map(fn, obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator, a => fn(a))
@@ -1738,7 +1717,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaValue;
   }
 
-  defineGlobalSymbol("set", set, {group: "core" });
+  defineGlobalSymbol("set", set, { usesDynamicScope: true, group: "core" });
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   function setSym(symbol, value, scope) {
@@ -1828,7 +1807,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (define variable value)
   // (define (fn args) forms)
-  defineGlobalSymbol("define", define, { evalArgs: 0, dontInline: true });
+  defineGlobalSymbol("define", define, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
   function define(defined, value, ...rest) {
     let scope = this, name = defined;
     if (isList(defined)) {
@@ -1859,7 +1838,7 @@ export function createInstance(schemeOpts = {}) {
   // here you almost certainly need to make a corresponding one there.
   //
 
-  defineGlobalSymbol("eval", _eval, { dontInline: true });
+  defineGlobalSymbol("eval", _eval, { usesDynamicScope: true, dontInline: true });
   exportAPI("_eval", _eval);
   function _eval(form, scope = this) {
     // Can't be called "eval" because "eval", besides being a global definition,
@@ -2045,7 +2024,7 @@ export function createInstance(schemeOpts = {}) {
     return (evalCount << 16) | requiredCount;
   }
 
-  defineGlobalSymbol("apply", apply, { dontInline: true });
+  defineGlobalSymbol("apply", apply, { usesDynamicScope: true, dontInline: true });
   function apply(fn, args, scope = this) {
     let argv = [];
     for ( ; moreList(args); args = args[REST])
@@ -2063,7 +2042,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\ (params) (form1) (form2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR, lambda, { evalArgs: 0, dontInline: true }, "\\", "lambda");
+  defineGlobalSymbol(LAMBDA_CHAR, lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\", "lambda");
   function lambda(params, ...forms) {
     let body = NIL;
     for (let i = forms.length; i > 0; --i)
@@ -2075,7 +2054,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { evalArgs: 0, dontInline: true }, "\\\\");
+  defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\\\");
   function special_lambda(evalCount, params, ...forms) {
     let body = NIL;
     for (let i = forms.length; i > 0; --i)
@@ -2454,7 +2433,7 @@ export function createInstance(schemeOpts = {}) {
     if (analyzed)
       return analyzed;
     let str = fn.toString(), pos = 0, token = "", paramPos = 0, requiredCount;
-    let name = fn.name, params = [], restParam, valueTemplate, bodyTemplate, native = false, printParams, printBody, usesThis = false;
+    let name = fn.name, params = [], restParam, valueTemplate, bodyTemplate, native = false, printParams, printBody;
     parse: {
       if (nextToken() === 'function') {
         paramPos = pos;
@@ -2489,7 +2468,7 @@ export function createInstance(schemeOpts = {}) {
       requiredCount = params.length;
     if (native)
       requiredCount = 0;
-    let res = { name, params, restParam, valueTemplate, bodyTemplate, printBody, printParams, native, requiredCount, usesThis };
+    let res = { name, params, restParam, valueTemplate, bodyTemplate, printBody, printParams, native, requiredCount };
     analyzedFunctions.set(fn, res);
     return res;
 
@@ -2526,8 +2505,6 @@ export function createInstance(schemeOpts = {}) {
         while (WSNL[str[pos]]) ++pos;
         let bodyPos = pos, returnPos = pos, nTok = 0;
         while (nextToken() && token !== 'return') {
-          if (token === 'this')
-            usesThis = true;
           returnPos = pos;
           if (nTok++ === 0 && token === '[') {
             if (nextToken() === 'native' && nextToken() === 'code' &&
@@ -2548,8 +2525,6 @@ export function createInstance(schemeOpts = {}) {
           if (nextToken() !== '') return;
           valueTemplate = possibleValue;
           bodyTemplate = str.substring(bodyPos, returnPos);
-          if (valueTemplate.includes('this'))
-            usesThis = true;
         }
       }
     }
@@ -2607,7 +2582,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
-  defineGlobalSymbol("compile", compile, { evalArgs: 0, dontInline: true });
+  defineGlobalSymbol("compile", compile, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
   function compile(nameAndParams, form, ...forms) {
     if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[FIRST]);

@@ -98,7 +98,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
 
   exportAPI("equal", equal);
-  defineGlobalSymbol("equal?", equal, { usesDynamicScope: false, dontInline: true });
+  defineGlobalSymbol("equal?", equal, { dontInline: true });
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
     if (a === b) return true;
     let stringCompare = report.stringCompare ?? ((a, b) => a === b);
@@ -260,7 +260,7 @@ export function createInstance(schemeOpts = {}) {
   // (qsort list predicate-fcn access-fcn)
   //   "qsort" is a lie for API compatibility with SIOD, but this sort has
   //   comparable performance and is excellent with partially-sorted lists.
-  defineGlobalSymbol("mergesort", mergesort, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "sort", "qsort");
+  defineGlobalSymbol("mergesort", mergesort, { dontInline: true, group: "list-op" }, "sort", "qsort");
   function mergesort(list, predicateFn = optional, accessFn = optional) {
     if (isNil(list)) return NIL;
     // Sort Arrays as Arrays
@@ -279,7 +279,7 @@ export function createInstance(schemeOpts = {}) {
     return in_place_mergesort(copied, predicateFn, accessFn);
   }
 
-  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { usesDynamicScope: false, dontInline: true, group: "list-op" }, "in-place-sort", "nsort");
+  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { dontInline: true, group: "list-op" }, "in-place-sort", "nsort");
   function in_place_mergesort(list, predicateFn = optional, accessFn = optional) {
     if (isNil(list)) return NIL;
     // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
@@ -439,9 +439,9 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("cdddr", cdddr);
   defineGlobalSymbol("cddr", cddr);
 
-  defineGlobalSymbol("intern", Atom, { usesDynamicScope: false, dontInline: true });
+  defineGlobalSymbol("intern", Atom, { dontInline: true });
 
-  defineGlobalSymbol("copy-list", copy_list, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // TODO: unit tests!
+  defineGlobalSymbol("copy-list", copy_list, { dontInline: true, group: "list-op" });  // TODO: unit tests!
   function copy_list(...lists) {
     let res = NIL, last;
     for (let list of lists) {
@@ -467,7 +467,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (apropos substring) -- Returns a list of all atoms containing the given substring in their names
-  defineGlobalSymbol("apropos", apropos, { dontInline: true });
+  defineGlobalSymbol("apropos", apropos, { usesDynamicScope: true, dontInline: true });
   function apropos(substring) {
     if (!substring) substring = "";
     substring = substring.toLowerCase();
@@ -652,7 +652,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Can be inlined (if isList, isIterator, isList, etc. are bound), but doesn't seem wise
-  defineGlobalSymbol("append", append, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("append", append, { dontInline: true, group: "list-op" });
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
@@ -673,7 +673,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("last", last, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("last", last, { dontInline: true, group: "list-op" });
   function last(list) {
     if (!isIterable(list))
       throw new TypeError(`not a list or iterable ${string(list)}`);
@@ -696,7 +696,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("butlast", butlast, { usesDynamicScope: false, dontInline: true, group: "list-op" }); // TODO: needs unit test!
+  defineGlobalSymbol("butlast", butlast, { dontInline: true, group: "list-op" }); // TODO: needs unit test!
   function butlast(list) {
     let res = NIL, last;
     if (iterateAsList(list)) {
@@ -719,7 +719,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("length", length, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("length", length, { dontInline: true, group: "list-op" });
   function length(list) {
     let n = 0;
     if (iterateAsList(list)) {
@@ -736,7 +736,7 @@ export function createInstance(schemeOpts = {}) {
     return n;
   }
 
-  defineGlobalSymbol("reverse", reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("reverse", reverse, { dontInline: true, group: "list-op" });
   function reverse(...lists) {
     let res = NIL;
     for (let list of lists) {
@@ -751,7 +751,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("nreverse", in_place_reverse, { usesDynamicScope: false, dontInline: true, group: "list-op" });  // Name from SIOD
+  defineGlobalSymbol("nreverse", in_place_reverse, { dontInline: true, group: "list-op" });  // Name from SIOD
   function in_place_reverse(list) {
     let res = NIL;
     if (!iterateAsList)
@@ -768,7 +768,7 @@ export function createInstance(schemeOpts = {}) {
   // XXX TODO: member and memq are almost certainly wrong. Need to find out about SIOD equality.
   // (member key list)
   //     Returns the portion of the list where FIRST is equal to the key, or () if none found.
-  defineGlobalSymbol("member", member, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("member", member, { dontInline: true, group: "list-op" });
   function member(key, list) {
     for ( ; moreList(list); list = list[REST])
       if (key === list[FIRST])   // TODO: == or ===?
@@ -778,7 +778,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (memq key list)
   //     Returns the portion of the list where FIRST is eq to the key, or () if none found.
-  defineGlobalSymbol("memq", memq, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("memq", memq, { dontInline: true, group: "list-op" });
   function memq(key, list) {
     for ( ; moreList(list); list = list[REST])
       if (key === list[FIRST])
@@ -788,7 +788,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (nth index list)
   //     Reference the list using index, with the first element being index 0.
-  defineGlobalSymbol("nth", nth, { usesDynamicScope: false, dontInline: true, group: "list-op" });
+  defineGlobalSymbol("nth", nth, { dontInline: true, group: "list-op" });
   function nth(index, list) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
       throw new TypeError(`not an integer ${string(index)}`);
@@ -833,7 +833,7 @@ export function createInstance(schemeOpts = {}) {
   SchemeJSThrow.prototype.name = "SchemeJSThrow";
 
   // (*throw tag value) -- SIOD style
-  defineGlobalSymbol("*throw", schemeThrow, { usesDynamicScope: false, dontInline: true });
+  defineGlobalSymbol("*throw", schemeThrow, { dontInline: true });
   function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style

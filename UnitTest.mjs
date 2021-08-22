@@ -688,72 +688,65 @@ export function run(opts = {}) {
       const trimCompare = (a, b) => a.trim() === b.trim();
       EXPECT(testAnalyze(x => x * x),
         { name: '', params: ['x'], restParam: undefined, valueTemplate: 'x * x', printParams: 'x',
-          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 1, usesThis: false });
+          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 1 });
       EXPECT(testAnalyze((x) => x * x),
         { name: '', params: ['x'], restParam: undefined, valueTemplate: 'x * x', printParams: '(x)',
-          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 1, usesThis: false });
+          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 1 });
       EXPECT(testAnalyze((x, y) => x * y),
         { name: '', params: ['x', 'y'], restParam: undefined, valueTemplate: 'x * y', printParams: '(x, y)',
-          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 2, usesThis: false });
+          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 2 });
       EXPECT(testAnalyze((x, ...y) => x * y),
         { name: '', params: ['x'], restParam: 'y', valueTemplate: 'x * y', printParams: '(x, ...y)',
-          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 1, usesThis: false });
+          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 1 });
       EXPECT(testAnalyze((x, y, ...z) => x * y),
         { name: '', params: ['x','y'], restParam: 'z', valueTemplate: 'x * y', printParams: '(x, y, ...z)',
-          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 2, usesThis: false });
+          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 2 });
       EXPECT(testAnalyze((...x) => x * x),
         { name: '', params: [], restParam: 'x', valueTemplate: 'x * x', printParams: '(...x)',
-          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 0, usesThis: false });
+          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 0 });
       EXPECT(testAnalyze((...x) => { let res = x * x; return res }),
         { name: '', params: [], restParam: 'x', valueTemplate: 'res', printParams: '(...x)',
-          bodyTemplate: 'let res = x * x;', printBody: undefined, native: false, requiredCount: 0, usesThis: false });
+          bodyTemplate: 'let res = x * x;', printBody: undefined, native: false, requiredCount: 0 });
       EXPECT(testAnalyze((x, y, a, b = [], c, d) => x * y),
         { name: '', params: ['x', 'y', 'a', 'b', 'c', 'd'], restParam: undefined, valueTemplate: 'x * y',
           printParams: '(x, y, a, b = [], c, d)',
-          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 3, usesThis: false });
+          bodyTemplate: undefined, printBody: undefined, native: false, requiredCount: 3 });
       EXPECT(testAnalyze(function (a) { a = 2 * a; return a; }),
         { name: '', params: ['a'], restParam: undefined, valueTemplate: 'a', printParams: '(a)',
-          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 1, usesThis: false },
+          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 1 },
         { stringCompare: trimCompare });
       EXPECT(testAnalyze(function(a, b, c) { a = 2 * a; return a; }),
         { name: '', params: ['a','b','c'], restParam: undefined, valueTemplate: 'a', printParams: '(a, b, c)',
-          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 3, usesThis: false },
+          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 3 },
         { stringCompare: trimCompare });
       EXPECT(testAnalyze(function fn(a) { a = 2 * a; return a; }),
         { name: 'fn', params: ['a'], restParam: undefined, valueTemplate: 'a', printParams: '(a)',
-          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 1, usesThis: false });
+          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 1 });
       EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * a; return a; }),
         { name: 'fn', params: ['a','b','c'], restParam: undefined, valueTemplate: 'a', printParams: '(a, b, c)',
-          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 3, usesThis: false });
+          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return a; }', native: false, requiredCount: 3 });
       EXPECT(testAnalyze(function (a, ...rest) { return a; }),
         { name: '', params: ['a'], restParam: 'rest', valueTemplate: 'a', printParams: '(a, ...rest)',
-          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 1, usesThis: false }, { stringCompare: trimCompare });
+          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 1 }, { stringCompare: trimCompare });
       EXPECT(testAnalyze(function (a, b, c, ...rest) { return a; }),
         { name: '', params: ['a','b','c'], restParam: 'rest', valueTemplate: 'a', printParams: '(a, b, c, ...rest)',
-          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 3, usesThis: false }, { stringCompare: trimCompare });
+          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 3 }, { stringCompare: trimCompare });
       EXPECT(testAnalyze(function foo(a, ...rest) { return a; }),
         { name: 'foo', params: ['a'], restParam: 'rest', valueTemplate: 'a', printParams: '(a, ...rest)',
-          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 1, usesThis: false });
+          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 1 });
       EXPECT(testAnalyze(function bar(a, b, c, ...rest) { return a; }),
         { name: 'bar', params: ['a','b','c'], restParam: 'rest', valueTemplate: 'a', printParams: '(a, b, c, ...rest)',
-          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 3, usesThis: false });
+          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 3 });
       EXPECT(testAnalyze(function baz(...rest) { return a; }),
         { name: 'baz', params: [], restParam: 'rest', valueTemplate: 'a', printParams: '(...rest)',
-          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 0, usesThis: false });
+          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 0 });
       EXPECT(testAnalyze(function (...rest) { return a; }),
         { name: '', params: [], restParam: 'rest', valueTemplate: 'a', printParams: '(...rest)',
-          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 0, usesThis: false }, { stringCompare: trimCompare });
+          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 0 }, { stringCompare: trimCompare });
       EXPECT(testAnalyze(function bar(a, b, c = {}, d, e = 1, ...rest) { return a; }),
         { name: 'bar', params: ['a','b','c', 'd', 'e'], restParam: 'rest', valueTemplate: 'a',
           printParams: '(a, b, c = {}, d, e = 1, ...rest)',
-          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 2, usesThis: false });
-      EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * a; return this; }),
-        { name: 'fn', params: ['a','b','c'], restParam: undefined, valueTemplate: 'this', printParams: '(a, b, c)',
-          bodyTemplate: 'a = 2 * a;', printBody: ' { a = 2 * a; return this; }', native: false, requiredCount: 3, usesThis: true });
-      EXPECT(testAnalyze(function fn(a, b, c) { a = 2 * this; return a; }),
-        { name: 'fn', params: ['a','b','c'], restParam: undefined, valueTemplate: 'a', printParams: '(a, b, c)',
-          bodyTemplate: 'a = 2 * this;', printBody: ' { a = 2 * this; return a; }', native: false, requiredCount: 3, usesThis: true });
-      
+          bodyTemplate: '', printBody: ' { return a; }', native: false, requiredCount: 2 });      
       // Safari and Firefox format the "native code" part differently than V8.
       //  EXPECT(testAnalyze([].sort),
       //    { name: 'sort', params: [], restParam: undefined, valueTemplate: undefined,
