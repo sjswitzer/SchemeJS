@@ -519,7 +519,7 @@ export function createInstance(schemeOpts = {}) {
   function subclassOf(cls, supercls) {
     while (cls != null) {
       if (cls === supercls) return true;
-      cls = cls.__proto__;
+      cls = Object.getPrototypeOf(cls);
     }
     return false;
   }
