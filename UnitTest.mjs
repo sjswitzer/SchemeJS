@@ -670,6 +670,29 @@ export function run(opts = {}) {
     // Internals tests
     //
 
+    { // String parsing; note backslashes need to be doubled in the test case
+      EXPECT(` "" `, expectString(""));
+      EXPECT(` " " `, expectString(" "));
+      EXPECT(` "abc" `, expectString("abc"));
+      EXPECT(` "\0" `, expectString("\0"));
+      EXPECT(` "a\0b" `, expectString("a\0b"));
+      EXPECT(` "\'" `, expectString("\'"));
+      EXPECT(` "\\"" `, expectString("\""));
+      EXPECT(` "\\\\" `, expectString("\\"));
+      EXPECT(` "\\n" `, expectString("\n"));
+      EXPECT(` "\\r" `, expectString("\r"));
+      EXPECT(` "\\v" `, expectString("\v"));
+      EXPECT(` "\\t" `, expectString("\t"));
+      EXPECT(` "\\b" `, expectString("\b"));
+      EXPECT(` "\\f" `, expectString("\f"));
+      EXPECT(` "\\u1f2B" `, expectString("\u1f2B"));
+      EXPECT(` "\\u{103fb}" `, expectString("\u{103fb}"));
+      EXPECT(` "\\u{20}" `, expectString(" "));
+      EXPECT(` "\\x20" `, expectString("\x20"));
+      EXPECT(` "a\\x20b" `, expectString("a b"));
+      EXPECT(` "\\x20" `, expectString(" "));
+    }
+
     { // Used by the compiler to convert wild Scheme identifiers into valid JavaScript identifiers
       const toJavaScriptIdentifier = globalScope.toJavaScriptIdentifier;
       const testToJavaScriptIdentifier = name => () => toJavaScriptIdentifier(name);
