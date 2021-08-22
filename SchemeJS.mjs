@@ -163,7 +163,7 @@ export function createInstance(schemeOpts = {}) {
           return false;
         }
         let i = 0, aRest = a, bRest = b;
-        for ( ; moreList(aRest) && moreList(bRest); ++i, ++length, aRest = aRest[REST], bRest = bRest[REST]) {
+        for ( ; iterateAsList(aRest) && iterateAsList(bRest); ++i, ++length, aRest = aRest[REST], bRest = bRest[REST]) {
           let res = deep_eq(aRest[FIRST], bRest[FIRST], depth+1, length);
           if (!res) {
             report.list = a, report.a = aRest[FIRST], report.b = bRest[FIRST];
@@ -446,22 +446,19 @@ export function createInstance(schemeOpts = {}) {
   function copy_list(...lists) {
     let res = NIL, last;
     for (let list of lists) {
-      if (isNil(list)) return NIL;
-      if (iterateAsList(list)) {
-        for ( ; moreList(list); list = list[REST]) {
-          let item = cons(list[FIRST], NIL);
-          if (last) last = last[REST] = item;
-          else res = last = item;
-        }
-      } else if (isIterable(list)) {
+      for ( ; iterateAsList(list); list = list[REST]) {
+        let item = cons(list[FIRST], NIL);
+        if (last) last = last[REST] = item;
+        else res = last = item;
+      }
+      if (!isNil(list)) {
+        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
           item = cons(item, NIL);
           if (last) last = last[REST] = item;
           else res = last = item;
           list = list[REST];
         }
-      } else {
-        throw new TypeError(`Not a list or iterable ${list}`);
       }
     }
     return res;
@@ -560,8 +557,12 @@ export function createInstance(schemeOpts = {}) {
       let evaled = _eval(predicateForm, this);
       if (schemeTrue(evaled)) {
         let res = NIL;
-        for ( ; moreList(forms); forms = forms[REST])
+        for ( ; iterateAsList(forms); forms = forms[REST])
           res = _eval(forms[FIRST], this);
+        if (!isNil(forms)) {
+          for (let form of forms)
+            res = _eval(form, this);
+        }
         return res;
       }
     }
@@ -659,12 +660,10 @@ export function createInstance(schemeOpts = {}) {
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
-      if (iterateAsList(list)) {
-        // Could handle as iterable, but faster not to
-        for ( ; moreList(list); list = list[REST])
-          if (last) last = last[REST] = cons(list[FIRST], NIL);
-          else res = last = cons(list[FIRST], NIL);
-      } else {
+      for ( ; iterateAsList(list); list = list[REST])
+        if (last) last = last[REST] = cons(list[FIRST], NIL);
+        else res = last = cons(list[FIRST], NIL);
+     if (!isNil(list)) {
         if (!isIterable(list)) throw new SchemeEvalError(`Not a list or iterable ${list}`);
         for (let value of list) {
           let item = cons(value, NIL);
