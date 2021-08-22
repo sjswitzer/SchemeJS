@@ -1294,7 +1294,7 @@ export function createInstance(schemeOpts = {}) {
       // Allows the REPL to select a mode where, at the top-level only,
       //    a = expr
       // is the same as
-      //    (define a expr)
+      //    (def a expr)
       // It might or might not be a good idea. It isn't worse than "evalquote", if anyone
       // else remembers that. In any case it's opt-in.
       let sym = token().value;
@@ -1302,7 +1302,7 @@ export function createInstance(schemeOpts = {}) {
       consumeToken(), consumeToken();
       let assigned = parseExpr();
       parseContext.pop();
-      expr = list(Atom("define"), sym, assigned);
+      expr = list(Atom("def"), sym, assigned);
     } else {
       expr = parseExpr(0);
     }

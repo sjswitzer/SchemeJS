@@ -507,12 +507,12 @@
             the rest are unevaluated.
             In <code>(\# 2 (a1 a3 a3 a5) forms...)</code>, <i>a1</i> and <i>a2</i> are evaluated and the rest are not.
         <h4> Optional Parameters </h4>
-        <p> A function defined as <code>(define (fn p1 (? p2 expr) (? p3 expr) ) form ...)</code>
+        <p> A function defined as <code>(def (fn p1 (? p2 expr) (? p3 expr) ) form ...)</code>
             has optional parameters <code>p2</code> and <code>p3</code> with default values
             supplied by the expressions that follow them. The expressions are evaluated only
             if the parameter is absent.
         <h4> Rest Parameters </h4>
-        <p> A function defined as <code>(define (fn p1 p2 . p3) form ...)</code> takes two
+        <p> A function defined as <code>(def (fn p1 p2 . p3) form ...)</code> takes two
             normal parameters (<i>p1</i> and <i>p2</i>) and receives a third parameter <i>p3</i>,
             that recieves a list of the remaining arguments.
         <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 . p3) form ...)</code> has a
@@ -1031,9 +1031,9 @@
         <p> Returns a Scheme atom named "str".
       </dd>
       <dd id="defn-define">
-        (define a form)
+        (def a form)
         <p> Defines a global-scope variable <i>a</i> with the evaluated value of <i>form</i>.</p>
-        (define (fn param...) form ...)
+        (def (fn param...) form ...)
         <p> Defines a global-scope function <i>fn</i> with parameters <i>param...</i>
             which evaluates the forms in the context of the bound parameters.
       </dd>

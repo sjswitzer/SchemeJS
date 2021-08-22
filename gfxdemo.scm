@@ -48,7 +48,7 @@
   (fill-text "Ship Arriving Too Late to Save a Drowning Witch" 0.1 (canvas-width))
 )
 
-(define ship-canvas (canvas "Too Late!" 300 320))
+(def ship-canvas (canvas "Too Late!" 300 320))
 (@= ship-canvas 'draw satltsadw)  ;; Set the draw function
 (@= ship-canvas 'animate true)    ;; Enable animation; otherwise just draws initially and when resized
 (@! ship-canvas 'show 20 20)      ;; Move the canvas widget from its default position
@@ -73,7 +73,7 @@
   (stroke-style "green") (line-width 1.5) (stroke)
 )
 
-(define lissajous-canvas (canvas "Lissajous"  300 300))
+(def lissajous-canvas (canvas "Lissajous"  300 300))
 (@= lissajous-canvas 'draw lissajous)         ;; Set the draw function
 (@= lissajous-canvas 'animate true)           ;; Enable animation
 (@! lissajous-canvas 'show 300 30)            ;; Move the canvas widget from its default position
@@ -103,13 +103,13 @@
     (stroke-style sc) (stroke)
   )
 )
-(define period 2)  ;; You can play with these numbers in the console!
-(define r1 25)
-(define r2 14)
-(define r3 20)
-(define sc "magenta")
+(def period 2)  ;; You can play with these numbers in the console!
+(def r1 25)
+(def r2 14)
+(def r3 20)
+(def sc "magenta")
 
-(define spirograph-canvas (canvas "Spirograph"  300 300))
+(def spirograph-canvas (canvas "Spirograph"  300 300))
 (@= spirograph-canvas 'draw spirograph)
 (@= spirograph-canvas 'animate true)
 (@! spirograph-canvas 'show 600 40)
@@ -119,14 +119,14 @@
 (println (String spirograph))
 
 ;; Here's a widget to scribble in interactively
-(define scribble (canvas "Scribble" 300))
+(def scribble (canvas "Scribble" 300))
 
 ;; Set the gfx-context variable to the canvas's drawing context so you can now
 ;; enter drawing commands into the command window and draw interactively.
 ;; Again, the commands are all documented at
 ;;    https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
 ;; Try it!
-(define gfx-context (canvas-gfx-context scribble))
+(def gfx-context (canvas-gfx-context scribble))
 (stroke-style "blue")
 (stroke-rect 10 10 40 40)
 (fill-text "Try it! Just enter drawing commands below." 10 65)

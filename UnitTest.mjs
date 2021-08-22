@@ -193,20 +193,20 @@ export function run(opts = {}) {
 
     { // Unbound variables in functions
       let savedScope = beginTestScope();
-      EXPECT(` (define (a x) (+ x y)) `, ` 'a `);
+      EXPECT(` (def (a x) (+ x y)) `, ` 'a `);
       EXPECT_ERROR(` (a 3) `, SchemeEvalError);
-      EXPECT(` (define y 5) `, ` 'y `);
+      EXPECT(` (def y 5) `, ` 'y `);
       EXPECT(` (a 3) `, 8);
-      EXPECT(` (define (a x y) (plus* x y)) `, ` 'a `);
+      EXPECT(` (def (a x y) (plus* x y)) `, ` 'a `);
       EXPECT_ERROR(` (plus 4 5) `, SchemeEvalError);
-      EXPECT(` (define plus* +) `, ` 'plus* `);
+      EXPECT(` (def plus* +) `, ` 'plus* `);
       EXPECT(` (plus* 4 5) `, 9)
       endTestScope(savedScope);
     }
 
     { // Object and Array literals
       let savedScope = beginTestScope();
-      EXPECT(` (define a 2) `, ` 'a `);
+      EXPECT(` (def a 2) `, ` 'a `);
       EXPECT(` { [a]: 3, "b": 4, "c": a } `, ` '{ "2": 3, "b": 4, "c": 2 } `)
       EXPECT(` [ a, 3 ] `, ` '[2, 3] `);
       endTestScope(savedScope);
@@ -538,7 +538,7 @@ export function run(opts = {}) {
 
     { // "Rest" parameters
       let savedScope = beginTestScope();
-      EXPECT(` (define (foo a b . c) c) `, ` 'foo `)
+      EXPECT(` (def (foo a b . c) c) `, ` 'foo `)
       EXPECT(` (foo 1 2 3 (+ 2 2) 5) `, ` '(3 4 5) `);
       endTestScope(savedScope);
     }
@@ -552,7 +552,7 @@ export function run(opts = {}) {
 
     { // optional paramaters
       let savedScope = beginTestScope();
-      EXPECT(` (define (opt a b (c (+ 2 3))) (list a b c)) `, ` 'opt `)
+      EXPECT(` (def (opt a b (c (+ 2 3))) (list a b c)) `, ` 'opt `)
       EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
       EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
       EXPECT(` (opt 1) `, isClosure);
@@ -572,17 +572,17 @@ export function run(opts = {}) {
 
     { // special lambdas
       let savedScope = beginTestScope();
-      EXPECT(` (define a 1) `, ` 'a `);
-      EXPECT(` (define b 2) `, ` 'b `);
-      EXPECT(` (define c 3) `, ` 'c `);
-      EXPECT(` (define d 4) `, ` 'd `);
-      EXPECT(` (define e 5) `, ` 'e `);
+      EXPECT(` (def a 1) `, ` 'a `);
+      EXPECT(` (def b 2) `, ` 'b `);
+      EXPECT(` (def c 3) `, ` 'c `);
+      EXPECT(` (def d 4) `, ` 'd `);
+      EXPECT(` (def e 5) `, ` 'e `);
       // \\ Because of string literal syntax. It's really \#
-      EXPECT(` (define x (\\# 2 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'x `)
+      EXPECT(` (def x (\\# 2 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'x `)
       EXPECT(` (x a b c d e) `, ` '(1 2 c d e) `);
-      EXPECT(` (define y (\\# 1 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'y `)
+      EXPECT(` (def y (\\# 1 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'y `)
       EXPECT(` (y a b c d e) `, ` '(1 b c d e) `);
-      EXPECT(` (define z (\\# 0 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'z `)
+      EXPECT(` (def z (\\# 0 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'z `)
       EXPECT(` (z a b c d e) `, ` '(a b c d e) `);
       endTestScope(savedScope);
     }
@@ -591,16 +591,16 @@ export function run(opts = {}) {
 
     { // Partial application returning closures
       let savedScope = beginTestScope();
-      EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
+      EXPECT(` (def mul-by-5 (* 5)) `, ` 'mul-by-5 `);
       EXPECT(` mul-by-5 `, isClosure);
       EXPECT(` (mul-by-5 3) `, 15);
-      EXPECT(` (define (_add a b) (+ a b)) `, ` '_add `);
+      EXPECT(` (def (_add a b) (+ a b)) `, ` '_add `);
       EXPECT(` (_add 5 6) `, 11);
-      EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
+      EXPECT(` (def add-4 (_add 4)) `, ` 'add-4 `);
       EXPECT(` add-4 `, isClosure);
       EXPECT(` (add-4 3) `, 7);
-      EXPECT(` (define (increment-by n) (\\(x)(+ x n))) `, ` 'increment-by `);
-      EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
+      EXPECT(` (def (increment-by n) (\\(x)(+ x n))) `, ` 'increment-by `);
+      EXPECT(` (def increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
       EXPECT(` increment-by-3 `, isClosure);
       EXPECT(` (increment-by-3 4) `, 7);
       endTestScope(savedScope);
@@ -609,7 +609,7 @@ export function run(opts = {}) {
     { // Partial application returning closures, compiled
       let savedScope = beginTestScope();
       EXPECT(` (compile (increment-by n) (\\(x)(+ x n))) `, ` 'increment-by `);
-      EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
+      EXPECT(` (def increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
       EXPECT(` increment-by-3 `, isClosure);
       EXPECT(` (increment-by-3 4) `, 7);
       endTestScope(savedScope);
@@ -622,7 +622,7 @@ export function run(opts = {}) {
     {
       let savedScope = beginTestScope();
       EXPECT(`
-        (define (factoral x)
+        (def (factoral x)
           (? (<= x 1) 
             (? (bigint? x) 1n 1)
             (* x (factoral (- x (? (bigint? x) 1n 1))))
@@ -658,10 +658,10 @@ export function run(opts = {}) {
 
     { // Test that when a when a bound function changes, the JIT's guards catch it.
       let savedScope = beginTestScope();
-      EXPECT(` (define op +) `, ` 'op `);
-      EXPECT(` (define (run-op a b c) (op a b c))`, ` 'run-op `);
+      EXPECT(` (def op +) `, ` 'op `);
+      EXPECT(` (def (run-op a b c) (op a b c))`, ` 'run-op `);
       EXPECT(` (run-op 2 3 4) `, 9);
-      EXPECT(` (define op *) `, ` 'op `);
+      EXPECT(` (def op *) `, ` 'op `);
       EXPECT(` (run-op 2 3 4) `, 24);
       endTestScope(savedScope);
      }

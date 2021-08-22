@@ -1814,10 +1814,10 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  // (define variable value)
-  // (define (fn args) forms)
-  defineGlobalSymbol("define", define, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
-  function define(defined, value, ...rest) {
+  // (def variable value)
+  // (def (fn args) forms)
+  defineGlobalSymbol("def", def, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
+  function def(defined, value, ...rest) {
     let scope = this, name = defined;
     if (isList(defined)) {
       name = defined[FIRST];
@@ -2589,12 +2589,12 @@ export function createInstance(schemeOpts = {}) {
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
   defineGlobalSymbol("compile", compile, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
-  function compile(nameAndParams, form, ...forms) {
+  function compile(nameAndParams, ...forms) {
     if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[FIRST]);
-    let args = nameAndParams[REST];
+    let params = nameAndParams[REST];
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
-    let lambda = cons(LAMBDA_ATOM, cons(args, [form, ...forms]));
+    let lambda = cons(LAMBDA_ATOM, cons(params, forms));
     let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
     namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
