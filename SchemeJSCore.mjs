@@ -53,7 +53,6 @@ export function createInstance(schemeOpts = {}) {
   const reportLoadInput = schemeOpts.reportLoadInput ?? (expr => undefined);
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
-  const arraysAreLists = schemeOpts.arraysAreLists ?? true;
   const generatorsAreLists = schemeOpts.generatorsAreLists ?? true;
   const standardIteratorsAreLists = schemeOpts.standardIteratorsAreLists ?? true;
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
@@ -174,23 +173,21 @@ export function createInstance(schemeOpts = {}) {
       || obj[MORELIST] === false;   // NIL test
   
   //
-  // First off, Arrays are lists (subject to arraysAreLists)
+  // First off, Arrays are lists
   //
-  if (arraysAreLists || standardIteratorsAreLists) {
-    Object.defineProperties(Array.prototype, {
-      [LIST]: { value: true },
-      [ITERATE_AS_LIST] : { value: false },  // not really necessary since it's default
-      // Null instead of false signals that there's REST, but I'm not a NIL
-      [MORELIST]: { get: function() { return this.length > 0 ? true : null } },
-      [FIRST]: { get: function() {
-        if (this.length > 0) return this[0];
-        throw new SchemeEvalError(`${firstName} of []`);
-      } },
-      [REST]: { get: function() {
-        return new ArrayList(this, 1);
-      } },
-    });
-  }
+  Object.defineProperties(Array.prototype, {
+    [LIST]: { value: true },
+    [ITERATE_AS_LIST] : { value: false },  // not really necessary since it's default
+    // Null instead of false signals that there's REST, but I'm not a NIL
+    [MORELIST]: { get: function() { return this.length > 0 ? true : null } },
+    [FIRST]: { get: function() {
+      if (this.length > 0) return this[0];
+      throw new SchemeEvalError(`${firstName} of []`);
+    } },
+    [REST]: { get: function() {
+      return new ArrayList(this, 1);
+    } },
+  });
 
   //
   // Secondly, all generators can be lists (subject to generatorsAreLists)
