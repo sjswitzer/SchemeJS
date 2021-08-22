@@ -452,7 +452,6 @@ export function createInstance(schemeOpts = {}) {
         else res = last = item;
       }
       if (!isNil(list)) {
-        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
           item = cons(item, NIL);
           if (last) last = last[REST] = item;
@@ -664,7 +663,6 @@ export function createInstance(schemeOpts = {}) {
         if (last) last = last[REST] = cons(list[FIRST], NIL);
         else res = last = cons(list[FIRST], NIL);
      if (!isNil(list)) {
-        if (!isIterable(list)) throw new SchemeEvalError(`Not a list or iterable ${list}`);
         for (let value of list) {
           let item = cons(value, NIL);
           if (last) last = last[REST] = item;
@@ -690,7 +688,6 @@ export function createInstance(schemeOpts = {}) {
           return list[list.length-1];
         return NIL;
       }
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
       for (let value of list)
         res = value;
     }
@@ -704,7 +701,6 @@ export function createInstance(schemeOpts = {}) {
       if (last) last = last[REST] = cons(list[FIRST], NIL);
       else res = last = cons(list[FIRST], NIL);
     if (!isNil(list)) {
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
       let previous, first = true;;
       for (let value of list) {
         if (!first) {
@@ -726,7 +722,6 @@ export function createInstance(schemeOpts = {}) {
       for ( ; iterateAsList(list); list = list[REST])
         res = cons(list[FIRST], res)
       if (!isNil(list)) {
-        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
         for (item of list)
           res = cons(item, res);
       }
@@ -783,7 +778,6 @@ export function createInstance(schemeOpts = {}) {
       if (isArray(list) || typeof list === 'string')
         if (index < list.length)
           return list[index];
-      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
       for (let value of list) {
         if (index <= 0)
           return value;

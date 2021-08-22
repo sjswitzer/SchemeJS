@@ -133,7 +133,6 @@ export function createInstance(schemeOpts = {}) {
   //      for ( ; iterateAsList(current); current = current[REST])
   //         ...;
   //      if (!isNil(current)) {
-  //        if (!isIterable(current)) throw TypeError(...);
   //        for (let tmp of obj)
   //          ...;
   //      }
@@ -1309,7 +1308,6 @@ export function createInstance(schemeOpts = {}) {
       }
       // Yes, fall thru!
       if (!isNil(list)) {
-        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
           item =  fn.call(this, item);
           item = cons(item, NIL);
@@ -1330,7 +1328,6 @@ export function createInstance(schemeOpts = {}) {
         res.push(fn(list[FIRST]));
       // Yes, fall thru!
       if (!isNil(list)) {
-        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list)
           res.push(fn(item));
       }
@@ -1352,7 +1349,6 @@ export function createInstance(schemeOpts = {}) {
         }
       }
       if (!isNil(list)) {
-        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
           if(schemeTrue(predicateFn(item))) {
             item = cons(item, NIL);
@@ -1893,7 +1889,6 @@ export function createInstance(schemeOpts = {}) {
         argv[i] = item;
       }
       if (!isNil(args)) {
-        if (!isIterable(args)) throw new TypeError(`not iterable ${args}`);
         for (let item of args) {
           item = _eval(item, scope);
           argv[i] = item;
@@ -2044,9 +2039,12 @@ export function createInstance(schemeOpts = {}) {
 
   defineGlobalSymbol("apply", apply, { usesDynamicScope: true, dontInline: true });
   function apply(fn, args, scope = this) {
-    let argv = [];
-    for ( ; moreList(args); args = args[REST])
-      argv.push(args[FIRST])
+    let argv = args;
+    if (!isArray(argv)) {
+      argv = [];
+      for ( ; moreList(args); args = args[REST])
+        argv.push(args[FIRST])
+    }
     let fName;
     if (TRACE_INTERPRETER) {
       fName = namedObjects.get(fn) ?? fn.name;
@@ -2154,9 +2152,12 @@ export function createInstance(schemeOpts = {}) {
           rest = cons(args[j-1], rest);
         scope[params] = rest;
       }
-      let result = NIL;
-      for (let form of forms)
-        result = _eval(form, scope);
+      let result = NIL, current = forms;
+      for ( ; iterateAsList(current); current = current[REST])
+        result = _eval(current[FIRST], scope);
+      if (!isNil(current))
+        for (let form of current)
+          result = _eval(form, scope);
       return result;
     }
     lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
