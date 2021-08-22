@@ -1910,10 +1910,9 @@ export function createInstance(schemeOpts = {}) {
       let jitCompiled = fn[JITCOMPILED];
       if (jitCompiled)
         fn = jitCompiled;
-      let fName;
+      let fName = namedObjects.get(fn) ?? fn.name; // Used for more than just tracing!
       if (argCount >= requiredCount) {
         if (TRACE_INTERPRETER) {
-          fName = namedObjects.get(fn) ?? fn.name;
           let logArgs = [ "APPLY (eval)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
