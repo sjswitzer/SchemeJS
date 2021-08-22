@@ -1219,24 +1219,6 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  defineGlobalSymbol("list", list, { group: "list-op", compileHook: list_hook });
-  function list(...elements) {
-    let val = NIL;
-    for (let i = elements.length; i > 0; --i)
-      val = cons(elements[i-1], val);
-    return val;
-  }
-  function list_hook(args, ssaScope, tools) {
-    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    // The compiler can inline the list function just fine, but it's better to do it this way
-    // because no argument array needs to be constructed.
-    let ssaResult = newTemp("list");
-    emit(`let ${ssaResult} = NIL;`);
-    for (let i = args.length; i > 0; --i)
-      emit(`${ssaResult} = cons(${args[i-1]}, ${ssaResult});`)
-    return ssaResult;
-  }
-
   defineGlobalSymbol("length", length, { dontInline: true, group: "list-op" });
   function length(list) {
     let n = 0;
@@ -1853,12 +1835,13 @@ export function createInstance(schemeOpts = {}) {
           argv[i] = item;
         }
       }
-      let fName = namedObjects.get(fn) ?? fn.name;
       let jitCompiled = fn[JITCOMPILED];
       if (jitCompiled)
         fn = jitCompiled;
+      let fName;
       if (argCount >= requiredCount) {
         if (TRACE_INTERPRETER) {
+          fName = namedObjects.get(fn) ?? fn.name;
           let logArgs = [ "APPLY (eval)", fName, ...argv ];
           console.log.apply(scope, logArgs);
         }
@@ -2098,12 +2081,8 @@ export function createInstance(schemeOpts = {}) {
         }
         scope[param] = arg;
       }
-      if (typeof params === 'symbol') {  // rest param
-        let rest = NIL;
-        for (let j = argLength; j > i; --j)
-          rest = cons(args[j-1], rest);
-        scope[params] = rest;
-      }
+      if (typeof params === 'symbol')
+        scope[params] = args.slice(i);
       let result = NIL;
       for (let form of forms)
         result = _eval(form, scope);
@@ -2580,7 +2559,7 @@ export function createInstance(schemeOpts = {}) {
       return val;
     }
     function invokeUnbound(fn, args) {
-      let list = cons(fn, to_list(args));
+      let list = cons(fn, args);
       return _eval(list, scope);
     }
   }
@@ -3105,13 +3084,8 @@ export function createInstance(schemeOpts = {}) {
       scopeLines.push(emit(`scope[${ssaParamName}] = ${ssaParam};`));
     }
     if (restParam) {
-      let ssaTmp = newTemp(restParam);
-      emit(`let ${ssaTmp} = NIL;`);
-      emit(`for (let i = ${ssaRestParam}.length; i > 0; --i)`);
-      emit(`  ${ssaTmp} = cons(${ssaRestParam}[i-1], ${ssaTmp});`);
-      emit(`${ssaRestParam} = ${ssaTmp};`);
       let ssaParamName = use(bind(restParam));
-      scopeLines.push(emit(`scope[${ssaParamName}] =${ssaTmp};`));
+      scopeLines.push(emit(`scope[${ssaParamName}] = ${ssaRestParam};`));
     }
     let ssaResult = 'NIL';
     for ( ; moreList(forms); forms = forms[REST])

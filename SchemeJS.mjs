@@ -65,7 +65,6 @@ export function createInstance(schemeOpts = {}) {
   let cons = globalScope.cons ?? required();
   let car = globalScope.car ?? required();
   let cdr = globalScope.cdr ?? required();
-  let list = globalScope.list ?? required();
   let iteratorFor = globalScope.iteratorFor ?? required();
   let schemeTrue = globalScope.schemeTrue ?? required();
   let SchemeEvalError = globalScope.SchemeEvalError ?? required();
@@ -481,6 +480,24 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("cddr", cddr);
 
   defineGlobalSymbol("intern", Atom, { dontInline: true });
+
+  defineGlobalSymbol("list", list, { group: "list-op", compileHook: list_hook });
+  function list(...elements) {
+    let val = NIL;
+    for (let i = elements.length; i > 0; --i)
+      val = cons(elements[i-1], val);
+    return val;
+  }
+  function list_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    // The compiler can inline the list function just fine, but it's better to do it this way
+    // because no argument array needs to be constructed.
+    let ssaResult = newTemp("list");
+    emit(`let ${ssaResult} = NIL;`);
+    for (let i = args.length; i > 0; --i)
+      emit(`${ssaResult} = cons(${args[i-1]}, ${ssaResult});`)
+    return ssaResult;
+  }
 
   defineGlobalSymbol("copy-list", copy_list, { dontInline: true, group: "list-op" });  // TODO: unit tests!
   function copy_list(...lists) {
