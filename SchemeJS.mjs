@@ -76,6 +76,46 @@ export function createInstance(schemeOpts = {}) {
   let ESCAPE_STRINGS = globalScope.ESCAPE_STRINGS ?? required();
   function required() { throw "required" }
 
+  { // (Local scope so we don't hang onto the property descriptors forever)
+    // Import global JavaScript symbols
+    let propDescs = Object.getOwnPropertyDescriptors(globalThis);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (name === 'eval') name = "js-eval";
+      if (!get && value)
+        defineGlobalSymbol(name, value, { schemeOnly: true, dontInline: true, group: "imported" });
+    }
+
+    // Object static methods: Object-getOwnPropertyDescriptors, etc.
+    propDescs = Object.getOwnPropertyDescriptors(Object);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (!get && typeof value === 'function')
+        defineGlobalSymbol(`Object-${name}`, value, { schemeOnly: true, dontInline: true, group: "imported" });
+    }
+
+    // Stuff the whole Math class in there!
+    propDescs = Object.getOwnPropertyDescriptors(Math);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (!get && value) {
+        // SIOD defines *pi* so I'll just define them all like that
+        if (typeof value === 'number')
+          defineGlobalSymbol(`*${name.toLowerCase()}*`, value, { schemeOnly: true }, `Math-${name}`);
+        // SIOD defines sin, cos, asin, etc. so I'll just define them all like that,
+        // but also as Math-sin, etc.
+        if (typeof value === 'function')
+          defineGlobalSymbol(name, value, { schemeOnly: true }, `Math-${name}`);
+      }
+    }
+    defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
+    // This is redundant but I want them defined in the "builtin" group.
+    defineGlobalSymbol("globalThis", globalThis, { schemeOnly: true });
+    for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
+      defineGlobalSymbol(obj.name, obj, { schemeOnly: true });
+    defineGlobalSymbol("Date-now", Date.now, { schemeOnly: true });
+  }
+
   //
   // Equality
   //
