@@ -1811,10 +1811,11 @@ export function createInstance(schemeOpts = {}) {
       fn = _eval(fn, scope);
       if (typeof fn !== 'function') throwBadForm();
       // See makeParameterDescriptor for the truth, but
-      //   parameterDescriptor = (evalCount << 16) | requiredCount
+      //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
       let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-      let requiredCount = parameterDescriptor & 0xffff;
-      let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+      let requiredCount = (parameterDescriptor >> 8) & 0xfff;
+      let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+      let tag = parameterDescriptor & 0xff;
       if (fn[FIRST] === SCLOSURE_ATOM) {
         let fnCdr = fn[REST];
         if (!isList(fnCdr)) throwBadForm();
@@ -1971,12 +1972,14 @@ export function createInstance(schemeOpts = {}) {
     return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
   }
 
-  function makeParameterDescriptor(requiredCount, evalCount = MAX_INTEGER55) {
-    if (requiredCount < 0 || requiredCount >= 0xffff)
+  function makeParameterDescriptor(requiredCount, evalCount = MAX_INTEGER, tag = 0) {
+    if (requiredCount < 0 || requiredCount >= 0xfff)
       throw new LogicError(`RequiredCount out of range`);
-    if (evalCount < 0 || (evalCount !== MAX_INTEGER && evalCount >= 0xffff))
+    if (evalCount < 0 || (evalCount !== MAX_INTEGER && evalCount >= 0xfff))
       throw new LogicError(`Too many evaluated paramaters`);
-    return (evalCount << 16) | requiredCount;
+    if (tag < 0 || (tag >= 0xff))
+      throw new LogicError(`Too many evaluated paramaters`);
+    return (evalCount << 20) | (requiredCount << 8) | tag;
   }
 
   defineGlobalSymbol("apply", apply, { usesDynamicScope: true, dontInline: true });
@@ -2309,7 +2312,8 @@ export function createInstance(schemeOpts = {}) {
       if (typeof obj === 'function' && !obj[LIST]) {
         let fnDesc = analyzeJSFunction(obj);
         let parameterDescriptor = obj[PARAMETER_DESCRIPTOR] ?? (MAX_INTEGER << 16);
-        let evalCount = parameterDescriptor >> 15 >>> 1;
+        let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+        let tag = parameterDescriptor & 0xfff;
         let name = namedObjects.get(obj) ?? fnDesc.name ?? obj.name;
         let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
@@ -2741,8 +2745,9 @@ export function createInstance(schemeOpts = {}) {
           let fnInfo = fn[COMPILE_INFO];
           if (!fnInfo) {  // Neither a builtin nor a lambdaClosure
             let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-            let requiredCount = parameterDescriptor & 0xffff;
-            let evalCount = parameterDescriptor >> 15 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+            let requiredCount = (parameterDescriptor >> 8) & 0xfff;
+            let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+            let tag = parameterDescriptor & 0xff;
             fnInfo = analyzeJSFunction(fn);
             fnInfo.requiredCount = requiredCount;
             fnInfo.evalCount = evalCount;
