@@ -86,7 +86,7 @@ export function run(opts = {}) {
     //
 
     EXPECT(` '(a .7) `, ` '(a 0.7) `)  // Make sure the dot notation doesn't get tripped up with numbers
-    EXPECT(` '(. a) `, ` 'a `);
+    EXPECT(` '(. a) `, ` 'a `);        // This is crucial for "rest" parameter notation
     EXPECT(` (cons 1 2) `, ` '(1 . 2) `);
     EXPECT(` (car '(1 . 2)) `, ` 1 `);
     EXPECT(` (cdr '(1 . 2)) `, 2);
