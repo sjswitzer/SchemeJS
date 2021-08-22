@@ -61,23 +61,44 @@ export function createInstance(schemeOpts = {}) {
   const restName = schemeOpts.firstName ?? "rest";
   const nilName = schemeOpts.nilName ?? "NIL";
 
+  // Create a new scope with newScope(enclosingScope, "description").
+  // A new scope's prototype is the enclosing scope.
+  // This way, a scope chain is a prototype chain and resolving
+  // a symbol is as simple as "scope[sym]"
+  //
+  // SCOPE_TYPE_SYMBOL hints the printer that it's a scope... and what kind.
+  const SCOPE_TYPE_SYMBOL = Symbol("SCOPE_IS");
+
+  let globalScope = new Object();
+  globalScope[SCOPE_TYPE_SYMBOL] = "global-scope";
+
+  exportAPI("newScope", newScope);
+  function newScope(enclosingScope, scope_type) {
+    let scope = Object.create(enclosingScope);
+    scope[SCOPE_TYPE_SYMBOL] = scope_type;
+    return scope;
+  }
+
+  exportAPI("exportAPI", exportAPI)
+  function exportAPI(name, value, ...aliases) {
+    globalScope[name] = value;
+    for (let alias in aliases)
+      globalScope[alias] = value;
+  }
+
   //
   // Unlike most Lisps, the Cons cell (Pair) is not central to this design, but a _list_ is.
   // A list is like an iterator and all lists are iterable, but a list is different
-  // form an iterator in that accessing the "next" element does not "consume"
+  // frmm an iterator in that accessing the "next" element does not "consume"
   // an item and change the state of the list; a list is stateless and its "next"
   // (REST) can always be accessed.
   //
   // Cons cells (pairs) are a kind of list but are no more a list than any other.
   // To be a list requires only to implement the list protocol.
   //
-  // Creating a Pair should be as cheap as possible, so no subclassing
-  // or calls to super. And people should be able to be able to define their
-  // own specialized or tricky lists.
-  //
   // The list protocol is defined by a set of properties implemented (or not)
-  // by an object. It's a lot of peroperties, but the idea is that property access
-  // is cheap but still I want each predicate to test one and only one property.
+  // by an object. There are a lot of properties but the idea is that, although property
+  // access is cheap, I still want each predicate to test one and only one property.
   //
   //   MORELIST -- A property which, if true, says that there are FIRST and REST
   //               properties. If false (exactly), the list is a NIL VALUE.
@@ -95,7 +116,7 @@ export function createInstance(schemeOpts = {}) {
   //                The list doesn't even know yet whether it is null or not.
   //   DISPLAY_AS_LIST -- Display the object using list notation "( ... )"
   //
-  // Finally, since all lists are iterable and all iterables are (can be) lists,
+  // Finally, since all lists are iterable and all iterables can be lists,
   // a property to indicate which is the "natural" iteration strategy for that object.
   //
   //   ITERATE_AS_LIST -- Use this idiom to iterate:
@@ -108,22 +129,13 @@ export function createInstance(schemeOpts = {}) {
   //        ...
   //      }
   //
-  // Fetching properties is something JITs really optimize.
-  // It's probably as fast as or faster than "instanceof".
-  // I presume that "typeof" checks are very cheap to free because the runtime
-  // and JIT generally have to be doing the checks already and usually already
-  // know through dataflow analysis what the type is already.
-  //
-  // Beware when traversing lists, although lists are conventionally NIL-terminated,
-  // the final "REST" could be anything at all.
-  //
 
-  const FIRST = Symbol("FIRST"), REST = Symbol("REST");
-  const LIST = Symbol("LIST"), MORELIST = Symbol("MORELIST");
-  const LAZYFIRST = Symbol("LAZYFIRST"), LAZYREST = Symbol("LAZYREST"), SUPERLAZY = Symbol("SUPERLAZY");
-  let ITERATE_AS_LIST = Symbol("ITERATE-AS-LIST"), DISPLAY_AS_LIST = Symbol("DISPLAY-AS-LIST");
-  const COMPILED = Symbol("COMPILED"), JITCOMPILED = Symbol("JITCOMPILED");
-  // Since these symbols are tagged on external JS functions and objects,label them as ours as a courtesy.
+  // Since these symbols can be tagged on external JS functions and objects, label them as ours as a courtesy.
+  const FIRST = Symbol("SchemeJS-FIRST"), REST = Symbol("SchemeJS-REST");
+  const LIST = Symbol("SchemeJS-LIST"), MORELIST = Symbol("SchemeJS-MORELIST");
+  const LAZYFIRST = Symbol("SchemeJS-LAZYFIRST"), LAZYREST = Symbol("SchemeJS-LAZYREST"), SUPERLAZY = Symbol("SchemeJS-SUPERLAZY");
+  let ITERATE_AS_LIST = Symbol("SchemeJS-ITERATE-AS-LIST"), DISPLAY_AS_LIST = Symbol("SchemeJS-DISPLAY-AS-LIST");
+  const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
 
   // I trust JITs to inline these
@@ -132,6 +144,15 @@ export function createInstance(schemeOpts = {}) {
   const iterateAsList = obj => obj != null && obj[ITERATE_AS_LIST] === true;
   const displayAsList = obj => obj != null && obj[DISPLAY_AS_LIST] === true;
   const moreList = obj => obj != null && obj[MORELIST] === true;
+
+  exportAPI("isList", isList);
+  exportAPI("isNil", isNil);
+  exportAPI("iterateAsList", iterateAsList);
+  exportAPI("moreList", moreList);
+  exportAPI("LIST", LIST);
+  exportAPI("MORELIST", MORELIST);
+  exportAPI("FIRST", FIRST);
+  exportAPI("REST", REST);
 
   // Objects that "eval" to themselves
   // I trust the JavaScript runtime and JITs to reduce this to some
@@ -246,7 +267,7 @@ export function createInstance(schemeOpts = {}) {
   ArrayList.prototype[ITERATE_AS_LIST] = true;
   ArrayList.prototype[DISPLAY_AS_LIST] = true;
 
-  const FIRSTVAL = Symbol("FIRSTVAL"), RESTVAL = Symbol("RESTVAL");
+  const FIRSTVAL = Symbol("SchemeJS-FIRSTVAL"), RESTVAL = Symbol("SchemeJS-RESTVAL");
 
   function monkeyPatchListProtocolForIterable(prototype) {
     Object.defineProperties(prototype, {
@@ -343,6 +364,7 @@ export function createInstance(schemeOpts = {}) {
   // no way that NIL can be changed.
   //
   const NIL = Object.create( null, {
+    NIL: { value: "NIL" },  // Makes it clear in the debugger
     [FIRST]: {
       get: () => { throw new SchemeEvalError(`${firstName} of ${nilName}`) },
       set: _ => { throw new SchemeEvalError(`set ${firstName} of ${nilName}`) }
@@ -373,40 +395,7 @@ export function createInstance(schemeOpts = {}) {
 
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
   
-  // Create a new scope with newScope(enclosingScope, "description").
-  // A new scope's prototype is the enclosing scope.
-  // This way, a scope chain is a prototype chain and resolving
-  // a symbol is as simple as "scope[sym]"!
-  //
-  // SCOPE_IS_SYMBOL hints the printer that it's a scope... and what kind.
-  const SCOPE_IS_SYMBOL = Symbol("SCOPE_IS");
-
-  let globalScope = new Object();
-  globalScope[SCOPE_IS_SYMBOL] = "global-scope";
-
-  exportAPI("newScope", newScope);
-  function newScope(enclosingScope, scope_is) {
-    let scope = Object.create(enclosingScope);
-    scope[SCOPE_IS_SYMBOL] = scope_is;
-    return scope;
-  }
-
-  exportAPI("exportAPI", exportAPI)
-  function exportAPI(name, value, ...aliases) {
-    globalScope[name] = value;
-    for (let alias in aliases)
-      globalScope[alias] = value;
-  }
-
-  exportAPI("isList", isList);
-  exportAPI("isNil", isNil);
-  exportAPI("iterateAsList", iterateAsList);
-  exportAPI("moreList", moreList);
   exportAPI("isIterable", isIterable);
-  exportAPI("LIST", LIST);
-  exportAPI("MORELIST", MORELIST);
-  exportAPI("FIRST", FIRST);
-  exportAPI("REST", REST);
   
   //
   // Atoms are Symbols that are in the ATOMS object
@@ -2275,11 +2264,11 @@ export function createInstance(schemeOpts = {}) {
         // a LazyIteratorList, cause it to call next() and mutate into something else.
         if (obj[SUPERLAZY] && displayAsList(obj))
           return put("(...)");
-        if (obj[SCOPE_IS_SYMBOL]) {
+        if (obj[SCOPE_TYPE_SYMBOL]) {
           let symStrs = "";
           if (obj !== globalScope) {
             for (let sym of Object.getOwnPropertySymbols(obj)) {
-              if (!isAtom(sym)) continue; // Not an atom (e.g. SCOPE_IS_SYMBOL)
+              if (!isAtom(sym)) continue; // Not an atom (e.g. SCOPE_TYPE_SYMBOL)
               let desc = sym.description;
               let value = string(obj[sym]);
               let descVal = ` ${desc}=${value}`;
@@ -2290,7 +2279,7 @@ export function createInstance(schemeOpts = {}) {
               symStrs += descVal;
             }
           }
-          return put(`{*${obj[SCOPE_IS_SYMBOL]}*${symStrs}}`);
+          return put(`{*${obj[SCOPE_TYPE_SYMBOL]}*${symStrs}}`);
         }
         if (isNil(obj) && displayAsList(obj)) return put("()"); // Be careful about []!
         if (obj[LAZYREST]) {
@@ -2691,7 +2680,7 @@ export function createInstance(schemeOpts = {}) {
     let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 1000000,
       bindLiterally, functionDescriptors, compileEval };
     let ssaScope = new Object();
-    ssaScope[SCOPE_IS_SYMBOL] = "compile-scope";
+    ssaScope[SCOPE_TYPE_SYMBOL] = "compile-scope";
     // Well-known names
     bindLiterally(string, "string");
     bindLiterally(NIL, "NIL");
