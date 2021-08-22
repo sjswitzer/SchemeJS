@@ -2167,13 +2167,15 @@ export function createInstance(schemeOpts = {}) {
     return isList(obj) && (obj[FIRST] === CLOSURE_ATOM || obj[FIRST] === SCLOSURE_ATOM);
   }
 
-  const ESCAPE_STRINGS = { t: '\t', n: '\n', r: '\r', '"': '"', '\\': '\\', '\n': '' };
+  const ESCAPE_STRINGS = { '0': '\0', "'": "'", '"': '"', '\\': '\\', 
+                           n: '\n', r: '\r', v: '\v', t: '\t', b: '\b', f: '\f' };
   const STRING_ESCAPES = (() => {
     let res = {};
     for (let [key, value] of Object.entries(ESCAPE_STRINGS))
       res[value] = '\\' + key;
     return res;
   })();
+  exportAPI("ESCAPE_STRINGS", ESCAPE_STRINGS);
 
   //
   // Implements "toString()" for SchemeJS objects.
@@ -2414,11 +2416,7 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  function jsChar(charCode) {
-    let hex = '000000' + charCode.toString(16);
-    hex = hex.substr(hex.length-6);
-    return `\\u{${hex}}`;
-  }
+  function jsChar(charCode) { return `\\u{${charCode.toString(16)}}` }
 
   exportAPI("analyzeJSFunction", analyzeJSFunction);
   function analyzeJSFunction(fn) {

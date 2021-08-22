@@ -73,6 +73,7 @@ export function createInstance(schemeOpts = {}) {
   let SchemeError = globalScope.SchemeError ?? required();
   let SchemeCompileError = globalScope.SchemeCompileError ?? required();
   let EVALUATE_KEY_VALUE = globalScope.EVALUATE_KEY_VALUE ?? required();
+  let ESCAPE_STRINGS = globalScope.ESCAPE_STRINGS ?? required();
   function required() { throw "required" }
 
   //
@@ -980,13 +981,16 @@ export function createInstance(schemeOpts = {}) {
   // Character clases for parsing
   //
   const NBSP = '\u00a0', VTAB = '\u000b', FORMFEED = '\u000c', ELIPSIS = '\u0085';
-  const NL = {}, SINGLE_CHAR_TOKENS = {}, QUOTES = {}, DIGITS = {}, NUM1 = {}, NUM2 = {};
+  const NL = {}, SINGLE_CHAR_TOKENS = {}, QUOTES = {};
+  const DIGITS = {}, HEXDIGITS = Object.create(DIGITS), NUM1 = {}, NUM2 = Object.create(NUM1);
   // IDENT2 includes IDENT1 by inheritence, as does WSNL WS.
   const IDENT1 = {}, IDENT2 = Object.create(IDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `0123456789`)
-    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = NUM2[ch] = ch.codePointAt(0);
+    DIGITS[ch] = IDENT2[ch] = NUM1[ch] = ch.codePointAt(0);
+  for (let ch of `abcdefABCDEF'`)
+    HEXDIGITS[ch] = ch.codePointAt(0);
   for (let ch of `+-.`)
-    NUM1[ch] = NUM2[ch] = ch.codePointAt(0);
+    NUM1[ch] = ch.codePointAt(0);
   for (let ch of `eEoOxXbBn`)
     NUM2[ch] = ch.codePointAt(0);
   for (let ch of ` \t${VTAB}${FORMFEED}${NBSP}`) WS[ch] = ch.codePointAt(0);
@@ -1115,18 +1119,38 @@ export function createInstance(schemeOpts = {}) {
               multiline = true;
             } else if (ch === '') {
               break;
+            } else if (ch === 'x') {  // \xXX
+              nextc();
+              if (!(HEXDIGITS[ch] && HEXDIGITS[peekc()]))
+                throwSyntaxError('Invalid hexadecimal escape sequence');
+              let str = `0x${ch}${peekc()}`;
+              nextc();
+              ch = String.fromCharCode(Number(str));
+            } else if (ch === 'u') {  // \uXXXX or \u{X...}
+              nextc();
+              if (ch === '{') {
+                let pos = 0, str = '0x';
+                for ( ; HEXDIGITS[peekc(pos)]; ++pos)
+                  str += peekc(pos);
+                let codePoint = Number(str);
+                if (peekc(pos) !== '}' || isNaN(codePoint))
+                  yield { type: 'garbage', value: `\\u{${str}${peekc(pos)}`,  position, line, lineChar };
+                if (codePoint >= 0x110000)
+                  yield { type: 'garbage', value: `\\u{${str}}`,  position, line, lineChar };
+                nextc();
+                while (pos-- > 0) nextc();
+                ch = String.fromCodePoint(codePoint);
+              } else {
+                if (!(HEXDIGITS[ch] && HEXDIGITS[peekc(0)] && HEXDIGITS[peekc(1)] && HEXDIGITS[peekc(2)]))
+                  yield { type: 'garbage', value: `\\u${ch}${peekc(0)}${peekc(1)}${peekc(2)}`,  position, line, lineChar };
+                let str = `0x${ch}${peekc(0)}${peekc(1)}${peekc(2)}`;
+                nextc(), nextc(), nextc();
+                ch = String.fromCharCode(Number(str));
+              }
             } else {
               ch = ESCAPE_STRINGS[ch] ?? ch;
             }
-          }
-          // Traditional string continuation begins when a string hits a newline and the last char
-          // is a "\""; the "\"" is ignored and the string continues at the beginning of the
-          // next line. Multiline string continuation begins when a the line ends in "\\". In that
-          // case initial whitespace is skipped on the next line(s) and the string continues
-          // after a "+", which simply appends the following text, or a "|", which appends a newline
-          // then the following text. The line does _not_ need to be terminateed with a "\"
-          // or "\\" and parsing continues until an unescaped "\".
-          if (NL[ch]) {
+          } else if (NL[ch]) {
             if (multiline) {
               nextc();
               while (WS[nextc()]) {}  // skips WS
