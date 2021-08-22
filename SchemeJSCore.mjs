@@ -1553,7 +1553,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  // (for-in key value obj form forms...)
+  // (for-in key-symbol value-symbol obj form forms...)
   defineGlobalSymbol("for-in", for_in, { evalArgs: 0, compileHook: for_in_hook, group: "core", schemeOnly: true });
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
@@ -1567,7 +1567,7 @@ export function createInstance(schemeOpts = {}) {
         scope[valueSymbol] = value;
         val = _eval(form, scope);
         for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
-          _eval(forms[i], scope);  
+          val = _eval(forms[i], scope);  
       }
       return val;
     }
@@ -1578,8 +1578,8 @@ export function createInstance(schemeOpts = {}) {
       scope[keySymbol] = key;
       scope[valueSymbol] = value;
       val = _eval(form, scope);
-      for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
-        _eval(forms[i], scope);
+      for (let form of forms)
+        val = _eval(form, scope);
     }
     return val;
   }
@@ -1606,14 +1606,14 @@ export function createInstance(schemeOpts = {}) {
     scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`));
     scopeLines.push(emit(`scope[${ssaIndexVarAtom}] = ${ssaIndexVar};`));
     scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
-    for (let i = 3; i < args.length; ++i)
-      ssaResult = compileEval(args[i], ssaScope, tools);
+    for (let arg of args)
+      ssaResult = compileEval(arg, ssaScope, tools);
     emit(`return ${ssaResult};`)
     tools.indent = saveIndent;
     emit('}');
     tools.bindLiterally(isIterable, "isIterable");
     tools.bindLiterally(throwForInTypeError, "throwForInTypeError");
-    ssaResult = newTemp('for_in');
+    ssaResult = newTemp('for_in_result');
     emit(`let ${ssaResult} = NIL;`);
     emit(`if (isIterable(${ssaObj})) {`);
     emit(`  let key = 0;`);
@@ -1633,6 +1633,60 @@ export function createInstance(schemeOpts = {}) {
   }
   function throwForInTypeError(obj) {
     throw new TypeError(`for-in requires iterable or object ${string(obj)}`);
+  }
+
+  // (for-of value-symbol obj form forms...)
+  defineGlobalSymbol("for-of", for_of, { evalArgs: 0, compileHook: for_of_hook, group: "core", schemeOnly: true });
+  function for_of(valueSymbol, obj, form, ...forms) {
+    let scope = this;
+    obj = _eval(obj, scope)
+    scope = newScope(this, "for-of-scope");
+    let val = NIL;
+    for (let lalue of obj) {
+      scope[valueSymbol] = value;
+      val = _eval(form, scope);
+      for (let form of forms)
+        _eval(form, scope);
+    }
+    return val;
+  }
+  function for_of_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    if (args.length < 3) throw new SchemeCompileError(`Bad for-of`);
+    let valueVar = args[1];
+    if (!isAtom(valueVar)) throw new SchemeCompileError(`bad value variable in for-of ${valueVar}`);
+    let ssaValueVarAtom  = use(bind(valueVar));
+    let ssaObj = compileEval(args[2], ssaScope, tools);
+    let ssaValueVar = newTemp("value");
+    ssaScope[valueVar] = ssaValueVar;
+    let ssaResult = 'NIL';
+    emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (for-in ${string(indexVar)} ${string(valueVar)} ...)`);
+    for (let i = 3; i < args.length; ++i)
+      ssaResult = compileEval(args[i], ssaScope, tools);
+    emit(`return ${ssaResult};`)
+    tools.indent = saveIndent;
+    emit('}');
+    let ssaTmpScope = newTemp("scope_tmp");
+    let saveSsaScope = ssaScope, scopeLines = [];
+    scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
+    ssaScope = newScope(ssaScope, "compiler-for-of-scope");
+    ssaResult = 'NIL';
+    emit(`{`);
+    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`));
+    scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
+    emit(`  for (let ${ssaValueVar} of ${ssaObj}) {`);
+    let saveIndent = tools.indent;
+    tools.indent += '    ';
+    for (let arg of args)
+      ssaResult = compileEval(arg, ssaScope, tools);
+    tools.indent = saveIndent;
+    emit(`  }`);
+    emit(`}`);
+    if (ssaScope.dynamicScopeUsed)
+      saveSsaScope.dynamicScopeUsed = true;
+    else
+      tools.deleteEmitted(scopeLines);
+    return ssaResult;
   }
 
   // Something like this would be nice, but it's not quite right
