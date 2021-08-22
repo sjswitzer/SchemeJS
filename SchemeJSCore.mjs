@@ -1561,9 +1561,9 @@ export function createInstance(schemeOpts = {}) {
     scope = newScope(this, "for-in-scope");
     let val = NIL;
     if (isIterable(obj)) {
-      let key = 0;
+      let index = 0;
       for (let value of obj) {
-        scope[keySymbol] = key++;
+        scope[keySymbol] = index++;
         scope[valueSymbol] = value;
         val = _eval(form, scope);
         for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
@@ -1571,8 +1571,6 @@ export function createInstance(schemeOpts = {}) {
       }
       return val;
     }
-    if (obj == null || typeof obj !== 'object')
-      throwForInTypeError(obj);
     for (let key in obj) {
       let value = obj[key];
       scope[keySymbol] = key;
@@ -1595,33 +1593,30 @@ export function createInstance(schemeOpts = {}) {
     let saveSsaScope = ssaScope, scopeLines = [];
     scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
     ssaScope = newScope(ssaScope, "compiler-for-in-scope");
-    let ssaIndexVar = newTemp("key"), ssaValueVar = newTemp("value");
+    let ssaIndexVar = newTemp(indexVar.description), ssaValueVar = newTemp(valueVar.description);
     ssaScope[indexVar] = ssaIndexVar;
     ssaScope[valueVar] = ssaValueVar;
     let ssaFn = newTemp('for_in_fn)');
-    let ssaResult = 'NIL';
+    let ssaValue = 'NIL';
     emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (for-in ${string(indexVar)} ${string(valueVar)} ...)`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
     scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`));
     scopeLines.push(emit(`scope[${ssaIndexVarAtom}] = ${ssaIndexVar};`));
     scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
-    for (let arg of args)
-      ssaResult = compileEval(arg, ssaScope, tools);
-    emit(`return ${ssaResult};`)
+    for (let i = 3; i < args.length; ++i)
+      ssaValue = compileEval(args[i], ssaScope, tools);
+    emit(`return ${ssaValue};`)
     tools.indent = saveIndent;
     emit('}');
     tools.bindLiterally(isIterable, "isIterable");
-    tools.bindLiterally(throwForInTypeError, "throwForInTypeError");
-    ssaResult = newTemp('for_in_result');
+    let ssaResult = newTemp('for_in_result');
     emit(`let ${ssaResult} = NIL;`);
     emit(`if (isIterable(${ssaObj})) {`);
-    emit(`  let key = 0;`);
+    emit(`  let index = 0;`);
     emit(`  for (let value of ${ssaObj})`);
-    emit(`    ${ssaResult} = ${ssaFn}(key++, value);`);
+    emit(`    ${ssaResult} = ${ssaFn}(index++, value);`);
     emit(`} else {`);
-    emit(`  if (${ssaObj} == null || typeof ${ssaObj} !== 'object')`);
-    emit(`    throwForInTypeError(${ssaObj});`);
     emit(`  for (let key in ${ssaObj})`);
     emit(`    ${ssaResult} = ${ssaFn}(key, ${ssaObj}[key]);`);
     emit(`}`);
@@ -1631,9 +1626,6 @@ export function createInstance(schemeOpts = {}) {
       tools.deleteEmitted(scopeLines);
     return ssaResult;
   }
-  function throwForInTypeError(obj) {
-    throw new TypeError(`for-in requires iterable or object ${string(obj)}`);
-  }
 
   // (for-of value-symbol obj form forms...)
   defineGlobalSymbol("for-of", for_of, { evalArgs: 0, compileHook: for_of_hook, group: "core", schemeOnly: true });
@@ -1642,11 +1634,11 @@ export function createInstance(schemeOpts = {}) {
     obj = _eval(obj, scope)
     scope = newScope(this, "for-of-scope");
     let val = NIL;
-    for (let lalue of obj) {
+    for (let value of obj) {
       scope[valueSymbol] = value;
       val = _eval(form, scope);
       for (let form of forms)
-        _eval(form, scope);
+        val = _eval(form, scope);
     }
     return val;
   }
@@ -1656,29 +1648,24 @@ export function createInstance(schemeOpts = {}) {
     let valueVar = args[1];
     if (!isAtom(valueVar)) throw new SchemeCompileError(`bad value variable in for-of ${valueVar}`);
     let ssaValueVarAtom  = use(bind(valueVar));
-    let ssaObj = compileEval(args[2], ssaScope, tools);
-    let ssaValueVar = newTemp("value");
+    let ssaObj = compileEval(args[1], ssaScope, tools);
+    let ssaValueVar = newTemp(valueVar.description);
     ssaScope[valueVar] = ssaValueVar;
-    let ssaResult = 'NIL';
-    emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (for-in ${string(indexVar)} ${string(valueVar)} ...)`);
-    for (let i = 3; i < args.length; ++i)
-      ssaResult = compileEval(args[i], ssaScope, tools);
-    emit(`return ${ssaResult};`)
-    tools.indent = saveIndent;
-    emit('}');
+    let ssaResult = newTemp('for_of_result'), ssaValue = 'NIL';
+    emit(`let ${ssaResult} = ${ssaValue};`)
     let ssaTmpScope = newTemp("scope_tmp");
     let saveSsaScope = ssaScope, scopeLines = [];
     scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
     ssaScope = newScope(ssaScope, "compiler-for-of-scope");
-    ssaResult = 'NIL';
     emit(`{`);
     scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`));
-    scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
     emit(`  for (let ${ssaValueVar} of ${ssaObj}) {`);
     let saveIndent = tools.indent;
     tools.indent += '    ';
-    for (let arg of args)
-      ssaResult = compileEval(arg, ssaScope, tools);
+    scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
+    for (let i = 2; i < args.length; ++i)
+      ssaValue = compileEval(args[i], ssaScope, tools);
+    emit(`${ssaResult} = ${ssaValue};`);
     tools.indent = saveIndent;
     emit(`  }`);
     emit(`}`);
@@ -1686,6 +1673,37 @@ export function createInstance(schemeOpts = {}) {
       saveSsaScope.dynamicScopeUsed = true;
     else
       tools.deleteEmitted(scopeLines);
+    return ssaResult;
+  }
+
+  // (while predicate obj form forms...)
+  defineGlobalSymbol("while", _while, { evalArgs: 0, compileHook: while_hook, group: "core", schemeOnly: true });
+  function _while(predicate, form, ...forms) {
+    let scope = this;
+    let val = NIL;
+    while (schemeTrue(_eval(predicate, scope))) {
+      val = _eval(form, scope);
+      for (let form of forms)
+        val = _eval(form, scope);
+    }
+    return val;
+  }
+  function while_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    if (args.length < 2) throw new SchemeCompileError(`Bad for-of`);
+    let predicate = args[0];
+    let ssaResult = newTemp('while_result'), ssaValue = 'NIL';
+    emit(`let $ssaResult = ${ssaValue};`);
+    emit(`for (;;) { // while loop`);
+    let saveIndent = tools.indent;
+    tools.indent += '  ';
+    let ssaPredicateValue = compileEval(predicate, scope, tools);
+    emit(`if (!schemeTrue(${ssaPredicateValue})) break;`)
+    for (let i = 1; i < args.length; ++i)
+      ssaValue = compileEval(args[i], ssaScope, tools);
+    emit(`${ssaResult} = ${ssaValue};`)
+    tools.indent = saveIndent;
+    emit(`}`);
     return ssaResult;
   }
 
