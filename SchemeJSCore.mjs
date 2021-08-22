@@ -128,6 +128,17 @@ export function createInstance(schemeOpts = {}) {
   //        ...
   //      }
   //
+  // But there is an even better way to iterate:
+  //      let current = obj;
+  //      for ( ; iterateAsList(current); current = current[REST])
+  //         ...;
+  //      if (!isIterable(current)) throw ...;
+  //      for (let tmp of obj)
+  //         ...;
+  // Because a list can start out list iterable and end up normally iterable,
+  // for example, (cons 1 [2 4 4])) is a perfectly good list. See the implementation
+  // of "length" for an example.
+  //
 
   // Since these symbols can be tagged on external JS functions and objects, label them as ours as a courtesy.
   const FIRST = Symbol("SchemeJS-FIRST"), REST = Symbol("SchemeJS-REST");
@@ -140,8 +151,8 @@ export function createInstance(schemeOpts = {}) {
   // I trust JITs to inline these
   const isList = obj => obj != null && obj[LIST] === true;
   const isNil = obj => obj != null && obj[MORELIST] === false;
-  const iterateAsList = obj => obj != null && obj[ITERATE_AS_LIST] === true;
-  const displayAsList = iterateAsList;
+  const iterateAsList = obj => obj != null && !!obj[ITERATE_AS_LIST];
+  const displayAsList = obj => obj != null && obj[ITERATE_AS_LIST] === true;;
   const moreList = obj => obj != null && obj[MORELIST] === true;
 
   exportAPI("isList", isList);
@@ -168,7 +179,8 @@ export function createInstance(schemeOpts = {}) {
     Object.defineProperties(Array.prototype, {
       [LIST]: { value: true },
       [ITERATE_AS_LIST] : { value: false },  // not really necessary since it's default
-      [MORELIST]: { get: function() { return this.length > 0 } },
+      // Null instead of false signals that there's REST, but I'm not a NIL
+      [MORELIST]: { get: function() { return this.length > 0 ? true : null } },
       [FIRST]: { get: function() {
         if (this.length > 0) return this[0];
         throw new SchemeEvalError(`${firstName} of []`);
@@ -375,7 +387,7 @@ export function createInstance(schemeOpts = {}) {
       } }
     },
     [LIST]: { value: true },
-    [ITERATE_AS_LIST]: { value: true },
+    [ITERATE_AS_LIST]: { value: false },
     [MORELIST]: { value: false },
     // Make sure it has Object methods to keep from blowing up the universe
     toString: { value: function NILtoString() { return nilName } },
@@ -1269,21 +1281,17 @@ export function createInstance(schemeOpts = {}) {
   // (map fn list1 list2 ...)
   defineGlobalSymbol("map", map, { dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
   function map(fn, ...lists) {
-    // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
     for (let list of lists) {
-      if (iterateAsList(list)) {
-        // Could just let the list iterator handle it but might as well just follow the Cons chain
-        // and not have to manufacture an iterator.
-        // TODO: the special cases should be for lists that are not naturally iterable
-        for ( ; moreList(list); list = list[REST]) {
-          let item = list[FIRST];
-          item = fn.call(this, item);
-          item = cons(item, NIL)
-          if (last) last = last[REST] = item;
-          else result = last = item;
-        }
-      } else {
+      for ( ; iterateAsList(list); list = list[REST]) {
+        let item = list[FIRST];
+        item = fn.call(this, item);
+        item = cons(item, NIL)
+        if (last) last = last[REST] = item;
+        else result = last = item;
+      }
+      // Yes, fall thru!
+      if (!isNil(list)) {
         if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
           item =  fn.call(this, item);
@@ -1300,12 +1308,14 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("array-map", array_map, { dontInline: true, group: "list-op" });
   function array_map(fn, ...lists) {
     let res = [];
-    // TODO: does not currently special-case the list case.
-    // This is intentional for now as it ensures lists-as-iterables is sufficiently tested.
     for (let list of lists) {
-      for (let item of list) {
-        item = fn.call(this, item);
-        res.push(item);
+      for ( ; iterateAsList(list); list = list[REST]) 
+        res.push(fn(list[FIRST]));
+      // Yes, fall thru!
+      if (!isNil(list)) {
+        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
+        for (let item of list)
+          res.push(fn(item));
       }
     }
     return res;
@@ -1314,21 +1324,17 @@ export function createInstance(schemeOpts = {}) {
   // (filter fn list1 list2 ...)
   defineGlobalSymbol("filter", filter, { dontInline: true, group: "list-op" });
   function filter(predicateFn, ...lists) {
-    // Actually, this will work for any iterables, and lists are iterable.
     let result = NIL, last;
     for (let list of lists) {
-      if (iterateAsList(list)) {
-        // Could just let the list iterator handle it but might as well just follow the Cons chain
-        // and not have to manufacture an iterator.
-        for ( ; moreList(list); list = list[REST]) {
-          let item = list[FIRST];
-          if (schemeTrue(predicateFn(item))) {
-            item = cons(item, NIL);
-            if (last) last = last[REST] = item;
-            else result = last = item;
-          }
+      for ( ; iterateAsList(list); list = list[REST]) {
+        let item = list[FIRST];
+        if (schemeTrue(predicateFn(item))) {
+          item = cons(item, NIL);
+          if (last) last = last[REST] = item;
+          else result = last = item;
         }
-      } else {
+      }
+      if (!isNil(list)) {
         if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
         for (let item of list) {
           if(schemeTrue(predicateFn(item))) {
@@ -2226,7 +2232,7 @@ export function createInstance(schemeOpts = {}) {
           }
           return put(`{*${obj[SCOPE_TYPE_SYMBOL]}*${symStrs}}`);
         }
-        if (isNil(obj) && displayAsList(obj)) return put("()"); // Be careful about []!
+        if (isNil(obj)) return put("()"); // Be careful about []!
         if (obj[LAZYREST]) {
           put("(");
           sep = "";

@@ -153,7 +153,7 @@ export function run(opts = {}) {
     EXPECT(` (! 1n) `, false);
     EXPECT(` (! null) `, true);
     EXPECT(` (! {}) `, false);
-    EXPECT(` (! []) `, true); // [] is NIL!
+    EXPECT(` (! []) `, false);
     EXPECT(` (! [1]) `, false); 
     EXPECT(` (~ 3) `, ~3);
     EXPECT(` (** 5 7) `, 5**7);
@@ -258,7 +258,7 @@ export function run(opts = {}) {
     EXPECT(` (? cons true false) `, true );
     EXPECT(` (? {a: 1} true false) `, true );
     EXPECT(` (? {} true false) `, true );
-    EXPECT(` (? [] true false) `, false ); // [] is nil
+    EXPECT(` (? [] true false) `, true );
     EXPECT(` (? [1] true false) `, true );
     EXPECT(` (? [1 2 3] true false) `, true );
     EXPECT(` (? true 1 2 (oops!)) `, 1);
@@ -460,6 +460,7 @@ export function run(opts = {}) {
     EXPECT(` (length '(a b c d)) `, 4);
     EXPECT(` (length '[a b c d]) `, 4);
     EXPECT(` (length "abcd") `, 4);
+    EXPECT(` (length (cons 'a (cons 'b '[c d e]))) `, 5);
 
     EXPECT(` (list) `, NIL);
     EXPECT(` (list 'a) `, ` '(a) `);

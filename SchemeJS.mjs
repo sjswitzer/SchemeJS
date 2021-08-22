@@ -725,15 +725,14 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("length", length, { dontInline: true, group: "list-op" });
   function length(list) {
     let n = 0;
-    if (iterateAsList(list)) {
-      for ( ; moreList(list); list = list[REST])
-        n += 1;
-    }
+    for ( ; iterateAsList(list); list = list[REST])
+      n += 1;
     // This is tricky... a list can begin as list-iterable but fall into soething normally-iterable.
     // Don't special-case string. Its iterator returns code points by combining surrogate pairs
     if (isArray(list) && list.length > 0)
       return list.length + n;
-    if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
+    if (isNil(list)) return n;
+      if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
     for (let _ of list)
       n += 1;
     return n;
@@ -743,10 +742,10 @@ export function createInstance(schemeOpts = {}) {
   function reverse(...lists) {
     let res = NIL;
     for (let list of lists) {
-      if (iterateAsList(list)) {
-        for ( ; moreList(list); list = list[REST])
-          res = cons(list[FIRST], res)
-      } else {
+      for ( ; iterateAsList(list); list = list[REST])
+        res = cons(list[FIRST], res)
+      if (!isNil(list)) {
+        if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${string(list)}`);
         for (item of list)
           res = cons(item, res);
       }
@@ -757,14 +756,13 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("nreverse", in_place_reverse, { dontInline: true, group: "list-op" });  // Name from SIOD
   function in_place_reverse(list) {
     let res = NIL;
-    if (!iterateAsList)
-      throw new SchemeEvalError(`not in-place-reversable`);
-    while (isList(list)) {
+    while (iterateAsList(list)) {
       let next = list[REST];
       list[REST] = res;
       res = list;
       list = next;
     }
+    if (!isNil(list)) throw new TypeError(`not in-place reversible`);
     return res;
   }
 
@@ -796,15 +794,14 @@ export function createInstance(schemeOpts = {}) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
       throw new TypeError(`not an integer ${string(index)}`);
     if (index < 0) throw new RangeError(`negative index`);
-    if (iterateAsList(list)) {
-      for ( ; index > 0 && moreList(list); list = list[REST])
-        index -= 1;
-      if (moreList(list))
+    for ( ; index > 0 && iterateAsList(list); list = list[REST])
+      index -= 1;
+    if (!isNil(list)) {
+      if (index === 0 && isList(list))
         return list[FIRST];
-  ``} else if (isArray(list)) {
-      if (index < list.length)
-        return list[index];
-    } else {
+      if (isArray(list) || typeof list === 'string')
+        if (index < list.length)
+          return list[index];
       if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
       for (let value of list) {
         if (index <= 0)
