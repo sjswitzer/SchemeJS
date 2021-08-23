@@ -1225,7 +1225,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Same as map but results in an Array
-  exportAPI("array-map", array_map, { dontInline: true });
+  exportAPI("array_map", array_map, { dontInline: true });
   function array_map(fn, ...lists) {
     let res = [];
     for (let list of lists) {
@@ -1419,13 +1419,13 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[LAZYREST] = true;
   LazyIteratorList.prototype[ITERATE_AS_LIST] = true;
 
-  exportAPI("list-view", list_view, { dontInline: true });
+  exportAPI("list_view", list_view, { dontInline: true });
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator);
   }
 
-  exportAPI("lazy-map", lazy_map, { dontInline: true });
+  exportAPI("lazy_map", lazy_map, { dontInline: true });
   function lazy_map(fn, obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator, a => fn(a))
@@ -2098,7 +2098,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\ (params) (form1) (form2) ...)
-  exportAPI(LAMBDA_CHAR, lambda, { requiresScope: true, evalArgs: 0, dontInline: true });
+  exportAPI("lambda", lambda, { requiresScope: true, evalArgs: 0, dontInline: true });
   function lambda(params, ...forms) {
     let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
     let scope = this;
@@ -2107,7 +2107,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
-  exportAPI(LAMBDA_CHAR+"#", special_lambda, { requiresScope: true, evalArgs: 0, dontInline: true });
+  exportAPI("special_lambda", special_lambda, { requiresScope: true, evalArgs: 0, dontInline: true });
   function special_lambda(evalCount, params, ...forms) {
     let lambda = new Pair(SLAMBDA_ATOM, new Pair(evalCount, new Pair(params, forms)));
     let scope = this;

@@ -47,6 +47,8 @@ export function createInstance(schemeOpts = {}) {
   let NIL = globalScope.NIL ?? required();
   let LAMBDA_CHAR = globalScope.LAMBDA_CHAR ?? required();
   let QUOTE_ATOM = globalScope.QUOTE_ATOM ?? required();
+  let LAMBDA_ATOM = globalScope.LAMBDA_ATOM ?? required();
+  let SLAMBDA_ATOM = globalScope.SLAMBDA_ATOM ?? required();
   let _eval = globalScope._eval ?? required();
   let compare_hooks = globalScope.compare_hooks ?? required();
   let Atom = globalScope.Atom ?? required();
@@ -252,7 +254,7 @@ export function createInstance(schemeOpts = {}) {
       return in_place_mergesort(list.slice(0), before_function, access_function);
     // Lists and other iterables are sorted as lists
     if (isList(list))
-      return in_place_mergesort(copy_list(list), before_function, access_function);
+      return in_place_mergesort(append(list), before_function, access_function);
     let copied = NIL, last;
     if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
     for (let item of list) {
@@ -420,27 +422,6 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("intern", Atom, { dontInline: true });
 
-  exportAPI("copy_list", copy_list, { dontInline: true });
-  function copy_list(...lists) {
-    let res = NIL, last;
-    for (let list of lists) {
-      for ( ; iterateAsList(list); list = list[REST]) {
-        let item = cons(list[FIRST], NIL);
-        if (last) last = last[REST] = item;
-        else res = last = item;
-      }
-      if (!isNil(list)) {
-        for (let item of list) {
-          item = cons(item, NIL);
-          if (last) last = last[REST] = item;
-          else res = last = item;
-          list = list[REST];
-        }
-      }
-    }
-    return res;
-  }
-
   exportAPI("apropos", apropos, { requiresScope: true, dontInline: true });
   function apropos(substring) {
     if (!substring) substring = "";
@@ -457,7 +438,7 @@ export function createInstance(schemeOpts = {}) {
           matches = cons(symbol, matches);
       }
     }
-    return this.nsort(matches,
+    return this.in_place_mergesort(matches,
       (a,b) => a.description.toUpperCase() < b.description.toUpperCase());
   }
 
@@ -636,9 +617,11 @@ export function createInstance(schemeOpts = {}) {
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
-      for ( ; iterateAsList(list); list = list[REST])
-        if (last) last = last[REST] = cons(list[FIRST], NIL);
-        else res = last = cons(list[FIRST], NIL);
+      for ( ; iterateAsList(list); list = list[REST]) {
+        let item = cons(list[FIRST], NIL);
+        if (last) last = last[REST] = item;
+        else res = last = item;
+      }
      if (!isNil(list)) {
         for (let value of list) {
           let item = cons(value, NIL);
@@ -1621,6 +1604,16 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(eval form [scope])`, 
       blurb: `Evaluates the given form in "scope" (default is the current scope).`
     });
+    defineBinding(LAMBDA_ATOM, "lambda", {
+      group: "main", sample: `(lambda parameters forms)`, 
+      blurb: `Creates a function with the given parameters which evaluates the forms `+
+             `and returns the value of the last one.`
+    });
+    defineBinding(SLAMBDA_ATOM, "special_lambda", {
+      group: "main", sample: `(lambda# n parameters forms)`, 
+      blurb: `Creates a function with the given parameters which evaluates the forms `+
+             `and returns the value of the last one, but only the first "n" parameters are evaluated.`
+    });
     defineBinding("def", "def", {
       group: "main", sample: `(def var value) -or- (def (fn param ...) form ...)`, 
       blurb: `Defines a global variable or function.`
@@ -1649,6 +1642,14 @@ export function createInstance(schemeOpts = {}) {
       group: "list", sample: `(length list)`, 
       blurb: `Returns the length of the list or iterable (including strings).`
     });
+    defineBinding("sort", mergesort, {
+      group: "list", sample: `(sort list-or-array)`, 
+      blurb: `Returns a sorted copy of the list or array.`
+    });
+    defineBinding("in-place-sort", in_place_mergesort, {
+      group: "list", sample: `(in-place-sort list-or-array)`, 
+      blurb: `Sorts and returns the list or array in-place.`
+    });
     defineBinding("list", "list", {
       group: "list", sample: `(list value ...)`, 
       blurb: `Returns a list of the arguments.`
@@ -1656,6 +1657,28 @@ export function createInstance(schemeOpts = {}) {
     defineBinding("nth", nth, {
       group: "list", sample: `(nth n list)`, 
       blurb: `Returns the nth element of the list.`
+    });
+    defineBinding("map", "map", {
+      group: "list", sample: `(map function list ...)`, 
+      blurb: `Returns a list of the results of the function applied to elements of the lists.`
+    });
+    defineBinding("array-map", "array_map", {
+      group: "list", sample: `(array-map function list ...)`, 
+      blurb: `Returns an array of the results of the function applied to elements of the lists.`
+    });
+    defineBinding("lazy-map", "lazy_map", {
+      group: "list", sample: `(lazy-map function list ...)`, 
+      blurb: `Returns a list of the results of the function applied to elements of the lists `+
+             `where the elements are only produced as they are accessed.`
+    });
+    defineBinding("list-view", "list_view", {
+      group: "list", sample: `(list-view iterable)`, 
+      blurb: `Returns a list representing the elements of the iterable `+
+              `where the elements are only produced as they are accessed.`
+    });
+    defineBinding("filter", "filter", {
+      group: "list", sample: `(filter predicate-function list ...)`, 
+      blurb: `Returns a list elements of the lists where the predicate-function is true of that element.`
     });
     defineBinding("&&", "and", "and", {
       group: "logical-op", sample: `(&& value ...)`, 
@@ -1947,13 +1970,10 @@ export function createInstance(schemeOpts = {}) {
       group: "util", sample: `(max value ...)`, 
       blurb: `The minimum of a set of values.`
     });
-    /*
-    defineBinding("xxx", "xxx", "xxx", {
-      group: "xxx", sample: `(xxx value ...)`, 
-      blurb: `xxx.`
+    defineBinding("apropos", apropos, {
+      group: "util", sample: `(apropos ["substr"])`, 
+      blurb: `Returns a list of current definitions matching the substring, or all definitions if absent.`
     });
-    */
-
   }
 
   return globalScope;
