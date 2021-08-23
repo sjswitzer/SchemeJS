@@ -1852,10 +1852,49 @@ export function createInstance(schemeOpts = {}) {
       group: "flow-op", sample: `(xxx expr ...)`, 
       blurb: `Evaluates each expression in turn, xxx.`
     });
-    defineBinding("xxx", "xxx", "xxx", {
-      group: "compare-op", sample: `(xxx value ...)`, 
-      blurb: `Returns true if each value is XXX than the previous. Evaluation ends as soon as the comparison fails.`
+    
+    defineBinding((a,b) => a in b, "in", { group: "js-op", sample: `(in a b)` });
+    defineBinding((cls, ...args) => new cls(...args), "new", { group: "js-op", sample: `(new cls . args)` });
+    defineBinding((obj, cls) => obj instanceof cls, "instanceof", { group: "js-op", sample: `(instanceof obj cls)` });
+    defineBinding((a, b) => a[b], "@", { group: "js-op", sample: `(@ a b)` });
+    defineBinding((a, b, c) => a[b][c], "@@", { group: "js-op", sample: `(@@ a b c)` });
+    defineBinding((a, b, c, d) => a[b][c][d], "@@@", { group: "js-op", sample: `(@@@ a b c d)` });
+    defineBinding((a, b) => a?.[b], "@?", { group: "js-op", sample: `(@? a b)` });
+    defineBinding((a, b, c) => a?.[b]?.[c], "@@?", { group: "js-op", sample: `(@@? a b c)` });
+    defineBinding((a, b, c, d) => a?.[b]?.[c]?.[d], "@@@?", { group: "js-op", sample: `(@@@? a b c d)` });
+    defineBinding((a, b, ...params) => a[b](...params), "@!", { group: "js-op", sample: `(@! a b . params)` });
+    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
+    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
+    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
+    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
+    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
+    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
+    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
+    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
+
+    
+    exportApi("@!", (a, b, ...params) => a[b](...params), { group: "js-op" });
+    exportApi("@@!", (a, b, c, ...params) => a[b][c](...params), { group: "js-op" });
+    exportApi("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { group: "js-op" });
+    exportApi("@?!", (a, b, ...params) => a?.[b](...params), { group: "js-op" });
+    exportApi("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { group: "js-op" });
+    exportApi("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { group: "js-op" });
+    exportApi("@=", (a, b, c) => a[b] = c, { group: "js-op" }, "js-assign");
+    exportApi("@@=", (a, b, c, d) => a[b][c] = d), { group: "js-op" };
+    exportApi("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { group: "js-op" });
+    exportApi("delete", (a, b) => delete a[b]), { schemeOnly: true, group: "js-op" };
+    exportApi("void", _ => undefined, { schemeOnly: true, group: "js-op" });
+    exportApi("not", a => typeof a === 'function' ? ((...params) => !a(...params)) : !a), { group: "logical-op" };
+
+    
+    defineBinding("in", "in", {
+      group: "js-op", sample: `(in property object)`, 
     });
+    defineBinding("at", "@", {
+      group: "js-op", sample: `(@ object key)`, 
+    });
+
+
     defineBinding("xxx", "xxx", "xxx", {
       group: "compare-op", sample: `(xxx value ...)`, 
       blurb: `Returns true if each value is XXX than the previous. Evaluation ends as soon as the comparison fails.`

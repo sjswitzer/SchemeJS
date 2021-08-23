@@ -61,6 +61,20 @@ export function createInstance(schemeOpts = {}) {
   const restName = schemeOpts.firstName ?? "rest";
   const nilName = schemeOpts.nilName ?? "NIL";
 
+  const COMPILE_INFO = Symbol("COMPILE-INFO");
+  const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
+  const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
+  let helpInfo = globalScope._helpInfo_ = {};  // For clients that want to implement help.
+  const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1), WS = {}, WSNL = Object.create(WS);
+  for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
+    JSIDENT1[ch] = ch.codePointAt(0);
+  for (let ch of "0123456789")
+    JSIDENT2[ch] = ch.codePointAt(0);
+  for (let ch of " \t")
+    WS[ch] = ch.codePointAt(0);
+  for (let ch of "\n\r")
+    WSNL[ch] = ch.codePointAt(0);
+
   // Create a new scope with newScope(enclosingScope, "description").
   // A new scope's prototype is the enclosing scope.
   // This way, a scope chain is a prototype chain and resolving
@@ -72,18 +86,18 @@ export function createInstance(schemeOpts = {}) {
   let globalScope = new Object();
   globalScope[SCOPE_TYPE_SYMBOL] = "global-scope";
 
+  exportAPI("exportAPI", exportAPI)
+  function exportApi(name, value, opts) {
+    if (typeof value === 'function')
+      examineFunctionForCompilerTemplates(name, value, opts);
+    globalScope[name] = value;
+  }
+
   exportAPI("newScope", newScope);
   function newScope(enclosingScope, scope_type) {
     let scope = Object.create(enclosingScope);
     scope[SCOPE_TYPE_SYMBOL] = scope_type;
     return scope;
-  }
-
-  exportAPI("exportAPI", exportAPI)
-  function exportAPI(name, value, ...aliases) {
-    globalScope[name] = value;
-    for (let alias in aliases)
-      globalScope[alias] = value;
   }
 
   //
@@ -172,6 +186,7 @@ export function createInstance(schemeOpts = {}) {
   const isPrimitive = obj => obj == null ||
       (typeof obj !== 'symbol' && typeof obj !== 'object')
       || obj[MORELIST] === false;   // NIL test
+  exportAPI("isPrimitive", isPrimitive);
   
   //
   // First off, Arrays are lists
@@ -428,7 +443,12 @@ export function createInstance(schemeOpts = {}) {
   ATOMS["\\#"] = ATOMS[LAMBDA_CHAR+"#"] = ATOMS[lambdaStr+"#"] = SLAMBDA_ATOM;
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%closure#");
+  const QUOTE_ATOM = Atom("quote");
+  ATOMS["'"] = QUOTE_ATOM;
   exportAPI("LAMBDA_CHAR", LAMBDA_CHAR);
+  exportAPI("LAMBDA_ATOM", LAMBDA_ATOM);
+  exportAPI("SLAMBDA_ATOM", SLAMBDA_ATOM);
+  exportAPI("QUOTE_ATOM", QUOTE_ATOM);
 
   exportAPI("iteratorFor", iteratorFor);
   function iteratorFor(obj, throwException = TypeError) {
@@ -437,105 +457,31 @@ export function createInstance(schemeOpts = {}) {
       if (typeof obj.next === 'function') return obj;
     }
     if (throwException) throw new throwException(`Not an iterable or list ${obj}`);
-  }
+  }  
 
-  // Why are these initialized here, you ask?
-  // Because they're indirectly refernced by defineGlobalSymbol is why.
-  const COMPILE_INFO = Symbol("COMPILE-INFO");
-  const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
-  const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
-  let helpInfo = globalScope._helpInfo_ = {};  // For clients that want to implement help.
-  const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1), WS = {}, WSNL = Object.create(WS);
-  for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
-    JSIDENT1[ch] = ch.codePointAt(0);
-  for (let ch of "0123456789")
-    JSIDENT2[ch] = ch.codePointAt(0);
-  for (let ch of " \t")
-    WS[ch] = ch.codePointAt(0);
-  for (let ch of "\n\r")
-    WSNL[ch] = ch.codePointAt(0);
-
-  //
-  // Unlike exportAPI, which exports an API to clients, defineGlobalSymbol
-  // defines a symbol for the SchemeJS environment AND exports it as an API.
-  // Be careful which one you use!
-  //
-  // Some of the short exported functions are all on one line. This is intentional.
-  // Those function's bodies are included in the string representation used for dispay.
-  // 
-  exportAPI("defineGlobalSymbol", defineGlobalSymbol);
-  function defineGlobalSymbol(name, value, ...aliases) {
-    let opts = {};
-    if (typeof aliases[0] === 'object')
-      opts = aliases.shift();
-    let group = opts.group ?? "default";
-    if (typeof value === 'function')
-      examineFunctionForCompilerTemplates(name, value, opts);
-    let { atom, atomName, jsName } = normalizeExportToJavaScriptName(name);
-    globalScope[atom] = value;
-    //helpGroups[atom] = group;
-    if (jsName && !opts.schemeOnly) {
-      globalScope[jsName] = value;
-      //helpGroups[jsName] = group;
-    }
-    for (let alias of aliases) {
-      ({ atom, atomName, jsName } = normalizeExportToJavaScriptName(alias));
-      globalScope[atom] = value;
-      //helpGroups[atom] = group;
-      if (jsName && !opts.schemeOnly) {
-        globalScope[jsName] = value;
-        //helpGroups[jsName] = group;
-      }
-    }
-    return atom;
-  }
-
-  function normalizeExportToJavaScriptName(name) {
-    if (typeof name === 'symbol')
-      name = name.description;
-    let atomName = name;
-    let atom = Atom(name);
-    // Java API name
-    let jsName = replaceAll(name, "-", "_");
-    if (!JSIDENT1[jsName[0]]) {
-      jsName = undefined;
-    } else {
-      for (let ch of jsName) {
-        if (!JSIDENT2[ch]) {
-          jsName = undefined;
-          break;
-        }
-      }
-    }
-    return { atom, atomName, jsName };
-  }
-
-  function defineBinding(objName, ...names) {
+  function defineBinding(value, ...names) {
     let opts = names[names.length-1];
     if (typeof opts === 'object')
       names = names.pop();
     else
       opts = {};
-    if (globalScope.hasOwnProperty(objName))
-      throw LogicError(`${objName} not in globalScope`);
-    let obj = globalSScope[objName];
+    if (typeof value === 'string') {
+      if (!globalScope.hasOwnProperty(value))
+        throw LogicError(`${value} not in globalScope`);
+      value = globalScope[value];
+    } else {
+      if (typeof value === 'function')
+        examineFunctionForCompilerTemplates(names[0], value, opts);
+    }
     for (let i = 0; i < names.length; ++i)
       names[i] = Atom(names[i]);
     opts.names = names;
-    opts.obj = obj;
+    opts.obj = value;
     helpInfo[objName[0]] = opts;
     for (name of names) {
-      globalScope[name] = obj;
+      globalScope[name] = value;
       helpInfo[name] = opts;
     }
-  }
-
-  function subclassOf(cls, supercls) {
-    while (cls != null) {
-      if (cls === supercls) return true;
-      cls = Object.getPrototypeOf(cls);
-    }
-    return false;
   }
 
   // Substitute for String.prototype.replaceAll until Node.js supports it.
@@ -551,7 +497,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  function examineFunctionForCompilerTemplates(name, fn, opts) {
+  function examineFunctionForCompilerTemplates(name, fn, opts = {}) {
     let evalCount = opts.evalArgs ?? MAX_INTEGER;
     let compileHook = opts.compileHook;
     let usesDynamicScope = opts.usesDynamicScope;
@@ -587,6 +533,14 @@ export function createInstance(schemeOpts = {}) {
 
     fnInfo.usesDynamicScope = usesDynamicScope;
     fn[COMPILE_INFO] = fnInfo;
+  }
+
+  function subclassOf(cls, supercls) {
+    while (cls != null) {
+      if (cls === supercls) return true;
+      cls = Object.getPrototypeOf(cls);
+    }
+    return false;
   }
 
   exportAPI("VERSION", VERSION);
@@ -625,62 +579,45 @@ export function createInstance(schemeOpts = {}) {
   const cons = (car, cdr) => new Pair(car, cdr);
   const car = a => a[FIRST];
   const cdr = a => a[REST];
-  defineGlobalSymbol("cons", cons);
-  defineGlobalSymbol("car", car, "first");
-  defineGlobalSymbol("cdr", cdr, "rest");
+  exportApi("cons", cons);
+  exportApi("car", car);
+  exportApi("cdr", cdr);
 
-  const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { dontInline: true, evalArgs: 0 }, "quote");
-  exportAPI("QUOTE_ATOM", QUOTE_ATOM);
+  let quote = quoted => quoted[FIRST];
+  exportApi("quote", quote, { dontInline: true, evalArgs: 0 }, "quote");
 
-  defineGlobalSymbol("scope", function() { return this });
+  exportApi("scope", function scope() { return this }, { usesDynamicScope: true });
 
   exportAPI("NIL", NIL);
-  defineGlobalSymbol("nil", NIL);
-  defineGlobalSymbol("undefined", undefined, { schemeOnly: true });
-  defineGlobalSymbol("null", null, { schemeOnly: true });
-  defineGlobalSymbol("true", true, { schemeOnly: true }, "t", "#t"); // SIOD: t, MIT Scheme: #t
-  defineGlobalSymbol("false", false, { schemeOnly: true });
-  defineGlobalSymbol("typeof", a => typeof a, { schemeOnly: true });
-
   // Hoist a bunch of JavaScript definitions into the global scope
-  defineGlobalSymbol("NaN", NaN, { schemeOnly: true });
-  defineGlobalSymbol("Infinity", Infinity, { schemeOnly: true });
-  defineGlobalSymbol("globalScope", globalScope);
+  exportApi("NIL", NIL);
+  exportApi("undefined", undefined);
+  exportApi("null", null);
+  exportApi("true", true);
+  exportApi("false", false);
+  exportApi("typeof", a => typeof a);
+
+  exportApi("NaN", NaN);
+  exportApi("Infinity", Infinity);
+  exportApi("globalScope", globalScope);
 
   // Pokemon gotta catch 'em' all!
-  defineGlobalSymbol("bit_not", a => ~a, { group: "bitwise-op" });
-  defineGlobalSymbol("pow", (a,b) => a ** b, { /* classification? */ });
-  defineGlobalSymbol("rem", (a,b) => a % b, { /* classification? */ });
-  defineGlobalSymbol("bit_shl", (a,b) => a << b, { group: "bitwise-op" }, "bit-shl");
-  defineGlobalSymbol("bit_shr", (a,b) => a >> b, { group: "bitwise-op" }, "bit-shr");
-  defineGlobalSymbol("bit-ash", (a,b) => a >>> b, { group: "bitwise-op" }, "bit-ushr");
-  defineGlobalSymbol("ash", (a, b) => b < 0 ? a >>> -b : a << b, { schemeOnly: true, group: "bitwise-op" });  // SIOD
-  defineGlobalSymbol("in", (a,b) => a in b, { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("new", (cls, ...args) => new cls(...args), { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("instanceof", (a,b) => a instanceof b, { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("@", (a, b) => a[b], { group: "js-op" }, "aref");  // indexing and member access (SIOD: aref)
-  defineGlobalSymbol("@@", (a, b, c) => a[b][c], { group: "js-op" });
-  defineGlobalSymbol("@@@", (a, b, c, d) => a[b][c][d], { group: "js-op" });
-  defineGlobalSymbol("@?", (a, b) => a?.[b], { group: "js-op" });  // conditional indexing and member access
-  defineGlobalSymbol("@@?", (a, b, c) => a?.[b]?.[c], { group: "js-op" });
-  defineGlobalSymbol("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], { group: "js-op" });
-  defineGlobalSymbol("@!", (a, b, ...params) => a[b](...params), { group: "js-op" });
-  defineGlobalSymbol("@@!", (a, b, c, ...params) => a[b][c](...params), { group: "js-op" });
-  defineGlobalSymbol("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { group: "js-op" });
-  defineGlobalSymbol("@?!", (a, b, ...params) => a?.[b](...params), { group: "js-op" });
-  defineGlobalSymbol("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { group: "js-op" });
-  defineGlobalSymbol("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { group: "js-op" });
-  defineGlobalSymbol("@=", (a, b, c) => a[b] = c, { group: "js-op" }, "js-assign");
-  defineGlobalSymbol("@@=", (a, b, c, d) => a[b][c] = d), { group: "js-op" };
-  defineGlobalSymbol("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { group: "js-op" });
-  defineGlobalSymbol("delete", (a, b) => delete a[b]), { schemeOnly: true, group: "js-op" };
-  defineGlobalSymbol("void", _ => undefined, { schemeOnly: true, group: "js-op" });
-  defineGlobalSymbol("not", a => typeof a === 'function' ? ((...params) => !a(...params)) : !a), { group: "logical-op" };
-
+  exportApi("bit_not", a => ~a);
+  exportApi("pow", (a,b) => a ** b);
+  exportApi("rem", (a,b) => a % b);
+  exportApi("bit_shl", (a,b) => a << b);
+  exportApi("bit_shr", (a,b) => a >> b);
+  exportApi("bit-ash", (a,b) => a >>> b);
+  exportApi("in", (a,b) => a in b);
+  exportApi("new", (cls, ...args) => new cls(...args));
+  exportApi("instanceof", (a,b) => a instanceof b);
+  exportApi("at", (a, b) => a[b]);
+  exportApi("at_if", (a, b) => a?.[b]);
+  
   //
   // Variable args definitions
   //
-  defineGlobalSymbol("add", add, { compileHook: add_hook, group: "arith-op" });
+  exportApi("add", add, { compileHook: add_hook, group: "arith-op" });
   function add(a, b, ...rest) {
     a += b;
     for (b of rest)
@@ -701,7 +638,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  defineGlobalSymbol("sub", { compileHook: sub_hook, group: "arith-op" });
+  exportApi("sub", { compileHook: sub_hook, group: "arith-op" });
   function sub(a, ...rest) {
     if (rest.length === 0) return -a;
     for (let b of rest)
@@ -715,7 +652,7 @@ export function createInstance(schemeOpts = {}) {
     return n_ary_hooks(args, ssaScope, tools, '-', 'sub');
   }
 
-  defineGlobalSymbol("mul", mul, { compileHook: mul_hook, group: "arith-op" });
+  exportApi("mul", mul, { compileHook: mul_hook, group: "arith-op" });
   function mul(a, b, ...rest) {
     a *= b;
     for (let b of rest)
@@ -726,7 +663,7 @@ export function createInstance(schemeOpts = {}) {
     return n_ary_hooks(args, ssaScope, tools, '*', 'mul');
   }
 
-  defineGlobalSymbol("div", div, { compileHook: div_hook, group: "arith-op" });
+  exportApi("div", div, { compileHook: div_hook, group: "arith-op" });
   function div(a, ...rest) {
     if (rest.length === 0) return 1/a;
     for (let b of rest)
@@ -745,7 +682,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("bit_and", bit_and, { compileHook: bit_and_hook, group: "bitwise-op" });
+  exportApi("bit_and", bit_and, { compileHook: bit_and_hook, group: "bitwise-op" });
   function bit_and(a, b, ...rest) {
     a &= b;
     for (b of rest)
@@ -757,7 +694,7 @@ export function createInstance(schemeOpts = {}) {
     return n_ary_hooks(args, ssaScope, tools, '&', 'bitAnd');
   }
 
-  defineGlobalSymbol("bit_or", bit_or, { compileHook: bit_or_hook, group: "bitwise-op" });
+  exportApi("bit_or", bit_or, { compileHook: bit_or_hook, group: "bitwise-op" });
   function bit_or(a, b, ...rest) {
     a |= b;
     for (let b of rest)
@@ -769,7 +706,7 @@ export function createInstance(schemeOpts = {}) {
     return n_ary_hooks(args, ssaScope, tools, '|', 'bitOr');
   }
 
-  defineGlobalSymbol("bit_xor", bit_xor, { compileHook: bit_xor_hook, group: "bitwise-op" });
+  exportApi("bit_xor", bit_xor, { compileHook: bit_xor_hook, group: "bitwise-op" });
   function bit_xor(a, b, ...rest) {
     a ^= b;
     for (let b of rest)
@@ -782,7 +719,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  defineGlobalSymbol("lt", lt, { evalArgs: 2, compileHook: lt_hook, group: "compare-op" });
+  exportApi("lt", lt, { evalArgs: 2, compileHook: lt_hook, group: "compare-op" });
   function lt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -827,7 +764,7 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("le", le, { evalArgs: 2, compileHook: le_hook, group: "compare-op" });
+  exportApi("le", le, { evalArgs: 2, compileHook: le_hook, group: "compare-op" });
   function le(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -842,7 +779,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A <= B', 'le');
   }
 
-  defineGlobalSymbol("gt", gt, { evalArgs: 2, compileHook: gt_hook, group: "compare-op" });
+  exportApi("gt", gt, { evalArgs: 2, compileHook: gt_hook, group: "compare-op" });
   function gt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -857,7 +794,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A > B', 'gt');
   }
 
-  defineGlobalSymbol("ge", ge, { evalArgs: 2, compileHook: ge_hook, group: "compare-op" });
+  exportApi("ge", ge, { evalArgs: 2, compileHook: ge_hook, group: "compare-op" });
   function ge(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -872,7 +809,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A >= B', 'ge');
   }
 
-  defineGlobalSymbol("eq", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" });
+  exportApi("eq", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" });
   function eq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -888,7 +825,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A == B', 'eq');
   }
 
-  defineGlobalSymbol("eeq", eeq, { evalArgs: 2, compileHook: eeq_hook, group: "compare-op" });
+  exportApi("eeq", eeq, { evalArgs: 2, compileHook: eeq_hook, group: "compare-op" });
   function eeq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -904,7 +841,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A === B', 'eeq');
   }
 
-  defineGlobalSymbol("neq", neq, { evalArgs: 2, compileHook: neq_hook, group: "compare-op" });
+  exportApi("neq", neq, { evalArgs: 2, compileHook: neq_hook, group: "compare-op" });
   function neq(a, b, ...rest) {
     return !eq.call(this, a, b, ...rest);
   }
@@ -914,7 +851,7 @@ export function createInstance(schemeOpts = {}) {
     return `(!${eq})`;
   }
 
-  defineGlobalSymbol("!==", neeq, { evalArgs: 2, compileHook: neeq, group: "compare-op" });
+  exportApi("!==", neeq, { evalArgs: 2, compileHook: neeq, group: "compare-op" });
   function neeq(a, b, ...rest) {
     return !eeq.call(this, a, b, ...rest);
   }
@@ -925,7 +862,7 @@ export function createInstance(schemeOpts = {}) {
 
   // Logical & Conditional
 
-  defineGlobalSymbol("and", and, { evalArgs: 0, compileHook: and_hook, group: "logical-op" });
+  exportApi("and", and, { evalArgs: 0, compileHook: and_hook, group: "logical-op" });
   function and(...forms) {
     let val = true;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -955,7 +892,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  defineGlobalSymbol("or", or, { evalArgs: 0, compileHook: or_hook, group: "logical-op" });
+  exportApi("or", or, { evalArgs: 0, compileHook: or_hook, group: "logical-op" });
   function or(...forms) {
     let val = false;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -968,7 +905,7 @@ export function createInstance(schemeOpts = {}) {
     return and_or_hook(args, ssaScope, tools, 'or', 'false', 'schemeTrue');
   }
 
-  defineGlobalSymbol("nullish", nullish, { evalArgs: 0, compileHook: nullish_hook, group: "logical-op" });
+  exportApi("nullish", nullish, { evalArgs: 0, compileHook: nullish_hook, group: "logical-op" });
   function nullish(...forms) {
     let val = undefined;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -997,7 +934,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // Conditionals
   //
-  defineGlobalSymbol("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook, group: "core", schemeOnly: true }, "if");
+  exportApi("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook, group: "core", schemeOnly: true }, "if");
   function ifelse(p, t = true, f = false) {
     p = schemeTrue(p);
     if (p)
@@ -1038,7 +975,7 @@ export function createInstance(schemeOpts = {}) {
   // The pattern here is that you can either write
   //   (? (bigint x) a b) or simply (bigint? x a b)
   //
-  defineGlobalSymbol("is_bigint", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook });
+  exportApi("is_bigint", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook });
   function is_bigint(a, t = true, f = false) {
     if (typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1049,7 +986,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_bigint', `typeof * === 'bigint'`);
   }
 
-  defineGlobalSymbol("is_atom", is_atom, { evalArgs: 1, compileHook: is_atom_hook, group: "pred-op" }, "is_atom");
+  exportApi("is_atom", is_atom, { evalArgs: 1, compileHook: is_atom_hook, group: "pred-op" }, "is_atom");
   function is_atom(a, t = true, f = false) {
     if (isAtom(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1060,7 +997,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_atom', `isAtom(*)`);
   }
 
-  defineGlobalSymbol("is_list", isList, { evalArgs: 1, compileHook: is_list_hook, group: "pred-op" } );
+  exportApi("is_list", isList, { evalArgs: 1, compileHook: is_list_hook, group: "pred-op" } );
   function is_list(a, t = true, f = false) {
     if (isList(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1071,7 +1008,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_list', `isList(*)`);
   }
 
-  defineGlobalSymbol("is_undefined", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook, group: "pred-op", schemeOnly: true })
+  exportApi("is_undefined", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook, group: "pred-op", schemeOnly: true })
   function is_undefined(a, t = true, f = false) {
     if (a === undefined)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1082,7 +1019,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_undefined', `* === undefined`);
   }
 
-  defineGlobalSymbol("is_null", is_null, { evalArgs: 1, compileHook: is_null_hook, group: "pred-op" }, "is-null");  // SIOD clained it first. Maybe rethink the naming here.
+  exportApi("is_null", is_null, { evalArgs: 1, compileHook: is_null_hook, group: "pred-op" }, "is-null");  // SIOD clained it first. Maybe rethink the naming here.
   function is_null(a, t = true, f = false) {
     if (a === null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1093,7 +1030,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_null', `* === null`);
   }
 
-  defineGlobalSymbol("is_nil", is_nil, { evalArgs: 1, compileHook: is_nil_hook, group: "pred-op", schemeOnly: true }, "is-jsnull");
+  exportApi("is_nil", is_nil, { evalArgs: 1, compileHook: is_nil_hook, group: "pred-op", schemeOnly: true }, "is-jsnull");
   function is_nil(a, t = true, f = false) {
     if (isNil(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1104,7 +1041,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nil', `isNil(*)`);
   }
 
-  defineGlobalSymbol("is_nullish", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_nullish", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook, group: "pred-op", schemeOnly: true });
   function is_nullish(a, t = true, f = false) {
     if (a == null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1115,7 +1052,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nullish', `* == null`);
   }
 
-  defineGlobalSymbol("is_boolean", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_boolean", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook, group: "pred-op", schemeOnly: true });
   function is_boolean(a, t = true, f = false) {
     if (typeof a === 'boolean')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1126,7 +1063,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_boolean', `typeof * === 'boolean'`);
   }
 
-  defineGlobalSymbol("is_number", is_number, { evalArgs: 1, compileHook: is_number_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_number", is_number, { evalArgs: 1, compileHook: is_number_hook, group: "pred-op", schemeOnly: true });
   function is_number(a, t = true, f = false) {
     if (typeof a === 'number')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1137,7 +1074,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_number', `typeof * === 'number'`);
   }
 
-  defineGlobalSymbol("is_numeric", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_numeric", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook, group: "pred-op", schemeOnly: true });
   function is_numeric(a, t = true, f = false) {
     if (typeof a === 'number' || typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1148,7 +1085,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_numeric', `typeof * === 'number' || typeof a === 'bigint`);
   }
 
-  defineGlobalSymbol("is_string", is_string, { evalArgs: 1, compileHook: is_string_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_string", is_string, { evalArgs: 1, compileHook: is_string_hook, group: "pred-op", schemeOnly: true });
   function is_string(a, t = true, f = false) {
     if (typeof a === 'string')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1159,7 +1096,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_string', `typeof * === 'string'`);
   }
 
-  defineGlobalSymbol("is_symbol", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook, group: "pred-op", schemeOnly: true }, "is-symbol");
+  exportApi("is_symbol", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook, group: "pred-op", schemeOnly: true }, "is-symbol");
   function is_symbol(a, t = true, f = false) {
     if (typeof a === 'symbol')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1170,7 +1107,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_symbol', `typeof * === 'symbol'`);
   }
 
-  defineGlobalSymbol("is_function", is_function, { evalArgs: 1, compileHook: is_function_hook, group: "pred-op", schemeOnly: true }, "is-function");
+  exportApi("is_function", is_function, { evalArgs: 1, compileHook: is_function_hook, group: "pred-op", schemeOnly: true }, "is-function");
   function is_function(a, t = true, f = false) {
     if (typeof a === 'function')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1181,7 +1118,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_function', `typeof * === 'function'`);
   }
 
-  defineGlobalSymbol("is_object", is_object, { evalArgs: 1, compileHook: is_object_hook, group: "pred-op", schemeOnly: true }, "is-object");
+  exportApi("is_object", is_object, { evalArgs: 1, compileHook: is_object_hook, group: "pred-op", schemeOnly: true }, "is-object");
   function is_object(a, t = true, f = false) {
     if (a !== null && typeof a === 'object')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1192,7 +1129,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_object', `* !== null && typeof * === 'object'`);
   }
 
-  defineGlobalSymbol("is_array", is_array, { evalArgs: 1, compileHook: is_array_hook, group: "pred-op", schemeOnly: true }, "is-array");
+  exportApi("is_array", is_array, { evalArgs: 1, compileHook: is_array_hook, group: "pred-op", schemeOnly: true }, "is-array");
   function is_array(a, t = true, f = false) {
     if (isArray(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1203,7 +1140,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_array', `Array.isArray(*)`);
   }
 
-  defineGlobalSymbol("is_NaN", is_nan, { evalArgs: 1, compileHook: is_nan_hook, group: "pred-op", schemeOnly: true } , "is-NaN", "NaN?");
+  exportApi("is_NaN", is_nan, { evalArgs: 1, compileHook: is_nan_hook, group: "pred-op", schemeOnly: true } , "is-NaN", "NaN?");
   function is_nan(a, t = true, f = false) {
     if (isNaN(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1214,7 +1151,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nan', `isNaN(*)`);
   }
 
-  defineGlobalSymbol("is_finite", is_finite, { evalArgs: 1, compileHook: is_finite_hook, group: "pred-op", schemeOnly: true } , "is-finite");
+  exportApi("is_finite", is_finite, { evalArgs: 1, compileHook: is_finite_hook, group: "pred-op", schemeOnly: true } , "is-finite");
   function is_finite(a, t = true, f = false) {
     if (isFinite(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1226,7 +1163,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (begin form1 form2 ...)
-  defineGlobalSymbol("begin", begin, { evalArgs: 0, compileHook: begin_hook, group: "core" });
+  exportApi("begin", begin, { evalArgs: 0, compileHook: begin_hook, group: "core" });
   function begin(...forms) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
@@ -1240,7 +1177,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  defineGlobalSymbol("length", length, { dontInline: true, group: "list-op" });
+  exportApi("length", length, { dontInline: true, group: "list-op" });
   function length(list) {
     let n = 0;
     for ( ; iterateAsList(list); list = list[REST])
@@ -1257,7 +1194,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (map fn list1 list2 ...)
-  defineGlobalSymbol("map", map, { dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
+  exportApi("map", map, { dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
   function map(fn, ...lists) {
     let result = NIL, last;
     for (let list of lists) {
@@ -1282,7 +1219,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Same as map but results in an Array
-  defineGlobalSymbol("array-map", array_map, { dontInline: true, group: "list-op" });
+  exportApi("array-map", array_map, { dontInline: true, group: "list-op" });
   function array_map(fn, ...lists) {
     let res = [];
     for (let list of lists) {
@@ -1298,7 +1235,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (filter fn list1 list2 ...)
-  defineGlobalSymbol("filter", filter, { dontInline: true, group: "list-op" });
+  exportApi("filter", filter, { dontInline: true, group: "list-op" });
   function filter(predicateFn, ...lists) {
     let result = NIL, last;
     for (let list of lists) {
@@ -1476,13 +1413,13 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[LAZYREST] = true;
   LazyIteratorList.prototype[ITERATE_AS_LIST] = true;
 
-  defineGlobalSymbol("list-view", list_view, { dontInline: true, group: "list-op" });
+  exportApi("list-view", list_view, { dontInline: true, group: "list-op" });
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator);
   }
 
-  defineGlobalSymbol("lazy-map", lazy_map, { dontInline: true });
+  exportApi("lazy-map", lazy_map, { dontInline: true });
   function lazy_map(fn, obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator, a => fn(a))
@@ -1506,7 +1443,7 @@ export function createInstance(schemeOpts = {}) {
   // "letrec" can be partially-applied, returning a function that
   // evaluates its arguments in the let scope!
   //
-  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook, group: "core", schemeOnly: true }, "let", "let*");
+  exportApi("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook, group: "core", schemeOnly: true }, "let", "let*");
   function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
     for ( ; moreList(bindings); bindings = bindings[REST]) {
@@ -1575,7 +1512,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (for-in key-symbol value-symbol obj form forms...)
-  defineGlobalSymbol("for-in", for_in, { evalArgs: 0, compileHook: for_in_hook, group: "core", schemeOnly: true });
+  exportApi("for-in", for_in, { evalArgs: 0, compileHook: for_in_hook, group: "core", schemeOnly: true });
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope)
@@ -1649,7 +1586,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (for-of value-symbol obj form forms...)
-  defineGlobalSymbol("for-of", for_of, { evalArgs: 0, compileHook: for_of_hook, group: "core", schemeOnly: true });
+  exportApi("for-of", for_of, { evalArgs: 0, compileHook: for_of_hook, group: "core", schemeOnly: true });
   function for_of(valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope)
@@ -1698,7 +1635,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (while predicate obj form forms...)
-  defineGlobalSymbol("while", _while, { evalArgs: 0, compileHook: while_hook, group: "core", schemeOnly: true });
+  exportApi("while", _while, { evalArgs: 0, compileHook: while_hook, group: "core", schemeOnly: true });
   function _while(predicate, form, ...forms) {
     let scope = this;
     let val = NIL;
@@ -1734,7 +1671,7 @@ export function createInstance(schemeOpts = {}) {
   // The point is that the JavaScript runtime HAS a suitable primitive; I just don't
   // think you can get at it directly from user code.
 
-  defineGlobalSymbol("set'", setq, { evalArgs: 0, compileHook: setq_hook, group: "core" }, "setq");
+  exportApi("set'", setq, { evalArgs: 0, compileHook: setq_hook, group: "core" }, "setq");
   function setq(symbol, valueForm, ...values) {
     let value = _eval(valueForm, this);
     for (let valueForm of values)
@@ -1760,7 +1697,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaValue;
   }
 
-  defineGlobalSymbol("set", set, { usesDynamicScope: true, group: "core" });
+  exportApi("set", set, { usesDynamicScope: true, group: "core" });
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   function setSym(symbol, value, scope) {
@@ -1782,11 +1719,11 @@ export function createInstance(schemeOpts = {}) {
   // try/catch
   //
 
-  defineGlobalSymbol("throw", js_throw);
+  exportApi("throw", js_throw);
   function js_throw(value) { throw value; return undefined; } // "return" lets compiler use template
 
   // (catch (var forms) forms) -- JavaScript style
-  defineGlobalSymbol("catch", js_catch, { evalArgs: 0, compileHook: js_catch_hook });
+  exportApi("catch", js_catch, { evalArgs: 0, compileHook: js_catch_hook });
   function js_catch(catchClause, form, ...forms) {
     if (!isList(catchClause))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
@@ -1850,7 +1787,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (def variable value)
   // (def (fn args) forms)
-  defineGlobalSymbol("def", def, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
+  exportApi("def", def, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
   function def(defined, value, ...rest) {
     let scope = this, name = defined;
     if (isList(defined)) {
@@ -1883,7 +1820,7 @@ export function createInstance(schemeOpts = {}) {
 
   const RETURN_SYMBOL = Symbol("RETURN");
 
-  defineGlobalSymbol("eval", _eval, { usesDynamicScope: true, dontInline: true });
+  exportApi("eval", _eval, { usesDynamicScope: true, dontInline: true });
   exportAPI("_eval", _eval);
   function _eval(form, scope = this) {
     // Can't be called "eval" because "eval", besides being a global definition,
@@ -2076,7 +2013,7 @@ export function createInstance(schemeOpts = {}) {
     return (evalCount << 20) | (requiredCount << 8) | tag;
   }
 
-  defineGlobalSymbol("apply", apply, { usesDynamicScope: true, dontInline: true });
+  exportApi("apply", apply, { usesDynamicScope: true, dontInline: true });
   function apply(fn, args, scope = this) {
     let argv = args;
     if (!isArray(argv)) {
@@ -2097,7 +2034,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\ (params) (form1) (form2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR, lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\", "lambda");
+  exportApi(LAMBDA_CHAR, lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\", "lambda");
   function lambda(params, ...forms) {
     let lambda = cons(LAMBDA_ATOM, cons(params, forms));
     let scope = this;
@@ -2106,7 +2043,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\\\");
+  exportApi(LAMBDA_CHAR+"#", special_lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\\\");
   function special_lambda(evalCount, params, ...forms) {
     let lambda = cons(SLAMBDA_ATOM, cons(evalCount, cons(params, forms)));
     let scope = this;
@@ -2201,7 +2138,7 @@ export function createInstance(schemeOpts = {}) {
 
   function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
 
-  defineGlobalSymbol("return", _return, { usesDynamicScope: false, compileHook: return_hook})
+  exportApi("return", _return, { usesDynamicScope: false, compileHook: return_hook})
   function _return(...values) {
     let scope = this, value = NIL;
     if (values.length > 0)
@@ -2217,7 +2154,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaValue;
   }
 
-  defineGlobalSymbol("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
+  exportApi("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
   function is_closure(a, t = true, f = false) {
     if (isClosure(a)) return typeof t === 'boolean' ? t : _eval(t, this);
     else return typeof f === 'boolean' ? f : eval(f, this);
@@ -2256,7 +2193,7 @@ export function createInstance(schemeOpts = {}) {
   // particularly true of functions (closures) since a SchemeJS closure is
   // simultaneously a JavaScript function and a SchemeJS closure.
   //
-  defineGlobalSymbol("to-string", a => string(a));
+  exportApi("to-string", a => string(a));
   exportAPI("string", string);
   function string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
@@ -2643,7 +2580,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
-  defineGlobalSymbol("compile", compile, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
+  exportApi("compile", compile, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
   function compile(nameAndParams, ...forms) {
     if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[FIRST]);
