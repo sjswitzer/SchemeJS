@@ -704,7 +704,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
     }
     return true;
   }
@@ -750,7 +750,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
     }
     return true;
   }
@@ -766,7 +766,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
     }
     return true;
   }
@@ -782,7 +782,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
     }
     return true;
   }
@@ -798,7 +798,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
     }
     return true;
   }
@@ -815,7 +815,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
     }
     return true;
   }
@@ -850,7 +850,7 @@ export function createInstance(schemeOpts = {}) {
     let val = true;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       val = _eval(forms[i], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
       if (!schemeTrue(val)) return val;
     }
     return val;
@@ -881,7 +881,7 @@ export function createInstance(schemeOpts = {}) {
     let val = false;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       val = _eval(forms[i], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
       if (schemeTrue(val)) return val;
     }
     return val;
@@ -895,7 +895,7 @@ export function createInstance(schemeOpts = {}) {
     let val = undefined;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       val = _eval(forms[i], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
       if (val != null) return val;
     }
     return val;
@@ -1154,7 +1154,7 @@ export function createInstance(schemeOpts = {}) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       res = _eval(forms[i], this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
     }
     return res;
   }
@@ -1462,15 +1462,15 @@ export function createInstance(schemeOpts = {}) {
       let val = NIL;
       for ( ; moreList(bindingForms); bindingForms = bindingForms[REST]) {
         val = _eval(bindingForms[FIRST], scope);
-        if (scope[RETURNS_SYMBOL]) return;
+        if (scope[RETURN_SYMBOL]) return;
       }
       scope[boundVar] = val;
     }
     let res = _eval(form, scope);
-    if (scope[RETURNS_SYMBOL]) return;
+    if (scope[RETURN_SYMBOL]) return;
     for (let i = 0, formsLength = forms.length; i < formsLength ; ++i) {
       res = _eval(forms[i], scope);
-      if (scope[RETURNS_SYMBOL]) return;
+      if (scope[RETURN_SYMBOL]) return;
     }
     return res;
   }
@@ -1527,7 +1527,7 @@ export function createInstance(schemeOpts = {}) {
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope);
-    if (scope[RETURNS_SYMBOL]) return;
+    if (scope[RETURN_SYMBOL]) return;
     scope = newScope(this, "for-in-scope");
     let val = NIL;
     if (isIterable(obj)) {
@@ -1536,10 +1536,10 @@ export function createInstance(schemeOpts = {}) {
         scope[keySymbol] = index++;
         scope[valueSymbol] = value;
         val = _eval(form, scope);
-        if (scope[RETURNS_SYMBOL]) return;
+        if (scope[RETURN_SYMBOL]) return;
         for (let i = 0, formsLength = forms.length; i < formsLength ; ++i) {
           val = _eval(forms[i], scope);
-          if (scope[RETURNS_SYMBOL]) return;
+          if (scope[RETURN_SYMBOL]) return;
         }
       }
       return val;
@@ -1549,10 +1549,10 @@ export function createInstance(schemeOpts = {}) {
       scope[keySymbol] = key;
       scope[valueSymbol] = value;
       val = _eval(form, scope);
-      if (scope[RETURNS_SYMBOL]) return;
+      if (scope[RETURN_SYMBOL]) return;
       for (let form of forms) {
         val = _eval(form, scope);
-        if (scope[RETURNS_SYMBOL]) return;
+        if (scope[RETURN_SYMBOL]) return;
       }
     }
     return val;
@@ -1608,16 +1608,16 @@ export function createInstance(schemeOpts = {}) {
   function for_of(valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope);
-    if (scope[RETURNS_SYMBOL]) return;
+    if (scope[RETURN_SYMBOL]) return;
     scope = newScope(this, "for-of-scope");
     let val = NIL;
     for (let value of obj) {
       scope[valueSymbol] = value;
       val = _eval(form, scope);
-      if (scope[RETURNS_SYMBOL]) return;
+      if (scope[RETURN_SYMBOL]) return;
       for (let form of forms) {
         val = _eval(form, scope);
-        if (scope[RETURNS_SYMBOL]) return;
+        if (scope[RETURN_SYMBOL]) return;
       }
     }
     return val;
@@ -1662,12 +1662,12 @@ export function createInstance(schemeOpts = {}) {
     let scope = this;
     let val = NIL;
     while (schemeTrue(_eval(predicate, scope))) {
-      if (scope[RETURNS_SYMBOL]) return;
+      if (scope[RETURN_SYMBOL]) return;
       val = _eval(form, scope);
-      if (scope[RETURNS_SYMBOL]) return;
+      if (scope[RETURN_SYMBOL]) return;
       for (let form of forms) {
         val = _eval(form, scope);
-        if (scope[RETURNS_SYMBOL]) return;
+        if (scope[RETURN_SYMBOL]) return;
       }
     }
     return val;
@@ -1700,10 +1700,10 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("setq", setq, { evalArgs: 0, compileHook: setq_hook });
   function setq(symbol, valueForm, ...values) {
     let value = _eval(valueForm, this);
-    if (this[RETURNS_SYMBOL]) return;
+    if (this[RETURN_SYMBOL]) return;
     for (let valueForm of values) {
       value = _eval(valueForm, this);
-      if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
     }
     let result = setSym(symbol, value, this);
     return result;
@@ -1766,17 +1766,17 @@ export function createInstance(schemeOpts = {}) {
     let val;
     try {
       val = _eval(form, this);
-      if (this[RETURNS_SYMBOL]) return;
-      for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
-        val = _eval(forms[i], this);
-        if (this[RETURNS_SYMBOL]) return;
+      if (this[RETURN_SYMBOL]) return;
+      for (let form of forms) {
+        val = _eval(form, this);
+        if (this[RETURN_SYMBOL]) return;
       }
     } catch (e) {
       let scope = newScope(this, "js-catch-scope");
       scope[catchVar] = e;
       for ( ; moreList(catchForms); catchForms = catchForms[REST]) {
         val = _eval(catchForms[FIRST], scope);
-        if (scope[RETURNS_SYMBOL]) return;
+        if (scope[RETURN_SYMBOL]) return;
       }
     }
     return val;
@@ -1832,7 +1832,7 @@ export function createInstance(schemeOpts = {}) {
       value = lambda.call(scope, params, value, ...rest);
     } else {
       value = _eval(value, scope);
-      if (scope[RETURNS_SYMBOL]) return;
+      if (scope[RETURN_SYMBOL]) return;
     }
     if (typeof name === 'string') name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know!)
@@ -1866,7 +1866,8 @@ export function createInstance(schemeOpts = {}) {
     return jsName;
   }
 
-  const RETURNS_SYMBOL = Symbol("RETURNS"), RETURNS_VALUE_SYMBOL = Symbol("RETURNS-VALUE"), RETURN_SCOPE_SYMBOL = Symbol('RETURN-SCOPE');
+  const RETURN_SYMBOL = Symbol("RETURNS"), RETURNS_VALUE_SYMBOL = Symbol("RETURNS-VALUE"), RETURN_SCOPE_SYMBOL = Symbol('RETURN-SCOPE');
+  exportAPI("RETURN_SYMBOL", RETURN_SYMBOL);
 
   //
   // This is where the magic happens
@@ -1879,7 +1880,7 @@ export function createInstance(schemeOpts = {}) {
   function _eval(form, scope = this) {
     // Can't be called "eval" because "eval", besides being a global definition,
     // is effectively a keyword in JavaScript.
-    if (scope[RETURNS_SYMBOL])
+    if (scope[RETURN_SYMBOL])
       throw new LogicError(`someone forgot to check scope[RETURNS_SYMBOL]`)
     if (isNil(form)) return form;
     if (isPrimitive(form)) return form;
@@ -1897,7 +1898,7 @@ export function createInstance(schemeOpts = {}) {
         return form[REST][FIRST];
       }
       fn = _eval(fn, scope);
-      if (scope[RETURNS_SYMBOL]) return;
+      if (scope[RETURN_SYMBOL]) return;
       if (typeof fn !== 'function') throwBadForm();
       // See makeParameterDescriptor for the truth, but
       //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
@@ -1917,14 +1918,14 @@ export function createInstance(schemeOpts = {}) {
         let item = args[FIRST];
         if (i < evalCount) {
           item = _eval(item, scope);
-          if (scope[RETURNS_SYMBOL]) return;
+          if (scope[RETURN_SYMBOL]) return;
         }
         argv[i] = item;
       }
       if (!isNil(args)) {
         for (let item of args) {
           item = _eval(item, scope);
-          if (scope[RETURNS_SYMBOL]) return;
+          if (scope[RETURN_SYMBOL]) return;
           argv[i] = item;
         }
       }
@@ -2023,7 +2024,7 @@ export function createInstance(schemeOpts = {}) {
         let res = [];
         for (let element of form) {
           res.push(_eval(element, scope));
-          if (scope[RETURNS_SYMBOL]) return;
+          if (scope[RETURN_SYMBOL]) return;
         }
         return res;
       } else {
@@ -2034,10 +2035,10 @@ export function createInstance(schemeOpts = {}) {
             key = value[0];
             value = value[1];
             key = _eval(key, scope);
-            if (scope[RETURNS_SYMBOL]) return;
+            if (scope[RETURN_SYMBOL]) return;
           }
           value = _eval(value, scope);
-          if (scope[RETURNS_SYMBOL]) return;
+          if (scope[RETURN_SYMBOL]) return;
           res[key] = value;
         }
         return res;
@@ -2175,7 +2176,7 @@ export function createInstance(schemeOpts = {}) {
           if (optionalForms) {
           for ( ; moreList(optionalForms); optionalForms = optionalForms[REST])
             arg = _eval(optionalForms[FIRST], scope);
-            if (scope[RETURNS_SYMBOL]) return;
+            if (scope[RETURN_SYMBOL]) return;
           }
         }
         scope[param] = arg;
@@ -2186,7 +2187,7 @@ export function createInstance(schemeOpts = {}) {
       let result = NIL;
       for (let form of forms) {
         result = _eval(form, scope);
-        if (scope[RETURNS_SYMBOL])
+        if (scope[RETURN_SYMBOL])
           return scope[RETURNS_VALUE_SYMBOL];
       }
       return result;
@@ -2211,7 +2212,7 @@ export function createInstance(schemeOpts = {}) {
       value = values[values.length-1];
     let returnScope = scope[RETURN_SCOPE_SYMBOL];
     returnScope[RETURNS_VALUE_SYMBOL] = value;
-    returnScope[RETURNS_SYMBOL] = true;
+    returnScope[RETURN_SYMBOL] = true;
     return undefined;  // just to be clear... this does not return the value
   }
   function return_hook(args, ssaScope, tools) {
@@ -3032,7 +3033,6 @@ export function createInstance(schemeOpts = {}) {
         closureForm[FIRST] = CLOSURE_ATOM;
         closureForm[REST] = new Pair("PATCH", closureBody);
       }
-      let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
       // and to the scope.
       let closedArgStr = '';
@@ -3065,16 +3065,9 @@ export function createInstance(schemeOpts = {}) {
         ssaRestParam = ssaRest;
       }
       use(ssaFunction);
-      let displayName;
-      if (requiresScope) {
-        ssaScope.dynamicScopeUsed = true;
-  
-        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
-        displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
-      } else {
-        emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr});`);
-        displayName = `(${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr})`;
-      }
+      ssaScope.dynamicScopeUsed = true;
+      emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
+      let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       // closures do not need a scope!
       let fnInfo = { requiredCount, evalCount, params: ssaParamv, restParam: ssaRestParam, requiresScope: false };
       decorateCompiledClosure(ssaResult, displayName, closureForm, fnInfo, tools);

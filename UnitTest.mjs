@@ -347,13 +347,6 @@ export function run(opts = {}) {
     EXPECT(` (!= 3 3 3 3 4 3) `, true);   // not all equal
     EXPECT_ERROR(` (!= 3 3 3 3 3 3 (oops!)) `, SchemeEvalError);
     EXPECT(` (!= 3 3 3 3 4 3 (oops!)) `, true); // Short-circuits on false
-    let list1 = `(a b (c d) 2 3)`, list2 = `(1 2 (7 3) x)`;
-    // TODO: Revist these. Make sure they match SIOD.
-    // EXPECT(` (== == eq?) `, true);
-    // EXPECT(` (eq? '${list1} '${list1}) `, false);
-    // EXPECT(` (equal? '${list1} '${list1}) `, true);
-    // EXPECT(` (eq? '${list1} '${list2}) `, false);
-    // EXPECT(` (equal? '${list1} '${list2}) `, false);
 
     EXPECT(` (&) `, 0);
     EXPECT(` (& 76134) `, isClosure);
@@ -520,7 +513,7 @@ export function run(opts = {}) {
     EXPECT(` (sort '[6 4 5 7 6 8 3]) `, ` '[3 4 5 6 6 7 8] `);
     EXPECT(` (sort '(6 4 5 7 6 8 3) >) `, ` '(8 7 6 6 5 4 3) `);
     EXPECT(` (sort '[6 4 5 7 6 8 3] >) `, ` '[8 7 6 6 5 4 3] `);
-    EXPECT(` (qsort '((3 a) (2 b)) < car)	`, ` '((2 b) (3 a)) `);
+    EXPECT(` (sort '((3 a) (2 b)) < car)	`, ` '((2 b) (3 a)) `);
     EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3)) `,
         result => globalScope.apply(globalScope.le, result));
     EXPECT(` (sort '(6 4 5 7 35 193 6 23 29 15 89 23 42 8 3) >)`,

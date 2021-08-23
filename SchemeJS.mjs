@@ -50,6 +50,7 @@ export function createInstance(schemeOpts = {}) {
   let LAMBDA_ATOM = globalScope.LAMBDA_ATOM ?? required();
   let SLAMBDA_ATOM = globalScope.SLAMBDA_ATOM ?? required();
   let _eval = globalScope._eval ?? required();
+  let RETURN_SYMBOL = globalScope.RETURN_SYMBOL ?? required();
   let compare_hooks = globalScope.compare_hooks ?? required();
   let Atom = globalScope.Atom ?? required();
   let isAtom = globalScope.isAtom ?? required();
@@ -232,6 +233,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
+      if (this[RETURN_SYMBOL]) return;
     }
     return true;
   }
@@ -403,18 +405,18 @@ export function createInstance(schemeOpts = {}) {
   const cons = (car, cdr) => new Pair(car, cdr);
   const car = a => a[FIRST];
   const cdr = a => a[REST];
-  const caaar = a => car(car(car(a)));
-  const caadr = a => car(car(cdr(a)));
-  const caar = a => car(car(a));
-  const cadar = a => car(cdr(car(a)));
-  const caddr = a => car(cdr(cdr(a)));
-  const cadr = a => car(cdr(a));
-  const cdaar = a => cdr(car(car(a)));
-  const cdadr = a => cdr(car(cdr(a)));
-  const cdar = a => cdr(car(a));
-  const cddar = a => cdr(cdr(car(a)));
-  const cdddr = a => cdr(cdr(cdr(a)));
-  const cddr = a => cdr(cdr(a));
+  const caaar = a => a[FIRST][FIRST][FIRST];
+  const caadr = a => a[REST][FIRST][FIRST];
+  const caar = a => a[FIRST][FIRST];
+  const cadar = a => a[FIRST][REST][FIRST];
+  const caddr = a => a[REST][REST][FIRST];
+  const cadr = a => a[REST][FIRST];
+  const cdaar = a => a[FIRST][FIRST][REST];
+  const cdadr = a => a[REST][FIRST][REST];
+  const cdar = a => a[FIRST][REST];
+  const cddar = a => a[FIRST][REST][REST];
+  const cdddr = a => a[REST][REST][REST];
+  const cddr = a => a[REST][REST];
   exportAPI("cons", cons);
   exportAPI("car", car);
   exportAPI("cdr", cdr);
@@ -486,6 +488,7 @@ export function createInstance(schemeOpts = {}) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       let val = _eval(forms[i], this);
+      if (this[RETURN_SYMBOL]) return;
       if (i === 0)
         res = val;
     }
@@ -514,13 +517,17 @@ export function createInstance(schemeOpts = {}) {
       let clause = clauses[i];
       let predicateForm = clause[FIRST], forms = clause[REST];
       let evaled = _eval(predicateForm, this);
+      
       if (schemeTrue(evaled)) {
         let res = NIL;
         for ( ; iterateAsList(forms); forms = forms[REST])
           res = _eval(forms[FIRST], this);
-        if (!isNil(forms)) {
-          for (let form of forms)
+        if (this[RETURN_SYMBOL]) return;
+          if (!isNil(forms)) {
+          for (let form of forms) {
             res = _eval(form, this);
+            if (this[RETURN_SYMBOL]) return;
+          }
         }
         return res;
       }
@@ -733,17 +740,19 @@ export function createInstance(schemeOpts = {}) {
   SchemeJSThrow.prototype.name = "SchemeJSThrow";
 
   // (*throw tag value) -- SIOD style
-  exportAPI("*throw", schemeThrow, { dontInline: true });
-  function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
+  exportAPI("siod_throw", siod_throw, { dontInline: true });
+  function siod_throw(tag, value) { throw new SchemeJSThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style
-  exportAPI("*catch", schemeCatch, { evalArgs: 1, compileHook: siod_catch_hook });
-  function schemeCatch(tag, form, ...forms) {
+  exportAPI("siod_catch", siod_catch, { evalArgs: 1, compileHook: siod_catch_hook });
+  function siod_catch(tag, form, ...forms) {
     let val;
     try {
       val = _eval(form, this);
-      for (let i = 0, formsLength = forms.length; i < forms.length; ++i)
-        val = _eval(forms[i], this);
+      for (let form of forms) {
+        val = _eval(form, this);
+        if (this[RETURN_SYMBOL]) return;
+      }
     } catch (e) {
       if (!(e instanceof SchemeJSThrow)) throw e;  // rethrow
       if (e.tag !== tag) throw e;
@@ -1622,6 +1631,26 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(compile (fn param ...) form ...)`, 
       blurb: `Compiles and defines a function.`
     });
+    defineBinding("letrec", "letrec", "let*", "let", {
+      group: "main", sample: `(let ((var val ...) ...) form ...)`, 
+      blurb: `Evaluates the forms where the variable are bound to the given values.`
+    });
+    defineBinding("throw", "throw", {
+      group: "main", sample: `(throw form ...)`, 
+      blurb: `TBD`
+    });
+    defineBinding("catch", "catch", {
+      group: "main", sample: `(catch (error-var form ...) form ...)`, 
+      blurb: `TBD`
+    });
+    defineBinding("*throw", "siod_throw", {
+      group: "main", sample: `(throw form ...)`, 
+      blurb: `TBD`
+    });
+    defineBinding("*catch", "siod_catch", {
+      group: "main", sample: `(catch form ...)`, 
+      blurb: `TBD`
+    });
     defineBinding("append", append, {
       group: "list", sample: `(append list ...)`, 
       blurb: `Appends the given lists.`
@@ -1897,7 +1926,7 @@ export function createInstance(schemeOpts = {}) {
       group: "flow-op", sample: `(begin expr ...)`, 
       blurb: `Evaluates each expression in turn, resulting in the value of the last.`
     });
-    defineBinding("prog1", prog1, {
+    defineBinding("prog1", "prog1", {
       group: "flow-op", sample: `(prog1 expr ...)`, 
       blurb: `Evaluates each expression in turn, resulting in the value of the first.`
     });
@@ -1962,15 +1991,15 @@ export function createInstance(schemeOpts = {}) {
       group: "util", sample: `(to-upper-case string [locale])`, 
       blurb: `Converts the string to upper case.`
     });
-    defineBinding("max", max, {
+    defineBinding("max", "max", {
       group: "util", sample: `(max value ...)`, 
       blurb: `The maximum of a set of values.`
     });
-    defineBinding("min", min, {
+    defineBinding("min", "min", {
       group: "util", sample: `(max value ...)`, 
       blurb: `The minimum of a set of values.`
     });
-    defineBinding("apropos", apropos, {
+    defineBinding("apropos", "apropos", {
       group: "util", sample: `(apropos ["substr"])`, 
       blurb: `Returns a list of current definitions matching the substring, or all definitions if absent.`
     });
