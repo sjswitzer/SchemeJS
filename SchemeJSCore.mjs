@@ -24,8 +24,8 @@ const MUL = '\u00d7', DIV = '\u00f7';
 // more like an AST for JavaScript that happens to be defined in terms of lists,
 // is executable, compilable, and has a JIT. Every function defined by the core
 // (and, hence, in SchemeJS or any other language built on the core) is a JavaScript
-// function whether it is compiled or not. Code that is compiled is perfectly normal
-// JavaScript that executes just as fast as JavaScript you'd write by hand.
+// function whether it is compiled or not. Compiled code is perfectly normal
+// JavaScript that executes just as fast as the JavaScript you'd write by hand.
 //
 // Lists can be built from Cons cells (Pairs) but Arrays, Iterables, and generator
 // functions are lists too (or can be, subject to instantiation options.)
@@ -38,10 +38,10 @@ const MUL = '\u00d7', DIV = '\u00f7';
 //
 export function createInstance(schemeOpts = {}) {
   const readFile = schemeOpts.readFile;
-  const latin1 = schemeOpts.latin1 ?? false;
-  const supplemental = schemeOpts.supplemental ?? false;
+  const latin1Only = schemeOpts.latin1Only ?? false;
+  const supplementalUnicode = schemeOpts.supplementalUnicode ?? false;
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
-  const jitThreshold = schemeOpts.jitThreshold ?? undefined;
+  const JIT_THRESHOLD = schemeOpts.jitThreshold ?? undefined;
   const TRACE_INTERPRETER = !!(schemeOpts.traceInterpreter ?? false);
   const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? false);
   const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? false);
@@ -245,6 +245,7 @@ export function createInstance(schemeOpts = {}) {
   Pair.prototype[LIST] = true;
   Pair.prototype[ITERATE_AS_LIST] = true;
   Pair.prototype[MORELIST] = true;
+  exportAPI("Pair", Pair);
 
   function pairIterator() {
     let current = this;
@@ -409,9 +410,9 @@ export function createInstance(schemeOpts = {}) {
     valueOf: { value: function NILvalueOf(_) { return false } },
   });
   Object.freeze(NIL);
+  exportAPI("NIL", NIL);
 
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
-  
   exportAPI("isIterable", isIterable);
   
   //
@@ -456,7 +457,8 @@ export function createInstance(schemeOpts = {}) {
     if (throwException) throw new throwException(`Not an iterable or list ${obj}`);
   }  
 
-  function defineBinding(value, ...names) {
+  exportAPI("defineBinding", defineBinding);
+  function defineBinding(name, value, ...names) {
     let opts = names[names.length-1];
     if (typeof opts === 'object')
       names = names.pop();
@@ -470,6 +472,7 @@ export function createInstance(schemeOpts = {}) {
       if (typeof value === 'function')
         examineFunctionForCompilerTemplates(names[0], value, opts);
     }
+    names = [name, ...names];
     for (let i = 0; i < names.length; ++i)
       names[i] = Atom(names[i]);
     opts.names = names;
@@ -576,19 +579,6 @@ export function createInstance(schemeOpts = {}) {
 
   exportApi("this", function scope() { return this }, { requiresScope: true });
 
-  exportAPI("NIL", NIL);
-  // Hoist a bunch of JavaScript definitions into the global scope
-  exportApi("NIL", NIL);
-  exportApi("undefined", undefined);
-  exportApi("null", null);
-  exportApi("true", true);
-  exportApi("false", false);
-  exportApi("typeof", a => typeof a);
-
-  exportApi("NaN", NaN);
-  exportApi("Infinity", Infinity);
-  exportApi("globalScope", globalScope);
-
   // Pokemon gotta catch 'em' all!
   exportApi("bit_not", a => ~a);
   exportApi("pow", (a,b) => a ** b);
@@ -602,8 +592,13 @@ export function createInstance(schemeOpts = {}) {
   exportApi("at", (a, b) => a[b]);
   exportApi("at_if", (a, b) => a?.[b]);
   exportApi("call", (a, ...params) => a(...params));
-  exportApi("method_call", (a, b, ...params) => a.b(...params));
-  
+  exportApi("method_call", (a, b, ...params) => a[b](...params));
+  exportApi("assign", (a, b, c) => a[b] = c);
+  exportApi("delete", (a, b) => delete a[b]);
+  exportApi("void", _ => undefined);
+  exportApi("not", a => !a);
+  exportApi("typeof", a => typeof a);
+
   //
   // Variable args definitions
   //
@@ -2144,15 +2139,15 @@ export function createInstance(schemeOpts = {}) {
       throwBadLambda(`bad "rest" parameter ${string(params)}`);
     if (!requiredCount)
       requiredCount = paramCount;
-    let jitCount = jitThreshold != null ? jitThreshold|0 : undefined;
+    let jitCount = JIT_THRESHOLD != null ? JIT_THRESHOLD|0 : undefined;
     function lambdaClosure(...args) {
       let jitFn = lambdaClosure[JITCOMPILED];
       if (jitFn)
         return jitFn.apply(this, args);
-      if (jitThreshold != null) {  // Disable by optioning jitThreshold as undefined
+      if (JIT_THRESHOLD != null) {  // Disable by optioning jitThreshold as undefined
         // SchemeJS will almost always call the jitFn directly, but external JS will still call this closure.
         if (--jitCount < 0) {
-          jitCount = jitThreshold;
+          jitCount = JIT_THRESHOLD;
           jitFn = lambdaClosure[JITCOMPILED] = compile_lambda.call(scope, undefined, namedObjects.get(lambdaClosure), lambda, lambdaClosure);
           return jitFn.apply(this, args);
         }

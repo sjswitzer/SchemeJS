@@ -21,7 +21,7 @@ const optional = undefined;
 //
 export function createInstance(schemeOpts = {}) {
   let globalScope = SchemeJS.createInstance(schemeOpts);
-  const defineBindings = schemeOpts.defineBindings ?? true;
+  const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
   const readFile = schemeOpts.readFile;
   const latin1 = schemeOpts.latin1 ?? false;
   const supplemental = schemeOpts.supplemental ?? false;
@@ -60,7 +60,6 @@ export function createInstance(schemeOpts = {}) {
   let EVALUATE_KEY_VALUE = globalScope.EVALUATE_KEY_VALUE ?? required();
   let ESCAPE_STRINGS = globalScope.ESCAPE_STRINGS ?? required();
   function required() { throw "required" }
-
 
   //
   // Equality
@@ -666,8 +665,7 @@ export function createInstance(schemeOpts = {}) {
     if (!isIterable(list))
       throw new TypeError(`not a list or iterable ${string(list)}`);
     let res = NIL;
-    if (!list || isNil(list)) return NIL; // XXX check this.
-      for ( ; iterateAsList(list); list = list[REST])
+    for ( ; iterateAsList(list); list = list[REST])
         res = list[FIRST];
     if (!isNil(list)) {
       // Don't special-case string; its iterator returns code points by combining surrogate pairs
@@ -780,7 +778,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (*catch tag form ...) -- SIOD style
   exportAPI("*catch", schemeCatch, { evalArgs: 1, compileHook: siod_catch_hook });
-  function schemeCatch(tag, form, ...forms) {  // XXX order of args?
+  function schemeCatch(tag, form, ...forms) {
     let val;
     try {
       val = _eval(form, this);
@@ -841,7 +839,7 @@ export function createInstance(schemeOpts = {}) {
     let parseContext = opts.parseContext = [];
     quitRepl = false;
     exportAPI("readline", (...prompt) => readline(prompt[0] ?? "? "));
-    if (defineBindings)
+    if (defineSchemeBindings)
       defineBinding("readline", readline, {
         group: "core", sample: `(readline [prompt])`,
         blurb: "Reads a line from the REPL console."
@@ -1468,7 +1466,12 @@ export function createInstance(schemeOpts = {}) {
   // Bindings!
   //
 
-  if (defineBindings) {
+  if (defineSchemeBindings) {
+    defineBinding("VERSION", "VERSION", {
+      group: "main", sample: `VERSION`,
+      blurb: `The SchemeJS version`
+    });
+    
     let propDescs = Object.getOwnPropertyDescriptors(globalThis);
     for (let name in propDescs) {
       let {value, get} = propDescs[name];
@@ -1499,23 +1502,37 @@ export function createInstance(schemeOpts = {}) {
           defineBinding(name, value, `Math-${name}, { group: "math" }`);
       }
     }
-    defineBinding("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this version deals with BigInt too
+
+    defineBinding("abs", "abs", {  // Overwrite Math.abs; this version deals with BigInt too
+      group: "main", sample: "(abs value)",
+      blurb: `The absolute value of "value".`
+    });
 
     // This is redundant but I want them defined in the "main" group.
     defineBinding("globalThis", globalThis, {
       group: "main", sample: "globalThis",
       blurb: `The JavaScript "globalThis" variable.`
     });
+  
     for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
       defineBinding(obj.name, obj, {
         group: "main", sample: `${obj.name}`,
         blurb: `The JavaScript "${obj.name}" object.`
       });
+
     defineBinding("Date-now", Date.now, {
       group: "main", sample: "(Date-now)",
       blurb: `Milliseconds since midnight 1 Jan 1970 UTC, the unix epoch.`
     });
 
+    defineBinding("quote", "quote", {
+      group: "main", sample: `(quote expr)`,
+      blurb: `Typically invoked as " 'expr ", "quote" prevents the evaluation of its argument.`
+    });
+    defineBinding("this", "this", {
+      group: "main", sample: `(this)`,
+      blurb: `The value of the JavaScript "this" variable.`
+    });
     defineBinding("cons", "cons", {
       group: "main", sample: `(cons a b)`, 
       blurb: `Constructs a Pair, a.k.a, a list node.`
@@ -1528,7 +1545,7 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(car list)`, 
       blurb: `Returns the first element of a list.`
     });
-    defineBinding("NIL", "nil",, {
+    defineBinding("nil", NIL,, {
       group: "main", sample: `nil`, 
       blurb: `An empty list.`
     });
@@ -1556,11 +1573,11 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `Infinity`, 
       blurb: `The JavaScript "Infinity" value.`
     });
-    defineBinding("globalScope", "globalScope", {
+    defineBinding("globalScope", globalScope, {
       group: "main", sample: `globalScope`, 
       blurb: `The Scheme "globalScope" value.`
     });
-    defineBinding("globalThis", "globalThis", {
+    defineBinding("globalThis", globalThis, {
       group: "main", sample: `globalThis`, 
       blurb: `The JavaScript "globalThis" value.`
     });
@@ -1581,12 +1598,12 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Logical "or." Stops evaluating and returns the first value that is true; otherwise returns the last value.`
     });
     defineBinding("nullish", "??", "nullish", {
-      group: "logical-op", sample: `(xxx value ...)`, 
+      group: "logical-op", sample: `(?? value ...)`, 
       blurb: `"Nullish" operator. Stops evaluating and returns the first value that neither null or undefined; otherwise returns the last value.`
     });
     defineBinding("bit_not", "~", "bit-not", {
       group: "bitwise-op", sample: `(~ value)`, 
-      blurb: `Bitwise XXX of each value.`
+      blurb: `Bitwise not of the value.`
     });
     defineBinding("bit_or", "|", "bit-or", {
       group: "bitwise-op", sample: `(| value ...)`, 
@@ -1646,7 +1663,7 @@ export function createInstance(schemeOpts = {}) {
     });
     defineBinding("gt", ">", "gt", {
       group: "compare-op", sample: `(> value ...)`, 
-      blurb: `Returns true if each value is XXX than the previous. Evaluation ends as soon as the comparison fails.`
+      blurb: `Returns true if each value is greater than than the previous. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding("ge", ">=", "ge", {
       group: "compare-op", sample: `(>= value ...)`, 
@@ -1761,13 +1778,13 @@ export function createInstance(schemeOpts = {}) {
          `Otherwise, evaluates and returns f-expr (default false).`
     });
     defineBinding("is_object", "object?", {
-      group: "pred-op", sample: `(xxx? value [t-expr true] [f-expr false])`, 
-      blurb: `If the value is an Onject (but not a function), ` +
+      group: "pred-op", sample: `(object? value [t-expr true] [f-expr false])`, 
+      blurb: `If the value is an Object (but not a Function), ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
     defineBinding("is_array", "array?", {
-      group: "pred-op", sample: `(xxx? value [t-expr true] [f-expr false])`, 
+      group: "pred-op", sample: `(array? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is an array, ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
@@ -1811,47 +1828,51 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Evaluates each expression in turn, xxx.`
     });
     
-    defineBinding((a,b) => a in b, "in", { group: "js-op", sample: `(in a b)` });
-    defineBinding((cls, ...args) => new cls(...args), "new", { group: "js-op", sample: `(new cls . args)` });
-    defineBinding((obj, cls) => obj instanceof cls, "instanceof", { group: "js-op", sample: `(instanceof obj cls)` });
-    defineBinding((a, b) => a[b], "@", { group: "js-op", sample: `(@ a b)` });
-    defineBinding((a, b, c) => a[b][c], "@@", { group: "js-op", sample: `(@@ a b c)` });
-    defineBinding((a, b, c, d) => a[b][c][d], "@@@", { group: "js-op", sample: `(@@@ a b c d)` });
-    defineBinding((a, b) => a?.[b], "@?", { group: "js-op", sample: `(@? a b)` });
-    defineBinding((a, b, c) => a?.[b]?.[c], "@@?", { group: "js-op", sample: `(@@? a b c)` });
-    defineBinding((a, b, c, d) => a?.[b]?.[c]?.[d], "@@@?", { group: "js-op", sample: `(@@@? a b c d)` });
-    defineBinding((a, b, ...params) => a[b](...params), "@!", { group: "js-op", sample: `(@! a b . params)` });
-    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
-    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
-    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
-    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
-    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
-    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
-    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
-    defineBinding(xxx, "xxx", { group: "js-op", sample: `(xxx xxx)` });
-
-    
-    exportApi("@!", (a, b, ...params) => a[b](...params), { group: "js-op" });
-    exportApi("@@!", (a, b, c, ...params) => a[b][c](...params), { group: "js-op" });
-    exportApi("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), { group: "js-op" });
-    exportApi("@?!", (a, b, ...params) => a?.[b](...params), { group: "js-op" });
-    exportApi("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), { group: "js-op" });
-    exportApi("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), { group: "js-op" });
-    exportApi("@=", (a, b, c) => a[b] = c, { group: "js-op" }, "js-assign");
-    exportApi("@@=", (a, b, c, d) => a[b][c] = d), { group: "js-op" };
-    exportApi("@@@=", (a, b, c, d, e) => a[b][b][c] = d, { group: "js-op" });
-    exportApi("delete", (a, b) => delete a[b]), { schemeOnly: true, group: "js-op" };
-    exportApi("void", _ => undefined, { schemeOnly: true, group: "js-op" });
-    exportApi("not", a => typeof a === 'function' ? ((...params) => !a(...params)) : !a), { group: "logical-op" };
-
-    
-    defineBinding("in", "in", {
-      group: "js-op", sample: `(in property object)`, 
-    });
-    defineBinding("at", "@", {
-      group: "js-op", sample: `(@ object key)`, 
-    });
-
+    defineBinding("in", (a,b) => a in b, {
+      group: "js-op", sample: `(in a b)` });
+    defineBinding("new", (cls, ...args) => new cls(...args), {
+      group: "js-op", sample: `(new cls . args)` });
+    defineBinding( "instanceof", (obj, cls) => obj instanceof cls, {
+      group: "js-op", sample: `(instanceof obj cls)` });
+    defineBinding("@", (a, b) => a[b], {
+      group: "js-op", sample: `(@ a "b")` });
+    defineBinding("@@", (a, b, c) => a[b][c], {
+      group: "js-op", sample: `(@@ a "b" "c")` });
+    defineBinding("@@@", (a, b, c, d) => a[b][c][d], {
+      group: "js-op", sample: `(@@@ a "b" "c" "d")` });
+    defineBinding("@?", (a, b) => a?.[b], {
+      group: "js-op", sample: `(@? a "b")` });
+    defineBinding("@@?", (a, b, c) => a?.[b]?.[c], {
+      group: "js-op", sample: `(@@? a "b" "c")` });
+    defineBinding("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], {
+      group: "js-op", sample: `(@@@? a "b" "c" "d")` });
+    defineBinding("@!", (a, b, ...params) => a[b](...params), {
+      group: "js-op", sample: `(@! a "b" param ...)` });
+    defineBinding("@@!", (a, b, c, ...params) => a[b][c](...params), {
+      group: "js-op", sample: `(@@! a "b" "c" param ...)` });
+    defineBinding("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), {
+      group: "js-op", sample: `(@@@! a "b" "c" "d" param ...)` });
+    defineBinding("@?!", (a, b, ...params) => a?.[b](...params), {
+      group: "js-op", sample: `(@?! a "b" param ...)` });
+    defineBinding("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), {
+      group: "js-op", sample: `(@@"! a "b" "c" param ...)` });
+    defineBinding("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), {
+      group: "js-op", sample: `(@@@?! a "b" "c" "d" param ...)` });
+    defineBinding("@=", (a, b, c) => a[b] = c, {
+      group: "js-op", sample: `(@= a "b" c)` });
+    defineBinding("@@=", (a, b, c, d) => a[b][c] = d), {
+      group: "js-op", sample: `(@@= a "b" "c" d)` };
+    defineBinding("@@@=", (a, b, c, d, e) => a[b][b][c] = d, {
+      group: "js-op", sample: `(@@= a "b" "c" "d" e)` });
+    defineBinding("delete", (a, b) => delete a[b], {
+      group: "js-op", sample: `(delete a "b")` });
+    defineBinding("void", _ => undefined, {
+      group: "js-op", sample: `(void ...)` });
+    defineBinding("not", a => typeof a === 'function' ? ((...params) => !schemeTrue(a(...params))) : !schemeTrue(a), {
+      group: "logical-op", sample: `(! value)`,
+      blurb: `Returns true if "value" is false, null, undefined, or nil. ` + 
+             `If "value" is a function, returns a function that negates the fuction's value. ` +
+             `Otherwise, returns false.` });
 
     defineBinding("xxx", "xxx", "xxx", {
       group: "compare-op", sample: `(xxx value ...)`, 
