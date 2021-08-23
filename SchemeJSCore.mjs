@@ -615,7 +615,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  exportAPI("sub", { compileHook: sub_hook });
+  exportAPI("sub", sub, { compileHook: sub_hook });
   function sub(a, ...rest) {
     if (rest.length === 0) return -a;
     for (let b of rest)
@@ -1843,9 +1843,27 @@ export function createInstance(schemeOpts = {}) {
       namedObjects.set(value, name.description);
     globalScope[name] = value;
     // Make available to JavaScript as well
-    let { jsName } = normalizeExportToJavaScriptName(name);
-    globalScope[jsName] = value;
+    let jsName = normalizeExportToJavaScriptName(name);
+    if (jsName)
+      globalScope[jsName] = value;
     return name;
+  }
+
+  function normalizeExportToJavaScriptName(name) {
+    if (typeof name === 'symbol')
+      name = name.description;
+    let jsName = replaceAll(name, "-", "_");
+    if (!JSIDENT1[jsName[0]]) {
+      jsName = undefined;
+    } else {
+      for (let ch of jsName) {
+        if (!JSIDENT2[ch]) {
+          jsName = undefined;
+          break;
+        }
+      }
+    }
+    return jsName;
   }
 
   const RETURNS_SYMBOL = Symbol("RETURNS"), RETURNS_VALUE_SYMBOL = Symbol("RETURNS-VALUE"), RETURN_SCOPE_SYMBOL = Symbol('RETURN-SCOPE');
@@ -2641,8 +2659,9 @@ export function createInstance(schemeOpts = {}) {
     namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
-    let { jsName } = normalizeExportToJavaScriptName(name);
-    globalScope[jsName] = compiledFunction;
+    let jsName = normalizeExportToJavaScriptName(name);
+    if (jsName)
+      globalScope[jsName] = compiledFunction;
     globalScope[name] = compiledFunction;
     return name;
   }

@@ -113,7 +113,7 @@ export function run(opts = {}) {
     EXPECT(` (sqrt 2) `, Math.sqrt(2));
     EXPECT(` NaN `, isNaN);
     EXPECT(` (NaN? 1) `, false);
-    EXPECT(` (nan? NaN) `, true);
+    EXPECT(` (NaN? NaN) `, true);
     EXPECT(` Infinity `, Infinity);
     EXPECT(` (- Infinity) `, -Infinity);
     EXPECT(` (finite? NaN) `, false);
@@ -128,12 +128,12 @@ export function run(opts = {}) {
     EXPECT(` (abs -3n) `, 3n);
 
     EXPECT(` (intern "abc") `, ` 'abc `);
-    EXPECT(` (Symbol  "a") `, x => typeof x === 'symbol' && x.description === "a");
+    EXPECT(` (Symbol "a") `, x => typeof x === 'symbol' && x.description === "a");
     EXPECT(` (Number "10") `, 10);
     EXPECT(` (Number "foo") `, isNaN);
     EXPECT(` (BigInt "10") `, 10n);
     EXPECT(` (BigInt 10) `, 10n);
-    EXPECT_ERROR(` (BigInt "foo") `, SyntaxError);  // This is a weird JavaScript thing; why not TypeError?
+    EXPECT_ERROR(` (BigInt "foo") `, SyntaxError);
 
     EXPECT(` (cos 3) `, Math.cos(3));   // Functions imported directly from JavaScript
     EXPECT(` (atan2 3 4) `, Math.atan2(3, 4));
@@ -322,17 +322,13 @@ export function run(opts = {}) {
     EXPECT_ERROR(` (>= 6 5 4 3 2 1 (oops!)) `, SchemeEvalError);
     EXPECT_ERROR(` (>= 6 5 4 4 3 2 1 (oops!)) `, SchemeEvalError);
     EXPECT(` (>= 6 5 4 10 3 2 1 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (=) `, true);   // "nothing" is equal to itself
-    EXPECT(` (= 5) `, isClosure);
-    EXPECT(` (= 5 3) `, false);
-    EXPECT(` (= 3 5) `, false);
-    EXPECT(` (= 3 3) `, true);
-    EXPECT(` (= 3 3 3 3 3 3) `, true);  // all equal
-    EXPECT(` (= 3 3 3 3 4 3) `, false); // not all equal
-    EXPECT_ERROR(` (= 3 3 3 3 3 3 (oops!)) `, SchemeEvalError);
-    EXPECT(` (= 3 3 3 3 4 3 (oops!)) `, false); // Short-circuits on false
-    EXPECT(` (= '(1 2 [ 3 4 5 ] 6) '(1 2 [ 3 4 5] 6)) `, true);
-    EXPECT(` (= '(1 2 [ 3 7 5 ] 6) '(1 2 [ 3 4 5] 6)) `, false);
+    EXPECT(` (equal) `, true);   // "nothing" is equal to itself
+    EXPECT(` (equal 5) `, isClosure);
+    EXPECT(` (equal 5 3) `, false);
+    EXPECT(` (equal 3 5) `, false);
+    EXPECT(` (equal 3 3) `, true);
+    EXPECT(` (equal '(1 2 [ 3 4 5 ] 6) '(1 2 [ 3 4 5] 6)) `, true);
+    EXPECT(` (equal '(1 2 [ 3 7 5 ] 6) '(1 2 [ 3 4 5] 6)) `, false);
     EXPECT(` (==) `, true);   // "nothing" is equal to itself
     EXPECT(` (== 5) `, isClosure);
     EXPECT(` (== 5 3) `, false);

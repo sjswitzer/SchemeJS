@@ -416,6 +416,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("cons", cons);
   exportAPI("car", car);
   exportAPI("cdr", cdr);
+  exportAPI("nil", NIL);
 
   exportAPI("intern", Atom, { dontInline: true });
 
@@ -1510,13 +1511,20 @@ export function createInstance(schemeOpts = {}) {
       });
 
     defineBinding("Date-now", Date.now, {
-      group: "main", sample: "(Date-now)",
+      group: "util", sample: "(Date-now)",
       blurb: `Milliseconds since midnight 1 Jan 1970 UTC, the unix epoch.`
     });
-
+    defineBinding("intern", Atom, {
+      group: "main", sample: `(intern "str")`,
+      blurb: `Returns the atom named "str".`
+    });
     defineBinding("cons", cons, {
       group: "main", sample: `(cons first rest)`,
       blurb: `Creates a list beginning with "first" and continuing with "rest.`
+    });
+    defineBinding("nil", NIL, {
+      group: "main", sample: `nil`, 
+      blurb: `An empty list.`
     });
     defineBinding("car", car, "first", {
       group: "main", sample: `(car list)`,
@@ -1549,7 +1557,7 @@ export function createInstance(schemeOpts = {}) {
     defineBinding("cadr", cadr, {
       group: "main", sample: `(cadr list)`,
       blurb: `Same as "(car (cdr list))".`
-    });,
+    });
     defineBinding("cdaar", cdaar, {
       group: "main", sample: `(cdaar list)`,
       blurb: `Same as "(cdr (car (car list)))".`
@@ -1561,7 +1569,7 @@ export function createInstance(schemeOpts = {}) {
     defineBinding("cdar", cdar, {
       group: "main", sample: `(cdar list)`,
       blurb: `Same as "(cdr (car list))".`
-    });,
+    });
     defineBinding("cddar", cddar, {
       group: "main", sample: `(cddar list)`,
       blurb: `Same as "(cdr (cdr (car list)))".`
@@ -1574,30 +1582,13 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(cddr list)`,
       blurb: `Same as "(cdr (cdr list))".`
     });
-  
     defineBinding("quote", "quote", {
       group: "main", sample: `(quote expr)`,
       blurb: `Typically invoked as " 'expr ", "quote" prevents the evaluation of its argument.`
     });
     defineBinding("this", "this", {
       group: "main", sample: `(this)`,
-      blurb: `The value of the JavaScript "this" variable.`
-    });
-    defineBinding("cons", cons, {
-      group: "main", sample: `(cons a b)`, 
-      blurb: `Constructs a Pair, a.k.a, a list node.`
-    });
-    defineBinding("car", car, "first", {
-      group: "main", sample: `(car list)`, 
-      blurb: `Returns the first element of a list`
-    });
-    defineBinding("cdr", cdr, "rest", {
-      group: "main", sample: `(car list)`, 
-      blurb: `Returns the first element of a list.`
-    });
-    defineBinding("nil", NIL, {
-      group: "main", sample: `nil`, 
-      blurb: `An empty list.`
+      blurb: `The value of the JavaScript "this" variable; typically the scope in SchemeJS.`
     });
     defineBinding("undefined", undefined, {
       group: "main", sample: `undefined`, 
@@ -1634,6 +1625,34 @@ export function createInstance(schemeOpts = {}) {
     defineBinding("typeof", "typeof", {
       group: "main", sample: `(typeof object)`, 
       blurb: `The JavaScript type of the object.`
+    });
+    defineBinding("apply", "apply", {
+      group: "main", sample: `(apply function arguments)`, 
+      blurb: `Invokes "function" with the given "arguments" list.`
+    });
+    defineBinding("eval", "_eval", {
+      group: "main", sample: `(eval form [scope])`, 
+      blurb: `Evaluates the given form in "scope" (default is the current scope).`
+    });
+    defineBinding("def", "def", {
+      group: "main", sample: `(def var value) -or- (def (fn param ...) form ...)`, 
+      blurb: `Defines a global variable or function.`
+    });
+    defineBinding("compile", "compile", {
+      group: "main", sample: `(compile (fn param ...) form ...)`, 
+      blurb: `Compiles and defines a function.`
+    });
+    defineBinding("append", append, {
+      group: "list", sample: `(append list ...)`, 
+      blurb: `Appends the given lists.`
+    });
+    defineBinding("last", last, {
+      group: "list", sample: `(last list)`, 
+      blurb: `Returns the the last element of the list or iterable.`
+    });
+    defineBinding("nth", nth, {
+      group: "list", sample: `(nth n list)`, 
+      blurb: `Returns the nth element of the list.`
     });
     defineBinding("&&", "and", "and", {
       group: "logical-op", sample: `(&& value ...)`, 
@@ -1852,9 +1871,13 @@ export function createInstance(schemeOpts = {}) {
       group: "flow-op", sample: `(begin expr ...)`, 
       blurb: `Evaluates each expression in turn, resulting in the value of the last.`
     });
-    defineBinding("prog1", "prog1", {
+    defineBinding("prog1", prog1, {
       group: "flow-op", sample: `(prog1 expr ...)`, 
       blurb: `Evaluates each expression in turn, resulting in the value of the first.`
+    });
+    defineBinding("cond", "cond", {
+      group: "flow-op", sample: `(cond (test expr ...) ...)`, 
+      blurb: `Evaluates the expressions of the first clause in which "test" is true.`
     });
     defineBinding("in", (a,b) => a in b, {
       group: "js-op", sample: `(in a b)` });
@@ -1897,16 +1920,37 @@ export function createInstance(schemeOpts = {}) {
     defineBinding("void", _ => undefined, {
       group: "js-op", sample: `(void ...)` });
     defineBinding("not", a => typeof a === 'function' ? ((...params) => !schemeTrue(a(...params))) : !schemeTrue(a), {
-      group: "logical-op", sample: `(! value)`,
+      group: "logical-op", sample: `(not value)`,
       blurb: `Returns true if "value" is false, null, undefined, or nil. ` + 
              `If "value" is a function, returns a function that negates the fuction's value. ` +
              `Otherwise, returns false.` });
+    defineBinding("!", a => !schemeTrue(a), {
+      group: "logical-op", sample: `(! value)`,
+      blurb: `Returns true if "value" is false, null, undefined, or nil. ` + 
+             `Otherwise, returns false.` });
+    defineBinding("to-lower-case", to_lower_case, {
+      group: "util", sample: `(to-lower-case string [locale])`, 
+      blurb: `Converts the string to lower case.`
+    });
+    defineBinding("to-upper-case", to_upper_case, {
+      group: "util", sample: `(to-upper-case string [locale])`, 
+      blurb: `Converts the string to upper case.`
+    });
+    defineBinding("max", max, {
+      group: "util", sample: `(max value ...)`, 
+      blurb: `The maximum of a set of values.`
+    });
+    defineBinding("min", min, {
+      group: "util", sample: `(max value ...)`, 
+      blurb: `The minimum of a set of values.`
+    });
     /*
     defineBinding("xxx", "xxx", "xxx", {
-      group: "compare-op", sample: `(xxx value ...)`, 
-      blurb: `Returns true if each value is XXX than the previous. Evaluation ends as soon as the comparison fails.`
+      group: "xxx", sample: `(xxx value ...)`, 
+      blurb: `xxx.`
     });
     */
+
   }
 
   return globalScope;
