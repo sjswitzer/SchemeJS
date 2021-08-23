@@ -77,7 +77,7 @@ export function createInstance(schemeOpts = {}) {
   let helpInfo = globalScope._helpInfo_ = {};  // For clients that want to implement help.
   helpInfo.jsAPI = {}
 
-  exportAPI("exportAPI", exportAPI)
+  exportAPI("exportAPI", exportAPI, { dontInline: true })
   function exportAPI(name, value, opts) {
     if (typeof value === 'function')
       examineFunctionForCompilerTemplates(name, value, opts);
@@ -238,7 +238,7 @@ export function createInstance(schemeOpts = {}) {
   Pair.prototype[LIST] = true;
   Pair.prototype[ITERATE_AS_LIST] = true;
   Pair.prototype[MORELIST] = true;
-  exportAPI("Pair", Pair);
+  exportAPI("Pair", Pair, { dontInline: true });
 
   function pairIterator() {
     let current = this;
@@ -415,7 +415,7 @@ export function createInstance(schemeOpts = {}) {
   const isAtom = obj => typeof obj === 'symbol' && ATOMS[obj.description] === obj;
   exportAPI("isAtom", isAtom);
 
-  exportAPI("Atom", Atom);
+  exportAPI("Atom", Atom, { dontInline: true });
   function Atom(name) {
     // If they pass in an atom, just return it
     if (isAtom(name)) return name;
@@ -441,7 +441,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("SLAMBDA_ATOM", SLAMBDA_ATOM);
   exportAPI("QUOTE_ATOM", QUOTE_ATOM);
 
-  exportAPI("iteratorFor", iteratorFor);
+  exportAPI("iteratorFor", iteratorFor, { dontInline: true });
   function iteratorFor(obj, throwException = TypeError) {
     if (obj != null) {
       if (typeof obj[Symbol.iterator] === 'function') return obj[Symbol.iterator]();
@@ -450,7 +450,7 @@ export function createInstance(schemeOpts = {}) {
     if (throwException) throw new throwException(`Not an iterable or list ${obj}`);
   }  
 
-  exportAPI("defineBinding", defineBinding);
+  exportAPI("defineBinding", defineBinding, { dontInline: true });
   function defineBinding(name, value, ...names) {
     let opts = names[names.length-1];
     if (typeof opts === 'object')
@@ -463,7 +463,7 @@ export function createInstance(schemeOpts = {}) {
       value = globalScope[value];
     } else {
       if (typeof value === 'function')
-        examineFunctionForCompilerTemplates(names[0], value, opts);
+        examineFunctionForCompilerTemplates(name, value, opts);
     }
     names = [name, ...names];
     for (let i = 0; i < names.length; ++i)
@@ -514,9 +514,9 @@ export function createInstance(schemeOpts = {}) {
     } else if (fnInfo.native) {
       // not an error
     } else if (!compileHook && evalCount !== MAX_INTEGER) {
-      console.log("SPECIAL FUNCTION REQUIRES COMPILE HOOK", name, fn);
+      throw new LogicError("Special function requires compile hook");
     } else if (!fnInfo.valueTemplate && !fnInfo.compileHook) {
-      console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
+      throw new LogicError("Function requires templatable definition or compile hook");
     }
     // Compile hooks will set ssaScope.dynamicScopeUsed if they want to
     if (compileHook)
@@ -712,7 +712,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A < B', 'lt');
   }
 
-  exportAPI("compare_hooks", compare_hooks)
+  exportAPI("compare_hooks", compare_hooks, { dontInline: true })
   function compare_hooks(args, ssaScope, tools, op, name) {
     if (args.length < 2) return 'false'; // individual invokers need to override this
     if (args.length === 2) {
@@ -2231,7 +2231,7 @@ export function createInstance(schemeOpts = {}) {
   function closureP_hook(args, ssaScope, tools) {
     return conditionalHooks(args, ssaScope, tools, 'is_closure', `is_closure(*)`);
   }
-  exportAPI("isClosure", isClosure);
+  exportAPI("isClosure", isClosure, { dontInline: true });
   function isClosure(obj) {
     return isList(obj) && (obj[FIRST] === CLOSURE_ATOM || obj[FIRST] === SCLOSURE_ATOM);
   }
@@ -2263,7 +2263,7 @@ export function createInstance(schemeOpts = {}) {
   // simultaneously a JavaScript function and a SchemeJS closure.
   //
   exportAPI("to-string", a => string(a));
-  exportAPI("string", string);
+  exportAPI("string", string, { dontInline: true });
   function string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let stringWrap = opts.stringWrap ?? 100;
@@ -2487,7 +2487,7 @@ export function createInstance(schemeOpts = {}) {
 
   function jsChar(charCode) { return `\\u{${charCode.toString(16)}}` }
 
-  exportAPI("analyzeJSFunction", analyzeJSFunction);
+  exportAPI("analyzeJSFunction", analyzeJSFunction, { dontInline: true });
   function analyzeJSFunction(fn) {
     // The idea here is to use the intrinsic functions themselves as code generation
     // templates. That works as long as the functions don't call _eval. In that case
@@ -2656,7 +2656,7 @@ export function createInstance(schemeOpts = {}) {
     let params = nameAndParams[REST];
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
     let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
-    let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
+    let compiledFunction = compile_lambda.call(this, name, name.description, lambda, { dontInline: true });
     namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
@@ -2667,7 +2667,7 @@ export function createInstance(schemeOpts = {}) {
     return name;
   }
 
-  exportAPI("compile_lambda", compile_lambda)
+  exportAPI("compile_lambda", compile_lambda, { dontInline: true });
   function compile_lambda(name, displayName, lambdaForm, jitFunction) {
     let scope = this;
     if (!isList(lambdaForm) && typeof lambdaForm === 'symbol' ) throw new SchemeEvalError(`Bad lambda ${string(lambda)}`);
@@ -2832,7 +2832,7 @@ export function createInstance(schemeOpts = {}) {
   // This function parallels "_eval" as closely as possible. If you make a change there
   // you almost certainly have to make a corresponding one here.
   //
-  exportAPI("compileEval", compileEval);
+  exportAPI("compileEval", compileEval, { dontInline: true });
   function compileEval(form, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
     if (--tools.evalLimit < 0)

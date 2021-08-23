@@ -87,7 +87,7 @@ export function createInstance(schemeOpts = {}) {
   let EQUAL_FUNCTION = Symbol("SchemeJS-EQUAL-FUNCTION");
   exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
 
-  exportAPI("equal", equal);
+  exportAPI("equal", equal, { dontInline: true });
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
     if (a === b) return true;
     let stringCompare = report.stringCompare ?? ((a, b) => a === b);
@@ -795,7 +795,7 @@ export function createInstance(schemeOpts = {}) {
   const quit = _ => quitRepl = true;
   exportAPI("quit", quit);
 
-  exportAPI("REPL", REPL);
+  exportAPI("REPL", REPL, { dontInline: true });
   function REPL(readline, opts = {}) {  // readline(prompt) => str | nullish
     let scope = this;
     opts = { ...schemeOpts, ...opts };
@@ -1446,7 +1446,7 @@ export function createInstance(schemeOpts = {}) {
       let {value, get} = propDescs[name];
       if (name === 'eval') name = "js-eval";
       if (!get && value)
-        defineBinding(name, value, { group: "imported" });
+        defineBinding(name, value, { dontInline: true, group: "imported" });
     }
 
     // Object static methods: Object-getOwnPropertyDescriptors, etc.
@@ -1493,7 +1493,7 @@ export function createInstance(schemeOpts = {}) {
       group: "util", sample: "(Date-now)",
       blurb: `Milliseconds since midnight 1 Jan 1970 UTC, the unix epoch.`
     });
-    defineBinding("intern", Atom, {
+    defineBinding("intern", "Atom", {
       group: "main", sample: `(intern "str")`,
       blurb: `Returns the atom named "str".`
     });
@@ -1651,19 +1651,19 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(catch form ...)`, 
       blurb: `TBD`
     });
-    defineBinding("append", append, {
+    defineBinding("append", "append", {
       group: "list", sample: `(append list ...)`, 
       blurb: `Appends the given lists.`
     });
-    defineBinding("reverse", reverse, {
+    defineBinding("reverse", "reverse", {
       group: "list", sample: `(reverse list ...)`, 
       blurb: `Reterns the reverse of the appended lists.`
     });
-    defineBinding("last", last, {
+    defineBinding("last", "last", {
       group: "list", sample: `(last list)`, 
       blurb: `Returns the last element of the list or iterable.`
     });
-    defineBinding("butlast", butlast, {
+    defineBinding("butlast", "butlast", {
       group: "list", sample: `(butlast list)`, 
       blurb: `Returns the second-to-last element of the list or iterable.`
     });
@@ -1671,11 +1671,11 @@ export function createInstance(schemeOpts = {}) {
       group: "list", sample: `(length list)`, 
       blurb: `Returns the length of the list or iterable (including strings).`
     });
-    defineBinding("sort", mergesort, {
+    defineBinding("sort", "mergesort", {
       group: "list", sample: `(sort list-or-array)`, 
       blurb: `Returns a sorted copy of the list or array.`
     });
-    defineBinding("in-place-sort", in_place_mergesort, {
+    defineBinding("in-place-sort", "in_place_mergesort", {
       group: "list", sample: `(in-place-sort list-or-array)`, 
       blurb: `Sorts and returns the list or array in-place.`
     });
@@ -1683,7 +1683,7 @@ export function createInstance(schemeOpts = {}) {
       group: "list", sample: `(list value ...)`, 
       blurb: `Returns a list of the arguments.`
     });
-    defineBinding("nth", nth, {
+    defineBinding("nth", "nth", {
       group: "list", sample: `(nth n list)`, 
       blurb: `Returns the nth element of the list.`
     });
@@ -1805,7 +1805,7 @@ export function createInstance(schemeOpts = {}) {
       group: "compare-op", sample: `(!== value ...)`, 
       blurb: `Returns true unless each value is equal to the previous, in the JavaScript "===" sense. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("equal", equal, {
+    defineBinding("equal", "equal", {
       group: "compare-op", sample: `(equal value value [options])`, 
       blurb: `Returns true if the two values are "deeply equal`
     });
@@ -1983,11 +1983,11 @@ export function createInstance(schemeOpts = {}) {
       group: "logical-op", sample: `(! value)`,
       blurb: `Returns true if "value" is false, null, undefined, or nil. ` + 
              `Otherwise, returns false.` });
-    defineBinding("to-lower-case", to_lower_case, {
+    defineBinding("to-lower-case", "to_lower_case", {
       group: "util", sample: `(to-lower-case string [locale])`, 
       blurb: `Converts the string to lower case.`
     });
-    defineBinding("to-upper-case", to_upper_case, {
+    defineBinding("to-upper-case", "to_upper_case", {
       group: "util", sample: `(to-upper-case string [locale])`, 
       blurb: `Converts the string to upper case.`
     });
