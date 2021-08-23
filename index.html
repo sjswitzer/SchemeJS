@@ -2574,7 +2574,7 @@
         exportAPI("global_composite_operation", global_composite_operation, { compileHook: CanvasRenderingContextPropertyHook('globalCompositeOperation') });
         defineBinding("global-composite-operation", "global_composite_operation", { group: "web-gfx" });
 
-        exportAPI("draw_image", draw_image, { compileHook: CanvasRenderingContextFunctionHook('drawImage'), { group: "web-gfx" }g, { group: "web-gfx" }g });
+        exportAPI("draw_image", draw_image, { compileHook: CanvasRenderingContextFunctionHook('drawImage') });
         defineBinding("draw-image", "draw_image", { group: "web-gfx" });
         function draw_image(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.drawImage(...params)) }
 
@@ -2595,7 +2595,7 @@
         defineBinding("image-smoothing-enabled", "image_smoothing_enabled", { group: "web-gfx" });
 
         const image_smoothing_quality = CanvasRenderingContextProperty("imageSmoothingQuality");
-        exportAPI("image-smoothing-quality", image_smoothing_quality, { compileHook: CanvasRenderingContextPropertyHook('imageSmoothingQuality') });
+        exportAPI("image_smoothing_quality", image_smoothing_quality, { compileHook: CanvasRenderingContextPropertyHook('imageSmoothingQuality') });
         defineBinding("image_smoothing_quality", "image_smoothing_quality", { group: "web-gfx" });
       }
 
