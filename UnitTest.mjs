@@ -470,11 +470,6 @@ export function run(opts = {}) {
     EXPECT(` (reverse '(a b c)) `, ` '(c b a) `);
     EXPECT(` (reverse '(a b c) '(d e f)) `, ` '(f e d c b a) `);
 
-    EXPECT(` (memq) `, NIL);
-    EXPECT(` (memq 'a) `, isClosure);
-    EXPECT(` (memq 'a 1) `, NIL);
-    EXPECT(` (memq 'c '(a b c d e f g)) `, ` '(c d e f g) `);
-    EXPECT(` (memq 'z '(a b c d e f g)) `, NIL);
     EXPECT_ERROR(` (nth) `, TypeError);
     EXPECT(` (nth 'a) `, isClosure);
     EXPECT(` (nth 4 '(a b c d e f g)) `, ` 'e `);

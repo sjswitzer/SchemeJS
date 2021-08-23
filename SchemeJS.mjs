@@ -705,19 +705,6 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  exportAPI("in_place_reverse", in_place_reverse, { dontInline: true });
-  function in_place_reverse(list) {
-    let res = NIL;
-    while (iterateAsList(list)) {
-      let next = list[REST];
-      list[REST] = res;
-      res = list;
-      list = next;
-    }
-    if (!isNil(list)) throw new TypeError(`not in-place reversible`);
-    return res;
-  }
-
   // (nth index list)
   //     Reference the list using index, with the first element being index 0.
   exportAPI("nth", nth, { dontInline: true });
@@ -1646,9 +1633,25 @@ export function createInstance(schemeOpts = {}) {
       group: "list", sample: `(append list ...)`, 
       blurb: `Appends the given lists.`
     });
+    defineBinding("reverse", reverse, {
+      group: "list", sample: `(reverse list ...)`, 
+      blurb: `Reterns the reverse of the appended lists.`
+    });
     defineBinding("last", last, {
       group: "list", sample: `(last list)`, 
-      blurb: `Returns the the last element of the list or iterable.`
+      blurb: `Returns the last element of the list or iterable.`
+    });
+    defineBinding("butlast", butlast, {
+      group: "list", sample: `(butlast list)`, 
+      blurb: `Returns the second-to-last element of the list or iterable.`
+    });
+    defineBinding("length", "length", {
+      group: "list", sample: `(length list)`, 
+      blurb: `Returns the length of the list or iterable (including strings).`
+    });
+    defineBinding("list", "list", {
+      group: "list", sample: `(list value ...)`, 
+      blurb: `Returns a list of the arguments.`
     });
     defineBinding("nth", nth, {
       group: "list", sample: `(nth n list)`, 
