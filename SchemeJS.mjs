@@ -23,8 +23,8 @@ export function createInstance(schemeOpts = {}) {
   let globalScope = SchemeJS.createInstance(schemeOpts);
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
   const readFile = schemeOpts.readFile;
-  const latin1 = schemeOpts.latin1 ?? false;
-  const supplemental = schemeOpts.supplemental ?? false;
+  const latin1Only = schemeOpts.latin1Only ?? false;
+  const supplementalUnicode = schemeOpts.supplementalUnicode ?? false;
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
@@ -57,7 +57,7 @@ export function createInstance(schemeOpts = {}) {
   let compileEval = globalScope.compileEval ?? required();
   let SchemeError = globalScope.SchemeError ?? required();
   let SchemeCompileError = globalScope.SchemeCompileError ?? required();
-  let EVALUATE_KEY_VALUE = globalScope.EVALUATE_KEY_VALUE ?? required();
+  let EVALUATE_KEY_VALUE_SYMBOL = globalScope.EVALUATE_KEY_VALUE_SYMBOL ?? required();
   let ESCAPE_STRINGS = globalScope.ESCAPE_STRINGS ?? required();
   function required() { throw "required" }
 
@@ -412,9 +412,9 @@ export function createInstance(schemeOpts = {}) {
   const cddar = a => cdr(cdr(car(a)));
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
-  exportApi("cons", cons);
-  exportApi("car", car);
-  exportApi("cdr", cdr);
+  exportAPI("cons", cons);
+  exportAPI("car", car);
+  exportAPI("cdr", cdr);
   exportAPI("caaar", caaar);
   exportAPI("caar", caar);
   exportAPI("caadr", caadr);
@@ -964,12 +964,12 @@ export function createInstance(schemeOpts = {}) {
     if (codePoint !== 0xad)  // Exclude invisible soft-hyphen
       IDENT1[String.fromCodePoint(codePoint)] = codePoint;
 
-  if (!latin1) {
+  if (!latin1Only) {
     for (let codePoint = 0x100; codePoint < 0xD800; ++codePoint)
       analyzeCodepoint(codePoint);
     for (let codePoint = 0xE000; codePoint < 0x10000; ++codePoint)
       analyzeCodepoint(codePoint);
-    if (supplemental) {
+    if (supplementalUnicode) {
       for (let codePoint = 0x10000; codePoint < 0x110000; ++codePoint)
         analyzeCodepoint(codePoint);
     }
@@ -1378,7 +1378,7 @@ export function createInstance(schemeOpts = {}) {
               let val = parseExpr();
               parseContext.pop();
               if (evaluatedKey)
-                res[EVALUATE_KEY_VALUE] = [sym, val];
+                res[EVALUATE_KEY_VALUE_SYMBOL] = [sym, val];
               else
                 res[sym] = val;
             }
@@ -1533,43 +1533,43 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(this)`,
       blurb: `The value of the JavaScript "this" variable.`
     });
-    defineBinding("cons", "cons", {
+    defineBinding("cons", cons, {
       group: "main", sample: `(cons a b)`, 
       blurb: `Constructs a Pair, a.k.a, a list node.`
     });
-    defineBinding("car", "car", "first", {
+    defineBinding("car", car, "first", {
       group: "main", sample: `(car list)`, 
       blurb: `Returns the first element of a list`
     });
-    defineBinding("cdr", "cdr", "rest", {
+    defineBinding("cdr", cdr, "rest", {
       group: "main", sample: `(car list)`, 
       blurb: `Returns the first element of a list.`
     });
-    defineBinding("nil", NIL,, {
+    defineBinding("nil", NIL, {
       group: "main", sample: `nil`, 
       blurb: `An empty list.`
     });
-    defineBinding("undefined", "undefined", {
+    defineBinding("undefined", undefined, {
       group: "main", sample: `undefined`, 
       blurb: `The JavaScript "undefined" value.`
     });
-    defineBinding("null", "null", {
+    defineBinding("null", null, {
       group: "main", sample: `null`, 
       blurb: `The JavaScript "null" value.`
     });
-    defineBinding("true", "true", {
+    defineBinding("true", true, {
       group: "main", sample: `true`, 
       blurb: `The JavaScript "true" value.`
     });
-    defineBinding("false", "false", {
+    defineBinding("false", false, {
       group: "main", sample: `false`, 
       blurb: `The JavaScript "false" value.`
     });
-    defineBinding("NaN", "NaN", {
+    defineBinding("NaN", NaN, {
       group: "main", sample: `NaN`, 
       blurb: `The JavaScript "NaN" value.`
     });
-    defineBinding("Infinity", "Infinity", {
+    defineBinding("Infinity", Infinity, {
       group: "main", sample: `Infinity`, 
       blurb: `The JavaScript "Infinity" value.`
     });
@@ -1585,103 +1585,99 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(typeof object)`, 
       blurb: `The JavaScript type of the object.`
     });
-    defineBinding("not", "!", "not", {
-      group: "logical-op", sample: `(! value)`, 
-      blurb: `Logical "not. If "value" is a function, returns a function with a negated result."`
-    });
-    defineBinding("and", "&&", "and", {
+    defineBinding("&&", "and", "and" {
       group: "logical-op", sample: `(&& value ...)`, 
       blurb: `Logical "and." Stops evaluating and returns the first value that is false; otherwise returns the last value.`
     });
-    defineBinding("or", "||", "or", {
+    defineBinding("||", "or", "or", {
       group: "logical-op", sample: `(|| value ...)`, 
       blurb: `Logical "or." Stops evaluating and returns the first value that is true; otherwise returns the last value.`
     });
-    defineBinding("nullish", "??", "nullish", {
+    defineBinding("??", "nullish", "nullish", {
       group: "logical-op", sample: `(?? value ...)`, 
       blurb: `"Nullish" operator. Stops evaluating and returns the first value that neither null or undefined; otherwise returns the last value.`
     });
-    defineBinding("bit_not", "~", "bit-not", {
+    defineBinding("~", "bit_not", "bit-not", {
       group: "bitwise-op", sample: `(~ value)`, 
       blurb: `Bitwise not of the value.`
     });
-    defineBinding("bit_or", "|", "bit-or", {
+    defineBinding("|", "bit_or", "bit-or", {
       group: "bitwise-op", sample: `(| value ...)`, 
       blurb: `Bitwise "or" of each value.`
     });
-    defineBinding("bit_and", "&", "bit-and", {
+    defineBinding("&", "bit_and", "bit-and", {
       group: "bitwise-op", sample: `(| value ...)`, 
       blurb: `Bitwise "and" of each value.`
     });
-    defineBinding("bit_xor", "^", "bit-xor", {
+    defineBinding("^", "bit_xor", "bit-xor", {
       group: "bitwise-op", sample: `(| value ...)`, 
       blurb: `Bitwise "exclusive or" of each value.`
     });
-    defineBinding("bit_shl", "<<", "bit-shl", {
+    defineBinding("<<", "bit_shl", "bit-shl", {
       group: "bitwise-op", sample: `(<< value shift)`,
       blurb: `Left shift of "value" considered as a 32-bit integer by "shift" bits.`
     });
-    defineBinding("bit_shr", ">>", "bit-shr", {
+    defineBinding(">>", "bit_shr", "bit-shr", {
       group: "bitwise-op", sample: `(<< value shift)`,
       blurb: `Right shift of "value" considered as a 32-bit integer by "shift" bits.`
     });
-    defineBinding("bit_ash", ">>>", "bit-ash", {
+    defineBinding(">>>", "bit_ash", "bit-ash", {
       group: "bitwise-op", sample: `(>> value shift)`,
       blurb: `Arithmetic right shift of "value" considered as a 32-bit integer by "shift" bits, extending the sign bit`
     });
-    defineBinding("add", "+", "add", {
+    defineBinding("+", "add", "add", {
       group: "math-op", sample: `(+ value ...)`, 
       blurb: `Adds each value.`
     });
-    defineBinding("sub", "-", "sub", {
+    defineBinding("-", "sub", "sub", {
       group: "math-op", sample: `(- value ...)`, 
       blurb: `Subtracts each value from the first. If only one value is given, it is negated.`
     });
-    defineBinding("mul", "*", MUL, "mul", {
+    defineBinding("*", "mul", MUL, "mul", {
       group: "math-op", sample: `(* value ...)`, 
       blurb: `Multiplies each value.`
     });
-    defineBinding("div", "/", DIV, "div", {
+    defineBinding("/", "div", DIV, "div", {
       group: "math-op", sample: `(/ value ...)`, 
       blurb: `Divides the first value by each subsequnt value. If only one value is given, it is inverted.`
     });
-    defineBinding("rem", "%", "rem", {
+    defineBinding("%", "rem", "rem", {
       group: "math-op", sample: `(% value value)`, 
       blurb: `Remainder of the first value divided by the second.`
     });
-    defineBinding("pow", "**", "pow", {
+    defineBinding("**", "pow", "pow", {
       group: "math-op", sample: `(** value value)`, 
       blurb: `The first value taken to the power of the second.`
     });
-    defineBinding("lt", "<", "lt", {
+    defineBinding("<", "lt", "lt", {
       group: "compare-op", sample: `(< value ...)`, 
       blurb: `Returns true if each value is less than the previous. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("le", "<=", "le", {
+    defineBinding("<=", "le", "le", {
       group: "compare-op", sample: `(<= value ...)`, 
       blurb: `Returns true if each value is less than or equal the previous. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("gt", ">", "gt", {
+    defineBinding(">", "gt", "gt", {
       group: "compare-op", sample: `(> value ...)`, 
       blurb: `Returns true if each value is greater than than the previous. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("ge", ">=", "ge", {
+    defineBinding(">=", "ge", "ge", {
       group: "compare-op", sample: `(>= value ...)`, 
       blurb: `Returns true if each value is greater than or equal the previous. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("eq", "==", {
+    defineBinding("==", "eq", "eq", {
       group: "compare-op", sample: `(== value ...)`, 
       blurb: `Returns true if each value is equal to the previous, in the JavaScript "==" sense. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("eeq", "===", {
+    defineBinding("eeq", "===", "eeq", "eeq", {
       group: "compare-op", sample: `(=== value ...)`, 
       blurb: `Returns true if each value is equal to the previous, in the JavaScript "===" sense. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("neq", "!=", {
+    defineBinding("neq", "!=", "neq", "neq", {
       group: "compare-op", sample: `(!= value ...)`, 
       blurb: `Returns true unless each value is equal to the previous, in the JavaScript "==" sense. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("neeq", "!==", {
+    defineBinding("neeq", "!==", "neeq", "neeq", {
       group: "compare-op", sample: `(!== value ...)`, 
       blurb: `Returns true unless each value is equal to the previous, in the JavaScript "===" sense. Evaluation ends as soon as the comparison fails.`
     });
@@ -1690,120 +1686,114 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Returns true if the two values are "deeply equal`
     });
     defineBinding("nequal", "nequal" {
-      group: "compare-op", sample: `(equal value value [options])`, 
+      group: "compare-op", sample: `(nequal value value [options])`, 
       blurb: `Returns false if the two values are "deeply equal`
     });
-    defineBinding("if", "?", "if", {
+    defineBinding("?", "if", "if", {
       group: "pred-op", sample: `(? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is "true" in the Scheme sense (neither false, undefined, null nor nil), ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_bigint", "bigint?", {
+    defineBinding("bigint?", "is_bigint", {
       group: "pred-op", sample: `(?bigint value [t-expr true] [f-expr false])`, 
       blurb: `If the value's type is "bigint," ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_atom", "atom?", {
+    defineBinding("atom?", "is_atom", {
       group: "pred-op", sample: `(atom? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is an atom ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_list", "list?", {
+    defineBinding("list?", "is_list", {
       group: "pred-op", sample: `(list? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is a list, ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_undefined", "undefined?", {
+    defineBinding("undefined?", "is_undefined", {
       group: "pred-op", sample: `(undefined? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is "undefined," ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_null", "null?", {
+    defineBinding("null?", "is_null", {
       group: "pred-op", sample: `(null? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is JavaScript's null, exactly, ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_nullish", "nulish?", {
+    defineBinding("nulish?", "is_nullish", {
       group: "pred-op", sample: `(nullish? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is Javascript's null or undefined, " ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_nil", "nil?", {
+    defineBinding("nil?", "is_nil", {
       group: "pred-op", sample: `(null? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is nil, ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_boolean", "boolean?", {
+    defineBinding("boolean?", "is_boolean", {
       group: "pred-op", sample: `(boolean? value [t-expr true] [f-expr false])`, 
       blurb: `If the value's type is boolean, ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_number", "number?", {
+    defineBinding("number?", "is_number", {
       group: "pred-op", sample: `(number? value [t-expr true] [f-expr false])`, 
       blurb: `If the value's type is "number," ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_numeric", "numeric?", {
+    defineBinding("numeric?", "is_numeric", {
       group: "pred-op", sample: `(numeric? value [t-expr true] [f-expr false])`, 
       blurb: `If the value's type is 'number' or 'bigint'. ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_string", "string?", {
+    defineBinding("string?", "is_string", {
       group: "pred-op", sample: `(string? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is a String, " ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_symbol", "symbol?", {
+    defineBinding("symbol?", "is_symbol", {
       group: "pred-op", sample: `(symbol? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is a Symbol, " ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_function", "function?", {
+    defineBinding("function?", "is_function", {
       group: "pred-op", sample: `(function? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is a function, ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_object", "object?", {
+    defineBinding("object?", "is_object", {
       group: "pred-op", sample: `(object? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is an Object (but not a Function), ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_array", "array?", {
+    defineBinding("array?", "is_array", {
       group: "pred-op", sample: `(array? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is an array, ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_NaN", "NaN?", {
+    defineBinding("NaN?", "is_NaN", {
       group: "pred-op", sample: `(NaN? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is not a number (ugh, although its type may be 'number'), ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
-    defineBinding("is_finite", "finite?", {
+    defineBinding("finite?", "is_finite", {
       group: "pred-op", sample: `(finite? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is +/-infinity or NaN, ` +
-         `evaluates t-expr and returns its value (default true). ` +
-         `Otherwise, evaluates and returns f-expr (default false).`
-    });
-    defineBinding("is_xxx", "xxx?", {
-      group: "pred-op", sample: `(xxx? value [t-expr true] [f-expr false])`, 
-      blurb: `If the value is xxx, ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
     });
@@ -1811,23 +1801,10 @@ export function createInstance(schemeOpts = {}) {
       group: "flow-op", sample: `(begin expr ...)`, 
       blurb: `Evaluates each expression in turn, resulting in the value of the last.`
     });
-    defineBinding("xxx", "xxx", {
-      group: "flow-op", sample: `(xxx expr ...)`, 
-      blurb: `Evaluates each expression in turn, xxx.`
+    defineBinding("prog1", "prog1", {
+      group: "flow-op", sample: `(prog1 expr ...)`, 
+      blurb: `Evaluates each expression in turn, resulting in the value of the first.`
     });
-    defineBinding("xxx", "xxx", {
-      group: "flow-op", sample: `(xxx expr ...)`, 
-      blurb: `Evaluates each expression in turn, xxx.`
-    });
-    defineBinding("xxx", "xxx", {
-      group: "flow-op", sample: `(xxx expr ...)`, 
-      blurb: `Evaluates each expression in turn, xxx.`
-    });
-    defineBinding("xxx", "xxx", {
-      group: "flow-op", sample: `(xxx expr ...)`, 
-      blurb: `Evaluates each expression in turn, xxx.`
-    });
-    
     defineBinding("in", (a,b) => a in b, {
       group: "js-op", sample: `(in a b)` });
     defineBinding("new", (cls, ...args) => new cls(...args), {
@@ -1978,7 +1955,6 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `XXX`, 
       blurb: `XXX.`
     });
-  
   }
 
   return globalScope;
