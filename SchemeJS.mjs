@@ -41,6 +41,7 @@ export function createInstance(schemeOpts = {}) {
   let iterateAsList = globalScope.iterateAsList ?? required();
   let isIterable = globalScope.isIterable ?? required();
   let moreList = globalScope.moreList ?? required();
+  let Pair = globalScope.Pair ?? required();
   let FIRST = globalScope.FIRST ?? required();
   let REST = globalScope.REST ?? required();
   let NIL = globalScope.NIL ?? required();
@@ -415,18 +416,6 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("cons", cons);
   exportAPI("car", car);
   exportAPI("cdr", cdr);
-  exportAPI("caaar", caaar);
-  exportAPI("caar", caar);
-  exportAPI("caadr", caadr);
-  exportAPI("cadar", cadar);
-  exportAPI("caddr", caddr);
-  exportAPI("cadr", cadr);
-  exportAPI("cdaar", cdaar);
-  exportAPI("cdadr", cdadr);
-  exportAPI("cdar", cdar);
-  exportAPI("cddar", cddar);
-  exportAPI("cdddr", cdddr);
-  exportAPI("cddr", cddr);
 
   exportAPI("intern", Atom, { dontInline: true });
 
@@ -701,7 +690,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  exportAPI("reverse", reverse, { dontInline: true, group });
+  exportAPI("reverse", reverse, { dontInline: true });
   function reverse(...lists) {
     let res = NIL;
     for (let list of lists) {
@@ -1525,6 +1514,67 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Milliseconds since midnight 1 Jan 1970 UTC, the unix epoch.`
     });
 
+    defineBinding("cons", cons, {
+      group: "main", sample: `(cons first rest)`,
+      blurb: `Creates a list beginning with "first" and continuing with "rest.`
+    });
+    defineBinding("car", car, "first", {
+      group: "main", sample: `(car list)`,
+      blurb: `Returns the first element of "list".`
+    });
+    defineBinding("cdr", cdr, "rest", {
+      group: "main", sample: `(cdr list)`,
+      blurb: `Returns the list except its first element "list".`
+    });
+    defineBinding("caaar", caaar, {
+      group: "main", sample: `(caaar list)`,
+      blurb: `Same as "(car (car (car list)))".`
+    });
+    defineBinding("caar", caar, {
+      group: "main", sample: `(caar list)`,
+      blurb: `Same as "(car (car list))".`
+    });
+    defineBinding("caadr", caadr, {
+      group: "main", sample: `(caadr list)`,
+      blurb: `Same as "(car (car (cdr list)))".`
+    });
+    defineBinding("cadar", cadar, {
+      group: "main", sample: `(cadar list)`,
+      blurb: `Same as "(car (cdr (car list)))".`
+    });
+    defineBinding("caddr", caddr, {
+      group: "main", sample: `(caddr list)`,
+      blurb: `Same as "(car (cdr (cdr list)))".`
+    });
+    defineBinding("cadr", cadr, {
+      group: "main", sample: `(cadr list)`,
+      blurb: `Same as "(car (cdr list))".`
+    });,
+    defineBinding("cdaar", cdaar, {
+      group: "main", sample: `(cdaar list)`,
+      blurb: `Same as "(cdr (car (car list)))".`
+    });
+    defineBinding("cdadr", cdadr, {
+      group: "main", sample: `(cdadr list)`,
+      blurb: `Same as "(cdr (car (cdr list)))".`
+    });
+    defineBinding("cdar", cdar, {
+      group: "main", sample: `(cdar list)`,
+      blurb: `Same as "(cdr (car list))".`
+    });,
+    defineBinding("cddar", cddar, {
+      group: "main", sample: `(cddar list)`,
+      blurb: `Same as "(cdr (cdr (car list)))".`
+    });
+    defineBinding("cdddr", cdddr, {
+      group: "main", sample: `(cdddr list)`,
+      blurb: `Same as "(cdr (cdr (cdr list)))".`
+    });
+    defineBinding("cddr", cddr, {
+      group: "main", sample: `(cddr list)`,
+      blurb: `Same as "(cdr (cdr list))".`
+    });
+  
     defineBinding("quote", "quote", {
       group: "main", sample: `(quote expr)`,
       blurb: `Typically invoked as " 'expr ", "quote" prevents the evaluation of its argument.`
@@ -1585,7 +1635,7 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(typeof object)`, 
       blurb: `The JavaScript type of the object.`
     });
-    defineBinding("&&", "and", "and" {
+    defineBinding("&&", "and", "and", {
       group: "logical-op", sample: `(&& value ...)`, 
       blurb: `Logical "and." Stops evaluating and returns the first value that is false; otherwise returns the last value.`
     });
@@ -1669,23 +1719,24 @@ export function createInstance(schemeOpts = {}) {
       group: "compare-op", sample: `(== value ...)`, 
       blurb: `Returns true if each value is equal to the previous, in the JavaScript "==" sense. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("eeq", "===", "eeq", "eeq", {
+    defineBinding("===", "eeq", "eeq", {
       group: "compare-op", sample: `(=== value ...)`, 
       blurb: `Returns true if each value is equal to the previous, in the JavaScript "===" sense. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("neq", "!=", "neq", "neq", {
+    defineBinding("!=", "neq", "neq", {
       group: "compare-op", sample: `(!= value ...)`, 
       blurb: `Returns true unless each value is equal to the previous, in the JavaScript "==" sense. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("neeq", "!==", "neeq", "neeq", {
+    defineBinding("!==", "neeq", "neeq", {
       group: "compare-op", sample: `(!== value ...)`, 
       blurb: `Returns true unless each value is equal to the previous, in the JavaScript "===" sense. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("equal", "equal" {
+    defineBinding("equal", equal, {
       group: "compare-op", sample: `(equal value value [options])`, 
       blurb: `Returns true if the two values are "deeply equal`
     });
-    defineBinding("nequal", "nequal" {
+    defineBinding("nequal",
+      (a, b, maxDepth = 10000, maxLength = 10000000, report = {}) => equal(a, b, maxDepth, maxLength, report), {
       group: "compare-op", sample: `(nequal value value [options])`, 
       blurb: `Returns false if the two values are "deeply equal`
     });
@@ -1850,113 +1901,13 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Returns true if "value" is false, null, undefined, or nil. ` + 
              `If "value" is a function, returns a function that negates the fuction's value. ` +
              `Otherwise, returns false.` });
-
+    /*
     defineBinding("xxx", "xxx", "xxx", {
       group: "compare-op", sample: `(xxx value ...)`, 
       blurb: `Returns true if each value is XXX than the previous. Evaluation ends as soon as the comparison fails.`
     });
-    defineBinding("xxx", "xxx", "xxx", {
-      group: "compare-op", sample: `(xxx value ...)`, 
-      blurb: `Returns true if each value is XXX than the previous. Evaluation ends as soon as the comparison fails.`
-    });
-    defineBinding("xxx", "xxx", "xxx", {
-      group: "compare-op", sample: `(xxx value ...)`, 
-      blurb: `Returns true if each value is XXX than the previous. Evaluation ends as soon as the comparison fails.`
-    });
-    defineBinding("xxx", "xxx", "xxx", {
-      group: "logical-op", sample: `(xxx value)`, 
-      blurb: `Logical XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
-    defineBinding("XXX", "XXX",, {
-      group: "main", sample: `XXX`, 
-      blurb: `XXX.`
-    });
+    */
   }
 
   return globalScope;
-
 }
