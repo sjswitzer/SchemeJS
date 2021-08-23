@@ -26,36 +26,21 @@ export function createInstance(schemeOpts = {}) {
   const latin1 = schemeOpts.latin1 ?? false;
   const supplemental = schemeOpts.supplemental ?? false;
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
-  const jitThreshold = schemeOpts.jitThreshold ?? undefined;
-  const TRACE_INTERPRETER = !!(schemeOpts.traceInterpreter ?? false);
-  const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? false);
-  const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? false);
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
   const reportSystemError = schemeOpts.reportError ?? _reportError;
   const reportLoadInput = schemeOpts.reportLoadInput ?? (expr => undefined);
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
-  const arraysAreLists = schemeOpts.arraysAreLists ?? true;
-  const generatorsAreLists = schemeOpts.generatorsAreLists ?? true;
-  const standardIteratorsAreLists = schemeOpts.standardIteratorsAreLists ?? true;
-  const allIteratorsAreLists = schemeOpts.standardIteratorsAreLists ?? false;
-  const lambdaStr = schemeOpts.lambdaStr ?? "\\";
-  const firstName = schemeOpts.firstName ?? "first";
-  const restName = schemeOpts.firstName ?? "rest";
-  const nilName = schemeOpts.nilName ?? "NIL";
 
   let string = globalScope.string ?? required();
   let exportAPI = globalScope.exportAPI ?? required();
-  let defineGlobalSymbol = globalScope.defineGlobalSymbol ?? required();
   let defineBinding = globalScope.defineBinding ?? required();
   let isList = globalScope.isList ?? required();
   let isNil = globalScope.isNil ?? required();
   let iterateAsList = globalScope.iterateAsList ?? required();
   let isIterable = globalScope.isIterable ?? required();
   let moreList = globalScope.moreList ?? required();
-  let LIST = globalScope.LIST ?? required();
-  let MORELIST = globalScope.MORELIST ?? required();
   let FIRST = globalScope.FIRST ?? required();
   let REST = globalScope.REST ?? required();
   let NIL = globalScope.NIL ?? required();
@@ -65,9 +50,7 @@ export function createInstance(schemeOpts = {}) {
   let compare_hooks = globalScope.compare_hooks ?? required();
   let Atom = globalScope.Atom ?? required();
   let isAtom = globalScope.isAtom ?? required();
-  let cons = globalScope.cons ?? required();
-  let car = globalScope.car ?? required();
-  let cdr = globalScope.cdr ?? required();
+  let list = globalScope.list ?? required();
   let iteratorFor = globalScope.iteratorFor ?? required();
   let schemeTrue = globalScope.schemeTrue ?? required();
   let SchemeEvalError = globalScope.SchemeEvalError ?? required();
@@ -78,45 +61,6 @@ export function createInstance(schemeOpts = {}) {
   let ESCAPE_STRINGS = globalScope.ESCAPE_STRINGS ?? required();
   function required() { throw "required" }
 
-  { // (Local scope so we don't hang onto the property descriptors forever)
-    // Import global JavaScript symbols
-    let propDescs = Object.getOwnPropertyDescriptors(globalThis);
-    for (let name in propDescs) {
-      let {value, get} = propDescs[name];
-      if (name === 'eval') name = "js-eval";
-      if (!get && value)
-        defineGlobalSymbol(name, value, { schemeOnly: true, dontInline: true, group: "imported" });
-    }
-
-    // Object static methods: Object-getOwnPropertyDescriptors, etc.
-    propDescs = Object.getOwnPropertyDescriptors(Object);
-    for (let name in propDescs) {
-      let {value, get} = propDescs[name];
-      if (!get && typeof value === 'function')
-        defineGlobalSymbol(`Object-${name}`, value, { schemeOnly: true, dontInline: true, group: "imported" });
-    }
-
-    // Stuff the whole Math class in there!
-    propDescs = Object.getOwnPropertyDescriptors(Math);
-    for (let name in propDescs) {
-      let {value, get} = propDescs[name];
-      if (!get && value) {
-        // SIOD defines *pi* so I'll just define them all like that
-        if (typeof value === 'number')
-          defineGlobalSymbol(`*${name.toLowerCase()}*`, value, { schemeOnly: true }, `Math-${name}`);
-        // SIOD defines sin, cos, asin, etc. so I'll just define them all like that,
-        // but also as Math-sin, etc.
-        if (typeof value === 'function')
-          defineGlobalSymbol(name, value, { schemeOnly: true }, `Math-${name}`);
-      }
-    }
-    defineGlobalSymbol("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this deals with BigInt too
-    // This is redundant but I want them defined in the "builtin" group.
-    defineGlobalSymbol("globalThis", globalThis, { schemeOnly: true });
-    for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
-      defineGlobalSymbol(obj.name, obj, { schemeOnly: true });
-    defineGlobalSymbol("Date-now", Date.now, { schemeOnly: true });
-  }
 
   //
   // Equality
@@ -141,7 +85,6 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("EQUAL_FUNCTION", EQUAL_FUNCTION);
 
   exportAPI("equal", equal);
-  defineGlobalSymbol("equal?", equal, { dontInline: true });
   function equal(a, b, maxDepth = 10000, maxLength = 10000000, report = {}) {
     if (a === b) return true;
     let stringCompare = report.stringCompare ?? ((a, b) => a === b);
@@ -279,8 +222,8 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  defineGlobalSymbol("=", scheme_eq, { evalArgs: 2, compileHook: scheme_eq_hook, group: "compare-op" });
-  function scheme_eq(a, b, ...rest) {
+  exportAPI("is_equal", is_equal, { evalArgs: 2, compileHook: is_equal_hook });
+  function is_equal(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
       if (!equal(a, b)) return false;
@@ -290,9 +233,9 @@ export function createInstance(schemeOpts = {}) {
     }
     return true;
   }
-  function scheme_eq_hook(args, ssaScope, tools) {
+  function is_equal_hook(args, ssaScope, tools) {
     if (args.length < 2) return 'true';
-    tools.use(tools.bind(equal, "equal"));
+    tools.bindLiterally(equal, "equal");
     return compare_hooks(args, ssaScope, tools, 'equal(A, B)', 'scheme_eq');
   }
 
@@ -300,18 +243,16 @@ export function createInstance(schemeOpts = {}) {
   // Sorting
   //
 
-  // (qsort list predicate-fcn access-fcn)
-  //   "qsort" is a lie for API compatibility with SIOD, but this sort has
-  //   comparable performance and is excellent with partially-sorted lists.
-  defineGlobalSymbol("mergesort", mergesort, { dontInline: true, group: "list-op" }, "sort", "qsort");
-  function mergesort(list, predicateFn = optional, accessFn = optional) {
+  // (mergesort list before-functionn access-function)
+  exportAPI("mergesort", mergesort, { dontInline: true });
+  function mergesort(list, before_function = optional, access_function = optional) {
     if (isNil(list)) return NIL;
     // Sort Arrays as Arrays
     if (isArray(list))
-      return in_place_mergesort(list.slice(0), predicateFn, accessFn);
+      return in_place_mergesort(list.slice(0), before_function, access_function);
     // Lists and other iterables are sorted as lists
     if (isList(list))
-      return in_place_mergesort(copy_list(list), predicateFn, accessFn);
+      return in_place_mergesort(copy_list(list), before_function, access_function);
     let copied = NIL, last;
     if (!isIterable(list)) throw new TypeError(`Not a list or iterable ${list}`);
     for (let item of list) {
@@ -319,21 +260,21 @@ export function createInstance(schemeOpts = {}) {
       if (last) last = last[REST] = item;
       else copied = last = item;
     }
-    return in_place_mergesort(copied, predicateFn, accessFn);
+    return in_place_mergesort(copied, before_function, access_function);
   }
 
-  defineGlobalSymbol("in-place-mergesort", in_place_mergesort, { dontInline: true, group: "list-op" }, "in-place-sort", "nsort");
-  function in_place_mergesort(list, predicateFn = optional, accessFn = optional) {
+  exportAPI("in_place_mergesort", in_place_mergesort, { dontInline: true });
+  function in_place_mergesort(list, before_function = optional, access_function = optional) {
     if (isNil(list)) return NIL;
     // Reduce the optional predicete and access function to a single (JavaScript) "before" predicate
-    let before = predicateFn, scope = this;
-    if (predicateFn) {
-      if (accessFn) {
-        before = (a, b) => predicateFn.call(scope, accessFn.call(scope, a), accessFn.call(scope, b));
+    let before = before_function, scope = this;
+    if (before_function) {
+      if (access_function) {
+        before = (a, b) => before_function.call(scope, access_function.call(scope, a), access_function.call(scope, b));
       }
     } else {
-      if (accessFn) {
-        before = (a, b) => accessFn.call(scope, a) <  accessFn.call(scope, b);
+      if (access_function) {
+        before = (a, b) => access_function.call(scope, a) <  access_function.call(scope, b);
       } else {
         before = (a, b) => a < b
       }
@@ -457,6 +398,9 @@ export function createInstance(schemeOpts = {}) {
   // Lispy stuff
   //
 
+  const cons = (car, cdr) => new Pair(car, cdr);
+  const car = a => a[FIRST];
+  const cdr = a => a[REST];
   const caaar = a => car(car(car(a)));
   const caadr = a => car(car(cdr(a)));
   const caar = a => car(car(a));
@@ -469,40 +413,25 @@ export function createInstance(schemeOpts = {}) {
   const cddar = a => cdr(cdr(car(a)));
   const cdddr = a => cdr(cdr(cdr(a)));
   const cddr = a => cdr(cdr(a));
-  defineGlobalSymbol("caaar", caaar);
-  defineGlobalSymbol("caar", caar);
-  defineGlobalSymbol("caadr", caadr);
-  defineGlobalSymbol("cadar", cadar);
-  defineGlobalSymbol("caddr", caddr);
-  defineGlobalSymbol("cadr", cadr);
-  defineGlobalSymbol("cdaar", cdaar);
-  defineGlobalSymbol("cdadr", cdadr);
-  defineGlobalSymbol("cdar", cdar);
-  defineGlobalSymbol("cddar", cddar);
-  defineGlobalSymbol("cdddr", cdddr);
-  defineGlobalSymbol("cddr", cddr);
+  exportApi("cons", cons);
+  exportApi("car", car);
+  exportApi("cdr", cdr);
+  exportAPI("caaar", caaar);
+  exportAPI("caar", caar);
+  exportAPI("caadr", caadr);
+  exportAPI("cadar", cadar);
+  exportAPI("caddr", caddr);
+  exportAPI("cadr", cadr);
+  exportAPI("cdaar", cdaar);
+  exportAPI("cdadr", cdadr);
+  exportAPI("cdar", cdar);
+  exportAPI("cddar", cddar);
+  exportAPI("cdddr", cdddr);
+  exportAPI("cddr", cddr);
 
-  defineGlobalSymbol("intern", Atom, { dontInline: true });
+  exportAPI("intern", Atom, { dontInline: true });
 
-  defineGlobalSymbol("list", list, { group: "list-op", compileHook: list_hook });
-  function list(...elements) {
-    let val = NIL;
-    for (let i = elements.length; i > 0; --i)
-      val = cons(elements[i-1], val);
-    return val;
-  }
-  function list_hook(args, ssaScope, tools) {
-    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    // The compiler can inline the list function just fine, but it's better to do it this way
-    // because no argument array needs to be constructed.
-    let ssaResult = newTemp("list");
-    emit(`let ${ssaResult} = NIL;`);
-    for (let i = args.length; i > 0; --i)
-      emit(`${ssaResult} = cons(${args[i-1]}, ${ssaResult});`)
-    return ssaResult;
-  }
-
-  defineGlobalSymbol("copy-list", copy_list, { dontInline: true, group: "list-op" });  // TODO: unit tests!
+  exportAPI("copy_list", copy_list, { dontInline: true });
   function copy_list(...lists) {
     let res = NIL, last;
     for (let list of lists) {
@@ -523,8 +452,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  // (apropos substring) -- Returns a list of all atoms containing the given substring in their names
-  defineGlobalSymbol("apropos", apropos, { requiresScope: true, dontInline: true });
+  exportAPI("apropos", apropos, { requiresScope: true, dontInline: true });
   function apropos(substring) {
     if (!substring) substring = "";
     // Normalize to upper case because some localles have squirreley
@@ -544,7 +472,7 @@ export function createInstance(schemeOpts = {}) {
       (a,b) => a.description.toUpperCase() < b.description.toUpperCase());
   }
 
-  defineGlobalSymbol("to-lower-case", to_lower_case);
+  exportAPI("to_lower_case", to_lower_case);
   function to_lower_case(str, locale = optional) {
     if (typeof str !== 'string') throw new TypeError(`${string(str)} is not a string}`);
     let result;  // write this way so that it can be a compiler template
@@ -553,7 +481,7 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("to-upper-case", to_upper_case);
+  exportAPI("to_upper_case", to_upper_case);
   function to_upper_case(str, locale = optional) {
     if (typeof str !== 'string') throw new TypeError(`${string(str)} is not a string}`);
     let result;  // write this way so that it can be a compiler template
@@ -562,7 +490,7 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  defineGlobalSymbol("max", max, { group: "var-op" });
+  exportAPI("max", max);
   function max(a, b, ...rest) {
     let val = a;
     if (val < b) val = b;
@@ -571,7 +499,7 @@ export function createInstance(schemeOpts = {}) {
     return val;
   }
 
-  defineGlobalSymbol("min", min, { group: "var-op" });
+  exportAPI("min", min);
   function min(a, b, ...rest) {
     let val = a;
     if (val > b) val = b;
@@ -580,8 +508,10 @@ export function createInstance(schemeOpts = {}) {
     return val;
   }
 
+  exportAPI("abs", a => a < 0 ? -a : a);
+
   // (prog1 form1 form2 form3 ...)
-  defineGlobalSymbol("prog1", prog1, { evalArgs: 0, compileHook: prog1_hook, group: "core" });
+  exportAPI("prog1", prog1, { evalArgs: 0, compileHook: prog1_hook });
   function prog1(...forms) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -602,7 +532,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  defineGlobalSymbol("cond", cond, { evalArgs: 0, compileHook: cond_hook, group: "core", schemeOnly: true });
+  exportAPI("cond", cond, { evalArgs: 0, compileHook: cond_hook });
   function cond(...clauses) {
     // Prescan for errors; the compiler needs to do it so the interpreter should too
     for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
@@ -655,7 +585,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  defineGlobalSymbol("require", require_, { dontInline: true });
+  exportAPI("require", require_, { dontInline: true });
   function require_(path) {
     let sym = Atom(`*${path}-loaded*`);
     if (!schemeTrue(globalScope[sym])) {
@@ -668,7 +598,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (load fname noeval-flag)
   //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
-  defineGlobalSymbol("load", load, { dontInline: true });
+  exportAPI("load", load, { dontInline: true });
   function load(path, noEval = false) {
     let scope = this, result = NIL, last;
     let fileContent;
@@ -706,16 +636,14 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  // Provisional but useful
-  defineGlobalSymbol("println", println);
+  exportAPI("println", println);
   function println(...lines) {
     for (let line of lines)
       linePrinter(line);
     return true;
   }
 
-  // Can be inlined (if isList, isIterator, isList, etc. are bound), but doesn't seem wise
-  defineGlobalSymbol("append", append, { dontInline: true, group: "list-op" });
+  exportAPI("append", append, { dontInline: true });
   function append(...lists) {
     let res = NIL, last;
     for (let list of lists) {
@@ -733,7 +661,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("last", last, { dontInline: true, group: "list-op" });
+  exportAPI("last", last, { dontInline: true });
   function last(list) {
     if (!isIterable(list))
       throw new TypeError(`not a list or iterable ${string(list)}`);
@@ -754,7 +682,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("butlast", butlast, { dontInline: true, group: "list-op" }); // TODO: needs unit test!
+  exportAPI("butlast", butlast, { dontInline: true });
   function butlast(list) {
     let res = NIL, last;
     for ( ; iterateAsList(list) && moreList(list[REST]); list = list[REST])
@@ -775,7 +703,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("reverse", reverse, { dontInline: true, group: "list-op" });
+  exportAPI("reverse", reverse, { dontInline: true, group });
   function reverse(...lists) {
     let res = NIL;
     for (let list of lists) {
@@ -789,7 +717,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  defineGlobalSymbol("nreverse", in_place_reverse, { dontInline: true, group: "list-op" });  // Name from SIOD
+  exportAPI("in_place_reverse", in_place_reverse, { dontInline: true });
   function in_place_reverse(list) {
     let res = NIL;
     while (iterateAsList(list)) {
@@ -802,30 +730,9 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
 
-  // XXX TODO: member and memq are almost certainly wrong. Need to find out about SIOD equality.
-  // (member key list)
-  //     Returns the portion of the list where FIRST is equal to the key, or () if none found.
-  defineGlobalSymbol("member", member, { dontInline: true, group: "list-op" });
-  function member(key, list) {
-    for ( ; moreList(list); list = list[REST])
-      if (key === list[FIRST])   // TODO: == or ===?
-        return list;
-    return NIL;
-  }
-
-  // (memq key list)
-  //     Returns the portion of the list where FIRST is eq to the key, or () if none found.
-  defineGlobalSymbol("memq", memq, { dontInline: true, group: "list-op" });
-  function memq(key, list) {
-    for ( ; moreList(list); list = list[REST])
-      if (key === list[FIRST])
-        return list;
-    return NIL;
-  }
-
   // (nth index list)
   //     Reference the list using index, with the first element being index 0.
-  defineGlobalSymbol("nth", nth, { dontInline: true, group: "list-op" });
+  exportAPI("nth", nth, { dontInline: true });
   function nth(index, list) {
     if (typeof index !== 'number' || Math.trunc(index) !== index)
       throw new TypeError(`not an integer ${string(index)}`);
@@ -849,7 +756,7 @@ export function createInstance(schemeOpts = {}) {
 
   let gensym_count = 0;
   const gensym = (name = `*gensym-${gensym_count++}*`) => Symbol(name);
-  defineGlobalSymbol("gensym", gensym);
+  exportAPI("gensym", gensym);
 
   //
   // SIOD-style try/catch
@@ -868,11 +775,11 @@ export function createInstance(schemeOpts = {}) {
   SchemeJSThrow.prototype.name = "SchemeJSThrow";
 
   // (*throw tag value) -- SIOD style
-  defineGlobalSymbol("*throw", schemeThrow, { dontInline: true });
+  exportAPI("*throw", schemeThrow, { dontInline: true });
   function schemeThrow(tag, value) { throw new SchemeJSThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style
-  defineGlobalSymbol("*catch", schemeCatch, { evalArgs: 1, compileHook: siod_catch_hook });
+  exportAPI("*catch", schemeCatch, { evalArgs: 1, compileHook: siod_catch_hook });
   function schemeCatch(tag, form, ...forms) {  // XXX order of args?
     let val;
     try {
@@ -909,9 +816,9 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  defineGlobalSymbol("to-string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
+  exportAPI("to_string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
 
-  defineGlobalSymbol("eval-string", eval_string, { dontInline: true });
+  exportAPI("eval_string", eval_string, { dontInline: true });
   function eval_string(str, scope = this) {
     let expr = parseSExpr(str);
     return _eval(expr, scope);
@@ -919,7 +826,7 @@ export function createInstance(schemeOpts = {}) {
 
   let quitRepl = false;
   const quit = _ => quitRepl = true;
-  defineGlobalSymbol("quit", quit);
+  exportAPI("quit", quit);
 
   exportAPI("REPL", REPL);
   function REPL(readline, opts = {}) {  // readline(prompt) => str | nullish
@@ -933,7 +840,12 @@ export function createInstance(schemeOpts = {}) {
     let endTest = opts.endTest ?? (_ => false);
     let parseContext = opts.parseContext = [];
     quitRepl = false;
-    defineGlobalSymbol("readline", (...prompt) => readline(prompt[0] ?? "? "));
+    exportAPI("readline", (...prompt) => readline(prompt[0] ?? "? "));
+    if (defineBindings)
+      defineBinding("readline", readline, {
+        group: "core", sample: `(readline [prompt])`,
+        blurb: "Reads a line from the REPL console."
+      })
     function* charStreamPromptInput() {
       for(;;) {
         let indent = "";
@@ -973,7 +885,7 @@ export function createInstance(schemeOpts = {}) {
   
   class SchemeParseError extends SchemeError {};
   SchemeParseError.prototype.name = "SchemeParseError";
-  defineGlobalSymbol("SchemeParseError", SchemeParseError);
+  exportAPI("SchemeParseError", SchemeParseError);
 
   class SchemeSyntaxError extends SchemeParseError {
     path; errorToken; position; line; lineChar
@@ -989,7 +901,7 @@ export function createInstance(schemeOpts = {}) {
     }
   };
   SchemeSyntaxError.prototype.name = "SchemeSyntaxError";
-  defineGlobalSymbol("SchemeSyntaxError", SchemeSyntaxError);
+  exportAPI("SchemeSyntaxError", SchemeSyntaxError);
 
   class SchemeParseIncompleteError extends SchemeParseError {
     path; token; parseContext; position; line; lineChar;
@@ -1007,7 +919,7 @@ export function createInstance(schemeOpts = {}) {
     }
   };
   SchemeParseIncompleteError.prototype.name = "SchemeParseIncompleteError";
-  defineGlobalSymbol("SchemeParseIncompleteError", SchemeParseIncompleteError);
+  exportAPI("SchemeParseIncompleteError", SchemeParseIncompleteError);
 
   //
   // Character clases for parsing
@@ -1088,7 +1000,7 @@ export function createInstance(schemeOpts = {}) {
     }
   }
   
-  defineGlobalSymbol("scheme-token-generator", schemeTokenGenerator, { dontInline: true });
+  exportAPI("scheme_token_generator", schemeTokenGenerator, { dontInline: true });
   function* schemeTokenGenerator(characterSource, opts = {}) {
     let parseContext = opts.parseContext ?? [];
     let characterGenerator = iteratorFor(characterSource, LogicError);
@@ -1335,8 +1247,7 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  defineGlobalSymbol("parse", parseSExpr, { dontInline: true });
-  exportAPI("parseSExpr", parseSExpr);
+  exportAPI("parseSExpr", parseSExpr, { dontInline: true });
   function parseSExpr(characterSource, opts = {}) {
     opts = { ...schemeOpts, ...opts };
     let parseContext = opts.parseContext ?? [];
@@ -1558,6 +1469,53 @@ export function createInstance(schemeOpts = {}) {
   //
 
   if (defineBindings) {
+    let propDescs = Object.getOwnPropertyDescriptors(globalThis);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (name === 'eval') name = "js-eval";
+      if (!get && value)
+        defineBinding(name, value, { group: "imported" });
+    }
+
+    // Object static methods: Object-getOwnPropertyDescriptors, etc.
+    propDescs = Object.getOwnPropertyDescriptors(Object);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (!get && typeof value === 'function')
+      defineBinding(`Object-${name}`, value, { group: "imported" });
+    }
+
+    // Stuff the whole dang Math class in there!
+    propDescs = Object.getOwnPropertyDescriptors(Math);
+    for (let name in propDescs) {
+      let {value, get} = propDescs[name];
+      if (!get && value) {
+        // SIOD defines *pi* so I'll just define them all like that
+        if (typeof value === 'number')
+        defineBinding(`*${name.toLowerCase()}*`, value, { group: "math" });
+        // SIOD defines sin, cos, asin, etc. so I'll just define them all like that,
+        // but also as Math-sin, etc.
+        if (typeof value === 'function')
+          defineBinding(name, value, `Math-${name}, { group: "math" }`);
+      }
+    }
+    defineBinding("abs", a => a < 0 ? -a : a);  // Overwrite Math.abs; this version deals with BigInt too
+
+    // This is redundant but I want them defined in the "main" group.
+    defineBinding("globalThis", globalThis, {
+      group: "main", sample: "globalThis",
+      blurb: `The JavaScript "globalThis" variable.`
+    });
+    for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
+      defineBinding(obj.name, obj, {
+        group: "main", sample: `${obj.name}`,
+        blurb: `The JavaScript "${obj.name}" object.`
+      });
+    defineBinding("Date-now", Date.now, {
+      group: "main", sample: "(Date-now)",
+      blurb: `Milliseconds since midnight 1 Jan 1970 UTC, the unix epoch.`
+    });
+
     defineBinding("cons", "cons", {
       group: "main", sample: `(cons a b)`, 
       blurb: `Constructs a Pair, a.k.a, a list node.`
@@ -1655,27 +1613,27 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Arithmetic right shift of "value" considered as a 32-bit integer by "shift" bits, extending the sign bit`
     });
     defineBinding("add", "+", "add", {
-      group: "arith-op", sample: `(+ value ...)`, 
+      group: "math-op", sample: `(+ value ...)`, 
       blurb: `Adds each value.`
     });
     defineBinding("sub", "-", "sub", {
-      group: "arith-op", sample: `(- value ...)`, 
+      group: "math-op", sample: `(- value ...)`, 
       blurb: `Subtracts each value from the first. If only one value is given, it is negated.`
     });
     defineBinding("mul", "*", MUL, "mul", {
-      group: "arith-op", sample: `(* value ...)`, 
+      group: "math-op", sample: `(* value ...)`, 
       blurb: `Multiplies each value.`
     });
     defineBinding("div", "/", DIV, "div", {
-      group: "arith-op", sample: `(/ value ...)`, 
+      group: "math-op", sample: `(/ value ...)`, 
       blurb: `Divides the first value by each subsequnt value. If only one value is given, it is inverted.`
     });
     defineBinding("rem", "%", "rem", {
-      group: "arith-op", sample: `(% value value)`, 
+      group: "math-op", sample: `(% value value)`, 
       blurb: `Remainder of the first value divided by the second.`
     });
     defineBinding("pow", "**", "pow", {
-      group: "arith-op", sample: `(** value value)`, 
+      group: "math-op", sample: `(** value value)`, 
       blurb: `The first value taken to the power of the second.`
     });
     defineBinding("lt", "<", "lt", {

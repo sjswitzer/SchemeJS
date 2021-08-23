@@ -11,9 +11,6 @@ export const LogicError = Error;
 const isArray = Array.isArray;
 const MUL = '\u00d7', DIV = '\u00f7';
 
-// So that optional parameters show up pretty when printed
-const optional = undefined;
-
 //
 // Creates a SchemeJS instance.
 //
@@ -574,17 +571,10 @@ export function createInstance(schemeOpts = {}) {
   const schemeTrue = a => a === true || (a !== false && a != null && a[MORELIST] !== false);
   exportAPI("schemeTrue", schemeTrue);
 
-  const cons = (car, cdr) => new Pair(car, cdr);
-  const car = a => a[FIRST];
-  const cdr = a => a[REST];
-  exportApi("cons", cons);
-  exportApi("car", car);
-  exportApi("cdr", cdr);
-
   let quote = quoted => quoted[FIRST];
   exportApi("quote", quote, { dontInline: true, evalArgs: 0 }, "quote");
 
-  exportApi("scope", function scope() { return this }, { requiresScope: true });
+  exportApi("this", function scope() { return this }, { requiresScope: true });
 
   exportAPI("NIL", NIL);
   // Hoist a bunch of JavaScript definitions into the global scope
@@ -611,11 +601,13 @@ export function createInstance(schemeOpts = {}) {
   exportApi("instanceof", (a,b) => a instanceof b);
   exportApi("at", (a, b) => a[b]);
   exportApi("at_if", (a, b) => a?.[b]);
+  exportApi("call", (a, ...params) => a(...params));
+  exportApi("method_call", (a, b, ...params) => a.b(...params));
   
   //
   // Variable args definitions
   //
-  exportApi("add", add, { compileHook: add_hook, group: "arith-op" });
+  exportApi("add", add, { compileHook: add_hook });
   function add(a, b, ...rest) {
     a += b;
     for (b of rest)
@@ -636,7 +628,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  exportApi("sub", { compileHook: sub_hook, group: "arith-op" });
+  exportApi("sub", { compileHook: sub_hook });
   function sub(a, ...rest) {
     if (rest.length === 0) return -a;
     for (let b of rest)
@@ -650,7 +642,7 @@ export function createInstance(schemeOpts = {}) {
     return n_ary_hooks(args, ssaScope, tools, '-', 'sub');
   }
 
-  exportApi("mul", mul, { compileHook: mul_hook, group: "arith-op" });
+  exportApi("mul", mul, { compileHook: mul_hook });
   function mul(a, b, ...rest) {
     a *= b;
     for (let b of rest)
@@ -661,7 +653,7 @@ export function createInstance(schemeOpts = {}) {
     return n_ary_hooks(args, ssaScope, tools, '*', 'mul');
   }
 
-  exportApi("div", div, { compileHook: div_hook, group: "arith-op" });
+  exportApi("div", div, { compileHook: div_hook });
   function div(a, ...rest) {
     if (rest.length === 0) return 1/a;
     for (let b of rest)
@@ -680,7 +672,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  exportApi("bit_and", bit_and, { compileHook: bit_and_hook, group: "bitwise-op" });
+  exportApi("bit_and", bit_and, { compileHook: bit_and_hook });
   function bit_and(a, b, ...rest) {
     a &= b;
     for (b of rest)
@@ -692,7 +684,7 @@ export function createInstance(schemeOpts = {}) {
     return n_ary_hooks(args, ssaScope, tools, '&', 'bitAnd');
   }
 
-  exportApi("bit_or", bit_or, { compileHook: bit_or_hook, group: "bitwise-op" });
+  exportApi("bit_or", bit_or, { compileHook: bit_or_hook });
   function bit_or(a, b, ...rest) {
     a |= b;
     for (let b of rest)
@@ -704,7 +696,7 @@ export function createInstance(schemeOpts = {}) {
     return n_ary_hooks(args, ssaScope, tools, '|', 'bitOr');
   }
 
-  exportApi("bit_xor", bit_xor, { compileHook: bit_xor_hook, group: "bitwise-op" });
+  exportApi("bit_xor", bit_xor, { compileHook: bit_xor_hook });
   function bit_xor(a, b, ...rest) {
     a ^= b;
     for (let b of rest)
@@ -717,7 +709,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  exportApi("lt", lt, { evalArgs: 2, compileHook: lt_hook, group: "compare-op" });
+  exportApi("lt", lt, { evalArgs: 2, compileHook: lt_hook });
   function lt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -763,7 +755,7 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  exportApi("le", le, { evalArgs: 2, compileHook: le_hook, group: "compare-op" });
+  exportApi("le", le, { evalArgs: 2, compileHook: le_hook });
   function le(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -779,7 +771,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A <= B', 'le');
   }
 
-  exportApi("gt", gt, { evalArgs: 2, compileHook: gt_hook, group: "compare-op" });
+  exportApi("gt", gt, { evalArgs: 2, compileHook: gt_hook });
   function gt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -795,7 +787,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A > B', 'gt');
   }
 
-  exportApi("ge", ge, { evalArgs: 2, compileHook: ge_hook, group: "compare-op" });
+  exportApi("ge", ge, { evalArgs: 2, compileHook: ge_hook });
   function ge(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -811,7 +803,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A >= B', 'ge');
   }
 
-  exportApi("eq", eq, { evalArgs: 2, compileHook: eq_hook, group: "compare-op" });
+  exportApi("eq", eq, { evalArgs: 2, compileHook: eq_hook });
   function eq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -828,7 +820,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A == B', 'eq');
   }
 
-  exportApi("eeq", eeq, { evalArgs: 2, compileHook: eeq_hook, group: "compare-op" });
+  exportApi("eeq", eeq, { evalArgs: 2, compileHook: eeq_hook });
   function eeq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -845,7 +837,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A === B', 'eeq');
   }
 
-  exportApi("neq", neq, { evalArgs: 2, compileHook: neq_hook, group: "compare-op" });
+  exportApi("neq", neq, { evalArgs: 2, compileHook: neq_hook });
   function neq(a, b, ...rest) {
     return !eq.call(this, a, b, ...rest);
   }
@@ -855,7 +847,7 @@ export function createInstance(schemeOpts = {}) {
     return `(!${eq})`;
   }
 
-  exportApi("!==", neeq, { evalArgs: 2, compileHook: neeq, group: "compare-op" });
+  exportApi("!==", neeq, { evalArgs: 2, compileHook: neeq });
   function neeq(a, b, ...rest) {
     return !eeq.call(this, a, b, ...rest);
   }
@@ -866,7 +858,7 @@ export function createInstance(schemeOpts = {}) {
 
   // Logical & Conditional
 
-  exportApi("and", and, { evalArgs: 0, compileHook: and_hook, group: "logical-op" });
+  exportApi("and", and, { evalArgs: 0, compileHook: and_hook });
   function and(...forms) {
     let val = true;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -897,7 +889,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  exportApi("or", or, { evalArgs: 0, compileHook: or_hook, group: "logical-op" });
+  exportApi("or", or, { evalArgs: 0, compileHook: or_hook });
   function or(...forms) {
     let val = false;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -911,7 +903,7 @@ export function createInstance(schemeOpts = {}) {
     return and_or_hook(args, ssaScope, tools, 'or', 'false', 'schemeTrue');
   }
 
-  exportApi("nullish", nullish, { evalArgs: 0, compileHook: nullish_hook, group: "logical-op" });
+  exportApi("nullish", nullish, { evalArgs: 0, compileHook: nullish_hook });
   function nullish(...forms) {
     let val = undefined;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -941,7 +933,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // Conditionals
   //
-  exportApi("?", ifelse, { evalArgs: 1, compileHook: ifelse_hook, group: "core", schemeOnly: true }, "if");
+  exportApi("if", ifelse, { evalArgs: 1, compileHook: ifelse_hook });
   function ifelse(p, t = true, f = false) {
     p = schemeTrue(p);
     if (p)
@@ -993,7 +985,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_bigint', `typeof * === 'bigint'`);
   }
 
-  exportApi("is_atom", is_atom, { evalArgs: 1, compileHook: is_atom_hook, group: "pred-op" }, "is_atom");
+  exportApi("is_atom", is_atom, { evalArgs: 1, compileHook: is_atom_hook });
   function is_atom(a, t = true, f = false) {
     if (isAtom(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1004,7 +996,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_atom', `isAtom(*)`);
   }
 
-  exportApi("is_list", isList, { evalArgs: 1, compileHook: is_list_hook, group: "pred-op" } );
+  exportApi("is_list", isList, { evalArgs: 1, compileHook: is_list_hook } );
   function is_list(a, t = true, f = false) {
     if (isList(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1015,7 +1007,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_list', `isList(*)`);
   }
 
-  exportApi("is_undefined", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook, group: "pred-op", schemeOnly: true })
+  exportApi("is_undefined", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook })
   function is_undefined(a, t = true, f = false) {
     if (a === undefined)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1026,7 +1018,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_undefined', `* === undefined`);
   }
 
-  exportApi("is_null", is_null, { evalArgs: 1, compileHook: is_null_hook, group: "pred-op" }, "is-null");  // SIOD clained it first. Maybe rethink the naming here.
+  exportApi("is_null", is_null, { evalArgs: 1, compileHook: is_null_hook });
   function is_null(a, t = true, f = false) {
     if (a === null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1037,7 +1029,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_null', `* === null`);
   }
 
-  exportApi("is_nil", is_nil, { evalArgs: 1, compileHook: is_nil_hook, group: "pred-op", schemeOnly: true }, "is-jsnull");
+  exportApi("is_nil", is_nil, { evalArgs: 1, compileHook: is_nil_hook });
   function is_nil(a, t = true, f = false) {
     if (isNil(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1048,7 +1040,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nil', `isNil(*)`);
   }
 
-  exportApi("is_nullish", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_nullish", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook });
   function is_nullish(a, t = true, f = false) {
     if (a == null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1059,7 +1051,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nullish', `* == null`);
   }
 
-  exportApi("is_boolean", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_boolean", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook });
   function is_boolean(a, t = true, f = false) {
     if (typeof a === 'boolean')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1070,7 +1062,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_boolean', `typeof * === 'boolean'`);
   }
 
-  exportApi("is_number", is_number, { evalArgs: 1, compileHook: is_number_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_number", is_number, { evalArgs: 1, compileHook: is_number_hook });
   function is_number(a, t = true, f = false) {
     if (typeof a === 'number')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1081,7 +1073,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_number', `typeof * === 'number'`);
   }
 
-  exportApi("is_numeric", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_numeric", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook });
   function is_numeric(a, t = true, f = false) {
     if (typeof a === 'number' || typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1092,7 +1084,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_numeric', `typeof * === 'number' || typeof a === 'bigint`);
   }
 
-  exportApi("is_string", is_string, { evalArgs: 1, compileHook: is_string_hook, group: "pred-op", schemeOnly: true });
+  exportApi("is_string", is_string, { evalArgs: 1, compileHook: is_string_hook });
   function is_string(a, t = true, f = false) {
     if (typeof a === 'string')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1103,7 +1095,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_string', `typeof * === 'string'`);
   }
 
-  exportApi("is_symbol", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook, group: "pred-op", schemeOnly: true }, "is-symbol");
+  exportApi("is_symbol", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook });
   function is_symbol(a, t = true, f = false) {
     if (typeof a === 'symbol')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1114,7 +1106,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_symbol', `typeof * === 'symbol'`);
   }
 
-  exportApi("is_function", is_function, { evalArgs: 1, compileHook: is_function_hook, group: "pred-op", schemeOnly: true }, "is-function");
+  exportApi("is_function", is_function, { evalArgs: 1, compileHook: is_function_hook });
   function is_function(a, t = true, f = false) {
     if (typeof a === 'function')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1125,7 +1117,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_function', `typeof * === 'function'`);
   }
 
-  exportApi("is_object", is_object, { evalArgs: 1, compileHook: is_object_hook, group: "pred-op", schemeOnly: true }, "is-object");
+  exportApi("is_object", is_object, { evalArgs: 1, compileHook: is_object_hook });
   function is_object(a, t = true, f = false) {
     if (a !== null && typeof a === 'object')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1136,7 +1128,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_object', `* !== null && typeof * === 'object'`);
   }
 
-  exportApi("is_array", is_array, { evalArgs: 1, compileHook: is_array_hook, group: "pred-op", schemeOnly: true }, "is-array");
+  exportApi("is_array", is_array, { evalArgs: 1, compileHook: is_array_hook });
   function is_array(a, t = true, f = false) {
     if (isArray(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1147,7 +1139,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_array', `Array.isArray(*)`);
   }
 
-  exportApi("is_NaN", is_nan, { evalArgs: 1, compileHook: is_nan_hook, group: "pred-op", schemeOnly: true } , "is-NaN", "NaN?");
+  exportApi("is_NaN", is_nan, { evalArgs: 1, compileHook: is_nan_hook });
   function is_nan(a, t = true, f = false) {
     if (isNaN(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1158,7 +1150,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nan', `isNaN(*)`);
   }
 
-  exportApi("is_finite", is_finite, { evalArgs: 1, compileHook: is_finite_hook, group: "pred-op", schemeOnly: true } , "is-finite");
+  exportApi("is_finite", is_finite, { evalArgs: 1, compileHook: is_finite_hook });
   function is_finite(a, t = true, f = false) {
     if (isFinite(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1170,7 +1162,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (begin form1 form2 ...)
-  exportApi("begin", begin, { evalArgs: 0, compileHook: begin_hook, group: "core" });
+  exportApi("begin", begin, { evalArgs: 0, compileHook: begin_hook });
   function begin(...forms) {
     let res = NIL;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -1186,7 +1178,25 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  exportApi("length", length, { dontInline: true, group: "list-op" });
+  exportApi("list", list, { compileHook: list_hook });
+  function list(...elements) {
+    let val = NIL;
+    for (let i = elements.length; i > 0; --i)
+      val = new Pair(elements[i-1], val);
+    return val;
+  }
+  function list_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    // The compiler can inline the list function just fine, but it's better to do it this way
+    // because no argument array needs to be constructed.
+    let ssaResult = newTemp("list");
+    emit(`let ${ssaResult} = NIL;`);
+    for (let i = args.length; i > 0; --i)
+      emit(`${ssaResult} = new Pair(${args[i-1]}, ${ssaResult});`)
+    return ssaResult;
+  }
+
+  exportApi("length", length, { dontInline: true });
   function length(list) {
     let n = 0;
     for ( ; iterateAsList(list); list = list[REST])
@@ -1203,14 +1213,14 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (map fn list1 list2 ...)
-  exportApi("map", map, { dontInline: true, group: "list-op" }, "mapcar"); // mapcar alias for SIOD compatibility
+  exportApi("map", map, { dontInline: true });
   function map(fn, ...lists) {
     let result = NIL, last;
     for (let list of lists) {
       for ( ; iterateAsList(list); list = list[REST]) {
         let item = list[FIRST];
         item = fn.call(this, item);
-        item = cons(item, NIL)
+        item = new Pair(item, NIL)
         if (last) last = last[REST] = item;
         else result = last = item;
       }
@@ -1218,7 +1228,7 @@ export function createInstance(schemeOpts = {}) {
       if (!isNil(list)) {
         for (let item of list) {
           item =  fn.call(this, item);
-          item = cons(item, NIL);
+          item = new Pair(item, NIL);
           if (last) last = last[REST] = item;
           else result = last = item;
         }
@@ -1228,7 +1238,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // Same as map but results in an Array
-  exportApi("array-map", array_map, { dontInline: true, group: "list-op" });
+  exportApi("array-map", array_map, { dontInline: true });
   function array_map(fn, ...lists) {
     let res = [];
     for (let list of lists) {
@@ -1244,14 +1254,14 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (filter fn list1 list2 ...)
-  exportApi("filter", filter, { dontInline: true, group: "list-op" });
+  exportApi("filter", filter, { dontInline: true });
   function filter(predicateFn, ...lists) {
     let result = NIL, last;
     for (let list of lists) {
       for ( ; iterateAsList(list); list = list[REST]) {
         let item = list[FIRST];
         if (schemeTrue(predicateFn(item))) {
-          item = cons(item, NIL);
+          item = new Pair(item, NIL);
           if (last) last = last[REST] = item;
           else result = last = item;
         }
@@ -1259,7 +1269,7 @@ export function createInstance(schemeOpts = {}) {
       if (!isNil(list)) {
         for (let item of list) {
           if(schemeTrue(predicateFn(item))) {
-            item = cons(item, NIL);
+            item = new Pair(item, NIL);
             if (last) last = last[REST] = item;
             else result = last = item;
           }
@@ -1422,7 +1432,7 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[LAZYREST] = true;
   LazyIteratorList.prototype[ITERATE_AS_LIST] = true;
 
-  exportApi("list-view", list_view, { dontInline: true, group: "list-op" });
+  exportApi("list-view", list_view, { dontInline: true });
   function list_view(obj) {
     let iterator = iteratorFor(obj, TypeError);
     return new LazyIteratorList(iterator);
@@ -1445,14 +1455,14 @@ export function createInstance(schemeOpts = {}) {
   //
   // TODO: Reconsider that; it's easy to implement let and let*;
   // it's just that I think they're bad ideas, historically baked-in.
-  // But it's possible there's existing SIOD code that depends on the
+  // But it's possible there's existing code that depends on the
   // behavior of let and let*, for instance,
   //    (let ((x (something-that-uses-outer-scope-x) ...
   //
   // "letrec" can be partially-applied, returning a function that
   // evaluates its arguments in the let scope!
   //
-  exportApi("letrec", letrec, { requiresScope: true, evalArgs: 0, compileHook: letrec_hook, group: "core", schemeOnly: true }, "let", "let*");
+  exportApi("letrec", letrec, { requiresScope: true, evalArgs: 0, compileHook: letrec_hook });
   function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
     for ( ; moreList(bindings); bindings = bindings[REST]) {
@@ -1526,7 +1536,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (for-in key-symbol value-symbol obj form forms...)
-  exportApi("for-in", for_in, { evalArgs: 0, compileHook: for_in_hook, group: "core", schemeOnly: true });
+  exportApi("for-in", for_in, { evalArgs: 0, compileHook: for_in_hook });
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope);
@@ -1607,7 +1617,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (for-of value-symbol obj form forms...)
-  exportApi("for-of", for_of, { evalArgs: 0, compileHook: for_of_hook, group: "core", schemeOnly: true });
+  exportApi("for-of", for_of, { evalArgs: 0, compileHook: for_of_hook });
   function for_of(valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope);
@@ -1660,7 +1670,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (while predicate obj form forms...)
-  exportApi("while", _while, { evalArgs: 0, compileHook: while_hook, group: "core", schemeOnly: true });
+  exportApi("while", _while, { evalArgs: 0, compileHook: while_hook });
   function _while(predicate, form, ...forms) {
     let scope = this;
     let val = NIL;
@@ -1700,7 +1710,7 @@ export function createInstance(schemeOpts = {}) {
   // The point is that the JavaScript runtime HAS a suitable primitive; I just don't
   // think you can get at it directly from user code.
 
-  exportApi("setq", setq, { evalArgs: 0, compileHook: setq_hook, group: "core" }, "setq");
+  exportApi("setq", setq, { evalArgs: 0, compileHook: setq_hook });
   function setq(symbol, valueForm, ...values) {
     let value = _eval(valueForm, this);
     if (this[RETURNS_SYMBOL]) return;
@@ -1732,7 +1742,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaValue;
   }
 
-  exportApi("set", set, { requiresScope: true, group: "core" });
+  exportApi("set", set, { requiresScope: true });
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   function setSym(symbol, value, scope) {
@@ -1753,8 +1763,8 @@ export function createInstance(schemeOpts = {}) {
   // try/catch
   //
 
+  const js_throw = value => { throw value; return undefined; }; // "return" lets compiler use template
   exportApi("throw", js_throw);
-  function js_throw(value) { throw value; return undefined; } // "return" lets compiler use template
 
   // (catch (var forms) forms) -- JavaScript style
   exportApi("catch", js_catch, { evalArgs: 0, compileHook: js_catch_hook });
@@ -1974,11 +1984,11 @@ export function createInstance(schemeOpts = {}) {
           paramStr += sep + params[i], sep = ", ";
         if (restParam)
           paramStr += `${sep}...${restParam}`;
-        closureForms = cons(Atom(`{*js-function-${fName}(${paramStr})*}`), NIL);
+        closureForms = new Pair(Atom(`{*js-function-${fName}(${paramStr})*}`), NIL);
         if (restParam)
           closureParams = Atom(restParam);
         for (let i = params.length; i > argCount; --i)
-          closureParams = cons(Atom(params[i-1]), closureParams);
+          closureParams = new Pair(Atom(params[i-1]), closureParams);
         for (let i = 0; i < argCount; ++i)
           scope[Atom(params[i])] = argv[i];
       }
@@ -1987,10 +1997,10 @@ export function createInstance(schemeOpts = {}) {
         if (evalCount < 0)
           evalCount = 0;
         bindingClosure[FIRST] = SCLOSURE_ATOM;
-        bindingClosure[REST] = cons(scope, cons(evalCount, cons(closureParams, closureForms)));
+        bindingClosure[REST] = new Pair(scope, new Pair(evalCount, new Pair(closureParams, closureForms)));
       } else {
         bindingClosure[FIRST] = CLOSURE_ATOM;
-        bindingClosure[REST] = cons(scope, cons(closureParams, closureForms));
+        bindingClosure[REST] = new Pair(scope, new Pair(closureParams, closureForms));
       }
       bindingClosure[LIST] = bindingClosure[MORELIST] = bindingClosure[ITERATE_AS_LIST] = true;
       bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
@@ -2084,20 +2094,20 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\ (params) (form1) (form2) ...)
-  exportApi(LAMBDA_CHAR, lambda, { requiresScope: true, evalArgs: 0, dontInline: true }, "\\", "lambda");
+  exportApi(LAMBDA_CHAR, lambda, { requiresScope: true, evalArgs: 0, dontInline: true });
   function lambda(params, ...forms) {
-    let lambda = cons(LAMBDA_ATOM, cons(params, forms));
+    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
     let scope = this;
-    let schemeClosure = cons(CLOSURE_ATOM, cons(scope, lambda[REST]));
+    let schemeClosure = new Pair(CLOSURE_ATOM, new Pair(scope, lambda[REST]));
     return makeLambdaClosure(scope, params, lambda, forms, schemeClosure);
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
-  exportApi(LAMBDA_CHAR+"#", special_lambda, { requiresScope: true, evalArgs: 0, dontInline: true }, "\\\\");
+  exportApi(LAMBDA_CHAR+"#", special_lambda, { requiresScope: true, evalArgs: 0, dontInline: true });
   function special_lambda(evalCount, params, ...forms) {
-    let lambda = cons(SLAMBDA_ATOM, cons(evalCount, cons(params, forms)));
+    let lambda = new Pair(SLAMBDA_ATOM, new Pair(evalCount, new Pair(params, forms)));
     let scope = this;
-    let schemeClosure = cons(SCLOSURE_ATOM, cons(scope, lambda[REST]));
+    let schemeClosure = new Pair(SCLOSURE_ATOM, new Pair(scope, lambda[REST]));
     return makeLambdaClosure(scope, params, lambda, forms, schemeClosure, evalCount);
   }
 
@@ -2190,7 +2200,7 @@ export function createInstance(schemeOpts = {}) {
 
   function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
 
-  exportApi("return", _return, { requiresScope: false, compileHook: return_hook})
+  exportApi("return", _return, { requiresScope: false, compileHook: return_hook })
   function _return(...values) {
     let scope = this, value = NIL;
     if (values.length > 0)
@@ -2208,10 +2218,10 @@ export function createInstance(schemeOpts = {}) {
     return ssaValue;
   }
 
-  exportApi("closure?", is_closure, { evalArgs: 1, compileHook: closureP_hook }, "is_closure")
+  exportApi("is_closure", is_closure, { evalArgs: 1, compileHook: closureP_hook })
   function is_closure(a, t = true, f = false) {
-    if (isClosure(a)) return typeof t === 'boolean' ? t : _eval(t, this);
-    else return typeof f === 'boolean' ? f : eval(f, this);
+    if (isClosure(a)) return isPrimitive(t) ? t : _eval(t, this);
+    else return isPrimitive(f) ? f : eval(f, this);
   }
   function closureP_hook(args, ssaScope, tools) {
     return conditionalHooks(args, ssaScope, tools, 'is_closure', `is_closure(*)`);
@@ -2640,7 +2650,7 @@ export function createInstance(schemeOpts = {}) {
     let name = Atom(nameAndParams[FIRST]);
     let params = nameAndParams[REST];
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
-    let lambda = cons(LAMBDA_ATOM, cons(params, forms));
+    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
     let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
     namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
@@ -2667,7 +2677,7 @@ export function createInstance(schemeOpts = {}) {
       return val;
     }
     function invokeUnbound(fn, args) {
-      let list = cons(fn, args);
+      let list = new Pair(fn, args);
       return _eval(list, scope);
     }
   }
@@ -2688,9 +2698,6 @@ export function createInstance(schemeOpts = {}) {
     bindLiterally(schemeTrue, "schemeTrue");
     bindLiterally(isList, "isList");
     bindLiterally(Pair, "Pair");
-    bindLiterally(cons, "cons");
-    bindLiterally(car, "car");
-    bindLiterally(cdr, "cdr");
     bindLiterally(Atom, "Atom");
     bindLiterally(newScope, "newScope");
     bindLiterally(FIRST, "FIRST");
@@ -2995,30 +3002,30 @@ export function createInstance(schemeOpts = {}) {
         if (restParam)
           innerParams = Atom(restParam);
         for (let i = params.length; i > 0; --i)
-          innerParams = cons(Atom(params[i-1]), innerParams);
-        innerForms = cons(cons(fn, innerParams), NIL);
+          innerParams = new Pair(Atom(params[i-1]), innerParams);
+        innerForms = new Pair(new Pair(fn, innerParams), NIL);
       }
       // Peel off the number of parameters we have arguments for
       let capturedParams = NIL, last;
       for (let i = argCount; i > 0; --i, innerParams = innerParams[REST]) {
         if (!isList(innerParams))
           throw new LogicError(`There should be enough params`);
-        let item = cons(innerParams[FIRST], NIL);
+        let item = new Pair(innerParams[FIRST], NIL);
         if (last) last = last[REST] = item;
         else capturedParams = last = item;
       }
       if (!last) throw new LogicError(`There should be at least one param`);
-      closureBody = cons(innerParams, innerForms);
-      let closureForm = cons();
+      closureBody = new Pair(innerParams, innerForms);
+      let closureForm = new Pair();
       if (evalCount !== MAX_INTEGER) {
         evalCount -= argCount;
         if (evalCount < 0)
           evalCount = 0;
         closureForm[FIRST] = SCLOSURE_ATOM;
-        closureForm[REST] = cons("PATCH", cons(evalCount, closureBody));
+        closureForm[REST] = new Pair("PATCH", new Pair(evalCount, closureBody));
       } else {
         closureForm[FIRST] = CLOSURE_ATOM;
-        closureForm[REST] = cons("PATCH", closureBody);
+        closureForm[REST] = new Pair("PATCH", closureBody);
       }
       let ssaClosureForm = bind(closureForm, "closureForm");
       // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
@@ -3221,9 +3228,9 @@ export function createInstance(schemeOpts = {}) {
     let closureAtom = CLOSURE_ATOM;
     if (evalCount !== MAX_INTEGER) {
       closureAtom = SCLOSURE_ATOM;
-      body = cons(evalCount, body);
+      body = new Pair(evalCount, body);
     }
-    let closureForm = cons(closureAtom, cons("PATCH", body));
+    let closureForm = new Pair(closureAtom, new Pair("PATCH", body));
     let fnInfo = { requiresScope: tools.usesDymanicScope, requiredCount, evalCount, params: ssaParamv, restParam: ssaRestParam };
     decorateCompiledClosure(ssaFunction, displayName, closureForm, fnInfo, tools);
     tools.usesDymanicScope = saveUsesDynamicScope;
