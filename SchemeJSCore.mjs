@@ -533,7 +533,7 @@ export function createInstance(schemeOpts = {}) {
   function examineFunctionForCompilerTemplates(name, fn, opts) {
     let evalCount = opts.evalArgs ?? MAX_INTEGER;
     let compileHook = opts.compileHook;
-    let usesDynamicScope = opts.usesDynamicScope;
+    let requiresScope = opts.requiresScope;
     examineFunctionForParameterDescriptor(fn, evalCount);
     let fnInfo = analyzeJSFunction(fn);
     fnInfo.evalCount = evalCount;
@@ -559,9 +559,7 @@ export function createInstance(schemeOpts = {}) {
     } else if (!fnInfo.valueTemplate && !fnInfo.compileHook) {
       console.log("FUNCTION REQUIRES TEMPLATABLE DEFINITION OR COMPILE HOOK", name, fn);
     }
-    if (compileHook && usesDynamicScope)
-      throw new LogicError(`TEMPLATED FUNCTIONS SHOULD NOT DECLARE "usesDynamicScope"`);
-    fnInfo.usesDynamicScope = usesDynamicScope;
+    fnInfo.requiresScope = requiresScope;
     fn[COMPILE_INFO] = fnInfo;
   }
 
@@ -608,7 +606,7 @@ export function createInstance(schemeOpts = {}) {
   const QUOTE_ATOM = defineGlobalSymbol("'", quoted => quoted[FIRST], { dontInline: true, evalArgs: 0 }, "quote");
   exportAPI("QUOTE_ATOM", QUOTE_ATOM);
 
-  defineGlobalSymbol("scope", function() { return this });
+  defineGlobalSymbol("this", function() { return this }, { requiresScope: true });
 
   exportAPI("NIL", NIL);
   defineGlobalSymbol("nil", NIL);
@@ -1484,7 +1482,7 @@ export function createInstance(schemeOpts = {}) {
   // "letrec" can be partially-applied, returning a function that
   // evaluates its arguments in the let scope!
   //
-  defineGlobalSymbol("letrec", letrec, { evalArgs: 0, compileHook: letrec_hook, group: "core", schemeOnly: true }, "let", "let*");
+  defineGlobalSymbol("letrec", letrec, { requiresScope: true, evalArgs: 0, compileHook: letrec_hook, group: "core", schemeOnly: true }, "let", "let*");
   function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
     for ( ; moreList(bindings); bindings = bindings[REST]) {
@@ -1712,7 +1710,7 @@ export function createInstance(schemeOpts = {}) {
   // The point is that the JavaScript runtime HAS a suitable primitive; I just don't
   // think you can get at it directly from user code.
 
-  defineGlobalSymbol("set'", setq, { evalArgs: 0, compileHook: setq_hook, group: "core" }, "setq");
+  defineGlobalSymbol("setq", setq, { evalArgs: 0, compileHook: setq_hook, group: "core" }, "setq");
   function setq(symbol, valueForm, ...values) {
     let value = _eval(valueForm, this);
     for (let valueForm of values)
@@ -1720,25 +1718,28 @@ export function createInstance(schemeOpts = {}) {
     let result = setSym(symbol, value, this);
     return result;
   }
-  function setq_hook(body, ssaScope, tools) {
-    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    if (!isList(body))
-      throw new SchemeCompileError(`Bad setq params ${body}`);
-    let varSym = body[FIRST], valForms = body[REST];
+  function setq_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use, scopeLines = tools.scopeLines;
+    if (args.lenght < 1)
+      throw new SchemeCompileError(`Bad setq arguments ${args}`);
+    let varSym = args[FIRST], valForms = args[REST];
     let ssaValue = 'NIL';
     for (let form of valForms)
       ssaValue = compileEval(form, ssaScope, tools);
     let boundVar = ssaScope[varSym];
     if (boundVar) {
       emit(`${boundVar} = ${ssaValue};`);
+      let ssaVarSym = use(bind(varSym));
+      scopeLines.push(emit(`scope[${ssaVarSym}] = ${ssaVarSym}`));
     } else {
       let ssaSetSym = use(bind(setSym));
-      emit(`${ssaSetSym}.call(this, ${ssaValue});`);
+      ssaScope.dynamicScopeUsed = true;
+      emit(`${ssaSetSym}.call(scope, ${ssaValue});`);
     }
     return ssaValue;
   }
 
-  defineGlobalSymbol("set", set, { usesDynamicScope: true, group: "core" });
+  defineGlobalSymbol("set", set, { requiresScope: true, group: "core" });
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   function setSym(symbol, value, scope) {
@@ -1753,7 +1754,6 @@ export function createInstance(schemeOpts = {}) {
       scope = Object.getPrototypeOf(scope);
     } while (scope && scope !== globalScope);  // I knew I'd use this someday!
     throw new EvalError(`set(q), ${string(symbol)} not in scope`)
-    return val;
   }
 
   //
@@ -1828,7 +1828,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (def variable value)
   // (def (fn args) forms)
-  defineGlobalSymbol("def", def, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
+  defineGlobalSymbol("def", def, { requiresScope: true, evalArgs: 0, dontInline: true });
   function def(defined, value, ...rest) {
     let scope = this, name = defined;
     if (isList(defined)) {
@@ -1852,6 +1852,8 @@ export function createInstance(schemeOpts = {}) {
     return name;
   }
 
+  const RETURNS_SYMBOL = Symbol("RETURNS"), RETURNS_VALUE_SYMBOL = Symbol("RETURNS-VALUE"), RETURN_SCOPE_SYMBOL = Symbol('RETURN-SCOPE');
+
   //
   // This is where the magic happens
   //
@@ -1859,13 +1861,13 @@ export function createInstance(schemeOpts = {}) {
   // here you almost certainly need to make a corresponding one there.
   //
 
-  const RETURN_SYMBOL = Symbol("RETURN");
-
-  defineGlobalSymbol("eval", _eval, { usesDynamicScope: true, dontInline: true });
+  defineGlobalSymbol("eval", _eval, { requiresScope: true, dontInline: true });
   exportAPI("_eval", _eval);
   function _eval(form, scope = this) {
     // Can't be called "eval" because "eval", besides being a global definition,
     // is effectively a keyword in JavaScript.
+    if (scope[RETURNS_SYMBOL])
+      throw new LogicError(`someone forgot to check scope[RETURNS_SYMBOL]`)
     if (isNil(form)) return form;
     if (isPrimitive(form)) return form;
     if (typeof form === 'symbol') { // atom resolution is the most common case
@@ -2054,7 +2056,7 @@ export function createInstance(schemeOpts = {}) {
     return (evalCount << 20) | (requiredCount << 8) | tag;
   }
 
-  defineGlobalSymbol("apply", apply, { usesDynamicScope: true, dontInline: true });
+  defineGlobalSymbol("apply", apply, { requiresScope: true, dontInline: true });
   function apply(fn, args, scope = this) {
     let argv = args;
     if (!isArray(argv)) {
@@ -2075,7 +2077,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\ (params) (form1) (form2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR, lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\", "lambda");
+  defineGlobalSymbol(LAMBDA_CHAR, lambda, { requiresScope: true, evalArgs: 0, dontInline: true }, "\\", "lambda");
   function lambda(params, ...forms) {
     let lambda = cons(LAMBDA_ATOM, cons(params, forms));
     let scope = this;
@@ -2084,7 +2086,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
-  defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { usesDynamicScope: true, evalArgs: 0, dontInline: true }, "\\\\");
+  defineGlobalSymbol(LAMBDA_CHAR+"#", special_lambda, { requiresScope: true, evalArgs: 0, dontInline: true }, "\\\\");
   function special_lambda(evalCount, params, ...forms) {
     let lambda = cons(SLAMBDA_ATOM, cons(evalCount, cons(params, forms)));
     let scope = this;
@@ -2158,11 +2160,12 @@ export function createInstance(schemeOpts = {}) {
       }
       if (typeof params === 'symbol')
         scope[params] = args.slice(i);
+      scope[RETURN_SCOPE_SYMBOL] = scope;
       let result = NIL;
       for (let form of forms) {
         result = _eval(form, scope);
-        if (scope.hasOwnProperty(RETURN_SYMBOL))
-          return scope[RETURN_SYMBOL];
+        if (scope[RETURNS_SYMBOL])
+          return scope[RETURNS_VALUE_SYMBOL];
       }
       return result;
     }
@@ -2179,13 +2182,15 @@ export function createInstance(schemeOpts = {}) {
 
   function throwBadLambda(lambda, msg) { throw new SchemeEvalError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
 
-  defineGlobalSymbol("return", _return, { usesDynamicScope: false, compileHook: return_hook})
+  defineGlobalSymbol("return", _return, { requiresScope: true, compileHook: return_hook})
   function _return(...values) {
     let scope = this, value = NIL;
     if (values.length > 0)
       value = values[values.length-1];
-    scope[RETURN_SYMBOL] = value;
-    return value;
+    let returnScope = scope[RETURN_SCOPE_SYMBOL];
+    returnScope[RETURNS_VALUE_SYMBOL] = value;
+    returnScope[RETURNS_SYMBOL] = true;
+    return undefined;  // just to be clear... this does not return the value
   }
   function return_hook(args, ssaScope, tools) {
     let ssaValue = 'NIL';
@@ -2621,7 +2626,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
-  defineGlobalSymbol("compile", compile, { usesDynamicScope: true, evalArgs: 0, dontInline: true });
+  defineGlobalSymbol("compile", compile, { requiresScope: true, evalArgs: 0, dontInline: true });
   function compile(nameAndParams, ...forms) {
     if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[FIRST]);
@@ -2665,7 +2670,7 @@ export function createInstance(schemeOpts = {}) {
     let scope = this;
     let bindSymToObj = {}, guardedSymbols = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
-    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 1000000,
+    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 10000000,
       bindLiterally, functionDescriptors, compileEval };
     let ssaScope = new Object();
     ssaScope[SCOPE_TYPE_SYMBOL] = "compile-scope";
@@ -2686,6 +2691,8 @@ export function createInstance(schemeOpts = {}) {
     bindLiterally(ITERATE_AS_LIST, "ITERATE_AS_LIST");
     bindLiterally(MORELIST, "MORELIST");
     bindLiterally(COMPILED, "COMPILED");
+    bindLiterally(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR");
+    bindLiterally(COMPILE_INFO, "COMPILE_INFO");
     bindLiterally(CLOSURE_ATOM, "CLOSURE_ATOM");
     let ssaFunction = compileLambda(nameAtom, displayName, lambdaForm, ssaScope, tools);
     if (jitFunction && Object.getOwnPropertyNames(guardedSymbols).length > 0) {
@@ -2843,13 +2850,13 @@ export function createInstance(schemeOpts = {}) {
             fnInfo.requiredCount = requiredCount;
             fnInfo.evalCount = evalCount;
             fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-            fnInfo.usesDynamicScope = !isClosure(fn) && !fnInfo.native;
           }
           // Everything you need to know about invoking a JS function is right here
           tools.functionDescriptors[ssaValue] = fnInfo;
         }
         return ssaValue;
       }
+      tools.dynamicScopeUsed = true;
       return `resolveUnbound(${use(bind(sym))})`;
     }
     if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
@@ -2884,8 +2891,9 @@ export function createInstance(schemeOpts = {}) {
       let compileHook = functionDescriptor.compileHook;
       let valueTemplate = functionDescriptor.valueTemplate;
       let bodyTemplate = functionDescriptor.bodyTemplate;
-      let usesDynamicScope = functionDescriptor.usesDynamicScope;
-      if (usesDynamicScope)
+      let requiresScope = functionDescriptor.requiresScope;
+      // A compile hook decides for itself whether or not to set ssaScope.dynamicScopeUsed
+      if (requiresScope && !compileHook) 
         ssaScope.dynamicScopeUsed = true;
 
       // Run through the arg list evaluating args
@@ -2938,7 +2946,7 @@ export function createInstance(schemeOpts = {}) {
         if (TRACE_COMPILER)
           console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
         use(ssaFunction);
-        if (usesDynamicScope) {
+        if (requiresScope) {
           if (ssaArgStr) ssaArgStr = `, ${ssaArgStr}`;
           emit(`let ${ssaResult} = ${ssaFunction}.call(scope${ssaArgStr});`);
         } else {
@@ -2958,11 +2966,6 @@ export function createInstance(schemeOpts = {}) {
       }
       let name = fName + '_closure';
       let ssaResult = newTemp(name), ssaTmpScope = newTemp("tmp_scope")
-      // If we had a compile hook but didn't use it because we're making a closure
-      // we assume it needs a scope when invoked.
-      if (compileHook)
-        usesDynamicScope = true;
-      ssaScope.dynamicScopeUsed = true;
       ssaScope = newScope(ssaScope, "compiler-closure-scope");
       emit(`let ${ssaTmpScope} = scope;`);
       emit(`let ${ssaResult}; {`);
@@ -3027,25 +3030,34 @@ export function createInstance(schemeOpts = {}) {
         }
       }
       let paramStr = '';
+      let ssaParamv = [], ssaRestParam;
       sep = '';
       for (; moreList(innerParams); innerParams = innerParams[REST]) {
         let param = innerParams[FIRST];
         let ssaParam = newTemp(param);
+        ssaParamv.push(ssaParam);
         paramStr += sep + ssaParam;
         sep = ', ';
       }
-      if (typeof innerParams === 'symbol')
-        paramStr += `${sep}...${newTemp(innerParams)}`;
+      if (typeof innerParams === 'symbol') {
+        let ssaRest = newTemp(innerParams);
+        paramStr += `${sep}...${ssaRest}`;
+        ssaRestParam = ssaRest;
+      }
       use(ssaFunction);
       let displayName;
-      if (usesDynamicScope) {
+      if (requiresScope) {
+        ssaScope.dynamicScopeUsed = true;
+  
         emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
         displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
       } else {
         emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr});`);
         displayName = `(${paramStr}) => ${ssaFunction}(${closedArgStr}, ${paramStr})`;
       }
-      decorateCompiledClosure(ssaResult, displayName, closureForm, requiredCount, evalCount, tools);
+      // closures do not need a scope!
+      let fnInfo = { requiredCount, evalCount, params: ssaParamv, restParam: ssaRestParam, requiresScope: false };
+      decorateCompiledClosure(ssaResult, displayName, closureForm, fnInfo, tools);
       tools.indent = saveIndent;
       emit(`}`);
       tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name, noScope: true };
@@ -3098,6 +3110,10 @@ export function createInstance(schemeOpts = {}) {
   //
   function compileLambda(nameAtom, displayName, lambda, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
+    let saveUsesDynamicScope = tools.usesDymanicScope;
+    tools.usesDynamicScope = false;
+    let saveScopeLines = tools.scopeLines, scopeLines = [];
+    tools.scopeLines = scopeLines;
     if (!isList(lambda)) throwBadCompiledLambda(lambda);
     let body = lambda[REST];
     let evalCount = MAX_INTEGER;
@@ -3114,7 +3130,7 @@ export function createInstance(schemeOpts = {}) {
     let forms = body[REST];
     if (!isList(params)) throwBadCompiledLambda(lambda);
     let ssaParamv = [], ssaRestParam, paramv = [], restParam;
-    let originalSsaScope = ssaScope, scopeLines = [];
+    let originalSsaScope = ssaScope;
     ssaScope = newScope(ssaScope, "compiler-lambda-scope");
     let paramCount = 0, requiredCount, optionalFormsVec = [];
     for (; moreList(params); ++paramCount, params = params[REST]) {
@@ -3156,7 +3172,7 @@ export function createInstance(schemeOpts = {}) {
       ssaParamStr += `${delim}...${ssaRestParam}`;
     let ssaScopeTmp = newTemp("tmp_scope");
     scopeLines.push(emit(`let ${ssaScopeTmp} = scope;`));
-    emit(`function ${ssaFunction}(${ssaParamStr}) { // COMPILED ${displayName}, req: ${requiredCount}, eval: ${evalCount === MAX_INTEGER ? 'MAX_INTEGER' : evalCount}`);
+    emit(`function ${ssaFunction}(${ssaParamStr}) { // COMPILED ${displayName}, req: ${requiredCount}, eval: ${evalCount === MAX_INTEGER ? '*' : evalCount}`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
     let lambdaStrs = string(lambda).split('\n');
@@ -3188,7 +3204,7 @@ export function createInstance(schemeOpts = {}) {
       ssaResult = compileEval(forms[FIRST], ssaScope, tools);
     if (ssaScope.dynamicScopeUsed)
       originalSsaScope.dynamicScopeUsed = true;
-    if (!ssaScope.dynamicScopeUsed || (paramCount === 0 && !restParam))
+    if (!ssaScope.dynamicScopeUsed)
       tools.deleteEmitted(scopeLines);
     use(ssaResult);
     emit(`return ${ssaResult};`);
@@ -3200,20 +3216,24 @@ export function createInstance(schemeOpts = {}) {
       body = cons(evalCount, body);
     }
     let closureForm = cons(closureAtom, cons("PATCH", body));
-    decorateCompiledClosure(ssaFunction, displayName, closureForm, requiredCount, evalCount, tools);
+    let fnInfo = { requiresScope: tools.usesDymanicScope, requiredCount, evalCount, params: ssaParamv, restParam: ssaRestParam };
+    decorateCompiledClosure(ssaFunction, displayName, closureForm, fnInfo, tools);
+    tools.usesDymanicScope = saveUsesDynamicScope;
+    tools.scopeLines = saveScopeLines;
     return ssaFunction;
   }
 
   function throwBadCompiledLambda(lambda, msg) { throw new SchemeCompileError(`Bad lambda ${lambda}` + (msg ? `, ${msg}` : '')) }
   
-  function decorateCompiledClosure(ssaClosure, displayName, closureForm, requiredCount, evalCount, tools) {
+  function decorateCompiledClosure(ssaClosure, displayName, closureForm, fnInfo, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind;
+    let requiredCount = fnInfo.requiredCount, evalCount = fnInfo.evalCount;
     let ssaClosureForm = use(bind(closureForm, "closureForm"));
-    let ssaParameter_descriptor = use(bind(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR"))
     let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
     let evalCountStr = evalCount === MAX_INTEGER ? "MAX_INTEGER" : String(evalCount);
     emit(`// evalCount: ${evalCountStr}, requiredCount: ${requiredCount}`)
-    emit(`${ssaClosure}[${ssaParameter_descriptor}] = ${parameterDescriptor};`);
+    emit(`${ssaClosure}[PARAMETER_DESCRIPTOR] = ${parameterDescriptor};`);
+    emit(`${ssaClosure}[COMPILE_INFO] = ${use(bind(fnInfo, "COMPILE_INFO"))};`);
     // The function is simultaneously a Scheme closure object
     let closureStr = string(closureForm);
     for (let str of closureStr.split('\n'))
@@ -3226,11 +3246,13 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function redecorateCompiledClosure(ssaToFn, ssaFromFn, emit) {
+    emit(`${ssaToFn}[COMPILE_INFO] = ${ssaFromFn}[COMPILE_INFO];`);
+    emit(`${ssaToFn}[PARAMETER_DESCRIPTOR] = ${ssaFromFn}[PARAMETER_DESCRIPTOR];`);
     emit(`${ssaToFn}[FIRST] = ${ssaFromFn}[FIRST];`);
     emit(`${ssaToFn}[REST] = ${ssaFromFn}[REST];`);
     emit(`${ssaToFn}[COMPILED] = ${ssaFromFn}[COMPILED];`);
     // Mark object as a list, a pair, and a closure.
-    emit(`${ssaToFn}[LIST] = ${ssaToFn}[ITERATE_AS_LIST] = ${ssaToFn}[CLOSURE_ATOM] = true;`);
+    emit(`${ssaToFn}[LIST] = ${ssaToFn}[ITERATE_AS_LIST] = ${ssaToFn}[MORELIST]  = ${ssaToFn}[CLOSURE_ATOM] = true;`);
   }
   
   const JS_IDENT_REPLACEMENTS = {

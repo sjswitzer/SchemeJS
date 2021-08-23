@@ -521,7 +521,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (apropos substring) -- Returns a list of all atoms containing the given substring in their names
-  defineGlobalSymbol("apropos", apropos, { usesDynamicScope: true, dontInline: true });
+  defineGlobalSymbol("apropos", apropos, { requiresScope: true, dontInline: true });
   function apropos(substring) {
     if (!substring) substring = "";
     // Normalize to upper case because some localles have squirreley
