@@ -766,6 +766,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
+      if (this[RETURNS_SYMBOL]) return;
     }
     return true;
   }
@@ -811,6 +812,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
+      if (this[RETURNS_SYMBOL]) return;
     }
     return true;
   }
@@ -826,6 +828,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
+      if (this[RETURNS_SYMBOL]) return;
     }
     return true;
   }
@@ -841,6 +844,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
+      if (this[RETURNS_SYMBOL]) return;
     }
     return true;
   }
@@ -856,6 +860,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
+      if (this[RETURNS_SYMBOL]) return;
     }
     return true;
   }
@@ -872,6 +877,7 @@ export function createInstance(schemeOpts = {}) {
       if (i >= restLength) break;
       a = b;
       b = _eval(rest[i++], this);
+      if (this[RETURNS_SYMBOL]) return;
     }
     return true;
   }
@@ -905,7 +911,8 @@ export function createInstance(schemeOpts = {}) {
   function and(...forms) {
     let val = true;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
-     val = _eval(forms[i], this);
+      val = _eval(forms[i], this);
+      if (this[RETURNS_SYMBOL]) return;
       if (!schemeTrue(val)) return val;
     }
     return val;
@@ -936,6 +943,7 @@ export function createInstance(schemeOpts = {}) {
     let val = false;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       val = _eval(forms[i], this);
+      if (this[RETURNS_SYMBOL]) return;
       if (schemeTrue(val)) return val;
     }
     return val;
@@ -949,6 +957,7 @@ export function createInstance(schemeOpts = {}) {
     let val = undefined;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       val = _eval(forms[i], this);
+      if (this[RETURNS_SYMBOL]) return;
       if (val != null) return val;
     }
     return val;
@@ -1205,8 +1214,10 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("begin", begin, { evalArgs: 0, compileHook: begin_hook, group: "core" });
   function begin(...forms) {
     let res = NIL;
-    for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
+    for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       res = _eval(forms[i], this);
+      if (this[RETURNS_SYMBOL]) return;
+    }
     return res;
   }
   function begin_hook(args, ssaScope, tools) {
@@ -1493,13 +1504,18 @@ export function createInstance(schemeOpts = {}) {
       if (typeof boundVar !== 'symbol')
         throw new SchemeEvalError(`Bad binding ${string(binding)}`);
       let val = NIL;
-      for ( ; moreList(bindingForms); bindingForms = bindingForms[REST])
+      for ( ; moreList(bindingForms); bindingForms = bindingForms[REST]) {
         val = _eval(bindingForms[FIRST], scope);
+        if (scope[RETURNS_SYMBOL]) return;
+      }
       scope[boundVar] = val;
     }
     let res = _eval(form, scope);
-    for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
+    if (scope[RETURNS_SYMBOL]) return;
+    for (let i = 0, formsLength = forms.length; i < formsLength ; ++i) {
       res = _eval(forms[i], scope);
+      if (scope[RETURNS_SYMBOL]) return;
+    }
     return res;
   }
   function letrec_hook(args, ssaScope, tools) {
@@ -1554,7 +1570,8 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("for-in", for_in, { evalArgs: 0, compileHook: for_in_hook, group: "core", schemeOnly: true });
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
-    obj = _eval(obj, scope)
+    obj = _eval(obj, scope);
+    if (scope[RETURNS_SYMBOL]) return;
     scope = newScope(this, "for-in-scope");
     let val = NIL;
     if (isIterable(obj)) {
@@ -1563,8 +1580,11 @@ export function createInstance(schemeOpts = {}) {
         scope[keySymbol] = index++;
         scope[valueSymbol] = value;
         val = _eval(form, scope);
-        for (let i = 0, formsLength = forms.length; i < formsLength ; ++i)
-          val = _eval(forms[i], scope);  
+        if (scope[RETURNS_SYMBOL]) return;
+        for (let i = 0, formsLength = forms.length; i < formsLength ; ++i) {
+          val = _eval(forms[i], scope);
+          if (scope[RETURNS_SYMBOL]) return;
+        }
       }
       return val;
     }
@@ -1573,8 +1593,11 @@ export function createInstance(schemeOpts = {}) {
       scope[keySymbol] = key;
       scope[valueSymbol] = value;
       val = _eval(form, scope);
-      for (let form of forms)
+      if (scope[RETURNS_SYMBOL]) return;
+      for (let form of forms) {
         val = _eval(form, scope);
+        if (scope[RETURNS_SYMBOL]) return;
+      }
     }
     return val;
   }
@@ -1628,14 +1651,18 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("for-of", for_of, { evalArgs: 0, compileHook: for_of_hook, group: "core", schemeOnly: true });
   function for_of(valueSymbol, obj, form, ...forms) {
     let scope = this;
-    obj = _eval(obj, scope)
+    obj = _eval(obj, scope);
+    if (scope[RETURNS_SYMBOL]) return;
     scope = newScope(this, "for-of-scope");
     let val = NIL;
     for (let value of obj) {
       scope[valueSymbol] = value;
       val = _eval(form, scope);
-      for (let form of forms)
+      if (scope[RETURNS_SYMBOL]) return;
+      for (let form of forms) {
         val = _eval(form, scope);
+        if (scope[RETURNS_SYMBOL]) return;
+      }
     }
     return val;
   }
@@ -1679,9 +1706,13 @@ export function createInstance(schemeOpts = {}) {
     let scope = this;
     let val = NIL;
     while (schemeTrue(_eval(predicate, scope))) {
+      if (scope[RETURNS_SYMBOL]) return;
       val = _eval(form, scope);
-      for (let form of forms)
+      if (scope[RETURNS_SYMBOL]) return;
+      for (let form of forms) {
         val = _eval(form, scope);
+        if (scope[RETURNS_SYMBOL]) return;
+      }
     }
     return val;
   }
@@ -1713,8 +1744,11 @@ export function createInstance(schemeOpts = {}) {
   defineGlobalSymbol("setq", setq, { evalArgs: 0, compileHook: setq_hook, group: "core" }, "setq");
   function setq(symbol, valueForm, ...values) {
     let value = _eval(valueForm, this);
-    for (let valueForm of values)
+    if (this[RETURNS_SYMBOL]) return;
+    for (let valueForm of values) {
       value = _eval(valueForm, this);
+      if (this[RETURNS_SYMBOL]) return;
+    }
     let result = setSym(symbol, value, this);
     return result;
   }
@@ -1776,13 +1810,18 @@ export function createInstance(schemeOpts = {}) {
     let val;
     try {
       val = _eval(form, this);
-      for (let i = 0, formsLength = forms.length; i < formsLength; ++i)
+      if (this[RETURNS_SYMBOL]) return;
+      for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
         val = _eval(forms[i], this);
+        if (this[RETURNS_SYMBOL]) return;
+      }
     } catch (e) {
       let scope = newScope(this, "js-catch-scope");
       scope[catchVar] = e;
-      for ( ; moreList(catchForms); catchForms = catchForms[REST])
+      for ( ; moreList(catchForms); catchForms = catchForms[REST]) {
         val = _eval(catchForms[FIRST], scope);
+        if (scope[RETURNS_SYMBOL]) return;
+      }
     }
     return val;
   }
@@ -1837,6 +1876,7 @@ export function createInstance(schemeOpts = {}) {
       value = lambda.call(scope, params, value, ...rest);
     } else {
       value = _eval(value, scope);
+      if (scope[RETURNS_SYMBOL]) return;
     }
     if (typeof name === 'string') name = Atom(name);
     // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know!)
@@ -1884,6 +1924,7 @@ export function createInstance(schemeOpts = {}) {
         return form[REST][FIRST];
       }
       fn = _eval(fn, scope);
+      if (scope[RETURNS_SYMBOL]) return;
       if (typeof fn !== 'function') throwBadForm();
       // See makeParameterDescriptor for the truth, but
       //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
@@ -1901,13 +1942,16 @@ export function createInstance(schemeOpts = {}) {
       let argv = new Array(argCount);
       for (let i = 0; iterateAsList(args); ++i, args = args[REST]) {
         let item = args[FIRST];
-        if (i < evalCount)
+        if (i < evalCount) {
           item = _eval(item, scope);
+          if (scope[RETURNS_SYMBOL]) return;
+        }
         argv[i] = item;
       }
       if (!isNil(args)) {
         for (let item of args) {
           item = _eval(item, scope);
+          if (scope[RETURNS_SYMBOL]) return;
           argv[i] = item;
         }
       }
@@ -2004,8 +2048,10 @@ export function createInstance(schemeOpts = {}) {
     if (form !== null && typeof form === 'object') {
       if (isArray(form)) {
         let res = [];
-        for (let element of form)
+        for (let element of form) {
           res.push(_eval(element, scope));
+          if (scope[RETURNS_SYMBOL]) return;
+        }
         return res;
       } else {
         let res = {};
@@ -2015,8 +2061,10 @@ export function createInstance(schemeOpts = {}) {
             key = value[0];
             value = value[1];
             key = _eval(key, scope);
+            if (scope[RETURNS_SYMBOL]) return;
           }
           value = _eval(value, scope);
+          if (scope[RETURNS_SYMBOL]) return;
           res[key] = value;
         }
         return res;
@@ -2154,6 +2202,7 @@ export function createInstance(schemeOpts = {}) {
           if (optionalForms) {
           for ( ; moreList(optionalForms); optionalForms = optionalForms[REST])
             arg = _eval(optionalForms[FIRST], scope);
+            if (scope[RETURNS_SYMBOL]) return;
           }
         }
         scope[param] = arg;
