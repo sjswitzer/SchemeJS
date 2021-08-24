@@ -2196,8 +2196,8 @@
         function stash_point(x, y) {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
-          schemeCanvasWidget.stashX = x;
-          schemeCanvasWidget.stashY = y;
+          schemeCanvasWidget._stashX = x;
+          schemeCanvasWidget._stashY = y;
           return ctx;
         };
         function stash_point_hook(args, ssaScope, tools) {
@@ -2208,8 +2208,8 @@
           let ssaContextToSchemeWidget = use(bind(contextToSchemeCanvasWidget, "contextToSchemeWidget"));
           let ssaWidget = newTemp("canvas_widget");
           emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
-          emit(`${ssaWidget}.stashX = ${args[0] ?? undefined};`);
-          emit(`${ssaWidget}.stashY = ${args[1] ?? undefined};`);
+          emit(`${ssaWidget}._stashX = ${args[0] ?? undefined};`);
+          emit(`${ssaWidget}._stashY = ${args[1] ?? undefined};`);
           return ssaCRC;
         }
 
@@ -2218,8 +2218,8 @@
         function move_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
-          if (schemeCanvasWidget && schemeCanvasWidget.stashX !== undefined && schemeCanvasWidget.stashY !== undefined)
-          ctx.moveTo(schemeCanvasWidget.stashX, schemeCanvasWidget.stashY);
+          if (schemeCanvasWidget && schemeCanvasWidget._stashX !== undefined && schemeCanvasWidget._stashY !== undefined)
+          ctx.moveTo(schemeCanvasWidget._stashX, schemeCanvasWidget._stashY);
           return ctx;
         };
         function MoveLineStashHook(op) {
@@ -2231,7 +2231,7 @@
             let ssaContextToSchemeWidget = use(bind(contextToSchemeCanvasWidget, "contextToSchemeWidget"));
             let ssaWidget = newTemp("canvas_widget"), ssaX = newTemp('stashedX'),ssaY = newTemp('stashedY');
             emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
-            emit(`let ${ssaX} = ${ssaWidget}.stashX, ${ssaY} = ${ssaWidget}.stashY;`);
+            emit(`let ${ssaX} = ${ssaWidget}._stashX, ${ssaY} = ${ssaWidget}._stashY;`);
             emit(`if (${ssaX} !== undefined && ${ssaY} !== undefined) ${ssaCRC}.${op}(${ssaX}, ${ssaY});`);
             return ssaCRC;
           }
@@ -2242,8 +2242,8 @@
         function line_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
-          if (schemeCanvasWidget && schemeCanvasWidget.stashX !== undefined && schemeCanvasWidget.stashY !== undefined)
-          ctx.lineTo(schemeCanvasWidget.stashX, schemeCanvasWidget.stashY);
+          if (schemeCanvasWidget && schemeCanvasWidget._stashX !== undefined && schemeCanvasWidget._stashY !== undefined)
+          ctx.lineTo(schemeCanvasWidget._stashX, schemeCanvasWidget._stashY);
           return ctx;
         };
 
