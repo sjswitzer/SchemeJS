@@ -77,8 +77,7 @@
 (@= lissajous-canvas 'draw lissajous)         ;; Set the draw function
 (@= lissajous-canvas 'animate true)           ;; Enable animation
 (@! lissajous-canvas 'show 300 30)            ;; Move the canvas widget from its default position
-(@! lissajous-canvas 'backing-buffer 600 600) ;; Use an offscreen-backing buffer
-(@= lissajous-canvas 'clear-canvas false)     ;; And don't clear the canvas before re-drawing
+(@= lissajous-canvas 'clear-canvas false)     ;; Don't clear the canvas before re-drawing
 (@= lissajous-canvas 'clear-color "black")    ;; Well, except initially
 
 ;; What it looks like compiled

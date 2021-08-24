@@ -193,7 +193,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("canvas_height", canvas_height, { compileHook: CanvasPropertyHook('height') });
   function canvas_height() {
     let ctx = this[gfxContextAtom];
-    return ctx.canvas.height;
+    return Number(ctx.canvas.height);
   };
 
   function CanvasPropertyHook(propName) {

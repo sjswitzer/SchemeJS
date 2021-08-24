@@ -1720,7 +1720,7 @@
           showHelp(null);
       });
 
-      let gfxContextAtom, drawAtom, animateAtom, clearCanvasAtom, backingBufferAtom;
+      let gfxContextAtom, drawAtom, animateAtom, clearCanvasAtom;
       let showAtom, hideAtom, clearColorAtom;
       let xAtom, yAtom, widthAtom, heightAtom;
       let userMediaAtom;
@@ -1746,7 +1746,6 @@
         set clearCanvas(value) { this[clearCanvasAtom] = value }
         get clearColor() { this[clearColorAtom] }
         set clearColor(value) { this[clearColorAtom] = value }
-        backingBuffer(width, height = width) { return this[backingBufferAtom](width, height) }
         show(...params) { return this[showAtom](...params) }
         hide() { this[hideAtom]() }
       }
@@ -1754,7 +1753,7 @@
       function defineGraphicsFunctions() {
         let newCanvasX = 20, newCanvasY = 10;
         gfxContextAtom = Atom("gfx-context"), drawAtom = Atom("draw");
-        animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");
+        animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas");
         showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
         xAtom = Atom("x"), yAtom = Atom("y"), widthAtom = Atom("width"), heightAtom = Atom("height");
         userMediaAtom = Atom("user-media");
@@ -1775,7 +1774,6 @@
           let drawFn, _staleImage = false, animate = false, animating = false;
           let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
-          let backingBufferWidth = 0, backingBufferHeight = 0, backingCanvas, backing2dRenderingContext;
           let muteElement, volumeElement;
           let userMedia, userMediaElement, userMediaStream, audioContext;
           let audioSource, gainNode;
@@ -1858,10 +1856,6 @@
             set [clearColorAtom](value) { clearColor = value; forceClear = true; },
             get [Atom('fft-size')]() { return fftSize },
             set [Atom('fft-size')](value) { fftSize = Math.max(32, Math.min(32768, 2**Math.ceil(Math.log2(value)))) },
-            [backingBufferAtom](width, height = width) {
-              backingBufferWidth = width;
-              backingBufferHeight = height;
-            },
             [showAtom](x = optional, y = optional, width = optional, height = optional) {
               if (x !== undefined) this.x = x;
               if (y !== undefined) this.y = y;
@@ -1892,14 +1886,13 @@
               return timeDomainDataArray;
             },
             clear_canvas() {
-              let ctx = backing2dRenderingContext ?? canvas2dRenderingContext;
-              ctx.save();
+              canvas2dRenderingContext.save();
               if (clearColor) {
-                ctx.fillStyle = clearColor;
-                ctx.fillRect(0, 0, width, width);
+                canvas2dRenderingContext.fillStyle = clearColor;
+                canvas2dRenderingContext.fillRect(0, 0, width, width);
               } else {}
-                ctx.clearRect(0, 0, width, height);
-              ctx.restore();
+                canvas2dRenderingContext.clearRect(0, 0, width, height);
+              canvas2dRenderingContext.restore();
             },
           };
           Object.setPrototypeOf(schemeWidget, SchemeWidget.prototype);
@@ -1914,45 +1907,7 @@
             if (now - drawTime > 200 /* ms */) // Stale stash -- heuristic!
               schemeWidget.stashX = schemeWidget.stashY = undefined;
             drawTime = now;
-            let renderingContext = canvas2dRenderingContext;
-            let canvasWidth = canvasElement.width, canvasHeight = canvasElement.height;
-            // If we're using a backing buffer make sure it (a) exists and (b) is big enough
-            if (backingBufferWidth > 0 && backingBufferHeight > 0) {
-              let neededWidth = backingBufferWidth > canvasWidth ? backingBufferWidth : canvasWidth;
-              let neededHeight = backingBufferHeight > canvasHeight ? backingBufferHeight : canvasHeight;
-              let oldBackingCanvas = backingCanvas, oldBacking2dRenderingContext = backing2dRenderingContext;
-              if (!oldBackingCanvas || neededWidth !== oldBackingCanvas.width || neededHeight !== oldBackingCanvas.height) {
-                backingCanvas = createElement('canvas');
-                backingCanvas.width = neededWidth;
-                backingCanvas.height = neededHeight;
-                backing2dRenderingContext = backingCanvas.getContext('2d');
-                contextToSchemeWidgetMap.set(backing2dRenderingContext, schemeWidget);
-                // Clear to the clearColor, if any
-                if (clearColor) {
-                  backing2dRenderingContext.save();
-                  backing2dRenderingContext.fillStyle = clearColor;
-                  backing2dRenderingContext.fillRect(0, 0, neededWidth, neededHeight);
-                  backing2dRenderingContext.restore();
-                }
-                // Transfer old contents to the new buffer
-                if (oldBackingCanvas) {
-                  let w = oldBackingCanvas.width, h = oldBackingCanvas.height;
-                  if (neededWidth < w) w = neededWidth;
-                  if (neededHeight < h) h = neededHeight;
-                  backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0, w, h, 0, 0, w, h);
-                  contextToSchemeWidgetMap.delete(oldBacking2dRenderingContext);
-                } else {
-                  let w = canvasElement.width, h = canvasElement.height;
-                  if (neededWidth < w) w = neededWidth;
-                  if (neededHeight < h) h = neededHeight;
-                  backing2dRenderingContext.drawImage(canvasElement, 0, 0, w, h, 0, 0, w, h);
-                }
-              }
-              renderingContext = backing2dRenderingContext;
-            } else {
-              backingCanvas = backing2dRenderingContext = undefined;
-            }
-            renderingContext.resetTransform();
+            canvas2dRenderingContext.resetTransform();
             // The spec says there's supposed to be a reset method, but MDN
             // doesn't mention it and, emperically, it doesn't exist (yet?).
             // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
@@ -1960,23 +1915,21 @@
             // So instead, pop a buncha renderingContexts, reset the
             // transform and, optionally clear the screen
             for (let i = 0; i < 20; ++i);
-              renderingContext.restore();
-            renderingContext.save();  // So we can easily restore context (just above)
+              canvas2dRenderingContext.restore();
+            canvas2dRenderingContext.save();  // So we can easily restore context (just above)
             if (clearCanvasMode || forceClear) {
               forceClear = false;
               if (clearColor) {
-                renderingContext.save();
-                renderingContext.fillStyle = clearColor;
-                renderingContext.fillRect(0, 0, canvasWidth, canvasHeight);
-                renderingContext.restore();
+                canvas2dRenderingContext.save();
+                canvas2dRenderingContext.fillStyle = clearColor;
+                canvas2dRenderingContext.fillRect(0, 0, canvasWidth, canvasHeight);
+                canvas2dRenderingContext.restore();
               } else {
-                renderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
+                canvas2dRenderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
               }
             }
-            renderingContext.beginPath();  // Make sure no path parts hanging around
-            drawFn(renderingContext, tickCount++);
-            if (backingCanvas)
-              canvas2dRenderingContext.drawImage(backingCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, canvasWidth, canvasHeight);
+            canvas2dRenderingContext.beginPath();  // Make sure no path parts hanging around
+            drawFn(canvas2dRenderingContext, tickCount++);
             _staleImage = false;
           }
           function redraw() {
