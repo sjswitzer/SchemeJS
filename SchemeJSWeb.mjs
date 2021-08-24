@@ -184,7 +184,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("restore_context", restore_context, { compileHook: CanvasRenderingContextFunctionHook('restore') });
   function restore_context() { return CanvasRenderingContextFunction(this, ctx => ctx.restore()) }
 
-  exportAPI("canvas_width", canvas_width, { compileHook: CanvasRenderingContextPropertyHook('canvaswidth') });
+  exportAPI("canvas_width", canvas_width, { compileHook: CanvasRenderingContextPropertyHook('canvas.width') });
   function canvas_width() {
     let ctx = this[gfxContextAtom];
     return ctx.canvas.width;
