@@ -2012,7 +2012,7 @@
               let muteElement = this._muteElement = userMediaElement.querySelector(".mute-toggle");
               muteElement.addEventListener('input', _ => { this._setGain() });
               let volumeElement = this._volumeElement = userMediaElement.querySelector(".volume");
-              volumeElement.addEventListener('input',  _ => { setGain()});
+              volumeElement.addEventListener('input',  _ => { this._setGain()});
               this._userMediaStream = this._audioSource = this._gainNode = undefined;
               let audioContext = this._audioContext= new AudioContext();
               let that = this;
