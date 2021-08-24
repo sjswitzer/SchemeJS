@@ -1391,7 +1391,7 @@
         SchemeParseIncompleteError = globalScope.SchemeParseIncompleteError ?? required();
         SchemeEvalError = globalScope.SchemeEvalError ?? required();
         NIL = globalScope.NIL ?? required();
-        BOTTOM = globalScope.BOTTOM ?? required();
+        BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
         string = globalScope.string ?? required();
         Atom = globalScope.Atom ?? required();
         newScope = globalScope.newScope ?? required();

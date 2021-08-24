@@ -45,7 +45,7 @@ export function run(opts = {}) {
   const list = globalScope.list ?? required();
   const Atom = globalScope.Atom ?? required();
   const compile_lambda = globalScope.compile_lambda ?? required();
-  const BOTTOM = globalScope.BOTTOM ?? required()
+  const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   const justTestJIT = opts.justTestJIT;
   function required() { throw "required" }
 
@@ -396,16 +396,16 @@ export function run(opts = {}) {
     EXPECT(` (?? (void) 1) `, 1);
     EXPECT(` (?? null (void) nil false 2 3) `, NIL); 
 
-    EXPECT(` (begin) `, NIL);
+    EXPECT(` (begin) `, BOTTOM);
     EXPECT(` (begin 1) `, 1);
     EXPECT(` (begin 1 2 3) `, 3);
     EXPECT(` (begin (+ 3 4) (* 3 4)) `, 12);
-    EXPECT(` (prog1) `, NIL);
+    EXPECT(` (prog1) `, BOTTOM);
     EXPECT(` (prog1 1) `, 1);
     EXPECT(` (prog1 1 2 3) `, 1);
     EXPECT(` (prog1 (+ 3 4) (* 3 4)) `, 7);
 
-    EXPECT(` (cond) `, NIL);
+    EXPECT(` (cond) `, BOTTOM);
     EXPECT_ERROR(` (cond a) `, isCompileOrEvalError);
     EXPECT_ERROR(` (cond 1) `, isCompileOrEvalError);
     EXPECT_ERROR(` (cond ()) `, isCompileOrEvalError);
@@ -426,11 +426,11 @@ export function run(opts = {}) {
     EXPECT(` (append '(a b c) '[d e f] "ghi") ` , ` '(a b c d e f "g" "h" "i") `);
     EXPECT_ERROR(` (last) `, TypeError);
     EXPECT_ERROR(` (last 'a) `, TypeError);
-    EXPECT(` (last ()) `, NIL);  // XXX whay should this really do?
+    EXPECT(` (last ()) `, BOTTOM);  // XXX whay should this really do?
     EXPECT(` (last '(a)) `, ` 'a `);
     EXPECT(` (last '(a b)) `, ` 'b `);
     EXPECT(` (last '(a b c)) `, ` 'c `);
-    EXPECT(` (last '[]) `, NIL);
+    EXPECT(` (last '[]) `, BOTTOM);
     EXPECT(` (last '[a]) `, ` 'a `);
     EXPECT(` (last '[a b]) `, ` 'b `);
     EXPECT(` (last '[a b c]) `, ` 'c `);

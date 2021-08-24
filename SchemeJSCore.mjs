@@ -1161,7 +1161,7 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("list", list, { compileHook: list_hook });
   function list(...elements) {
-    let val = BOTTOM;
+    let val = NIL;
     for (let i = elements.length; i > 0; --i)
       val = new Pair(elements[i-1], val);
     return val;
@@ -1171,7 +1171,7 @@ export function createInstance(schemeOpts = {}) {
     // The compiler can inline the list function just fine, but it's better to do it this way
     // because no argument array needs to be constructed.
     let ssaResult = newTemp("list");
-    emit(`let ${ssaResult} = ${BOTTOM};`);
+    emit(`let ${ssaResult} = NIL;`);
     for (let i = args.length; i > 0; --i)
       emit(`${ssaResult} = new Pair(${args[i-1]}, ${ssaResult});`)
     return ssaResult;

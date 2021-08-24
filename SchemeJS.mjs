@@ -63,7 +63,7 @@ export function createInstance(schemeOpts = {}) {
   const SchemeCompileError = globalScope.SchemeCompileError ?? required();
   const EVALUATE_KEY_VALUE_SYMBOL = globalScope.EVALUATE_KEY_VALUE_SYMBOL ?? required();
   const ESCAPE_STRINGS = globalScope.ESCAPE_STRINGS ?? required();
-  const BOTTOM = globalScope.BOTTOM ?? required()
+  const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   function required() { throw "required" }
 
   //
