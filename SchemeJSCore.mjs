@@ -210,14 +210,18 @@ export function createInstance(schemeOpts = {}) {
   // Thirdly, Map, Set, and TypedArray(s) are lists (subject to standardIteratorsAreLists).
   // For some reason, WeakMap and WeakSet do not currently (Aug 2021) support iteration.
   //
+  let stdIterables = [Map, Set,
+    Int8Array, Uint8Array, Uint8ClampedArray,
+    Int16Array, Uint16Array,
+    Int32Array, Uint32Array,
+    Float32Array, Float64Array,
+  ]
+  // Safari doesn't yet support (Aug 2021)
+  if (typeof BigInt64Array === 'object') stdIterables.push(BigInt64Array);
+  if (typeof BigUint64Array === 'object') stdIterables.push(BigUint64Array);
+
   if (standardIteratorsAreLists) {
-    for (let cls of [Map, Set,
-      Int8Array, Uint8Array, Uint8ClampedArray,
-      Int16Array, Uint16Array,
-      Int32Array, Uint32Array,
-      Float32Array, Float64Array,
-      BigInt64Array, BigUint64Array,
-    ])
+    for (let cls of stdIterables)
       monkeyPatchListProtocolForIterable(cls.prototype);
   }
 
@@ -468,7 +472,7 @@ export function createInstance(schemeOpts = {}) {
     names = [name, ...names];
     for (let i = 0; i < names.length; ++i)
       names[i] = Atom(names[i]);
-    opts.names = names;
+    opts.atoms = names;
     opts.value = value;
     for (name of names) {
       globalScope[name] = value;
@@ -1523,7 +1527,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (for-in key-symbol value-symbol obj form forms...)
-  exportAPI("for-in", for_in, { evalArgs: 0, compileHook: for_in_hook });
+  exportAPI("for_in", for_in, { evalArgs: 0, compileHook: for_in_hook });
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope);
@@ -1604,7 +1608,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (for-of value-symbol obj form forms...)
-  exportAPI("for-of", for_of, { evalArgs: 0, compileHook: for_of_hook });
+  exportAPI("for_of", for_of, { evalArgs: 0, compileHook: for_of_hook });
   function for_of(valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope);
@@ -2656,7 +2660,7 @@ export function createInstance(schemeOpts = {}) {
     let params = nameAndParams[REST];
     if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
     let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
-    let compiledFunction = compile_lambda.call(this, name, name.description, lambda, { dontInline: true });
+    let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
     namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
     // Make available to JavaScript as well
@@ -2899,8 +2903,8 @@ export function createInstance(schemeOpts = {}) {
       if (!functionDescriptor) {
         use(ssaFunction);
         let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
-        let ssaResult = newTemp(fName+'_result');
-        let ssaArgList = use(bind(args, `${fName}_args`));
+        let ssaResult = newTemp(`${fName}_result`);
+        let ssaArgList = use(bind(args));
         emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
         return ssaResult;
       }

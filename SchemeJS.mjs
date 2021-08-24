@@ -1651,6 +1651,30 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(catch form ...)`, 
       blurb: `TBD`
     });
+    defineBinding("for-in", "for_in", {
+      group: "main", sample: `(for-in key value obj form ...)`, 
+      blurb: `TBD`
+    });
+    defineBinding("for-of", "for_of", {
+      group: "main", sample: `(for-of value obj form ...)`, 
+      blurb: `TBD`
+    });
+    defineBinding("require", "require", {
+      group: "main", sample: `(require "filename")`, 
+      blurb: `TBD`
+    });
+    defineBinding("load", "load", {
+      group: "main", sample: `(load "filename")`, 
+      blurb: `TBD`
+    });
+    defineBinding("println", "println", {
+      group: "main", sample: `(println "string")`, 
+      blurb: `TBD`
+    });
+    defineBinding("to-string", "string", {
+      group: "main", sample: `(to-strin gobj)`, 
+      blurb: `Returns a string representation of the object`
+    });
     defineBinding("append", "append", {
       group: "list", sample: `(append list ...)`, 
       blurb: `Appends the given lists.`

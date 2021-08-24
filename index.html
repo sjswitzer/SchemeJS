@@ -1384,13 +1384,16 @@
         newScope = globalScope.newScope ?? required();
         exportAPI = globalScope.exportAPI ?? required();
         defineBinding = globalScope.defineBinding ?? required();
-        defineGraphicsFunctions() ?? required();
-        let loadAtom = Atom("load") ?? required();
-        originalLoad = globalScope[loadAtom] ?? required();
-        globalScope[loadAtom] = load ?? required();
         WS = globalScope.WS ?? required();
         NL = globalScope.NL ?? required();
         function required() { throw "required" }
+
+        let loadAtom = Atom("load");
+        originalLoad = globalScope[loadAtom];
+        globalScope[loadAtom] = load;
+
+        defineGraphicsFunctions();
+
         buildBuiltinHelp(globalScope);
 
         // The idea here is to let the handleInput exacute after the keypress has been
@@ -1573,41 +1576,18 @@
 
       function buildBuiltinHelp(globalScope) {
         const string = globalScope.string;
-        let helpGroups = globalScope._helpgroups_, groups = {};
-        // Invert by group on atom value
-        for (let atom of Object.getOwnPropertySymbols(helpGroups)) {
-          let value = globalScope[atom], helpGroup = helpGroups[atom];
-          if (value === undefined) continue;
-          let groupMap = groups[helpGroup];
-          if (!groupMap)
-            groupMap = groups[helpGroup] = new Map();
-          let valueObj = groupMap.get(value);
-          if (!valueObj)
-            groupMap.set(value, valueObj = { atoms: [], jsNames: [] });
-          valueObj.atoms.push(atom);
-        }
-        // Add JavaScript names
-        for (let jsName of Object.getOwnPropertyNames(helpGroups)) {
-          let value = globalScope[jsName], helpGroup = helpGroups[jsName];
-          if (value === undefined) continue;
-          let groupMap = groups[helpGroup];
-          if (!groupMap) continue;
-          let valueObj = groupMap.get(value);
-          if (!valueObj) continue
-          valueObj.jsNames.push(jsName);
-        }
-        // Organize into a symbol table by group then sort on a transformation of the first
-        // atom defined. "groups" is now: groups[groupName] = (sorted)[{ key, atoms: [], jsNames: [] }];
-        for (let helpGroup in groups) {
-          let groupMap = groups[helpGroup];
-          let symtab = [];
-          for (let [map_key_which_is_the_value, valueObj] of groupMap.entries()) {
-            valueObj.key = keyFor(valueObj.atoms[0]);
-            valueObj.value = map_key_which_is_the_value;
-            symtab.push(valueObj);
-          }
-          symtab.sort((a, b) => a.key < b.key ? -1 : 1);
-          groups[helpGroup] = symtab;
+        let helpInfo = globalScope._helpInfo_, groups = {}, jsAPI = helpInfo.jsAPI;
+        let jsAPIMap = new Map();
+        // Invert the JS API names
+        for (let jsName in jsAPI)
+          jsAPIMap.set(jsAPI[jsName], jsName);
+        // Invert by group on atom sort key
+        for (let atom of Object.getOwnPropertySymbols(helpInfo)) {
+          let info = helpInfo[atom], helpGroup = info.group;
+          let groupDict = groups[helpGroup];
+          if (!groupDict)
+            groupDict = groups[helpGroup] = {};
+          groupDict[keyFor(atom)] = info;
         }
         for (let helpGroup in groups) {
           let symtab = groups[helpGroup];
@@ -1616,8 +1596,12 @@
             console.error("Missing help group", helpGroup);
             continue;
           }
-          for (let { atoms, jsNames, value } of symtab) {
-            for (let atom of atoms)
+          for (let key in symtab) {
+            let info = symtab[key];
+            let atoms = info.atoms;
+            let atom = atoms[0];
+            let value = info.value;
+            let jsName = jsAPIMap.get(value);
             if (helpGroup === "imported") {
               let atomDesc = atom.description, anchor = createElement('a', null, atomDesc);
               let href = `https://developer.mozilla.org/docs/Web/API/${atomDesc}`;
@@ -1632,12 +1616,8 @@
             } else {
               helpElement.appendChild(createElement('dt', null, atom.description));
             }
-            let dd;
-            for (let atom of atoms) {
-              let elementId = "defn-" + atom.description;
-              dd = document.getElementById(elementId);
-              if (dd) break;
-            }
+            let elementId = "defn-" + atom.description;
+            let dd = document.getElementById(elementId);
             if (!dd) {
               dd = createElement('dd');
               dd.appendChild(createElement('span', 'tbd', `TBD defn-${atoms[0].description}`));
@@ -1647,17 +1627,15 @@
               dd.appendChild(createElement('p', 'impl', string(value)));
             else
               dd.appendChild(createElement('p', 'value', string(value)));
-            if (jsNames.length > 0) {
+            if (jsName) {
               let jsNamesElement = createElement('p', 'js-names');
               dd.appendChild(jsNamesElement);
-              for (let jsName of jsNames)
-                jsNamesElement.appendChild(createElement('span', 'js-name', jsName));
+              jsNamesElement.appendChild(createElement('span', 'js-name', jsName));
             }
           }
         }
-
         function keyFor(atom) {
-          let key = atom.description, alpha = "abcdefghijklmnopqrstuvwxyz", stripPrefixSyms = "*#!?";
+          let key = atom.description, alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", stripPrefixSyms = "*#!?";
           key = key.toUpperCase();
           // Strip certain special symbols before alpha (mostly for *catch and *throw)
           if (stripPrefixSyms.includes(key[0]) && alpha.includes(key[1]))
@@ -2123,11 +2101,15 @@
         defineBinding("gfx-save", "gfx_save", { group: "web-gfx" });
         function gfx_save(...forms) {
           let scope = this, canvasRenderingContext = scope[gfxContextAtom];
+          let RETURN_SYMBOL = globalScope.RETURN_SYMBOL;
+          if (!RETURN_SYMBOL) throw "required symbol"
           canvasRenderingContext.save();
           try {
             let res = NIL;
-            for (let form of forms)
-              res = scope.eval(form);
+            for (let form of forms) {
+              res = scope._eval(form);
+              if (this[RETURN_SYMBOL]) return;
+            }
             return res;
           } finally {
             canvasRenderingContext.restore();
@@ -2658,7 +2640,7 @@
           showInput(inputText, loadPath, loadLine, expr, varNo);
 
           // Eval
-          let value = globalScope.eval(expr, globalScope);
+          let value = globalScope._eval(expr, globalScope);
 
           // Show results and save in variables for later reuse
           showResult(value, varNo);
