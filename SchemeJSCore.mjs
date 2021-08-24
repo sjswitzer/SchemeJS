@@ -1321,7 +1321,7 @@ export function createInstance(schemeOpts = {}) {
   LazyRestList.prototype[LIST] = true;
   LazyRestList.prototype[LAZYREST] = true;
   LazyRestList.prototype[ITERATE_AS_LIST] = true;
-  LazyRestList.prototype[MORELIST] = true;
+  LazyRestList.prototype[MORELIST] = true;  // TODO: this isn't right at the end
 
   class LazyFirstRestList {
     [LAZYFIRST]; [LAZYREST];
@@ -1358,7 +1358,7 @@ export function createInstance(schemeOpts = {}) {
   LazyFirstRestList.prototype[LAZYFIRST] = true;
   LazyFirstRestList.prototype[LAZYREST] = true;
   LazyFirstRestList.prototype[ITERATE_AS_LIST] = true;
-  LazyFirstRestList.prototype[MORELIST] = true;
+  LazyFirstRestList.prototype[MORELIST] = true;  // TODO: this isn't right at the end.
   
   //
   // Doesn't even know if it's a cons cell or null yet!
@@ -1414,6 +1414,7 @@ export function createInstance(schemeOpts = {}) {
       this[REST] = cdr;
       return true;
     }
+    get [ITERATE_AS_LIST]() { return this[MORELIST] }
     toString() { return string(this) }
     [Symbol.iterator] = pairIterator();
   }
@@ -1421,7 +1422,6 @@ export function createInstance(schemeOpts = {}) {
   LazyIteratorList.prototype[SUPERLAZY] = true;
   LazyIteratorList.prototype[LAZYFIRST] = true;
   LazyIteratorList.prototype[LAZYREST] = true;
-  LazyIteratorList.prototype[ITERATE_AS_LIST] = true;
 
   exportAPI("list_view", list_view, { dontInline: true });
   function list_view(obj) {
