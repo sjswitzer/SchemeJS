@@ -48,7 +48,7 @@
   (fill-text "Ship Arriving Too Late to Save a Drowning Witch" 0.1 (canvas-width))
 )
 
-(def ship-canvas (canvas "Too Late!" 300 320))
+(def ship-canvas (create-canvas-widget "Too Late!" 300 320))
 (@= ship-canvas 'draw satltsadw)  ;; Set the draw function
 (@= ship-canvas 'animate true)    ;; Enable animation; otherwise just draws initially and when resized
 (@! ship-canvas 'show 20 20)      ;; Move the canvas widget from its default position
@@ -73,7 +73,7 @@
   (stroke-style "green") (line-width 1.5) (stroke)
 )
 
-(def lissajous-canvas (canvas "Lissajous"  300 300))
+(def lissajous-canvas (create-canvas-widget "Lissajous"  300 300))
 (@= lissajous-canvas 'draw lissajous)         ;; Set the draw function
 (@= lissajous-canvas 'animate true)           ;; Enable animation
 (@! lissajous-canvas 'show 300 30)            ;; Move the canvas widget from its default position
@@ -108,7 +108,7 @@
 (def r3 20)
 (def sc "magenta")
 
-(def spirograph-canvas (canvas "Spirograph"  300 300))
+(def spirograph-canvas (create-canvas-widget "Spirograph"  300 300))
 (@= spirograph-canvas 'draw spirograph)
 (@= spirograph-canvas 'animate true)
 (@! spirograph-canvas 'show 600 40)
@@ -118,7 +118,7 @@
 (println (String spirograph))
 
 ;; Here's a widget to scribble in interactively
-(def scribble (canvas "Scribble" 300))
+(def scribble (create-canvas-widget "Scribble" 300))
 
 ;; Set the gfx-context variable to the canvas's drawing context so you can now
 ;; enter drawing commands into the command window and draw interactively.

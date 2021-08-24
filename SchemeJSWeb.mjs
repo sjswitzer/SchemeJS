@@ -101,35 +101,6 @@ export function createInstance(schemeOpts = {}) {
     return ssaGfxContext;
   }
 
-  exportAPI("translate", translate, { compileHook: CanvasRenderingContextFunctionHook('translate') });
-  function translate(x, y) {
-    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
-    canvasRenderingContext.translate(x, y);
-    return canvasRenderingContext;
-  }
-
-  exportAPI("scale", scale, { compileHook: CanvasRenderingContextFunctionHook('scale', { dup1: true }) });
-  function scale(width, height = width) {
-    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
-    canvasRenderingContext.scale(width, height);
-    return canvasRenderingContext;
-  }
-
-  exportAPI("rotate", rotate, { compileHook: CanvasRenderingContextFunctionHook('rotate') });
-  function rotate(theta) {
-    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
-    canvasRenderingContext.rotate(theta);
-    return canvasRenderingContext;
-  }
-
-  // You probably shouldn't be using these (use gfx-save instead!),
-  // but for completeness...
-  exportAPI("save_context", save_context, { compileHook: CanvasRenderingContextFunctionHook('save') });
-  function save_context() { return CanvasRenderingContextFunction(this, ctx => ctx.save()) }
-
-  exportAPI("restore_context", restore_context, { compileHook: CanvasRenderingContextFunctionHook('restore') });
-  function restore_context() { return CanvasRenderingContextFunction(this, ctx => ctx.restore()) }
-
   function CanvasRenderingContextFunction(scope, fn) {
     let canvasRenderingContext = scope[gfxContextAtom];
     fn(canvasRenderingContext);
@@ -184,34 +155,46 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  exportAPI("canvas_width", canvas_width, { compileHook: CanvasPropertyHook('width') });
+  exportAPI("translate", translate, { compileHook: CanvasRenderingContextFunctionHook('translate') });
+  function translate(x, y) {
+    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
+    canvasRenderingContext.translate(x, y);
+    return canvasRenderingContext;
+  }
+
+  exportAPI("scale", scale, { compileHook: CanvasRenderingContextFunctionHook('scale', { dup1: true }) });
+  function scale(width, height = width) {
+    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
+    canvasRenderingContext.scale(width, height);
+    return canvasRenderingContext;
+  }
+
+  exportAPI("rotate", rotate, { compileHook: CanvasRenderingContextFunctionHook('rotate') });
+  function rotate(theta) {
+    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
+    canvasRenderingContext.rotate(theta);
+    return canvasRenderingContext;
+  }
+
+  // You probably shouldn't be using these (use gfx-save instead!),
+  // but for completeness...
+  exportAPI("save_context", save_context, { compileHook: CanvasRenderingContextFunctionHook('save') });
+  function save_context() { return CanvasRenderingContextFunction(this, ctx => ctx.save()) }
+
+  exportAPI("restore_context", restore_context, { compileHook: CanvasRenderingContextFunctionHook('restore') });
+  function restore_context() { return CanvasRenderingContextFunction(this, ctx => ctx.restore()) }
+
+  exportAPI("canvas_width", canvas_width, { compileHook: CanvasRenderingContextPropertyHook('canvaswidth') });
   function canvas_width() {
     let ctx = this[gfxContextAtom];
-    return ct.canvasx.width;
+    return ctx.canvas.width;
   };
 
-  exportAPI("canvas_height", canvas_height, { compileHook: CanvasPropertyHook('height') });
+  exportAPI("canvas_height", canvas_height, { compileHook: CanvasRenderingContextPropertyHook('canvas.height') });
   function canvas_height() {
     let ctx = this[gfxContextAtom];
-    return Number(ctx.canvas.height);
+    return ctx.canvas.height;
   };
-
-  function CanvasPropertyHook(propName) {
-    return function widgetHookProp(args, ssaScope, tools) {
-      let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-      let ssaCRC = ssaScope[gfxContextAtom];
-      if (!ssaCRC)
-        ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-      let ssaRes = newTemp(propName + '_value');
-      emit(`let ${ssaRes} = ${BOTTOM};`);
-      emit(`if (${ssaCRC}) {`);
-      emit(`  ${ssaRes} = ${ssaCRC}.${propName};`)
-      if (args.length > 0)
-        emit(`   ${ssaCRC}.${propName}(${args[0]});`);
-      emit(`}`);
-      return ssaRes;
-    }
-  }
 
   exportAPI("fill_rect", fill_rect, { compileHook: CanvasRenderingContextFunctionHook('fillRect') });
   function fill_rect(x = 0, y = 0, width = 1, height = 1) { return CanvasRenderingContextFunction(this, ctx => ctx.fillRect(x, y, width, height)) }

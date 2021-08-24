@@ -1720,48 +1720,279 @@
           showHelp(null);
       });
 
-      let gfxContextAtom, drawAtom, animateAtom, clearCanvasAtom;
-      let showAtom, hideAtom, clearColorAtom;
-      let xAtom, yAtom, widthAtom, heightAtom;
-      let userMediaAtom;
-      let contextToSchemeWidgetMap = new WeakMap();
-      function contextToSchemeWidget(ctx) { return contextToSchemeWidgetMap.get(ctx) }
-
-      class SchemeWidget {
-        get x() { return this[xAtom] }
-        set x(value) { this[xAtom] = value }
-        get y() { return this[yAtom] }
-        set y(value) { this[yAtom] = value }
-        get width() { return this[widthAtom] }
-        set width(value) { this[widthAtom] = value }
-        get height() { return this[heightAtom] }
-        set height(value) { this[heightAtom] = value }
-        get drawFn() { this[drawAtom] }
-        set drawFn(value) { this[drawAtom] = value }
-        get animate() { this[animateAtom] }
-        set animate(value) { this[animateAtom] = value }
-        get animate() { this[animateAtom] }
-        set animate(value) { this[animateAtom] = value }
-        get clearCanvas() { this[clearCanvasAtom] }
-        set clearCanvas(value) { this[clearCanvasAtom] = value }
-        get clearColor() { this[clearColorAtom] }
-        set clearColor(value) { this[clearColorAtom] = value }
-        show(...params) { return this[showAtom](...params) }
-        hide() { this[hideAtom]() }
-      }
-
       function defineGraphicsFunctions() {
         let newCanvasX = 20, newCanvasY = 10;
-        gfxContextAtom = Atom("gfx-context"), drawAtom = Atom("draw");
-        animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas");
-        showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
-        xAtom = Atom("x"), yAtom = Atom("y"), widthAtom = Atom("width"), heightAtom = Atom("height");
-        userMediaAtom = Atom("user-media");
+        let gfxContextAtom = Atom("gfx-context"), drawAtom = Atom("draw");
+        let animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas");
+        let showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
+        let xAtom = Atom("x"), yAtom = Atom("y"), widthAtom = Atom("width"), heightAtom = Atom("height");
+        let userMediaAtom = Atom("user-media");
         globalScope.contextToSchemeWidget = contextToSchemeWidget;
+        let contextToSchemeWidgetMap = new WeakMap();
+        function contextToSchemeWidget(ctx) { return contextToSchemeWidgetMap.get(ctx) }
 
-        exportAPI("canvas", canvas, { dontInline: true });
-        defineBinding("canvas", "canvas", { group: "web-gfx" } );
-        function canvas(name = "canvas", width = 200, height = width) { 
+        class SchemeCanvasWidget {
+          _canvasFrameElement; _canvasElement; _canvas2dRenderingContext;
+          _clearColor; _animate = false; _clearCanvasMode = true;
+          _staleImage = false; _forceClear = false;
+          _drawTime = Date.now(); _tickCount = 0; _stashX; _stashY;
+          _volumeElement; _muteElement;
+          _userMedia; _userMediaElement; _userMediaStream; _audioContext;
+          _audioAnalyser; _fftSize = 1024 ;_frequencyDataArray; _timeDomainDataArray;
+          constructor(canvasFrameElement, canvasElement) {
+            this._canvasFrameElement = canvasFrameElement;
+            this._canvasElement = canvasElement;
+            this._canvas2dRenderingContext = canvasElement.getContext('2d');
+          }
+          // Delegate JavaScript API to Scheme API
+          get x() { return this[xAtom] }
+          set x(value) { this[xAtom] = value }
+          get y() { return this[yAtom] }
+          set y(value) { this[yAtom] = value }
+          get width() { return this[widthAtom] }
+          set width(value) { this[widthAtom] = value }
+          get height() { return this[heightAtom] }
+          set height(value) { this[heightAtom] = value }
+          get drawFn() { this[drawAtom] }
+          set drawFn(value) { this[drawAtom] = value }
+          get animate() { this[animateAtom] }
+          set animate(value) { this[animateAtom] = value }
+          get animate() { this[animateAtom] }
+          set animate(value) { this[animateAtom] = value }
+          get clearCanvas() { this[clearCanvasAtom] }
+          set clearCanvas(value) { this[clearCanvasAtom] = value }
+          get clearColor() { this[clearColorAtom] }
+          set clearColor(value) { this[clearColorAtom] = value }
+          show(...params) { return this[showAtom](...params) }
+          hide() { this[hideAtom]() }
+          get canvasElement() { return this._canvasElement }
+          get canvasFrame() { return this._canvasFrameElement }
+          get canvas2dRenderingContext() { return this._canvas2dRenderingContext }
+
+          // Scheme API
+          get [xAtom]() { return parseInt(this._canvasFrameElement.style.left) }
+          set [xAtom](x) { this._canvasFrameElement.style.left = x+"px" }
+          get [yAtom]() { return parseInt(this._canvasFrameElement.style.top) }
+          set [yAtom](y) { this._canvasFrameElement.style.top = y+"px" }
+          get [widthAtom]() { return this._canvasElement.width }
+          set [widthAtom](width) { this._resizeWithoutSmashingContent(width, this._canvasElement.height) }
+          get [heightAtom]() { return this._canvasElement.height }
+          set [heightAtom](height) { this._resizeWithoutSmashingContent(this._canvasElement.width, height) }
+          get [drawAtom]() { return this._drawFn; }
+          set [drawAtom](fn) {
+            if (typeof fn !== 'function')
+              throw new SchemeEvalError(`[draw] not a function ${string(fn)}`);
+            this._drawFn = fn;
+            this._staleImage = true;
+            window.requestAnimationFrame(
+              this._animate ? (_ => this.startAnimation()) : (_ => this._doRedraw()));
+          }
+          get [animateAtom]() { return this._animate }
+          set [animateAtom](value) {
+            this._animate = value;
+            if (value)
+              this.startAnimation();
+          }
+          get [userMediaAtom]() { return this._userMedia }
+          set [userMediaAtom](value) { this._startUserMedia(value) }
+          get [clearCanvasAtom]() { return this._clearCanvasMode }
+          set [clearCanvasAtom](value) { this._clearCanvasMode = value }
+          get [clearColorAtom]() { return this._clearColor }
+          set [clearColorAtom](value) { this._clearColor = value; this._forceClear = true; }
+          get [Atom('fft-size')]() { return this._fftSize }
+          set [Atom('fft-size')](value) { this._fftSize = Math.max(32, Math.min(32768, 2**Math.ceil(Math.log2(value)))) }
+          [showAtom](x = optional, y = optional, width = optional, height = optional) {
+            let cfe = this._canvasFrameElement;
+            if (x !== undefined) this[xAtom] = x;
+            if (y !== undefined) this[yAtom] = y;
+            if (width !== undefined) this._canvasElement.width = width;
+            if (height !== undefined) this._canvasElement.height = height;
+            containerElement.appendChild(cfe);
+            if (this._animate)
+              this.startAnimation();
+            this._setGain();
+            return this;
+          }
+          [hideAtom]() {
+            let cfe = this._canvasFrameElement;
+            if (cfe.parentNode)
+              cfe.parentNode.removeChild(cfe);
+            this._setGain();
+            return this;
+          }
+          get [Atom('frequency-domain-data')]() {
+            if (!this._audioAnalyser) this._attachAnalyzer();
+            if (this._audioAnalyser && this._frequencyDataArray.length !== 1) {
+              let fdda = this._frequencyDataArray;
+              audioAnalyser.getByteFrequencyData(fdda);
+            }
+            return fdda;
+          }
+          get [Atom('time-domain-data')]() {
+            if (!this._audioAnalyser) this._attachAnalyzer();
+            if (this._audioAnalyser && this._timeDomainDataArray.length !== 1) {
+              let tdda = this._timeDomainDataArray;
+              this._audioAnalyser.getByteTimeDomainData(tdda);
+            }
+            return tdda;
+          }
+          // Utility methods
+          _clear_canvas() {
+            let crc = this._canvas2dRenderingContext;
+            crc.save();
+            let clearColor = this._clearColor;
+            if (clearColor) {
+              crc.fillStyle = clearColor;
+              crc.fillRect(0, 0, this._width, this._width);
+            } else {}
+              crc.clearRect(0, 0, this._width, this._height);
+            crc.restore();
+          }
+          _attachAnalyzer() {
+            if (this._audioAnalyser || !this._audioContext || !this._gainNode) return;
+            let audioAnalyser = this._audioAnalyser = this._audioContext.createAnalyser();
+            audioAnalyser.fftSize = fftSize;
+            this._gainNode.connect(audioAnalyser);
+            this._setGain();
+          }
+          _setGain() {
+            if (!this._gainNode) return;
+            let muted = this._muteElement?this._muteElement.checked : false;
+            if (muted || !this._canvasFrameElement.parentNode) {
+              this._audioContext.suspend();
+              this._frequencyDataArray = this._timeDomainDataArray = new Uint8Array(1);
+              return;
+            }
+            else {
+              this._audioContext.resume();
+            }
+            if (this._audioAnalyser && this._frequencyDataArray.length === 1) {
+              this._frequencyDataArray = new Uint8Array(this._audioAnalyser.frequencyBinCount);
+              this._timeDomainDataArray = new Uint8Array(this._audioAnalyser.fftSize);
+            }
+            let volume = this._volumeElement ? parseFloat(this._volumeElement.value) / 100 : .5;
+            this._gainNode.gain.setValueAtTime(volume, this._audioContext.currentTime);
+          }
+          _resizeWithoutSmashingContent(newWidth, newHeight) {
+            let scratch = createElement('canvas');
+            let ctx = this._canvas2dRenderingContext, canvasElement = this._canvasElement;
+            let width = canvasElement.width, height = canvasElement.height;
+            // Unfortunately, you can't set them together
+            scratch.width = width;
+            scratch.height = height;
+            ctx.drawImage(canvasElement, 0, 0, width, height, 0, 0, width, height);
+            canvasElement.width = newWidth;
+            canvasElement.height = newHeight;
+            ctx.save();
+            ctx.resetTransform();
+            let clearColor = this._clearColor;
+            if (clearColor) {
+              ctx.fillStyle = clearColor;
+              ctx.fillRect(0, 0, newWidth, newHeight);
+            }
+            ctx.drawImage(scratch, 0, 0, width, height, 0, 0, width, height);
+            ctx.restore();
+          }
+          _doRedraw() {
+            // Encapsulate common drawing and animation patterns in an easy
+            // declatative structure
+            let drawFn = this._drawFn;
+            if (!(drawFn && this._staleImage && this._canvasFrameElement.parentElement)) return;
+            let now = Date.now();
+            if (now - this._drawTime > 200 /* ms */) // Stale stash -- heuristic!
+              this._stashX = this._stashY = undefined;
+            this._drawTime = now;
+            let ctx = this._canvas2dRenderingContext;
+            // The spec says there's supposed to be a reset method, but MDN
+            // doesn't mention it and, emperically, it doesn't exist (yet?).
+            // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
+            //   canvas2dRenderingContext.reset();
+            // So instead, pop a buncha renderingContexts, reset the
+            // transform and, optionally clear the screen
+            for (let i = 0; i < 20; ++i);
+              ctx.restore();
+            ctx.resetTransform();
+            ctx.save();  // So we can easily restore context (just above)
+            let canvas = this._canvasElement, canvasWidth = canvas.width, canvasHeight = canvas.height;
+            if (this._clearCanvasMode || this._forceClear) {
+              this._forceClear = false;
+              let clearColor = this._clearColor;
+              if (clearColor) {
+                ctx.save();
+                ctx.fillStyle = clearColor;
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+                ctx.restore();
+              } else {
+                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+              }
+            }
+            ctx.beginPath();  // Make sure no path parts hanging around
+            drawFn(ctx, this._tickCount++);
+            this._staleImage = false;
+          }
+          redraw() {
+            this._staleImage = true;
+            requestAnimationFrame(_ => this._doRedraw());
+          }
+          startAnimation() {
+            // Take special care to not get multiple animation loops going.
+            if (this._animating) return;
+            if (!(this._drawFn && this._animate && this._canvasFrameElement.parentElement)) return;
+            this._animating = true;
+            window.requestAnimationFrame(_ => drawAnimation(this));
+            function drawAnimation(that) {
+              that._staleImage = true;
+              that._doRedraw();
+              if (that._drawFn && that._animate && that._canvasFrameElement.parentElement)
+                return window.requestAnimationFrame(_ => drawAnimation(that));
+              that._animating = false;
+            }
+          }
+          _startUserMedia(value) {
+            let alreadyUsingMedia = this._userMedia;
+            let userMedia = this._userMedia = value;
+            let canvasFrameElement = this._canvasFrameElement;
+            let userMediaElement = this._userMediaElement;
+            if (userMedia && !alreadyUsingMedia) {
+              if (userMediaElement)
+                canvasFrameElement.removeChild(userMediaElement);
+              let deep = true;
+              userMediaElement = userMediaTemplateElement.cloneNode(deep);
+              userMediaElement.removeAttribute('id');
+              canvasFrameElement.appendChild(userMediaElement);
+              let muteElement = this._muteElement = querySelector(".mute-toggle");
+              muteElement.addEventListener('input', _ => { this._setGain() });
+              let volumeElement = this._volumeElement = userMediaElement.querySelector(".volume");
+              volumeElement.addEventListener('input',  _ => { setGain()});
+              this._userMediaStream = this._audioSource = this._gainNode = undefined;
+              let audioContext = this._audioContext= new AudioContext();
+              let that = this;
+              startMedia(userMedia);
+              async function startMedia(constraints) {
+                try {
+                  let userMediaStream = that._userMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                  let audioSource = that._audioSource= audioContext.createMediaStreamSource(userMediaStream);
+                  let gainNode = that._gainNode = audioContext.createGain();
+                  that._setGain();
+                  audioSource.connect(gainNode);
+                } catch(error) {
+                  console.log("GET-USER-MEDIA-ERROR", error);
+                }
+              }
+            } else if (!userMedia && alreadyUsingMedia) {
+              if (userMediaElement)
+                canvasFrameElement.removeChild(userMediaElement);
+              this._userMediaElement = undefined;
+              this._userMediaStream = this._audioContext = this._audioAnalyser = undefined;
+              this._frequencyDataArray = new Uint8Array(1);
+              this._timeDomainDataArray = new Uint8Array(1);
+            }
+          }
+        };
+
+        exportAPI("create_canvas_widget", createCanvasWidget, { dontInline: true });
+        defineBinding("create-canvas-widget", "create_canvas_widget", { group: "web-gfx" } );
+        function createCanvasWidget(name = "canvas", width = 200, height = width) {
           let canvasFrameElement = createElement('div', 'canvas-frame');
           let canvasTitleBar = createElement('div', 'title-bar');
           let titleSpan = createElement('span', 'title', name);
@@ -1771,186 +2002,10 @@
           let canvasElement = createElement('canvas', 'drawing-canvas');
           canvasFrameElement.appendChild(canvasTitleBar);
           canvasFrameElement.appendChild(canvasElement);
-          let drawFn, _staleImage = false, animate = false, animating = false;
-          let clearCanvasMode = true, clearColor, forceClear = true;
           let canvas2dRenderingContext = canvasElement.getContext('2d');
-          let muteElement, volumeElement;
-          let userMedia, userMediaElement, userMediaStream, audioContext;
-          let audioSource, gainNode;
-          let audioAnalyser, fftSize = 1024, frequencyDataArray = new Uint8Array(1), timeDomainDataArray = frequencyDataArray;
-          function attachAnalyzer() {
-            if (audioAnalyser || !audioContext || !gainNode) return;
-            audioAnalyser = audioContext.createAnalyser();
-            audioAnalyser.fftSize = fftSize;
-            gainNode.connect(audioAnalyser);
-            setGain();
-          }
-          function setGain() {
-            if (!gainNode) return;
-            let muted = muteElement? muteElement.checked : false;
-            if (muted || !canvasFrameElement.parentNode) {
-              audioContext.suspend();
-              frequencyDataArray = timeDomainDataArray = new Uint8Array(1);
-              return;
-            }
-            else {
-              audioContext.resume();
-            }
-            if (audioAnalyser && frequencyDataArray.length === 1) {
-              frequencyDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
-              timeDomainDataArray = new Uint8Array(audioAnalyser.fftSize);
-            }
-            let volume = volumeElement ? parseFloat(volumeElement.value) / 100 : .5;
-            let vol = volume;
-            gainNode.gain.setValueAtTime(vol, audioContext.currentTime);
-          }
-          function _resizeWithoutSmashingContent(newWidth, newHeight) {
-            let scratch = createElement('canvas'), ctx = scratch.getContext('2d');
-            let width = canvasElement.width, height = canvasElement.height;
-            // Unfortunately, you can't set them together
-            scratch.width = width;
-            scratch.height = height;
-            ctx.drawImage(canvasElement, 0, 0, width, height, 0, 0, width, height);
-            canvasElement.width = newWidth;
-            canvasElement.height = newHeight;
-            canvas2dRenderingContext.save();
-            canvas2dRenderingContext.resetTransform();
-            if (clearColor) {
-              canvas2dRenderingContext.fillStyle = clearColor;
-              canvas2dRenderingContext.fillRect(0, 0, newWidth, newHeight);
-            }
-            canvas2dRenderingContext.drawImage(scratch, 0, 0, width, height, 0, 0, width, height);
-            canvas2dRenderingContext.restore();
-          }
-          let schemeWidget = { // Can access state through scoped references
-            get canvasElement() { return canvasElement },
-            get canvasFrame() { return canvasFrameElement },
-            get canvas2dRenderingContext() { return canvas2dRenderingContext },
-            get [xAtom]() { return parseInt(canvasFrameElement.style.left) },
-            set [xAtom](x) { canvasFrameElement.style.left = x+"px" },
-            get [yAtom]() { return parseInt(canvasFrameElement.style.top) },
-            set [yAtom](y) { canvasFrameElement.style.top = y+"px" },
-            get [widthAtom]() { return Number(canvasElement.width) },
-            set [widthAtom](width) { _resizeWithoutSmashingContent(width, canvasElement.height) },
-            get [heightAtom]() { return Number(canvasElement.height) },
-            set [heightAtom](height) { _resizeWithoutSmashingContent(canvasElement.width, height) },
-            get [drawAtom]() { return drawFn; },
-            set [drawAtom](fn) {
-              if (typeof fn !== 'function')
-                throw new SchemeEvalError(`[draw] not a function ${string(fn)}`);
-              drawFn = fn;
-              _staleImage = true;
-              window.requestAnimationFrame(animate ? startAnimation : _doRedraw);
-            },
-            get [animateAtom]() { return animate },
-            set [animateAtom](value) {
-              animate = value;
-              if (animate)
-                startAnimation();
-            },
-            get [userMediaAtom]() { return userMedia },
-            set [userMediaAtom](value) { startUserMedia(value) },
-            get [clearCanvasAtom]() { return clearCanvasMode },
-            set [clearCanvasAtom](value) { clearCanvasMode = value },
-            get [clearColorAtom]() { return clearColor },
-            set [clearColorAtom](value) { clearColor = value; forceClear = true; },
-            get [Atom('fft-size')]() { return fftSize },
-            set [Atom('fft-size')](value) { fftSize = Math.max(32, Math.min(32768, 2**Math.ceil(Math.log2(value)))) },
-            [showAtom](x = optional, y = optional, width = optional, height = optional) {
-              if (x !== undefined) this.x = x;
-              if (y !== undefined) this.y = y;
-              if (width !== undefined) this.width = width;
-              if (height !== undefined) this.height = height;
-              containerElement.appendChild(canvasFrameElement);
-              if (animate)
-                startAnimation();
-              setGain();
-              return this;
-            },
-            [hideAtom]() {
-              if (canvasFrameElement.parentNode)
-                canvasFrameElement.parentNode.removeChild(canvasFrameElement);
-              setGain();
-              return this;
-            },
-            get [Atom('frequency-domain-data')]() {
-              if (!audioAnalyser) attachAnalyzer();
-              if (audioAnalyser && frequencyDataArray.length !== 1)
-                audioAnalyser.getByteFrequencyData(frequencyDataArray);
-              return frequencyDataArray;
-            },
-            get [Atom('time-domain-data')]() {
-              if (!audioAnalyser) attachAnalyzer();
-              if (audioAnalyser && timeDomainDataArray.length !== 1)
-                audioAnalyser.getByteTimeDomainData(timeDomainDataArray);
-              return timeDomainDataArray;
-            },
-            clear_canvas() {
-              canvas2dRenderingContext.save();
-              if (clearColor) {
-                canvas2dRenderingContext.fillStyle = clearColor;
-                canvas2dRenderingContext.fillRect(0, 0, width, width);
-              } else {}
-                canvas2dRenderingContext.clearRect(0, 0, width, height);
-              canvas2dRenderingContext.restore();
-            },
-          };
-          Object.setPrototypeOf(schemeWidget, SchemeWidget.prototype);
-          contextToSchemeWidgetMap.set(canvas2dRenderingContext, schemeWidget);
-          let drawTime = Date.now();
-          let tickCount = 0;
-          function _doRedraw() {
-            // Encapsulate common drawing and animation patterns in an easy
-            // declatative structure
-            if (!(drawFn && _staleImage && canvasFrameElement.parentElement)) return;
-            let now = Date.now();
-            if (now - drawTime > 200 /* ms */) // Stale stash -- heuristic!
-              schemeWidget.stashX = schemeWidget.stashY = undefined;
-            drawTime = now;
-            canvas2dRenderingContext.resetTransform();
-            // The spec says there's supposed to be a reset method, but MDN
-            // doesn't mention it and, emperically, it doesn't exist (yet?).
-            // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
-            //   canvas2dRenderingContext.reset();
-            // So instead, pop a buncha renderingContexts, reset the
-            // transform and, optionally clear the screen
-            for (let i = 0; i < 20; ++i);
-              canvas2dRenderingContext.restore();
-            canvas2dRenderingContext.save();  // So we can easily restore context (just above)
-            if (clearCanvasMode || forceClear) {
-              forceClear = false;
-              if (clearColor) {
-                canvas2dRenderingContext.save();
-                canvas2dRenderingContext.fillStyle = clearColor;
-                canvas2dRenderingContext.fillRect(0, 0, canvasWidth, canvasHeight);
-                canvas2dRenderingContext.restore();
-              } else {
-                canvas2dRenderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
-              }
-            }
-            canvas2dRenderingContext.beginPath();  // Make sure no path parts hanging around
-            drawFn(canvas2dRenderingContext, tickCount++);
-            _staleImage = false;
-          }
-          function redraw() {
-            _staleImage = true;
-            requestAnimationFrame(_doRedraw);
-          }
-          function startAnimation() {
-            // Take special care to not get multiple animation loops going.
-            if (animating) return;
-            if (!(drawFn && animate && canvasFrameElement.parentElement)) return;
-            animating = true;
-            window.requestAnimationFrame(drawAnimation);
-            function drawAnimation() {
-              _staleImage = true;
-              _doRedraw();
-              if (drawFn && animate && canvasFrameElement.parentElement)
-                return window.requestAnimationFrame(drawAnimation);
-              animating = false;
-            }
-          }
-          canvasCloseButtonElement.addEventListener('click', _ => schemeWidget.hide());
+          let schemeCanvasWidget = new SchemeCanvasWidget(canvasFrameElement, canvasElement);
+          contextToSchemeWidgetMap.set(canvas2dRenderingContext, schemeCanvasWidget);
+          canvasCloseButtonElement.addEventListener('click', _ => schemeCanvasWidget.hide());
           canvasFrameElement.addEventListener('mousedown', mouseDown);
           canvasFrameElement.addEventListener('touchstart', mouseDown);
           canvasFrameElement.addEventListener('mousemove', updateCursor);
@@ -1989,10 +2044,10 @@
                 if (canvasFrameElement.parentNode)
                   canvasFrameElement.parentNode.appendChild(canvasFrameElement);
               });
-              if (fx !== 0) schemeWidget.x = left + fx * deltaX;
-              if (fy !== 0) schemeWidget.y = top + fy * deltaY;
-              if (fw !== 0) schemeWidget.width = canvasWidth + fw * deltaX;
-              if (fh !== 0) schemeWidget.height = canvasHeight + fh * deltaY;
+              if (fx !== 0) schemeCanvasWidget.x = left + fx * deltaX;
+              if (fy !== 0) schemeCanvasWidget.y = top + fy * deltaY;
+              if (fw !== 0) schemeCanvasWidget.width = canvasWidth + fw * deltaX;
+              if (fh !== 0) schemeCanvasWidget.height = canvasHeight + fh * deltaY;
             }
             function mouseUp(event) {
               event.stopPropagation();
@@ -2014,57 +2069,20 @@
             bodyElement.addEventListener('touchend', mouseUp);
             bodyElement.addEventListener('touchcancel', mouseUp);
           }
-          function startUserMedia(value) {
-            let alreadyUsingMedia = userMedia;
-            userMedia = value;
-            if (userMedia && !alreadyUsingMedia) {
-              if (userMediaElement)
-                canvasFrameElement.removeChild(userMediaElement);
-              let deep = true;
-              userMediaElement = userMediaTemplateElement.cloneNode(deep);
-              userMediaElement.removeAttribute('id');
-              canvasFrameElement.appendChild(userMediaElement);
-              muteElement = userMediaElement.querySelector(".mute-toggle");
-              muteElement.addEventListener('input', _ => { setGain() });
-              volumeElement = userMediaElement.querySelector(".volume");
-              volumeElement.addEventListener('input',  _ => { setGain()});
-              userMediaStream = audioSource = gainNode = undefined;
-              audioContext = new AudioContext();
-              startMedia(userMedia);
-              async function startMedia(constraints) {
-                try {
-                  userMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-                  audioSource = audioContext.createMediaStreamSource(userMediaStream);
-                  gainNode = audioContext.createGain();
-                  setGain();
-                  audioSource.connect(gainNode);
-                } catch(error) {
-                  console.log("GET-USER-MEDIA-ERROR", error);
-                }
-              }
-            } else if (!userMedia && alreadyUsingMedia) {
-              if (userMediaElement)
-                canvasFrameElement.removeChild(userMediaElement);
-              userMediaElement = undefined;
-              userMediaStream = audioContext = audioAnalyser = undefined;
-              frequencyDataArray = new Uint8Array(1);
-              timeDomainDataArray = new Uint8Array(1);
-            }
-          }
           newCanvasX += 25;
           newCanvasY += 25;
-          schemeWidget.x = newCanvasX;
-          schemeWidget.y = newCanvasY;
-          schemeWidget.width = width;
-          schemeWidget.height = height;
-          schemeWidget.show();   // Not sure if this should happen by default, but for now...
-          return schemeWidget;
+          schemeCanvasWidget.x = newCanvasX;
+          schemeCanvasWidget.y = newCanvasY;
+          schemeCanvasWidget.width = width;
+          schemeCanvasWidget.height = height;
+          schemeCanvasWidget.show();   // Not sure if this should happen by default, but for now...
+          return schemeCanvasWidget;
         }
 
         exportAPI("canvas_gfx_context", canvas_gfx_context, { dontInline: true });
         defineBinding("canvas-gfx-context", "canvas_gfx_context", { group: "web-gfx" });
-        function canvas_gfx_context(schemeWidget) {
-          return schemeWidget.canvas2dRenderingContext;
+        function canvas_gfx_context(schemeCanvasWidget) {
+          return schemeCanvasWidget.canvas2dRenderingContext;
         }
 
         function WidgetFunctionHook(fName) {
@@ -2073,7 +2091,7 @@
             let ssaCRC = ssaScope[gfxContextAtom];
             if (!ssaCRC)
               ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-            let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
+            let ssaContextToSchemeWidget = use(bind(contextToSchemeWidget, "contextToSchemeWidget"));
             let ssaWidget = newTemp("canvas_widget");
             emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
             let ssaArgStr = '', sep = '';
@@ -2088,9 +2106,9 @@
         defineBinding("stash-point", "stash_point", { group: "web-gfx" });
         function stash_point(x, y) {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget(ctx);
-          schemeWidget.stashX = x;
-          schemeWidget.stashY = y;
+          let schemeCanvasWidget = contextToSchemeWidget(ctx);
+          schemeCanvasWidget.stashX = x;
+          schemeCanvasWidget.stashY = y;
           return ctx;
         };
         function stash_point_hook(args, ssaScope, tools) {
@@ -2098,7 +2116,7 @@
           let ssaCRC = ssaScope[gfxContextAtom];
           if (!ssaCRC)
             ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-          let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
+          let ssaContextToSchemeWidget = use(bind(contextToSchemeWidget, "contextToSchemeWidget"));
           let ssaWidget = newTemp("canvas_widget");
           emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
           emit(`${ssaWidget}.stashX = ${args[0] ?? undefined};`);
@@ -2110,9 +2128,9 @@
         defineBinding("move-to-stashed", "move_to_stashed", { group: "web-gfx" });
         function move_to_stashed() {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget(ctx);
-          if (schemeWidget && schemeWidget.stashX !== undefined && schemeWidget.stashY !== undefined)
-          ctx.moveTo(schemeWidget.stashX, schemeWidget.stashY);
+          let schemeCanvasWidget = contextToSchemeWidget(ctx);
+          if (schemeCanvasWidget && schemeCanvasWidget.stashX !== undefined && schemeCanvasWidget.stashY !== undefined)
+          ctx.moveTo(schemeCanvasWidget.stashX, schemeCanvasWidget.stashY);
           return ctx;
         };
         function MoveLineStashHook(op) {
@@ -2121,7 +2139,7 @@
             let ssaCRC = ssaScope[gfxContextAtom];
             if (!ssaCRC)
               ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-            let ssaContextToSchemeWidget = bind(contextToSchemeWidget, "contextToSchemeWidget");
+            let ssaContextToSchemeWidget = use(bind(contextToSchemeWidget, "contextToSchemeWidget"));
             let ssaWidget = newTemp("canvas_widget"), ssaX = newTemp('stashedX'),ssaY = newTemp('stashedY');
             emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
             emit(`let ${ssaX} = ${ssaWidget}.stashX, ${ssaY} = ${ssaWidget}.stashY;`);
@@ -2134,9 +2152,9 @@
         defineBinding("line-to-stashed", "line_to_stashed", { group: "web-gfx" });
         function line_to_stashed() {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget(ctx);
-          if (schemeWidget && schemeWidget.stashX !== undefined && schemeWidget.stashY !== undefined)
-          ctx.lineTo(schemeWidget.stashX, schemeWidget.stashY);
+          let schemeCanvasWidget = contextToSchemeWidget(ctx);
+          if (schemeCanvasWidget && schemeCanvasWidget.stashX !== undefined && schemeCanvasWidget.stashY !== undefined)
+          ctx.lineTo(schemeCanvasWidget.stashX, schemeCanvasWidget.stashY);
           return ctx;
         };
 
@@ -2144,24 +2162,24 @@
         defineBinding("clear-canvas", "clear_canvas", { group: "web-gfx" });
         function clear_canvas() {
           let ctx = this[gfxContextAtom];
-          let schemeWidget = contextToSchemeWidget(ctx);
-          schemeWidget.clear_canvas();
+          let schemeCanvasWidget = contextToSchemeWidget(ctx);
+          schemeCanvasWidget._clear_canvas();
           return ctx;
         };
 
         exportAPI("show_canvas", show_canvas, { compileHook: WidgetFunctionHook('show_canvas') });
         defineBinding("show-canvas", "show_canvas", { group: "web-gfx" });
         function show_canvas(x = optional, y = optional, width = optional, height = optional) {
-          let ctx = this[gfxContextAtom], schemeWidget = contextToSchemeWidget(ctx);
-          schemeWidget.show(x, y, width, height);
+          let ctx = this[gfxContextAtom], schemeCanvasWidget = contextToSchemeWidget(ctx);
+          schemeCanvasWidget.show(x, y, width, height);
           return ctx;
         };
 
         exportAPI("hide_canvas", hide_canvas, { compileHook: WidgetFunctionHook('hide_canvas') });
         defineBinding("hide-canvas", "hide_canvas", { group: "web-gfx" });
         function hide_canvas() {
-          let ctx = this[gfxContextAtom], schemeWidget = contextToSchemeWidget(ctx);
-          schemeWidget.hide();
+          let ctx = this[gfxContextAtom], schemeCanvasWidget = contextToSchemeWidget(ctx);
+          schemeCanvasWidget.hide();
           return ctx;
         };
       }
