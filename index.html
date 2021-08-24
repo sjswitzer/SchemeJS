@@ -1371,7 +1371,7 @@
       const userMediaTemplateElement = document.getElementById("user-media-template");
       let globalScope, SCHEME_VERSION;
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, SchemeEvalError;
-      let NIL, Atom, string, newScope, exportAPI, defineBinding, originalLoad;
+      let NIL, BOTTOM, Atom, string, newScope, exportAPI, defineBinding, originalLoad;
       let varNo = 0, WS, NL;
       const NBSP = '\u00a0', lambdaStr = "\u03BB";
       const optional = undefined;  // so that parameters show up pretty when printed
@@ -1391,6 +1391,7 @@
         SchemeParseIncompleteError = globalScope.SchemeParseIncompleteError ?? required();
         SchemeEvalError = globalScope.SchemeEvalError ?? required();
         NIL = globalScope.NIL ?? required();
+        BOTTOM = globalScope.BOTTOM ?? required();
         string = globalScope.string ?? required();
         Atom = globalScope.Atom ?? required();
         newScope = globalScope.newScope ?? required();
@@ -1427,7 +1428,7 @@
           doXHRLoad();
         else
           doFileLoad();
-        return NIL;
+        return BOTTOM;
         async function doXHRLoad() {
           let xhr = new Promise((resolve, reject) => {
             let request = new XMLHttpRequest();
@@ -2117,7 +2118,7 @@
           if (!RETURN_SYMBOL) throw "required symbol"
           canvasRenderingContext.save();
           try {
-            let res = NIL;
+            let res = BOTTOM;
             for (let form of forms) {
               res = scope._eval(form);
               if (this[RETURN_SYMBOL]) return;

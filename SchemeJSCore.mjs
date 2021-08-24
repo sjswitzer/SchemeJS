@@ -42,11 +42,13 @@ export function createInstance(schemeOpts = {}) {
   const TRACE_COMPILER = !!(schemeOpts.traceCompiler ?? false);
   const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? false);
   const generatorsAreLists = schemeOpts.generatorsAreLists ?? true;
-  const standardIteratorsAreLists = schemeOpts.standardIteratorsAreLists ?? true;
+  const standardIterablesAreLists = schemeOpts.standardIterablesAreLists ?? true;
   const lambdaStr = schemeOpts.lambdaStr ?? "\\";
   const firstName = schemeOpts.firstName ?? "first";
   const restName = schemeOpts.firstName ?? "rest";
   const nilName = schemeOpts.nilName ?? "NIL";
+  const schemeTrueOverride = schemeOpts.schemeTrueOverride;
+  const bottomIsLNIL = schemeOpts.bottomIsLNIL ?? true;
 
   const COMPILE_INFO = Symbol("COMPILE-INFO");
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
@@ -205,7 +207,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
-  // Thirdly, Map, Set, and TypedArray(s) are lists (subject to standardIteratorsAreLists).
+  // Thirdly, Map, Set, and TypedArray(s) are lists (subject to standardIterablesAreLists).
   // For some reason, WeakMap and WeakSet do not currently (Aug 2021) support iteration.
   //
   let standardIterables = [Map, Set,
@@ -218,7 +220,7 @@ export function createInstance(schemeOpts = {}) {
   if (typeof BigInt64Array === 'object') standardIterables.push(BigInt64Array);
   if (typeof BigUint64Array === 'object') standardIterables.push(BigUint64Array);
 
-  if (standardIteratorsAreLists) {
+  if (standardIterablesAreLists) {
     for (let cls of standardIterables)
       monkeyPatchListProtocolForIterable(cls.prototype);
   }
@@ -373,7 +375,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
-  // NIL is an utter degenerate that signals errors when accessed incorrectly,
+  // NIL is an utter degenerate that signals errors when accessed incorrectly.
   // NIL inherits from null rather than Object so that, once frozen, there is literally
   // no way that NIL can be changed.
   //
@@ -407,11 +409,15 @@ export function createInstance(schemeOpts = {}) {
   Object.freeze(NIL);
   exportAPI("NIL", NIL);
 
+  // But what is the "bottom" value anyway? Lisps usually use NIL, but JS uses "undefined", You choose.
+  const BOTTOM = bottomIsLNIL ? NIL : undefined;
+  exportAPI("BOTTOM", BOTTOM);
+
   const isIterable = obj => obj != null && typeof obj[Symbol.iterator] === 'function';
   exportAPI("isIterable", isIterable);
   
   //
-  // Atoms are Symbols that are in the ATOMS object
+  // Atoms are Symbols that are in the ATOMS dictionary
   //
   const ATOMS = {};
   const isAtom = obj => typeof obj === 'symbol' && ATOMS[obj.description] === obj;
@@ -519,14 +525,6 @@ export function createInstance(schemeOpts = {}) {
     fn[COMPILE_INFO] = fnInfo;
   }
 
-  function subclassOf(cls, supercls) {
-    while (cls != null) {
-      if (cls === supercls) return true;
-      cls = Object.getPrototypeOf(cls);
-    }
-    return false;
-  }
-
   exportAPI("VERSION", VERSION);
 
   class SchemeError extends Error {};
@@ -556,8 +554,10 @@ export function createInstance(schemeOpts = {}) {
   // I'm likely to revisit this. Differet Schemes and Lisps have different policies
   // here. What I'd like to do is define schemeTrue in a way that the JIT can trivially evaluate.
   // In particular, treating NIL as false is slightly more costly than I'd like.
+  // Anyway, overrride it if you want to by setting the schemeTrueOverride option.
   //
-  const schemeTrue = a => a === true || (a !== false && a != null && a[MORELIST] !== false);
+  const schemeTrue = typeof schemeTrueOverride === 'function' ? schemeTrueOverride :
+      (a => a === true || (a !== false && a != null && a[MORELIST] !== false));
   exportAPI("schemeTrue", schemeTrue);
 
   let quote = quoted => quoted[FIRST];
@@ -1145,7 +1145,7 @@ export function createInstance(schemeOpts = {}) {
   // (begin form1 form2 ...)
   exportAPI("begin", begin, { evalArgs: 0, compileHook: begin_hook });
   function begin(...forms) {
-    let res = NIL;
+    let res = BOTTOM;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       res = _eval(forms[i], this);
       if (this[RETURN_SYMBOL]) return;
@@ -1153,7 +1153,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
   function begin_hook(args, ssaScope, tools) {
-    let ssaResult = 'NIL';
+    let ssaResult = `${BOTTOM}`;
     for (let i = 0; i < args.length; ++i)
       ssaResult = compileEval(args[i], ssaScope, tools);
     return ssaResult;
@@ -1161,7 +1161,7 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("list", list, { compileHook: list_hook });
   function list(...elements) {
-    let val = NIL;
+    let val = BOTTOM;
     for (let i = elements.length; i > 0; --i)
       val = new Pair(elements[i-1], val);
     return val;
@@ -1171,7 +1171,7 @@ export function createInstance(schemeOpts = {}) {
     // The compiler can inline the list function just fine, but it's better to do it this way
     // because no argument array needs to be constructed.
     let ssaResult = newTemp("list");
-    emit(`let ${ssaResult} = NIL;`);
+    emit(`let ${ssaResult} = ${BOTTOM};`);
     for (let i = args.length; i > 0; --i)
       emit(`${ssaResult} = new Pair(${args[i-1]}, ${ssaResult});`)
     return ssaResult;
@@ -1505,7 +1505,7 @@ export function createInstance(schemeOpts = {}) {
     ssaScope[indexVar] = ssaIndexVar;
     ssaScope[valueVar] = ssaValueVar;
     let ssaFn = newTemp('for_in_fn)');
-    let ssaValue = 'NIL';
+    let ssaValue = `${BOTTOM}`;
     emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (for-in ${string(indexVar)} ${string(valueVar)} ...)`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
@@ -1519,7 +1519,7 @@ export function createInstance(schemeOpts = {}) {
     emit('}');
     tools.bindLiterally(isIterable, "isIterable");
     let ssaResult = newTemp('for_in_result');
-    emit(`let ${ssaResult} = NIL;`);
+    emit(`let ${ssaResult} = ${BOTTOM};`);
     emit(`if (isIterable(${ssaObj})) {`);
     emit(`  let index = 0;`);
     emit(`  for (let value of ${ssaObj})`);
@@ -1542,7 +1542,7 @@ export function createInstance(schemeOpts = {}) {
     obj = _eval(obj, scope);
     if (scope[RETURN_SYMBOL]) return;
     scope = newScope(this, "for-of-scope");
-    let val = NIL;
+    let val = BOTTOM;
     for (let value of obj) {
       scope[valueSymbol] = value;
       val = _eval(form, scope);
@@ -1563,7 +1563,7 @@ export function createInstance(schemeOpts = {}) {
     let ssaObj = compileEval(args[1], ssaScope, tools);
     let ssaValueVar = newTemp(valueVar.description);
     ssaScope[valueVar] = ssaValueVar;
-    let ssaResult = newTemp('for_of_result'), ssaValue = 'NIL';
+    let ssaResult = newTemp('for_of_result'), ssaValue = `${BOTTOM}`;
     emit(`let ${ssaResult} = ${ssaValue};`)
     let ssaTmpScope = newTemp("scope_tmp");
     let saveSsaScope = ssaScope, scopeLines = [];
@@ -1592,7 +1592,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("while", _while, { evalArgs: 0, compileHook: while_hook });
   function _while(predicate, form, ...forms) {
     let scope = this;
-    let val = NIL;
+    let val = BOTTOM;
     while (schemeTrue(_eval(predicate, scope))) {
       if (scope[RETURN_SYMBOL]) return;
       val = _eval(form, scope);
@@ -1608,7 +1608,7 @@ export function createInstance(schemeOpts = {}) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (args.length < 2) throw new SchemeCompileError(`Bad for-of`);
     let predicate = args[0];
-    let ssaResult = newTemp('while_result'), ssaValue = 'NIL';
+    let ssaResult = newTemp('while_result'), ssaValue = `${BOTTOM}`;
     emit(`let $ssaResult = ${ssaValue};`);
     emit(`for (;;) { // while loop`);
     let saveIndent = tools.indent;
@@ -1645,7 +1645,7 @@ export function createInstance(schemeOpts = {}) {
     if (args.lenght < 1)
       throw new SchemeCompileError(`Bad setq arguments ${args}`);
     let varSym = args[FIRST], valForms = args[REST];
-    let ssaValue = 'NIL';
+    let ssaValue = `${BOTTOM}`;
     for (let form of valForms)
       ssaValue = compileEval(form, ssaScope, tools);
     let boundVar = ssaScope[varSym];
@@ -1721,7 +1721,7 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeCompileError(`Bad catch clause ${string(catchClause)}`);
     let catchVar = catchClause[FIRST], catchForms = catchClause[REST];
     let ssaCatchSym = newTemp(catchVar);
-    let ssaResult = newTemp('js_catch'), ssaValue = 'NIL';
+    let ssaResult = newTemp('js_catch'), ssaValue = `${BOTTOM}`;
     let saveSSaScope = ssaScope, scopeLines = [];
     let ssaTmpScope = newTemp('tmp_scope');
     scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
@@ -1740,7 +1740,7 @@ export function createInstance(schemeOpts = {}) {
     scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-js-catch-scope");`));
     let ssaCatchAtom = use(bind(catchVar));
     scopeLines.push(emit(`scope[${ssaCatchAtom}] = ${ssaCatchSym};`));
-    let ssaCatchVal = 'NIL';
+    let ssaCatchVal = `${BOTTOM}`;
     for (let form of catchForms)
       ssaCatchVal = compileEval(form, ssaScope, tools);
     emit(`${ssaResult} = ${ssaCatchVal};`);
@@ -2116,7 +2116,7 @@ export function createInstance(schemeOpts = {}) {
       if (typeof params === 'symbol')
         scope[params] = args.slice(i);
       scope[RETURN_SCOPE_SYMBOL] = scope;
-      let result = NIL;
+      let result = BOTTOM;
       for (let form of forms) {
         result = _eval(form, scope);
         if (scope[RETURN_SYMBOL])
@@ -2139,7 +2139,7 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("return", _return, { requiresScope: false, compileHook: return_hook })
   function _return(...values) {
-    let scope = this, value = NIL;
+    let scope = this, value = BOTTOM;
     if (values.length > 0)
       value = values[values.length-1];
     let returnScope = scope[RETURN_SCOPE_SYMBOL];
@@ -2148,7 +2148,7 @@ export function createInstance(schemeOpts = {}) {
     return undefined;  // just to be clear... this does not return the value
   }
   function return_hook(args, ssaScope, tools) {
-    let ssaValue = 'NIL';
+    let ssaValue = `${BOTTOM}`;
     for (let arg of args)
       ssaValue = compileEval(arg, ssaScope, tools);
     tools.emit(`return ${ssaValue};`);
@@ -3130,7 +3130,7 @@ export function createInstance(schemeOpts = {}) {
         emit(`if (${ssaParam} === undefined) {`);
         let saveIndent = tools.indent;
         tools.indent += '  ';
-        let ssaVal = 'NIL';
+        let ssaVal = `${BOTTOM}`;
         for (let form of optionalForms)
           ssaVal = compileEval(form, ssaScope, tools);
         emit(`${ssaParam} = ${ssaVal};`);
@@ -3144,7 +3144,7 @@ export function createInstance(schemeOpts = {}) {
       let ssaParamName = use(bind(restParam));
       scopeLines.push(emit(`scope[${ssaParamName}] = ${ssaRestParam};`));
     }
-    let ssaResult = 'NIL';
+    let ssaResult = `${BOTTOM}`;
     for ( ; moreList(forms); forms = forms[REST])
       ssaResult = compileEval(forms[FIRST], ssaScope, tools);
     if (ssaScope.dynamicScopeUsed)

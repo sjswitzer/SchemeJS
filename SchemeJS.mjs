@@ -33,36 +33,37 @@ export function createInstance(schemeOpts = {}) {
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
 
-  let string = globalScope.string ?? required();
-  let exportAPI = globalScope.exportAPI ?? required();
-  let defineBinding = globalScope.defineBinding ?? required();
-  let isList = globalScope.isList ?? required();
-  let isNil = globalScope.isNil ?? required();
-  let iterateAsList = globalScope.iterateAsList ?? required();
-  let isIterable = globalScope.isIterable ?? required();
-  let moreList = globalScope.moreList ?? required();
-  let Pair = globalScope.Pair ?? required();
-  let FIRST = globalScope.FIRST ?? required();
-  let REST = globalScope.REST ?? required();
-  let NIL = globalScope.NIL ?? required();
-  let LAMBDA_CHAR = globalScope.LAMBDA_CHAR ?? required();
-  let QUOTE_ATOM = globalScope.QUOTE_ATOM ?? required();
-  let LAMBDA_ATOM = globalScope.LAMBDA_ATOM ?? required();
-  let SLAMBDA_ATOM = globalScope.SLAMBDA_ATOM ?? required();
-  let _eval = globalScope._eval ?? required();
-  let RETURN_SYMBOL = globalScope.RETURN_SYMBOL ?? required();
-  let compare_hooks = globalScope.compare_hooks ?? required();
-  let Atom = globalScope.Atom ?? required();
-  let isAtom = globalScope.isAtom ?? required();
-  let list = globalScope.list ?? required();
-  let iteratorFor = globalScope.iteratorFor ?? required();
-  let schemeTrue = globalScope.schemeTrue ?? required();
-  let SchemeEvalError = globalScope.SchemeEvalError ?? required();
-  let compileEval = globalScope.compileEval ?? required();
-  let SchemeError = globalScope.SchemeError ?? required();
-  let SchemeCompileError = globalScope.SchemeCompileError ?? required();
-  let EVALUATE_KEY_VALUE_SYMBOL = globalScope.EVALUATE_KEY_VALUE_SYMBOL ?? required();
-  let ESCAPE_STRINGS = globalScope.ESCAPE_STRINGS ?? required();
+  const string = globalScope.string ?? required();
+  const exportAPI = globalScope.exportAPI ?? required();
+  const defineBinding = globalScope.defineBinding ?? required();
+  const isList = globalScope.isList ?? required();
+  const isNil = globalScope.isNil ?? required();
+  const iterateAsList = globalScope.iterateAsList ?? required();
+  const isIterable = globalScope.isIterable ?? required();
+  const moreList = globalScope.moreList ?? required();
+  const Pair = globalScope.Pair ?? required();
+  const FIRST = globalScope.FIRST ?? required();
+  const REST = globalScope.REST ?? required();
+  const NIL = globalScope.NIL ?? required();
+  const LAMBDA_CHAR = globalScope.LAMBDA_CHAR ?? required();
+  const QUOTE_ATOM = globalScope.QUOTE_ATOM ?? required();
+  const LAMBDA_ATOM = globalScope.LAMBDA_ATOM ?? required();
+  const SLAMBDA_ATOM = globalScope.SLAMBDA_ATOM ?? required();
+  const _eval = globalScope._eval ?? required();
+  const RETURN_SYMBOL = globalScope.RETURN_SYMBOL ?? required();
+  const compare_hooks = globalScope.compare_hooks ?? required();
+  const Atom = globalScope.Atom ?? required();
+  const isAtom = globalScope.isAtom ?? required();
+  const list = globalScope.list ?? required();
+  const iteratorFor = globalScope.iteratorFor ?? required();
+  const schemeTrue = globalScope.schemeTrue ?? required();
+  const SchemeEvalError = globalScope.SchemeEvalError ?? required();
+  const compileEval = globalScope.compileEval ?? required();
+  const SchemeError = globalScope.SchemeError ?? required();
+  const SchemeCompileError = globalScope.SchemeCompileError ?? required();
+  const EVALUATE_KEY_VALUE_SYMBOL = globalScope.EVALUATE_KEY_VALUE_SYMBOL ?? required();
+  const ESCAPE_STRINGS = globalScope.ESCAPE_STRINGS ?? required();
+  const BOTTOM = globalScope.BOTTOM ?? required()
   function required() { throw "required" }
 
   //
@@ -485,7 +486,7 @@ export function createInstance(schemeOpts = {}) {
   // (prog1 form1 form2 form3 ...)
   exportAPI("prog1", prog1, { evalArgs: 0, compileHook: prog1_hook });
   function prog1(...forms) {
-    let res = NIL;
+    let res = BOTTOM;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
       let val = _eval(forms[i], this);
       if (this[RETURN_SYMBOL]) return;
@@ -495,7 +496,7 @@ export function createInstance(schemeOpts = {}) {
     return res;
   }
   function prog1_hook(args, ssaScope, tools) {
-    let ssaResult = 'NIL';
+    let ssaResult = `${BOTTOM}`;
     for (let i = 0; i< args.length; ++i) {
       let res = compileEval(args[i], ssaScope, tools);
       if (i === 0)
@@ -519,7 +520,7 @@ export function createInstance(schemeOpts = {}) {
       let evaled = _eval(predicateForm, this);
       
       if (schemeTrue(evaled)) {
-        let res = NIL;
+        let res = BOTTOM;
         for ( ; iterateAsList(forms); forms = forms[REST])
           res = _eval(forms[FIRST], this);
         if (this[RETURN_SYMBOL]) return;
@@ -532,12 +533,12 @@ export function createInstance(schemeOpts = {}) {
         return res;
       }
     }
-    return NIL;
+    return BOTTOM;
   }
   function cond_hook(args, ssaScope, tools) {
     let clauses = args;
     let ssaResult = tools.newTemp('cond');
-    tools.emit(`let ${ssaResult} = NIL; ${ssaResult}: {`);
+    tools.emit(`let ${ssaResult} = ${BOTTOM}; ${ssaResult}: {`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
     for (let clause of clauses) {
@@ -548,7 +549,7 @@ export function createInstance(schemeOpts = {}) {
       tools.emit(`if (schemeTrue(${ssaPredicateValue})) {`)
       let saveIndent = tools.indent;
       tools.indent += '  ';
-      let ssaValue = 'NIL';
+      let ssaValue = `${BOTTOM}`;
       for (let form of forms) {
         ssaValue = compileEval(form, ssaScope, tools);
       }
@@ -570,14 +571,14 @@ export function createInstance(schemeOpts = {}) {
       globalScope[sym] = true;
       return sym;
     }
-    return NIL;
+    return BOTTOM;
   }
 
   // (load fname noeval-flag)
   //   If the neval-flag is true then a list of the forms is returned otherwise the forms are evaluated.
   exportAPI("load", load, { dontInline: true });
   function load(path, noEval = false) {
-    let scope = this, result = NIL, last;
+    let scope = this, result = BOTTOM, last;
     let fileContent;
     try {
       if (!readFile) throw new SchemeEvalError("No file reader defined");
@@ -644,7 +645,7 @@ export function createInstance(schemeOpts = {}) {
   function last(list) {
     if (!isIterable(list))
       throw new TypeError(`not a list or iterable ${string(list)}`);
-    let res = NIL;
+    let res = BOTTOM;
     for ( ; iterateAsList(list); list = list[REST])
         res = list[FIRST];
     if (!isNil(list)) {
@@ -652,7 +653,7 @@ export function createInstance(schemeOpts = {}) {
       if (isArray(list)) {
         if (list.length > 0)
           return list[list.length-1];
-        return NIL;
+        return BOTTOM;
       }
       for (let value of list)
         res = value;
@@ -764,7 +765,7 @@ export function createInstance(schemeOpts = {}) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (args.length < 2) throw new LogicError(`Bad catch`);
     let ssaTag = args[0];
-    let ssaResult = newTemp('siod_catch'), ssaValue = 'NIL';
+    let ssaResult = newTemp('siod_catch'), ssaValue = `${BOTTOM}`;
     emit(`let ${ssaResult};`);
     emit(`try {`);
     let saveIndent = tools.indent;

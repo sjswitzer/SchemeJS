@@ -45,6 +45,7 @@ export function run(opts = {}) {
   const list = globalScope.list ?? required();
   const Atom = globalScope.Atom ?? required();
   const compile_lambda = globalScope.compile_lambda ?? required();
+  const BOTTOM = globalScope.BOTTOM ?? required()
   const justTestJIT = opts.justTestJIT;
   function required() { throw "required" }
 
