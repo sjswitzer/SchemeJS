@@ -12,7 +12,7 @@ const isArray = Array.isArray;
 const MUL = '\u00d7', DIV = '\u00f7';
 
 //
-// Creates a SchemeJS instance.
+// Creates a SchemeJSCore instance.
 //
 // Instances are distinct to the bones; they do not even recognize each other's
 // Pairs, Atoms or NIL values. This is by design. People should be able
