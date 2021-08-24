@@ -24,6 +24,13 @@ export class TestFailureError extends Error {
 TestFailureError.prototype.name = "TestFailureError";
 
 export function run(opts = {}) {
+  innerRun({ ... opts, bottomIsLNIL: true });
+  innerRun({ ... opts, bottomIsLNIL: false });
+  console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
+  return { succeeded, failed };
+}
+
+function innerRun(opts = {}) {
   let throwOnError = opts.throwOnError ?? true;
   let reportTestFailed = opts.reportTestFailed ?? ((message, test, result, expected, report) =>
       console.error("FAILED", message, test, result, expected, report));
@@ -54,8 +61,8 @@ export function run(opts = {}) {
   let evalTestString = evalString;
 
   if (justTestJIT) {
-    return { succeeded, failed };
     testSuite();
+    return;
   }
 
   // Test Internals
@@ -72,11 +79,9 @@ export function run(opts = {}) {
   // Calling run() recursively, with new parameters, accomplishes that. But it should probably be reworked.
 
   let jitThreshold = 0;  // Means: JIT immediately (zero iterations of the interpreter)
-  run({ justTestJIT: true, jitThreshold });
+  innerRun({ justTestJIT: true, jitThreshold });
 
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
-  console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
-  return { succeeded, failed };
 
   function testSuite() {
     //
