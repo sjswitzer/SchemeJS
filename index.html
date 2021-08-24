@@ -1727,9 +1727,9 @@
         let showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
         let xAtom = Atom("x"), yAtom = Atom("y"), widthAtom = Atom("width"), heightAtom = Atom("height");
         let userMediaAtom = Atom("user-media");
-        globalScope.contextToSchemeWidget = contextToSchemeWidget;
-        let contextToSchemeWidgetMap = new WeakMap();
-        function contextToSchemeWidget(ctx) { return contextToSchemeWidgetMap.get(ctx) }
+        globalScope.contextToSchemeWidget = contextToSchemeCanvasWidget;
+        let contextToSchemeCanvasWidgetMap = new WeakMap();
+        function contextToSchemeCanvasWidget(ctx) { return contextToSchemeCanvasWidgetMap.get(ctx) }
 
         class SchemeCanvasWidget {
           _canvasFrameElement; _canvasElement; _canvas2dRenderingContext;
@@ -1925,7 +1925,7 @@
                 backingCanvas.width = neededWidth;
                 backingCanvas.height = neededHeight;
                 this._backing2dRenderingContext = backing2dRenderingContext = backingCanvas.getContext('2d');
-                contextToSchemeWidgetMap.set(backing2dRenderingContext, this);
+                contextToSchemeCanvasWidgetMap.set(backing2dRenderingContext, this);
                 // Clear to the clearColor, if any
                 if (clearColor) {
                   backing2dRenderingContext.save();
@@ -1939,7 +1939,7 @@
                   if (neededWidth < w) w = neededWidth;
                   if (neededHeight < h) h = neededHeight;
                   backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0, w, h, 0, 0, w, h);
-                  contextToSchemeWidgetMap.delete(oldBacking2dRenderingContext);
+                  contextToSchemeCanvasWidgetMap.delete(oldBacking2dRenderingContext);
                 } else {
                   let w = canvasElement.width, h = canvasElement.height;
                   if (neededWidth < w) w = neededWidth;
@@ -1951,7 +1951,7 @@
             } else {
               if (backing2dRenderingContext) {
                 this._backingCanvas = this._backing2dRenderingContext = undefined;
-                contextToSchemeWidgetMap.delete(backing2dRenderingContext);
+                contextToSchemeCanvasWidgetMap.delete(backing2dRenderingContext);
               }
             }
             // The spec says there's supposed to be a reset method, but MDN
@@ -2055,7 +2055,7 @@
           canvasFrameElement.appendChild(canvasElement);
           let canvas2dRenderingContext = canvasElement.getContext('2d');
           let schemeCanvasWidget = new SchemeCanvasWidget(canvasFrameElement, canvasElement);
-          contextToSchemeWidgetMap.set(canvas2dRenderingContext, schemeCanvasWidget);
+          contextToSchemeCanvasWidgetMap.set(canvas2dRenderingContext, schemeCanvasWidget);
           canvasCloseButtonElement.addEventListener('click', _ => schemeCanvasWidget.hide());
           canvasFrameElement.addEventListener('mousedown', mouseDown);
           canvasFrameElement.addEventListener('touchstart', mouseDown);
@@ -2142,7 +2142,7 @@
             let ssaCRC = ssaScope[gfxContextAtom];
             if (!ssaCRC)
               ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-            let ssaContextToSchemeWidget = use(bind(contextToSchemeWidget, "contextToSchemeWidget"));
+            let ssaContextToSchemeWidget = use(bind(contextToSchemeCanvasWidget, "contextToSchemeWidget"));
             let ssaWidget = newTemp("canvas_widget");
             emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
             let ssaArgStr = '', sep = '';
@@ -2153,11 +2153,49 @@
           }
         }
 
+        function WidgetPropertyHook(propName) {
+          return function widgetHookProp(args, ssaScope, tools) {
+            let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+            let ssaCRC = ssaScope[gfxContextAtom];
+              if (!ssaCRC)
+                ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
+              let ssaContextToSchemeWidget = use(bind(contextToSchemeCanvasWidget, "contextToSchemeWidget"));
+              let ssaWidget = newTemp("canvas_widget");
+              emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
+              let ssaRes = newTemp(propName + '_value');
+              emit(`let ${ssaRes} = ${ssaWidget}.${propName};`);
+              if (args.length > 0) {
+                let ssaVal = args[0];
+                emit(`if (${ssaVal} !== undefined)`);
+                emit(`  ${ssaWidget}.${propName} = ${ssaVal};`);
+              }
+              return ssaRes;
+          }
+        }
+
+        // Override canvas-width and canvas-height defined in SchemeJSWeb.mjs to use the width and height
+        // of the non-backing canvas, regardless of which canvas the client is drawing on
+        exportAPI("canvas_width", canvas_width, { compileHook: WidgetPropertyHook('width') });
+        defineBinding("canvas-width", "canvas_width", { group: "web-gfx" });
+        function canvas_width() {
+          let ctx = this[gfxContextAtom];
+          let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
+          return schemeCanvasWidget._canvasElement.width;
+        };
+
+        exportAPI("canvas_height", canvas_height, { compileHook: WidgetPropertyHook('height') });
+        defineBinding("canvas-height", "canvas_height", { group: "web-gfx" });
+        function canvas_height() {
+          let ctx = this[gfxContextAtom];
+          let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
+          return schemeCanvasWidget._canvasElement.height;
+        };
+
         exportAPI("stash_point", stash_point, { compileHook: stash_point_hook });
         defineBinding("stash-point", "stash_point", { group: "web-gfx" });
         function stash_point(x, y) {
           let ctx = this[gfxContextAtom];
-          let schemeCanvasWidget = contextToSchemeWidget(ctx);
+          let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           schemeCanvasWidget.stashX = x;
           schemeCanvasWidget.stashY = y;
           return ctx;
@@ -2167,7 +2205,7 @@
           let ssaCRC = ssaScope[gfxContextAtom];
           if (!ssaCRC)
             ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-          let ssaContextToSchemeWidget = use(bind(contextToSchemeWidget, "contextToSchemeWidget"));
+          let ssaContextToSchemeWidget = use(bind(contextToSchemeCanvasWidget, "contextToSchemeWidget"));
           let ssaWidget = newTemp("canvas_widget");
           emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
           emit(`${ssaWidget}.stashX = ${args[0] ?? undefined};`);
@@ -2179,7 +2217,7 @@
         defineBinding("move-to-stashed", "move_to_stashed", { group: "web-gfx" });
         function move_to_stashed() {
           let ctx = this[gfxContextAtom];
-          let schemeCanvasWidget = contextToSchemeWidget(ctx);
+          let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           if (schemeCanvasWidget && schemeCanvasWidget.stashX !== undefined && schemeCanvasWidget.stashY !== undefined)
           ctx.moveTo(schemeCanvasWidget.stashX, schemeCanvasWidget.stashY);
           return ctx;
@@ -2190,7 +2228,7 @@
             let ssaCRC = ssaScope[gfxContextAtom];
             if (!ssaCRC)
               ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-            let ssaContextToSchemeWidget = use(bind(contextToSchemeWidget, "contextToSchemeWidget"));
+            let ssaContextToSchemeWidget = use(bind(contextToSchemeCanvasWidget, "contextToSchemeWidget"));
             let ssaWidget = newTemp("canvas_widget"), ssaX = newTemp('stashedX'),ssaY = newTemp('stashedY');
             emit(`let ${ssaWidget} = ${ssaContextToSchemeWidget}(${ssaCRC});`);
             emit(`let ${ssaX} = ${ssaWidget}.stashX, ${ssaY} = ${ssaWidget}.stashY;`);
@@ -2203,7 +2241,7 @@
         defineBinding("line-to-stashed", "line_to_stashed", { group: "web-gfx" });
         function line_to_stashed() {
           let ctx = this[gfxContextAtom];
-          let schemeCanvasWidget = contextToSchemeWidget(ctx);
+          let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           if (schemeCanvasWidget && schemeCanvasWidget.stashX !== undefined && schemeCanvasWidget.stashY !== undefined)
           ctx.lineTo(schemeCanvasWidget.stashX, schemeCanvasWidget.stashY);
           return ctx;
@@ -2213,7 +2251,7 @@
         defineBinding("clear-canvas", "clear_canvas", { group: "web-gfx" });
         function clear_canvas() {
           let ctx = this[gfxContextAtom];
-          let schemeCanvasWidget = contextToSchemeWidget(ctx);
+          let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           schemeCanvasWidget._clear_canvas();
           return ctx;
         };
@@ -2221,7 +2259,7 @@
         exportAPI("show_canvas", show_canvas, { compileHook: WidgetFunctionHook('show_canvas') });
         defineBinding("show-canvas", "show_canvas", { group: "web-gfx" });
         function show_canvas(x = optional, y = optional, width = optional, height = optional) {
-          let ctx = this[gfxContextAtom], schemeCanvasWidget = contextToSchemeWidget(ctx);
+          let ctx = this[gfxContextAtom], schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           schemeCanvasWidget.show(x, y, width, height);
           return ctx;
         };
@@ -2229,7 +2267,7 @@
         exportAPI("hide_canvas", hide_canvas, { compileHook: WidgetFunctionHook('hide_canvas') });
         defineBinding("hide-canvas", "hide_canvas", { group: "web-gfx" });
         function hide_canvas() {
-          let ctx = this[gfxContextAtom], schemeCanvasWidget = contextToSchemeWidget(ctx);
+          let ctx = this[gfxContextAtom], schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           schemeCanvasWidget.hide();
           return ctx;
         };
