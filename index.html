@@ -1910,7 +1910,7 @@
             if (now - this._drawTime > 200 /* ms */) // Stale stash -- heuristic!
               this._stashX = this._stashY = undefined;
             this._drawTime = now;
-            let renderingContext = this._canvas2dRenderingContext;
+            let canvas2dRenderingContext = this._canvas2dRenderingContext, renderingContext = canvas2dRenderingContext;;
             let clearColor = this._clearColor;
             let canvasElement = this._canvasElement, canvasWidth = canvasElement.width, canvasHeight = canvasElement.height; 
             let backingCanvas = this._backingCanvas, backing2dRenderingContext = this._backing2dRenderingContext;
@@ -1921,7 +1921,7 @@
               let neededHeight = backingBufferHeight > canvasHeight ? backingBufferHeight : canvasHeight;
               let oldBackingCanvas = backingCanvas, oldBacking2dRenderingContext = backing2dRenderingContext;
               if (!oldBackingCanvas || neededWidth !== oldBackingCanvas.width || neededHeight !== oldBackingCanvas.height) {
-                this._backingCanvas = backingCanvas = createElement('canvas');
+                backingCanvas = this._backingCanvas = createElement('canvas');
                 backingCanvas.width = neededWidth;
                 backingCanvas.height = neededHeight;
                 this._backing2dRenderingContext = backing2dRenderingContext = backingCanvas.getContext('2d');
@@ -1949,9 +1949,10 @@
               }
               renderingContext = backing2dRenderingContext;
             } else {
-              this._backingCanvas = this._backing2dRenderingContext = undefined;
-              if (backing2dRenderingContext)
+              if (backing2dRenderingContext) {
+                this._backingCanvas = this._backing2dRenderingContext = undefined;
                 contextToSchemeWidgetMap.delete(backing2dRenderingContext);
+              }
             }
             // The spec says there's supposed to be a reset method, but MDN
             // doesn't mention it and, emperically, it doesn't exist (yet?).
@@ -1977,7 +1978,7 @@
             renderingContext.beginPath();  // Make sure no path parts hanging around
             drawFn(renderingContext, this._tickCount++);
             if (backingCanvas)
-              renderingContext.drawImage(backingCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, canvasWidth, canvasHeight);
+              canvas2dRenderingContext.drawImage(backingCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, canvasWidth, canvasHeight);
             this._staleImage = false;
           }
           redraw() {

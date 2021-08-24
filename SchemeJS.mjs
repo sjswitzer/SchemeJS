@@ -6,10 +6,10 @@
 //   4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
 //
 
-import * as SchemeJS from './SchemeJSCore.mjs';
+import * as SchemeJSCore from './SchemeJSCore.mjs';
 
-export const VERSION = SchemeJS.VERSION;
-export const LogicError = SchemeJS.LogicError;
+export const VERSION = SchemeJSCore.VERSION;
+export const LogicError = SchemeJSCore.LogicError;
 const isArray = Array.isArray;
 const MUL = '\u00d7', DIV = '\u00f7';
 
@@ -20,7 +20,7 @@ const optional = undefined;
 // Creates a SchemeJS instance.
 //
 export function createInstance(schemeOpts = {}) {
-  let globalScope = SchemeJS.createInstance(schemeOpts);
+  let globalScope = SchemeJSCore.createInstance(schemeOpts);
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
   const readFile = schemeOpts.readFile;
   const latin1Only = schemeOpts.latin1Only ?? false;
