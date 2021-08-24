@@ -70,12 +70,17 @@ export function createInstance(schemeOpts = {}) {
   //
   // SCOPE_TYPE_SYMBOL hints the printer that it's a scope... and what kind.
   const SCOPE_TYPE_SYMBOL = Symbol("SCOPE_IS");
-
   let globalScope = new Object();
   globalScope[SCOPE_TYPE_SYMBOL] = "global-scope";
+  let helpInfo = globalScope._helpInfo_ = {};
+  helpInfo.jsAPI = {};
 
-  let helpInfo = globalScope._helpInfo_ = {};  // For clients that want to implement help.
-  helpInfo.jsAPI = {}
+  exportAPI("newScope", newScope);
+  function newScope(enclosingScope, scope_type) {
+    let scope = Object.create(enclosingScope);
+    scope[SCOPE_TYPE_SYMBOL] = scope_type;
+    return scope;
+  }
 
   exportAPI("exportAPI", exportAPI, { dontInline: true })
   function exportAPI(name, value, opts) {
@@ -83,13 +88,6 @@ export function createInstance(schemeOpts = {}) {
       examineFunctionForCompilerTemplates(name, value, opts);
     globalScope[name] = value;
     helpInfo.jsAPI[name] = value;
-  }
-
-  exportAPI("newScope", newScope);
-  function newScope(enclosingScope, scope_type) {
-    let scope = Object.create(enclosingScope);
-    scope[SCOPE_TYPE_SYMBOL] = scope_type;
-    return scope;
   }
 
   //
@@ -210,18 +208,18 @@ export function createInstance(schemeOpts = {}) {
   // Thirdly, Map, Set, and TypedArray(s) are lists (subject to standardIteratorsAreLists).
   // For some reason, WeakMap and WeakSet do not currently (Aug 2021) support iteration.
   //
-  let stdIterables = [Map, Set,
+  let standardIterables = [Map, Set,
     Int8Array, Uint8Array, Uint8ClampedArray,
     Int16Array, Uint16Array,
     Int32Array, Uint32Array,
     Float32Array, Float64Array,
   ]
   // Safari doesn't yet support (Aug 2021)
-  if (typeof BigInt64Array === 'object') stdIterables.push(BigInt64Array);
-  if (typeof BigUint64Array === 'object') stdIterables.push(BigUint64Array);
+  if (typeof BigInt64Array === 'object') standardIterables.push(BigInt64Array);
+  if (typeof BigUint64Array === 'object') standardIterables.push(BigUint64Array);
 
   if (standardIteratorsAreLists) {
-    for (let cls of stdIterables)
+    for (let cls of standardIterables)
       monkeyPatchListProtocolForIterable(cls.prototype);
   }
 
@@ -504,23 +502,15 @@ export function createInstance(schemeOpts = {}) {
       fnInfo.compileHook = compileHook;
     if (compileHook || evalCount !== MAX_INTEGER) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-    } else {
-      // A policy thing, I guess. You wouldn't expect to inline an Error class definition
-      // and it's tedious to mark them all as "dontInline." This would actually be the case
-      // of any "class," but Error classes are the only ones currently defined in the
-      // SchemeJS API and there's no way to truly distinguish a class from a function
-      // in JavaScript.
-      if (subclassOf(fn, Error))
-        return;
     }
     if (opts.dontInline) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
     } else if (fnInfo.native) {
       // not an error
     } else if (!compileHook && evalCount !== MAX_INTEGER) {
-      throw new LogicError("Special function requires compile hook");
+      throw new LogicError(`Special function requires compile hook ${name}`);
     } else if (!fnInfo.valueTemplate && !fnInfo.compileHook) {
-      throw new LogicError("Function requires templatable definition or compile hook");
+      throw new LogicError(`Function requires templatable definition or compile hook ${name}`);
     }
     // Compile hooks will set ssaScope.dynamicScopeUsed if they want to
     if (compileHook)
@@ -541,17 +531,17 @@ export function createInstance(schemeOpts = {}) {
 
   class SchemeError extends Error {};
   SchemeError.prototype.name = "SchemeError";
-  exportAPI("SchemeError", SchemeError);
+  exportAPI("SchemeError", SchemeError, { dontInline: true });
 
   class SchemeEvalError extends SchemeError {};
   SchemeEvalError.prototype.name = "SchemeEvalError";
-  exportAPI("SchemeEvalError", SchemeEvalError);
+  exportAPI("SchemeEvalError", SchemeEvalError, { dontInline: true });
 
   class SchemeCompileError extends SchemeError {};
   SchemeCompileError.prototype.name = "SchemeCompileError";
-  exportAPI("SchemeCompileError", SchemeCompileError);
+  exportAPI("SchemeCompileError", SchemeCompileError, { dontInline: true });
 
-  exportAPI("LogicError", LogicError);
+  exportAPI("LogicError", LogicError), { dontInline: true };
 
   let EVALUATE_KEY_VALUE_SYMBOL = Symbol("EVALUATE-KEY-VALUE")
   exportAPI("EVALUATE_KEY_VALUE_SYMBOL", EVALUATE_KEY_VALUE_SYMBOL);

@@ -852,7 +852,7 @@ export function createInstance(schemeOpts = {}) {
   
   class SchemeParseError extends SchemeError {};
   SchemeParseError.prototype.name = "SchemeParseError";
-  exportAPI("SchemeParseError", SchemeParseError);
+  exportAPI("SchemeParseError", SchemeParseError, { dontInline: true });
 
   class SchemeSyntaxError extends SchemeParseError {
     path; errorToken; position; line; lineChar
@@ -868,7 +868,7 @@ export function createInstance(schemeOpts = {}) {
     }
   };
   SchemeSyntaxError.prototype.name = "SchemeSyntaxError";
-  exportAPI("SchemeSyntaxError", SchemeSyntaxError);
+  exportAPI("SchemeSyntaxError", SchemeSyntaxError, { dontInline: true });
 
   class SchemeParseIncompleteError extends SchemeParseError {
     path; token; parseContext; position; line; lineChar;
@@ -886,7 +886,7 @@ export function createInstance(schemeOpts = {}) {
     }
   };
   SchemeParseIncompleteError.prototype.name = "SchemeParseIncompleteError";
-  exportAPI("SchemeParseIncompleteError", SchemeParseIncompleteError);
+  exportAPI("SchemeParseIncompleteError", SchemeParseIncompleteError, { dontInline: true });
 
   //
   // Character clases for parsing
@@ -1490,7 +1490,7 @@ export function createInstance(schemeOpts = {}) {
       });
 
     defineBinding("Date-now", Date.now, {
-      group: "util", sample: "(Date-now)",
+      group: "utility", sample: "(Date-now)",
       blurb: `Milliseconds since midnight 1 Jan 1970 UTC, the unix epoch.`
     });
     defineBinding("intern", "Atom", {
@@ -1632,19 +1632,19 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Compiles and defines a function.`
     });
     defineBinding("letrec", "letrec", "let*", "let", {
-      group: "main", sample: `(let ((var val ...) ...) form ...)`, 
+      group: "control-flow", sample: `(let ((var val ...) ...) form ...)`, 
       blurb: `Evaluates the forms where the variable are bound to the given values.`
     });
     defineBinding("throw", "throw", {
-      group: "main", sample: `(throw form ...)`, 
+      group: "control-flow", sample: `(throw form ...)`, 
       blurb: `TBD`
     });
     defineBinding("catch", "catch", {
-      group: "main", sample: `(catch (error-var form ...) form ...)`, 
+      group: "control-flow", sample: `(catch (error-var form ...) form ...)`, 
       blurb: `TBD`
     });
     defineBinding("*throw", "siod_throw", {
-      group: "main", sample: `(throw form ...)`, 
+      group: "control-flow", sample: `(throw form ...)`, 
       blurb: `TBD`
     });
     defineBinding("*catch", "siod_catch", {
@@ -1652,23 +1652,27 @@ export function createInstance(schemeOpts = {}) {
       blurb: `TBD`
     });
     defineBinding("for-in", "for_in", {
-      group: "main", sample: `(for-in key value obj form ...)`, 
+      group: "control-flow", sample: `(for-in key value obj form ...)`, 
       blurb: `TBD`
     });
     defineBinding("for-of", "for_of", {
-      group: "main", sample: `(for-of value obj form ...)`, 
+      group: "control-flow", sample: `(for-of value obj form ...)`, 
       blurb: `TBD`
     });
+    defineBinding("return", "return", {
+      group: "control-flow", sample: `(return form ...)`, 
+      blurb: `Returns the falue of the last form from the enclosing lambda.`
+    });
     defineBinding("require", "require", {
-      group: "main", sample: `(require "filename")`, 
+      group: "utility", sample: `(require "filename")`, 
       blurb: `TBD`
     });
     defineBinding("load", "load", {
-      group: "main", sample: `(load "filename")`, 
+      group: "utility", sample: `(load "filename")`, 
       blurb: `TBD`
     });
     defineBinding("println", "println", {
-      group: "main", sample: `(println "string")`, 
+      group: "utility", sample: `(println "string")`, 
       blurb: `TBD`
     });
     defineBinding("to-string", "string", {
@@ -1734,15 +1738,15 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Returns a list elements of the lists where the predicate-function is true of that element.`
     });
     defineBinding("&&", "and", "and", {
-      group: "logical-op", sample: `(&& value ...)`, 
+      group: "logical", sample: `(&& value ...)`, 
       blurb: `Logical "and." Stops evaluating and returns the first value that is false; otherwise returns the last value.`
     });
     defineBinding("||", "or", "or", {
-      group: "logical-op", sample: `(|| value ...)`, 
+      group: "logical", sample: `(|| value ...)`, 
       blurb: `Logical "or." Stops evaluating and returns the first value that is true; otherwise returns the last value.`
     });
     defineBinding("??", "nullish", "nullish", {
-      group: "logical-op", sample: `(?? value ...)`, 
+      group: "logical", sample: `(?? value ...)`, 
       blurb: `"Nullish" operator. Stops evaluating and returns the first value that neither null or undefined; otherwise returns the last value.`
     });
     defineBinding("~", "bit_not", "bit-not", {
@@ -1774,68 +1778,68 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Arithmetic right shift of "value" considered as a 32-bit integer by "shift" bits, extending the sign bit`
     });
     defineBinding("+", "add", "add", {
-      group: "math-op", sample: `(+ value ...)`, 
+      group: "math", sample: `(+ value ...)`, 
       blurb: `Adds each value.`
     });
     defineBinding("-", "sub", "sub", {
-      group: "math-op", sample: `(- value ...)`, 
+      group: "math", sample: `(- value ...)`, 
       blurb: `Subtracts each value from the first. If only one value is given, it is negated.`
     });
     defineBinding("*", "mul", MUL, "mul", {
-      group: "math-op", sample: `(* value ...)`, 
+      group: "math", sample: `(* value ...)`, 
       blurb: `Multiplies each value.`
     });
     defineBinding("/", "div", DIV, "div", {
-      group: "math-op", sample: `(/ value ...)`, 
+      group: "math", sample: `(/ value ...)`, 
       blurb: `Divides the first value by each subsequnt value. If only one value is given, it is inverted.`
     });
     defineBinding("%", "rem", "rem", {
-      group: "math-op", sample: `(% value value)`, 
+      group: "math", sample: `(% value value)`, 
       blurb: `Remainder of the first value divided by the second.`
     });
     defineBinding("**", "pow", "pow", {
-      group: "math-op", sample: `(** value value)`, 
+      group: "math", sample: `(** value value)`, 
       blurb: `The first value taken to the power of the second.`
     });
     defineBinding("<", "lt", "lt", {
-      group: "compare-op", sample: `(< value ...)`, 
+      group: "compare", sample: `(< value ...)`, 
       blurb: `Returns true if each value is less than the previous. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding("<=", "le", "le", {
-      group: "compare-op", sample: `(<= value ...)`, 
+      group: "compare", sample: `(<= value ...)`, 
       blurb: `Returns true if each value is less than or equal the previous. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding(">", "gt", "gt", {
-      group: "compare-op", sample: `(> value ...)`, 
+      group: "compare", sample: `(> value ...)`, 
       blurb: `Returns true if each value is greater than than the previous. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding(">=", "ge", "ge", {
-      group: "compare-op", sample: `(>= value ...)`, 
+      group: "compare", sample: `(>= value ...)`, 
       blurb: `Returns true if each value is greater than or equal the previous. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding("==", "eq", "eq", {
-      group: "compare-op", sample: `(== value ...)`, 
+      group: "compare", sample: `(== value ...)`, 
       blurb: `Returns true if each value is equal to the previous, in the JavaScript "==" sense. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding("===", "eeq", "eeq", {
-      group: "compare-op", sample: `(=== value ...)`, 
+      group: "compare", sample: `(=== value ...)`, 
       blurb: `Returns true if each value is equal to the previous, in the JavaScript "===" sense. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding("!=", "neq", "neq", {
-      group: "compare-op", sample: `(!= value ...)`, 
+      group: "compare", sample: `(!= value ...)`, 
       blurb: `Returns true unless each value is equal to the previous, in the JavaScript "==" sense. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding("!==", "neeq", "neeq", {
-      group: "compare-op", sample: `(!== value ...)`, 
+      group: "compare", sample: `(!== value ...)`, 
       blurb: `Returns true unless each value is equal to the previous, in the JavaScript "===" sense. Evaluation ends as soon as the comparison fails.`
     });
     defineBinding("equal", "equal", {
-      group: "compare-op", sample: `(equal value value [options])`, 
+      group: "compare", sample: `(equal value value [options])`, 
       blurb: `Returns true if the two values are "deeply equal`
     });
     defineBinding("nequal",
       (a, b, maxDepth = 10000, maxLength = 10000000, report = {}) => equal(a, b, maxDepth, maxLength, report), {
-      group: "compare-op", sample: `(nequal value value [options])`, 
+      group: "compare", sample: `(nequal value value [options])`, 
       blurb: `Returns false if the two values are "deeply equal`
     });
     defineBinding("?", "if", "if", {
@@ -1947,15 +1951,15 @@ export function createInstance(schemeOpts = {}) {
          `Otherwise, evaluates and returns f-expr (default false).`
     });
     defineBinding("begin", "begin", {
-      group: "flow-op", sample: `(begin expr ...)`, 
+      group: "control-flow", sample: `(begin expr ...)`, 
       blurb: `Evaluates each expression in turn, resulting in the value of the last.`
     });
     defineBinding("prog1", "prog1", {
-      group: "flow-op", sample: `(prog1 expr ...)`, 
+      group: "control-flow", sample: `(prog1 expr ...)`, 
       blurb: `Evaluates each expression in turn, resulting in the value of the first.`
     });
     defineBinding("cond", "cond", {
-      group: "flow-op", sample: `(cond (test expr ...) ...)`, 
+      group: "control-flow", sample: `(cond (test expr ...) ...)`, 
       blurb: `Evaluates the expressions of the first clause in which "test" is true.`
     });
     defineBinding("in", (a,b) => a in b, {
@@ -1999,32 +2003,32 @@ export function createInstance(schemeOpts = {}) {
     defineBinding("void", _ => undefined, {
       group: "js-op", sample: `(void ...)` });
     defineBinding("not", a => typeof a === 'function' ? ((...params) => !schemeTrue(a(...params))) : !schemeTrue(a), {
-      group: "logical-op", sample: `(not value)`,
+      group: "logical", sample: `(not value)`,
       blurb: `Returns true if "value" is false, null, undefined, or nil. ` + 
              `If "value" is a function, returns a function that negates the fuction's value. ` +
              `Otherwise, returns false.` });
     defineBinding("!", a => !schemeTrue(a), {
-      group: "logical-op", sample: `(! value)`,
+      group: "logical", sample: `(! value)`,
       blurb: `Returns true if "value" is false, null, undefined, or nil. ` + 
              `Otherwise, returns false.` });
     defineBinding("to-lower-case", "to_lower_case", {
-      group: "util", sample: `(to-lower-case string [locale])`, 
+      group: "utility", sample: `(to-lower-case string [locale])`, 
       blurb: `Converts the string to lower case.`
     });
     defineBinding("to-upper-case", "to_upper_case", {
-      group: "util", sample: `(to-upper-case string [locale])`, 
+      group: "utility", sample: `(to-upper-case string [locale])`, 
       blurb: `Converts the string to upper case.`
     });
     defineBinding("max", "max", {
-      group: "util", sample: `(max value ...)`, 
+      group: "utility", sample: `(max value ...)`, 
       blurb: `The maximum of a set of values.`
     });
     defineBinding("min", "min", {
-      group: "util", sample: `(max value ...)`, 
+      group: "utility", sample: `(max value ...)`, 
       blurb: `The minimum of a set of values.`
     });
     defineBinding("apropos", "apropos", {
-      group: "util", sample: `(apropos ["substr"])`, 
+      group: "utility", sample: `(apropos ["substr"])`, 
       blurb: `Returns a list of current definitions matching the substring, or all definitions if absent.`
     });
   }

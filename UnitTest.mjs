@@ -53,8 +53,8 @@ export function run(opts = {}) {
   let evalTestString = evalString;
 
   if (justTestJIT) {
-    testSuite();
     return { succeeded, failed };
+    testSuite();
   }
 
   // Test Internals
