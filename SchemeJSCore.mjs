@@ -1271,7 +1271,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
-  // Lazy lists by decaying down to ordinary Cons cells as evaluated
+  // Lazy lists by decaying down to ordinary Cons cells as evaluated.
   //
   class LazyFirstList {
     [LAZYFIRST]; [REST];
@@ -1298,68 +1298,6 @@ export function createInstance(schemeOpts = {}) {
   LazyFirstList.prototype[ITERATE_AS_LIST] = true;
   LazyFirstList.prototype[MORELIST] = true;
 
-  class LazyRestList {
-    [FIRST]; [LAZYREST];
-    constructor(first, getRest) {
-      this[FIRST] = first;
-      this[LAZYREST] = getRest;
-    }
-    toString() { return string(this) }
-    get [REST]() {
-      let rest = this[LAZYREST]();
-      delete this[LAZYREST];
-      Object.setPrototypeOf(this, Pair.prototype);
-      return this[REST] = rest;
-    }
-    set [REST](val) {
-      delete this[LAZYREST];
-      Object.setPrototypeOf(this, Pair.prototype);
-      this[REST] = val;
-    }
-    [Symbol.iterator] = pairIterator();
-  }
-  LazyRestList.prototype[LIST] = true;
-  LazyRestList.prototype[LAZYREST] = true;
-  LazyRestList.prototype[ITERATE_AS_LIST] = true;
-  LazyRestList.prototype[MORELIST] = true;  // TODO: this isn't right at the end
-
-  class LazyFirstRestList {
-    [LAZYFIRST]; [LAZYREST];
-    constructor(getCar, getCdr) {
-      this[LAZYFIRST] = getCar;
-      this[LAZYREST] = getCdr;
-    }
-    toString() { return string(this) }
-    get [FIRST]() {
-      let first = this[LAZYFIRST]();
-      delete this[LAZYFIRST];
-      Object.setPrototypeOf(this, LazyRestList.prototype);
-      return this[FIRST] = first;
-    }
-    set [FIRST](val) {
-      delete this[LAZYFIRST];
-      Object.setPrototypeOf(this, LazyRestList.prototype);
-      this[FIRST] = val;
-    }
-    get [REST]() {
-      let cdr = this[LAZYREST]();
-      delete this[LAZYREST];
-      Object.setPrototypeOf(this, LazyFirstList.prototype);
-      return this[REST] = cdr;
-    }
-    set [REST](val) {
-      delete this[LAZYREST];
-      Object.setPrototypeOf(this, LazyFirstList.prototype);
-      this[REST] = val;
-    }
-    [Symbol.iterator] = pairIterator();
-  }
-  LazyFirstRestList.prototype[LIST] = true;
-  LazyFirstRestList.prototype[LAZYFIRST] = true;
-  LazyFirstRestList.prototype[LAZYREST] = true;
-  LazyFirstRestList.prototype[ITERATE_AS_LIST] = true;
-  LazyFirstRestList.prototype[MORELIST] = true;  // TODO: this isn't right at the end.
-  
   //
   // Doesn't even know if it's a cons cell or null yet!
   //
