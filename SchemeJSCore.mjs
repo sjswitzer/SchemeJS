@@ -3163,6 +3163,14 @@ export function createInstance(schemeOpts = {}) {
       body = new Pair(evalCount, body);
     }
     let closureForm = new Pair(closureAtom, new Pair("PATCH", body));
+    // NOTE: The compiler is misssing an opportunity her that I want to return to
+    // later. If the compiled lambda (and in compileEval, closure)
+    // references unbound parameters (requiresScope here), it should
+    // *also* set a compileHook in foNofo so that if the compiler sees the
+    // function (or closure) again, it will try to compile it again
+    // in a new scope which coul potentially satisfy those references).
+    // It's trivial to write but hard to test so I'm saiving it for a
+    // rainy day. More important things to do right now.R
     let fnInfo = { requiresScope: tools.usesDymanicScope, requiredCount, evalCount, params: ssaParamv, restParam: ssaRestParam };
     decorateCompiledClosure(ssaFunction, displayName, closureForm, fnInfo, tools);
     tools.usesDymanicScope = saveUsesDynamicScope;
