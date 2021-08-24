@@ -1723,7 +1723,7 @@
       function defineGraphicsFunctions() {
         let newCanvasX = 20, newCanvasY = 10;
         let gfxContextAtom = Atom("gfx-context"), drawAtom = Atom("draw");
-        let animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas");
+        let animateAtom = Atom("animate"), clearCanvasAtom = Atom("clear-canvas"), backingBufferAtom = Atom("backing-buffer");;
         let showAtom = Atom("show"), hideAtom = Atom("hide"), clearColorAtom = Atom("clear-color");
         let xAtom = Atom("x"), yAtom = Atom("y"), widthAtom = Atom("width"), heightAtom = Atom("height");
         let userMediaAtom = Atom("user-media");
@@ -1734,6 +1734,7 @@
         class SchemeCanvasWidget {
           _canvasFrameElement; _canvasElement; _canvas2dRenderingContext;
           _clearColor; _animate = false; _clearCanvasMode = true;
+          _backingBufferWidth = 0; _backingBufferHeight = 0; _backingCanvas; _backing2dRenderingContext;
           _staleImage = false; _forceClear = false;
           _drawTime = Date.now(); _tickCount = 0; _stashX; _stashY;
           _volumeElement; _muteElement;
@@ -1768,6 +1769,7 @@
           get canvasElement() { return this._canvasElement }
           get canvasFrame() { return this._canvasFrameElement }
           get canvas2dRenderingContext() { return this._canvas2dRenderingContext }
+          backingBuffer(width, height = width) { return this[backingBufferAtom](width, height) }
 
           // Scheme API
           get [xAtom]() { return parseInt(this._canvasFrameElement.style.left) }
@@ -1801,6 +1803,10 @@
           set [clearColorAtom](value) { this._clearColor = value; this._forceClear = true; }
           get [Atom('fft-size')]() { return this._fftSize }
           set [Atom('fft-size')](value) { this._fftSize = Math.max(32, Math.min(32768, 2**Math.ceil(Math.log2(value)))) }
+          [backingBufferAtom](width, height = width) {
+            this._backingBufferWidth = width;
+            this._backingBufferHeight = height;
+          }
           [showAtom](x = optional, y = optional, width = optional, height = optional) {
             let cfe = this._canvasFrameElement;
             if (x !== undefined) this[xAtom] = x;
@@ -1838,15 +1844,17 @@
           }
           // Utility methods
           _clear_canvas() {
-            let crc = this._canvas2dRenderingContext;
-            crc.save();
+            let cxt = this._canvas2dRenderingContext;
+            if (this._backing2dRenderingContext)
+              cxt = this._backing2dRenderingContext;
+            cxt.save();
             let clearColor = this._clearColor;
             if (clearColor) {
-              crc.fillStyle = clearColor;
-              crc.fillRect(0, 0, this._width, this._width);
+              cxt.fillStyle = clearColor;
+              cxt.fillRect(0, 0, this._width, this._width);
             } else {}
-              crc.clearRect(0, 0, this._width, this._height);
-            crc.restore();
+              cxt.clearRect(0, 0, this._width, this._height);
+            cxt.restore();
           }
           _attachAnalyzer() {
             if (this._audioAnalyser || !this._audioContext || !this._gainNode) return;
@@ -1902,7 +1910,49 @@
             if (now - this._drawTime > 200 /* ms */) // Stale stash -- heuristic!
               this._stashX = this._stashY = undefined;
             this._drawTime = now;
-            let ctx = this._canvas2dRenderingContext;
+            let renderingContext = this._canvas2dRenderingContext;
+            let clearColor = this._clearColor;
+            let canvasElement = this._canvasElement, canvasWidth = canvasElement.width, canvasHeight = canvasElement.height; 
+            let backingCanvas = this._backingCanvas, backing2dRenderingContext = this._backing2dRenderingContext;
+            let backingBufferWidth = this._backingBufferWidth, backingBufferHeight = this._backingBufferHeight;
+            // If we're using a backing buffer make sure it (a) exists and (b) is big enough
+            if (backingBufferWidth > 0 && backingBufferHeight > 0) {
+              let neededWidth = backingBufferWidth > canvasWidth ? backingBufferWidth : canvasWidth;
+              let neededHeight = backingBufferHeight > canvasHeight ? backingBufferHeight : canvasHeight;
+              let oldBackingCanvas = backingCanvas, oldBacking2dRenderingContext = backing2dRenderingContext;
+              if (!oldBackingCanvas || neededWidth !== oldBackingCanvas.width || neededHeight !== oldBackingCanvas.height) {
+                this._backingCanvas = backingCanvas = createElement('canvas');
+                backingCanvas.width = neededWidth;
+                backingCanvas.height = neededHeight;
+                this._backing2dRenderingContext = backing2dRenderingContext = backingCanvas.getContext('2d');
+                contextToSchemeWidgetMap.set(backing2dRenderingContext, this);
+                // Clear to the clearColor, if any
+                if (clearColor) {
+                  backing2dRenderingContext.save();
+                  backing2dRenderingContext.fillStyle = clearColor;
+                  backing2dRenderingContext.fillRect(0, 0, neededWidth, neededHeight);
+                  backing2dRenderingContext.restore();
+                }
+                // Transfer old contents to the new buffer
+                if (oldBackingCanvas) {
+                  let w = oldBackingCanvas.width, h = oldBackingCanvas.height;
+                  if (neededWidth < w) w = neededWidth;
+                  if (neededHeight < h) h = neededHeight;
+                  backing2dRenderingContext.drawImage(oldBackingCanvas, 0, 0, w, h, 0, 0, w, h);
+                  contextToSchemeWidgetMap.delete(oldBacking2dRenderingContext);
+                } else {
+                  let w = canvasElement.width, h = canvasElement.height;
+                  if (neededWidth < w) w = neededWidth;
+                  if (neededHeight < h) h = neededHeight;
+                  backing2dRenderingContext.drawImage(canvasElement, 0, 0, w, h, 0, 0, w, h);
+                }
+              }
+              renderingContext = backing2dRenderingContext;
+            } else {
+              this._backingCanvas = this._backing2dRenderingContext = undefined;
+              if (backing2dRenderingContext)
+                contextToSchemeWidgetMap.delete(backing2dRenderingContext);
+            }
             // The spec says there's supposed to be a reset method, but MDN
             // doesn't mention it and, emperically, it doesn't exist (yet?).
             // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-reset
@@ -1910,24 +1960,24 @@
             // So instead, pop a buncha renderingContexts, reset the
             // transform and, optionally clear the screen
             for (let i = 0; i < 20; ++i);
-              ctx.restore();
-            ctx.resetTransform();
-            ctx.save();  // So we can easily restore context (just above)
-            let canvas = this._canvasElement, canvasWidth = canvas.width, canvasHeight = canvas.height;
+              renderingContext.restore();
+            renderingContext.resetTransform();
+            renderingContext.save();  // So we can easily restore context (just above)
             if (this._clearCanvasMode || this._forceClear) {
               this._forceClear = false;
-              let clearColor = this._clearColor;
               if (clearColor) {
-                ctx.save();
-                ctx.fillStyle = clearColor;
-                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-                ctx.restore();
+                renderingContext.save();
+                renderingContext.fillStyle = clearColor;
+                renderingContext.fillRect(0, 0, canvasWidth, canvasHeight);
+                renderingContext.restore();
               } else {
-                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                renderingContext.clearRect(0, 0, canvasWidth, canvasHeight);
               }
             }
-            ctx.beginPath();  // Make sure no path parts hanging around
-            drawFn(ctx, this._tickCount++);
+            renderingContext.beginPath();  // Make sure no path parts hanging around
+            drawFn(renderingContext, this._tickCount++);
+            if (backingCanvas)
+              renderingContext.drawImage(backingCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, canvasWidth, canvasHeight);
             this._staleImage = false;
           }
           redraw() {
