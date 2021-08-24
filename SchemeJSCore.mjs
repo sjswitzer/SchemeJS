@@ -92,6 +92,8 @@ export function createInstance(schemeOpts = {}) {
     helpInfo.jsAPI[name] = value;
   }
 
+  exportAPI("COMPILE_INFO", COMPILE_INFO);
+
   //
   // Unlike most Lisps, the Cons cell (Pair) is not central to this design, but a _list_ is.
   // A list is like an iterator and all lists are iterable, but a list is different

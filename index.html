@@ -574,11 +574,8 @@
         <label for="javascript">JavaScript API</label>
       </div>
       <div class="help-content">
-        <h3> Core Operations</h3>
+        <h3> Core Definitions</h3>
         <dl class="definitions" id="helpgroup-main">
-          <dt class="heading"> Symbol
-            <dd class="heading"> Description
-
           <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
         <h3> Mathematical Operations </h3>
@@ -613,28 +610,28 @@
         <dl class="definitions" id="helpgroup-pred-op">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h3> Utility Opeations </h3>
+        <h3> Utility </h3>
         <dl class="definitions" id="helpgroup-utility">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h2> List Operations </h2>
+        <h3> List Operations </h2>
         <dl class="definitions" id="helpgroup-list">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h2> JavaScript-Related Operations </h2>
+        <h3> JavaScript-Related </h2>
         <p> The implementations should explain what they do well enough.
-        <dl class="definitions" id="helpgroup-js-op">
+        <dl class="definitions" id="helpgroup-javascript">
           <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h2> Web Graphics </h2>
+        <h3> Web Graphics </h2>
         <dl class="definitions" id="helpgroup-web-gfx">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h2> Uncategorized </h2>
+        <h3> Uncategorized </h2>
         <dl class="definitions" id="helpgroup-undefined">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h2> Functions and Constants Imported from JavaScript </h2>
+        <h3> Functions and Constants Imported from JavaScript </h2>
         <dl class="definitions" id="helpgroup-imported">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
@@ -1590,6 +1587,7 @@
       function buildBuiltinHelp(globalScope) {
         const string = globalScope.string;
         let helpInfo = globalScope._helpInfo_, groups = {}, jsAPI = helpInfo.jsAPI;
+        let COMPILE_INFO = globalScope.COMPILE_INFO;
         let jsAPIMap = new Map();
         // Invert the JS API names
         for (let jsName in jsAPI)
@@ -1597,20 +1595,20 @@
         // Invert by group on atom sort key
         for (let atom of Object.getOwnPropertySymbols(helpInfo)) {
           let info = helpInfo[atom], helpGroup = info.group;
-          let groupDict = groups[helpGroup];
-          if (!groupDict)
-            groupDict = groups[helpGroup] = {};
-          groupDict[keyFor(atom)] = info;
+          let symTab = groups[helpGroup];
+          if (!symTab)
+            symTab = groups[helpGroup] = [];
+          symTab.push({key: keyFor(atom), ...info});
         }
         for (let helpGroup in groups) {
           let symtab = groups[helpGroup];
+          symtab.sort((a,b) => a.key < b.key ? -1 : 1);
           let helpElement = document.getElementById(`helpgroup-${helpGroup}`);
           if (!helpElement) {
             console.error("Missing help group", helpGroup);
             continue;
           }
-          for (let key in symtab) {
-            let info = symtab[key];
+          for (let info of symtab) {
             let atoms = info.atoms;
             let atom = atoms[0];
             let value = info.value;
@@ -1629,11 +1627,16 @@
             } else {
               helpElement.appendChild(createElement('dt', null, atom.description));
             }
-            let elementId = "defn-" + atom.description;
+            let elementId = "defnXXX-" + atom.description;
             let dd = document.getElementById(elementId);
             if (!dd) {
               dd = createElement('dd');
-              dd.appendChild(createElement('span', 'tbd', `TBD defn-${atoms[0].description}`));
+              if (info.sample)
+                dd.textContent = info.sample;
+              if (info.blurb)
+                dd.appendChild(createElement('p', null, info.blurb));
+              if (!info.sample && !info.blurb)
+                dd.appendChild(createElement('span', 'tbd', `TBD defn-${atoms[0].description}`));
             }
             helpElement.appendChild(dd);
             if (typeof value === 'function')
@@ -1641,9 +1644,11 @@
             else
               dd.appendChild(createElement('p', 'value', string(value)));
             if (jsName) {
+              let fnInfo = value[COMPILE_INFO];
+              let requiresScopeStr = fnInfo?.requiresScope ? " (requires scope)" : "";
               let jsNamesElement = createElement('p', 'js-names');
               dd.appendChild(jsNamesElement);
-              jsNamesElement.appendChild(createElement('span', 'js-name', jsName));
+              jsNamesElement.appendChild(createElement('span', 'js-name', jsName + requiresScopeStr));
             }
           }
         }

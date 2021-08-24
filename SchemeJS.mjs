@@ -1474,7 +1474,7 @@ export function createInstance(schemeOpts = {}) {
     }
 
     defineBinding("abs", "abs", {  // Overwrite Math.abs; this version deals with BigInt too
-      group: "main", sample: "(abs value)",
+      group: "math", sample: "(abs value)",
       blurb: `The absolute value of "value".`
     });
 
@@ -1486,7 +1486,7 @@ export function createInstance(schemeOpts = {}) {
   
     for (let obj of [Object, Boolean, Symbol, Number, String, BigInt, Array])
       defineBinding(obj.name, obj, {
-        group: "main", sample: `${obj.name}`,
+        group: "javascript", sample: `${obj.name}`,
         blurb: `The JavaScript "${obj.name}" object.`
       });
 
@@ -1964,45 +1964,45 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Evaluates the expressions of the first clause in which "test" is true.`
     });
     defineBinding("in", (a,b) => a in b, {
-      group: "js-op", sample: `(in a b)` });
+      group: "javascript", sample: `(in a b)` });
     defineBinding("new", (cls, ...args) => new cls(...args), {
-      group: "js-op", sample: `(new cls . args)` });
+      group: "javascript", sample: `(new cls . args)` });
     defineBinding( "instanceof", (obj, cls) => obj instanceof cls, {
-      group: "js-op", sample: `(instanceof obj cls)` });
+      group: "javascript", sample: `(instanceof obj cls)` });
     defineBinding("@", (a, b) => a[b], {
-      group: "js-op", sample: `(@ a "b")` });
+      group: "javascript", sample: `(@ a "b")` });
     defineBinding("@@", (a, b, c) => a[b][c], {
-      group: "js-op", sample: `(@@ a "b" "c")` });
+      group: "javascript", sample: `(@@ a "b" "c")` });
     defineBinding("@@@", (a, b, c, d) => a[b][c][d], {
-      group: "js-op", sample: `(@@@ a "b" "c" "d")` });
+      group: "javascript", sample: `(@@@ a "b" "c" "d")` });
     defineBinding("@?", (a, b) => a?.[b], {
-      group: "js-op", sample: `(@? a "b")` });
+      group: "javascript", sample: `(@? a "b")` });
     defineBinding("@@?", (a, b, c) => a?.[b]?.[c], {
-      group: "js-op", sample: `(@@? a "b" "c")` });
+      group: "javascript", sample: `(@@? a "b" "c")` });
     defineBinding("@@@?", (a, b, c, d) => a?.[b]?.[c]?.[d], {
-      group: "js-op", sample: `(@@@? a "b" "c" "d")` });
+      group: "javascript", sample: `(@@@? a "b" "c" "d")` });
     defineBinding("@!", (a, b, ...params) => a[b](...params), {
-      group: "js-op", sample: `(@! a "b" param ...)` });
+      group: "javascript", sample: `(@! a "b" param ...)` });
     defineBinding("@@!", (a, b, c, ...params) => a[b][c](...params), {
-      group: "js-op", sample: `(@@! a "b" "c" param ...)` });
+      group: "javascript", sample: `(@@! a "b" "c" param ...)` });
     defineBinding("@@@!", (a, b, c, d, ...params) => a[b][c][d](...params), {
-      group: "js-op", sample: `(@@@! a "b" "c" "d" param ...)` });
+      group: "javascript", sample: `(@@@! a "b" "c" "d" param ...)` });
     defineBinding("@?!", (a, b, ...params) => a?.[b](...params), {
-      group: "js-op", sample: `(@?! a "b" param ...)` });
+      group: "javascript", sample: `(@?! a "b" param ...)` });
     defineBinding("@@?!", (a, b, c, ...params) => a?.[b]?.[c](...params), {
-      group: "js-op", sample: `(@@"! a "b" "c" param ...)` });
+      group: "javascript", sample: `(@@"! a "b" "c" param ...)` });
     defineBinding("@@@?!", (a, b, c, d, ...params) => a?.[b]?.[c]?.[d](...params), {
-      group: "js-op", sample: `(@@@?! a "b" "c" "d" param ...)` });
+      group: "javascript", sample: `(@@@?! a "b" "c" "d" param ...)` });
     defineBinding("@=", (a, b, c) => a[b] = c, {
-      group: "js-op", sample: `(@= a "b" c)` });
+      group: "javascript", sample: `(@= a "b" c)` });
     defineBinding("@@=", (a, b, c, d) => a[b][c] = d), {
-      group: "js-op", sample: `(@@= a "b" "c" d)` };
+      group: "javascript", sample: `(@@= a "b" "c" d)` };
     defineBinding("@@@=", (a, b, c, d, e) => a[b][b][c] = d, {
-      group: "js-op", sample: `(@@= a "b" "c" "d" e)` });
+      group: "javascript", sample: `(@@= a "b" "c" "d" e)` });
     defineBinding("delete", (a, b) => delete a[b], {
-      group: "js-op", sample: `(delete a "b")` });
+      group: "javascript", sample: `(delete a "b")` });
     defineBinding("void", _ => undefined, {
-      group: "js-op", sample: `(void ...)` });
+      group: "javascript", sample: `(void ...)` });
     defineBinding("not", a => typeof a === 'function' ? ((...params) => !schemeTrue(a(...params))) : !schemeTrue(a), {
       group: "logical", sample: `(not value)`,
       blurb: `Returns true if "value" is false, null, undefined, or nil. ` + 
