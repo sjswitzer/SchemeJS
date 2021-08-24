@@ -1739,7 +1739,7 @@
           _drawTime = Date.now(); _tickCount = 0; _stashX; _stashY;
           _volumeElement; _muteElement;
           _userMedia; _userMediaElement; _userMediaStream; _audioContext;
-          _audioAnalyser; _fftSize = 1024 ;_frequencyDataArray; _timeDomainDataArray;
+          _audioAnalyser; _fftSize = 1024 ; _frequencyDataArray = new Uint8Array(1);; _timeDomainDataArray = this._frequencyDataArray;
           constructor(canvasFrameElement, canvasElement) {
             this._canvasFrameElement = canvasFrameElement;
             this._canvasElement = canvasElement;
@@ -1827,26 +1827,24 @@
             return this;
           }
           get [Atom('frequency-domain-data')]() {
-            if (!this._audioAnalyser) this._attachAnalyzer();
-            if (this._audioAnalyser && this._frequencyDataArray.length !== 1) {
-              let fdda = this._frequencyDataArray;
+            if (!this._audioAnalyser) this._attachAnalyser();
+            let audioAnalyser = this._audioAnalyser, fdda = this._frequencyDataArray;
+            if (audioAnalyser && fdda.length !== 1)
               audioAnalyser.getByteFrequencyData(fdda);
-            }
             return fdda;
           }
           get [Atom('time-domain-data')]() {
-            if (!this._audioAnalyser) this._attachAnalyzer();
-            if (this._audioAnalyser && this._timeDomainDataArray.length !== 1) {
-              let tdda = this._timeDomainDataArray;
-              this._audioAnalyser.getByteTimeDomainData(tdda);
-            }
+            if (!this._audioAnalyser) this._attachAnalyser();
+            let audioAnalyser = this._audioAnalyser, tdda = this._timeDomainDataArray;
+            if (audioAnalyser && tdda.length !== 1)
+              audioAnalyser.getByteTimeDomainData(tdda);
             return tdda;
           }
           // Utility methods
           _clear_canvas() {
-            let cxt = this._canvas2dRenderingContext;
-            if (this._backing2dRenderingContext)
-              cxt = this._backing2dRenderingContext;
+            let cxt = this._canvas2dRenderingContext, backing2dRenderingContext = this._backing2dRenderingContext;
+            if (backing2dRenderingContext)
+              cxt = backing2dRenderingContext;
             cxt.save();
             let clearColor = this._clearColor;
             if (clearColor) {
@@ -1856,10 +1854,10 @@
               cxt.clearRect(0, 0, this._width, this._height);
             cxt.restore();
           }
-          _attachAnalyzer() {
+          _attachAnalyser() {
             if (this._audioAnalyser || !this._audioContext || !this._gainNode) return;
             let audioAnalyser = this._audioAnalyser = this._audioContext.createAnalyser();
-            audioAnalyser.fftSize = fftSize;
+            audioAnalyser.fftSize = this._fftSize;
             this._gainNode.connect(audioAnalyser);
             this._setGain();
           }
@@ -2008,10 +2006,10 @@
               if (userMediaElement)
                 canvasFrameElement.removeChild(userMediaElement);
               let deep = true;
-              userMediaElement = userMediaTemplateElement.cloneNode(deep);
+              userMediaElement = this._userMediaElement = userMediaTemplateElement.cloneNode(deep);
               userMediaElement.removeAttribute('id');
               canvasFrameElement.appendChild(userMediaElement);
-              let muteElement = this._muteElement = querySelector(".mute-toggle");
+              let muteElement = this._muteElement = userMediaElement.querySelector(".mute-toggle");
               muteElement.addEventListener('input', _ => { this._setGain() });
               let volumeElement = this._volumeElement = userMediaElement.querySelector(".volume");
               volumeElement.addEventListener('input',  _ => { setGain()});
@@ -2035,8 +2033,7 @@
                 canvasFrameElement.removeChild(userMediaElement);
               this._userMediaElement = undefined;
               this._userMediaStream = this._audioContext = this._audioAnalyser = undefined;
-              this._frequencyDataArray = new Uint8Array(1);
-              this._timeDomainDataArray = new Uint8Array(1);
+              this._frequencyDataArray = this._timeDomainDataArray = new Uint8Array(1);
             }
           }
         };
