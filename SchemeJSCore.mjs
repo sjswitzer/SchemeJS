@@ -3170,7 +3170,10 @@ export function createInstance(schemeOpts = {}) {
     // function (or closure) again, it will try to compile it again
     // in a new scope which coul potentially satisfy those references).
     // It's trivial to write but hard to test so I'm saiving it for a
-    // rainy day. More important things to do right now.R
+    // rainy day. More important things to do right now.
+    // OR, perhaps better, the compiler should just recompile any
+    // closures it sees, having the potential there to materialize the closed
+    // values in the downstream compiled code.
     let fnInfo = { requiresScope: tools.usesDymanicScope, requiredCount, evalCount, params: ssaParamv, restParam: ssaRestParam };
     decorateCompiledClosure(ssaFunction, displayName, closureForm, fnInfo, tools);
     tools.usesDymanicScope = saveUsesDynamicScope;
