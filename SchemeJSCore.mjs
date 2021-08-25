@@ -1817,169 +1817,183 @@ export function createInstance(schemeOpts = {}) {
     // is effectively a keyword in JavaScript.
     if (scope[RETURN_SYMBOL])
       throw new LogicError(`someone forgot to check scope[RETURNS_SYMBOL]`)
-    if (isNil(form)) return form;
-    if (isPrimitive(form)) return form;
-    if (typeof form === 'symbol') { // atom resolution is the most common case
-      let val = scope[form];
-      if (val === undefined) checkUndefinedInScope(form, scope);
-      return val;
-    }
-    if (TRACE_INTERPRETER)
-      console.log("EVAL", string(form));
-    if (isList(form) && !isArray(form)) {
-      let fn, args, parameterDescriptor, requiredCount, evalCount, tag;
-      do {
-        fn = form[FIRST];
-        args = form[REST];
+    do { // Macro expansion loop
+      if (isNil(form)) return form;
+      if (isPrimitive(form)) return form;
+      if (typeof form === 'symbol') { // atom resolution is the most common case
+        let val = scope[form];
+        if (val === undefined) checkUndefinedInScope(form, scope);
+        return val;
+      }
+      if (TRACE_INTERPRETER)
+        console.log("EVAL", string(form));
+      if (isList(form) && !isArray(form)) {
+        let fn = form[FIRST];
+        let args = form[REST];
         if (fn === QUOTE_ATOM) // QUOTE is a special function that will do this but catch it here anyway.
           return args[FIRST];
+        if (typeof fn === 'symbol') {  // check for a macro without evaluating
+          let symVal = scope[fn];
+          if (typeof symVal === 'function') {
+            let parameterDescriptor = fn[PARAMETER_DESCRIPTOR];
+            if (parameterDescriptor != null) {
+              let tag = parameterDescriptor && 0xff;
+              if (tag === MACRO_TAG) {
+                form = symVal.call(scope, args);
+                continue;
+              }
+            }
+          }
+        }
         fn = _eval(fn, scope);
         if (scope[RETURN_SYMBOL]) return;
         if (typeof fn !== 'function') throwBadForm();
         // See makeParameterDescriptor for the truth, but
         //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
-        parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-        requiredCount = (parameterDescriptor >> 8) & 0xfff;
-        evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-        tag = parameterDescriptor & 0xff;
+        let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+        let requiredCount = (parameterDescriptor >> 8) & 0xfff;
+        let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+        let tag = parameterDescriptor & 0xff;
         if (tag === MACRO_TAG) {
           form = fn.call(scope, args);
           continue;
         }
-      } while (false);
-      // Run through the arg list evaluating args
-      let argCount = length(args), argv = new Array(argCount);
-      for (let i = 0; iterateAsList(args); ++i, args = args[REST]) {
-        let item = args[FIRST];
-        if (i < evalCount) {
-          item = _eval(item, scope);
-          if (scope[RETURN_SYMBOL]) return;
-        }
-        argv[i] = item;
-      }
-      if (!isNil(args)) {
-        for (let item of args) {
-          item = _eval(item, scope);
-          if (scope[RETURN_SYMBOL]) return;
-          argv[i] = item;
-        }
-      }
-      argCount = argv.length;
-      let jitCompiled = fn[JITCOMPILED];
-      if (jitCompiled)
-        fn = jitCompiled;
-      let fName = namedObjects.get(fn) ?? fn.name; // Used for more than just tracing!
-      if (argCount >= requiredCount) {
-        if (TRACE_INTERPRETER) {
-          let logArgs = [ "APPLY (eval)", fName, ...argv ];
-          console.log.apply(scope, logArgs);
-        }
-        let result = fn.apply(scope, argv);
-        if (TRACE_INTERPRETER)
-          console.log("RETURNS", fName, result);
-        return result;
-      }
-      // Insufficient # of parameters. If there is at least one argument, create a closure.
-      // Otherwise, call the function with no arguments. Returning the function is tempting
-      // but that would be error-prone and create an asymmetry between functions with zero
-      // required parameters, like apropos, and those that have required parameters.
-      // The function itself can decide what to do if it receives "undefined" as its first argument.
-      if (argCount === 0) {
-        if (TRACE_INTERPRETER) {
-          let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
-          console.log.apply(scope, logArgs);
-        }
-        let result = fn.apply(scope, argv);
-        if (TRACE_INTERPRETER)
-          console.log("RETURNS", fName, result);
-        return result;
-      }
-
-      // OK, now create a closure.
-      const boundArgv = argv, boundFunction = fn;
-      let bindingClosure = (...args) => boundFunction.call(scope, ...boundArgv, ...args);
-      // A closure function leads a double life: as a closure function but also a closure form!
-      // Dig out the original function's closure, if it had one.
-      let closureBody = fn[REST];
-      let closureParams = NIL, closureForms;
-      if (closureBody) {
-        scope = closureBody[FIRST];
-        scope = newScope(scope, "closure-scope");
-        let lambdaBody = closureBody[REST];
-        if (fn[FIRST] === SCLOSURE_ATOM)  // Skip the evalCount param
-          lambdaBody = lambdaBody[REST];
-        closureParams = lambdaBody[FIRST];
-        closureForms = lambdaBody[REST];
-        for (let i = 0; i < argCount; ++i, closureParams = closureParams[REST]) {
-          if (!isList(closureParams)) throw new LogicError(`Shouldn't happen`);
-          let param = closureParams[FIRST];
-          if (isList(param) && typeof param[FIRST] === 'symbol')
-            param = [FIRST];
-          scope[param] = argv[i];
-        }
-      } else {
-        scope = newScope(scope, "closure-scope");
-        let fnInfo = analyzeJSFunction(fn);
-        let params = fnInfo.params, restParam = fnInfo.restParam, paramStr = '', sep = '';
-        for (let i = 0, lng = params.length; i < lng; ++i)
-          paramStr += sep + params[i], sep = ", ";
-        if (restParam)
-          paramStr += `${sep}...${restParam}`;
-        closureForms = new Pair(Atom(`{*js-function-${fName}(${paramStr})*}`), NIL);
-        if (restParam)
-          closureParams = Atom(restParam);
-        for (let i = params.length; i > argCount; --i)
-          closureParams = new Pair(Atom(params[i-1]), closureParams);
-        for (let i = 0; i < argCount; ++i)
-          scope[Atom(params[i])] = argv[i];
-      }
-      if (evalCount !== MAX_INTEGER) {
-        evalCount -= argCount;
-        if (evalCount < 0)
-          evalCount = 0;
-        bindingClosure[FIRST] = SCLOSURE_ATOM;
-        bindingClosure[REST] = new Pair(scope, new Pair(evalCount, new Pair(closureParams, closureForms)));
-      } else {
-        bindingClosure[FIRST] = CLOSURE_ATOM;
-        bindingClosure[REST] = new Pair(scope, new Pair(closureParams, closureForms));
-      }
-      bindingClosure[LIST] = bindingClosure[MORELIST] = bindingClosure[ITERATE_AS_LIST] = true;
-      bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
-      requiredCount -= argCount;
-      if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
-      bindingClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
-      return bindingClosure;
-    }
-
-    // Special eval for JS arrays and objects:
-    //   Values that are evaluated and placed in
-    //   a new Object or Array in correspoding position.
-    // TODO: Investigate Symbol.species (also for map, etc.)
-    if (form !== null && typeof form === 'object') {
-      if (isArray(form)) {
-        let res = [];
-        for (let element of form) {
-          res.push(_eval(element, scope));
-          if (scope[RETURN_SYMBOL]) return;
-        }
-        return res;
-      } else {
-        let res = {};
-        for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
-          let value = form[key];
-          if (key === EVALUATE_KEY_VALUE_SYMBOL) {
-            key = value[0];
-            value = value[1];
-            key = _eval(key, scope);
+        // Run through the arg list evaluating args
+        let argCount = length(args), argv = new Array(argCount);
+        do { // for parameter macros
+        for (let i = 0; iterateAsList(args); ++i, args = args[REST]) {
+          let item = args[FIRST];
+          if (i < evalCount) {
+            item = _eval(item, scope);
             if (scope[RETURN_SYMBOL]) return;
           }
-          value = _eval(value, scope);
-          if (scope[RETURN_SYMBOL]) return;
-          res[key] = value;
+          argv[i] = item;
         }
-        return res;
+        if (!isNil(args)) {
+          for (let item of args) {
+            item = _eval(item, scope);
+            if (scope[RETURN_SYMBOL]) return;
+            argv[i] = item;
+          }
+        }
+      } while (false);
+        argCount = argv.length;
+        let jitCompiled = fn[JITCOMPILED];
+        if (jitCompiled)
+          fn = jitCompiled;
+        let fName = namedObjects.get(fn) ?? fn.name; // Used for more than just tracing!
+        if (argCount >= requiredCount) {
+          if (TRACE_INTERPRETER) {
+            let logArgs = [ "APPLY (eval)", fName, ...argv ];
+            console.log.apply(scope, logArgs);
+          }
+          let result = fn.apply(scope, argv);
+          if (TRACE_INTERPRETER)
+            console.log("RETURNS", fName, result);
+          return result;
+        }
+        // Insufficient # of parameters. If there is at least one argument, create a closure.
+        // Otherwise, call the function with no arguments. Returning the function is tempting
+        // but that would be error-prone and create an asymmetry between functions with zero
+        // required parameters, like apropos, and those that have required parameters.
+        // The function itself can decide what to do if it receives "undefined" as its first argument.
+        if (argCount === 0) {
+          if (TRACE_INTERPRETER) {
+            let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
+            console.log.apply(scope, logArgs);
+          }
+          let result = fn.apply(scope, argv);
+          if (TRACE_INTERPRETER)
+            console.log("RETURNS", fName, result);
+          return result;
+        }
+
+        // OK, now create a closure.
+        const boundArgv = argv, boundFunction = fn;
+        let bindingClosure = (...args) => boundFunction.call(scope, ...boundArgv, ...args);
+        // A closure function leads a double life: as a closure function but also a closure form!
+        // Dig out the original function's closure, if it had one.
+        let closureBody = fn[REST];
+        let closureParams = NIL, closureForms;
+        if (closureBody) {
+          scope = closureBody[FIRST];
+          scope = newScope(scope, "closure-scope");
+          let lambdaBody = closureBody[REST];
+          if (fn[FIRST] === SCLOSURE_ATOM)  // Skip the evalCount param
+            lambdaBody = lambdaBody[REST];
+          closureParams = lambdaBody[FIRST];
+          closureForms = lambdaBody[REST];
+          for (let i = 0; i < argCount; ++i, closureParams = closureParams[REST]) {
+            if (!isList(closureParams)) throw new LogicError(`Shouldn't happen`);
+            let param = closureParams[FIRST];
+            if (isList(param) && typeof param[FIRST] === 'symbol')
+              param = [FIRST];
+            scope[param] = argv[i];
+          }
+        } else {
+          scope = newScope(scope, "closure-scope");
+          let fnInfo = analyzeJSFunction(fn);
+          let params = fnInfo.params, restParam = fnInfo.restParam, paramStr = '', sep = '';
+          for (let i = 0, lng = params.length; i < lng; ++i)
+            paramStr += sep + params[i], sep = ", ";
+          if (restParam)
+            paramStr += `${sep}...${restParam}`;
+          closureForms = new Pair(Atom(`{*js-function-${fName}(${paramStr})*}`), NIL);
+          if (restParam)
+            closureParams = Atom(restParam);
+          for (let i = params.length; i > argCount; --i)
+            closureParams = new Pair(Atom(params[i-1]), closureParams);
+          for (let i = 0; i < argCount; ++i)
+            scope[Atom(params[i])] = argv[i];
+        }
+        if (evalCount !== MAX_INTEGER) {
+          evalCount -= argCount;
+          if (evalCount < 0)
+            evalCount = 0;
+          bindingClosure[FIRST] = SCLOSURE_ATOM;
+          bindingClosure[REST] = new Pair(scope, new Pair(evalCount, new Pair(closureParams, closureForms)));
+        } else {
+          bindingClosure[FIRST] = CLOSURE_ATOM;
+          bindingClosure[REST] = new Pair(scope, new Pair(closureParams, closureForms));
+        }
+        bindingClosure[LIST] = bindingClosure[MORELIST] = bindingClosure[ITERATE_AS_LIST] = true;
+        bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
+        requiredCount -= argCount;
+        if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
+        bindingClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
+        return bindingClosure;
       }
-    }
+
+      // Special eval for JS arrays and objects:
+      //   Values that are evaluated and placed in
+      //   a new Object or Array in correspoding position.
+      // TODO: Investigate Symbol.species (also for map, etc.)
+      if (form !== null && typeof form === 'object') {
+        if (isArray(form)) {
+          let res = [];
+          for (let element of form) {
+            res.push(_eval(element, scope));
+            if (scope[RETURN_SYMBOL]) return;
+          }
+          return res;
+        } else {
+          let res = {};
+          for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
+            let value = form[key];
+            if (key === EVALUATE_KEY_VALUE_SYMBOL) {
+              key = value[0];
+              value = value[1];
+              key = _eval(key, scope);
+              if (scope[RETURN_SYMBOL]) return;
+            }
+            value = _eval(value, scope);
+            if (scope[RETURN_SYMBOL]) return;
+            res[key] = value;
+          }
+          return res;
+        }
+      }
+    } while (false);
     throw new LogicError(`Shouldn't happen. All cases should be handled above`);
 
     function throwBadForm() {
