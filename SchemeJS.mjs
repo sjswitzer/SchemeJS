@@ -1687,7 +1687,7 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Prints the string or strings on the "console."`
     });
     defineBinding("to-string", "string", {
-      group: "main", sample: `(to-strin gobj)`, 
+      group: "main", sample: `(to-string obj)`, 
       blurb: `Returns a string representation of the object`
     });
     defineBinding("append", "append", {
@@ -1846,12 +1846,12 @@ export function createInstance(schemeOpts = {}) {
     });
     defineBinding("equal", "equal", {
       group: "compare", sample: `(equal value value [options])`, 
-      blurb: `Returns true if the two values are "deeply equal`
+      blurb: `Returns true if the two values are "deeply equal"`
     });
     defineBinding("nequal",
       (a, b, maxDepth = 10000, maxLength = 10000000, report = {}) => equal(a, b, maxDepth, maxLength, report), {
       group: "compare", sample: `(nequal value value [options])`, 
-      blurb: `Returns false if the two values are "deeply equal`
+      blurb: `Returns false if the two values are "deeply equal"`
     });
     defineBinding("?", "if", "if", {
       group: "pred-op", sample: `(? value [t-expr true] [f-expr false])`, 
@@ -2005,10 +2005,10 @@ export function createInstance(schemeOpts = {}) {
       group: "javascript", sample: `(@@@?! a "b" "c" "d" param ...)` });
     defineBinding("@=", (a, b, c) => a[b] = c, {
       group: "javascript", sample: `(@= a "b" c)` });
-    defineBinding("@@=", (a, b, c, d) => a[b][c] = d), {
-      group: "javascript", sample: `(@@= a "b" "c" d)` };
+    defineBinding("@@=", (a, b, c, d) => a[b][c] = d, {
+      group: "javascript", sample: `(@@= a "b" "c" d)` });
     defineBinding("@@@=", (a, b, c, d, e) => a[b][b][c] = d, {
-      group: "javascript", sample: `(@@= a "b" "c" "d" e)` });
+      group: "javascript", sample: `(@@@= a "b" "c" "d" e)` });
     defineBinding("delete", (a, b) => delete a[b], {
       group: "javascript", sample: `(delete a "b")` });
     defineBinding("void", _ => undefined, {

@@ -101,13 +101,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaGfxContext;
   }
 
-  function CanvasRenderingContextFunction(scope, fn) {
-    let canvasRenderingContext = scope[gfxContextAtom];
-    fn(canvasRenderingContext);
-    return canvasRenderingContext;
-  }
-
-  function CanvasRenderingContextFunctionHook(fName, opts = {}) {
+  function CtxFnHookHook(fName, opts = {}) {
     let dup1 = opts.dup1 ?? false;
     return function crcHookFn(args, ssaScope, tools) {
       let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
@@ -155,65 +149,43 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  exportAPI("translate", translate, { compileHook: CanvasRenderingContextFunctionHook('translate') });
-  function translate(x, y) {
-    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
-    canvasRenderingContext.translate(x, y);
-    return canvasRenderingContext;
-  }
+  exportAPI("translate", translate, { compileHook: CtxFnHookHook('translate') });
+  function translate(x, y) { return this[gfxContextAtom].translate(x, y) }
 
-  exportAPI("scale", scale, { compileHook: CanvasRenderingContextFunctionHook('scale', { dup1: true }) });
-  function scale(width, height = width) {
-    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
-    canvasRenderingContext.scale(width, height);
-    return canvasRenderingContext;
-  }
+  exportAPI("scale", scale, { compileHook: CtxFnHookHook('scale', { dup1: true }) });
+  function scale(width, height = width) { return this[gfxContextAtom].scale(width, height) }
 
-  exportAPI("rotate", rotate, { compileHook: CanvasRenderingContextFunctionHook('rotate') });
-  function rotate(theta) {
-    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
-    canvasRenderingContext.rotate(theta);
-    return canvasRenderingContext;
-  }
+  exportAPI("rotate", rotate, { compileHook: CtxFnHookHook('rotate') });
+  function rotate(theta) { return this[gfxContextAtom].rotate(theta) }
 
   // You probably shouldn't be using these (use gfx-save instead!),
   // but for completeness...
-  exportAPI("save_context", save_context, { compileHook: CanvasRenderingContextFunctionHook('save') });
-  function save_context() { return CanvasRenderingContextFunction(this, ctx => ctx.save()) }
+  exportAPI("save_context", save_context, { compileHook: CtxFnHookHook('save') });
+  function save_context() { return this[gfxContextAtom].save() }
 
-  exportAPI("restore_context", restore_context, { compileHook: CanvasRenderingContextFunctionHook('restore') });
-  function restore_context() { return CanvasRenderingContextFunction(this, ctx => ctx.restore()) }
+  exportAPI("restore_context", restore_context, { compileHook: CtxFnHookHook('restore') });
+  function restore_context() { return this[gfxContextAtom].restore() }
 
   exportAPI("canvas_width", canvas_width, { compileHook: CanvasRenderingContextPropertyHook('canvas.width') });
-  function canvas_width() {
-    let ctx = this[gfxContextAtom];
-    return ctx.canvas.width;
-  };
+  function canvas_width() { return this[gfxContextAtom].canvas.width; }
 
   exportAPI("canvas_height", canvas_height, { compileHook: CanvasRenderingContextPropertyHook('canvas.height') });
-  function canvas_height() {
-    let ctx = this[gfxContextAtom];
-    return ctx.canvas.height;
-  };
+  function canvas_height() { return this[gfxContextAtom].canvas.height }
 
-  exportAPI("fill_rect", fill_rect, { compileHook: CanvasRenderingContextFunctionHook('fillRect') });
-  function fill_rect(x = 0, y = 0, width = 1, height = 1) { return CanvasRenderingContextFunction(this, ctx => ctx.fillRect(x, y, width, height)) }
+  exportAPI("fill_rect", fill_rect, { compileHook: CtxFnHookHook('fillRect') });
+  function fill_rect(x = 0, y = 0, width = 1, height = 1) { return this[gfxContextAtom].fillRect(x, y, width, height) }
   
-  exportAPI("clear_rect", clear_rect, { compileHook: CanvasRenderingContextFunctionHook('clearRect') });
-  function clear_rect(x = 0, y = 0, width = 1, height = 1) { return CanvasRenderingContextFunction(this, ctx => ctx.clearRect(x, y, width, height)) }
+  exportAPI("clear_rect", clear_rect, { compileHook: CtxFnHookHook('clearRect') });
+  function clear_rect(x = 0, y = 0, width = 1, height = 1) { return this[gfxContextAtom].clearRect(x, y, width, height) }
   
-  exportAPI("stroke_rect", stroke_rect, { compileHook: CanvasRenderingContextFunctionHook('strokeRect') });
-  function stroke_rect(x = 0, y = 0, width = 1, height = 1) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.strokeRect(x, y, width, height))
-  }
+  exportAPI("stroke_rect", stroke_rect, { compileHook: CtxFnHookHook('strokeRect') });
+  function stroke_rect(x = 0, y = 0, width = 1, height = 1) { return this[gfxContextAtom].strokeRect(x, y, width, height) }
 
-  exportAPI("fill_text", fill_text, { compileHook: CanvasRenderingContextFunctionHook('fillText') });
-  function fill_text(text, x = 0, y = 0 , maxWidth = optional) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.fillText(text, x, y , maxWidth))
-  }
+  exportAPI("fill_text", fill_text, { compileHook: CtxFnHookHook('fillText') });
+  function fill_text(text, x = 0, y = 0 , maxWidth = optional) { return this[gfxContextAtom].fillText(text, x, y , maxWidth) }
 
-  exportAPI("measure_text", measure_text, { compileHook: CanvasRenderingContextFunctionHook('measureText') });
-  function measure_text(text) { return CanvasRenderingContextFunction(this, ctx => ctx.measureText(text)) }
+  exportAPI("measure_text", measure_text, { compileHook: CtxFnHookHook('measureText') });
+  function measure_text(text) { return this[gfxContextAtom].measureText(text) }
 
   const line_width = CanvasRenderingContextProperty("lineWidth");
   exportAPI("line_width", line_width, { compileHook: CanvasRenderingContextPropertyHook('lineWidth') });
@@ -227,11 +199,11 @@ export function createInstance(schemeOpts = {}) {
   const miter_limit = CanvasRenderingContextProperty("miterLimit");
   exportAPI("miter_limit", miter_limit, { compileHook: CanvasRenderingContextPropertyHook('miterLimit') });
 
-  exportAPI("get_line_dash", get_line_dash, { compileHook: CanvasRenderingContextFunctionHook('getLineDash') });
-  function get_line_dash() { return CanvasRenderingContextFunction(this, ctx => ctx.getLineDash) }
+  exportAPI("get_line_dash", get_line_dash, { compileHook: CtxFnHookHook('getLineDash') });
+  function get_line_dash() { return this[gfxContextAtom].getLineDash() }
 
-  exportAPI("set_line_dash", set_line_dash, { compileHook: CanvasRenderingContextFunctionHook('setLineDash') });
-  function set_line_dash(segments) { CanvasRenderingContextFunction(this, ctx => ctx.setLineDash(segments)) }
+  exportAPI("set_line_dash", set_line_dash, { compileHook: CtxFnHookHook('setLineDash') });
+  function set_line_dash(segments) { this[gfxContextAtom].setLineDash(segments) }
 
   const line_dash_offset = CanvasRenderingContextProperty("lineDashOffset");
   exportAPI("line_dash_offset", line_dash_offset, { compileHook: CanvasRenderingContextPropertyHook('lineDashOffset') });
@@ -254,23 +226,17 @@ export function createInstance(schemeOpts = {}) {
   const stroke_style = CanvasRenderingContextProperty("strokeStyle");
   exportAPI("stroke_style", stroke_style, { compileHook: CanvasRenderingContextPropertyHook('strokeStyle') });
 
-  exportAPI("create_conic_gradient", create_conic_gradient, { compileHook: CanvasRenderingContextFunctionHook('createConicGradient') });
-  function create_conic_gradient(startAngle = 0, x = 0, y = 0) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.createConicGradient(startAngle, x, y))
-  }
+  exportAPI("create_conic_gradient", create_conic_gradient, { compileHook: CtxFnHookHook('createConicGradient') });
+  function create_conic_gradient(startAngle = 0, x = 0, y = 0) { return this[gfxContextAtom].createConicGradient(startAngle, x, y) }
 
-  exportAPI("create_linear_gradient", create_linear_gradient, { compileHook: CanvasRenderingContextFunctionHook('createLinearGradient') });
-  function create_linear_gradient(x0 = 0, y0 = 0, x1 = 1, y1 = 1) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.createLinearGradient(x0, y0, x1, y1))
-  }
+  exportAPI("create_linear_gradient", create_linear_gradient, { compileHook: CtxFnHookHook('createLinearGradient') });
+  function create_linear_gradient(x0 = 0, y0 = 0, x1 = 1, y1 = 1) { return this[gfxContextAtom].createLinearGradient(x0, y0, x1, y1) }
 
-  exportAPI("create_radial_gradient", create_radial_gradient, { compileHook: CanvasRenderingContextFunctionHook('createRadialGradient') });
-  function create_radial_gradient(x0 = 0, y0 = 0, r0 = 1, x1 = 0, y1 = 0, r1 = 0) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.createRadialGradient(x0, y0, r0, x1, y1, r1))
-  }
+  exportAPI("create_radial_gradient", create_radial_gradient, { compileHook: CtxFnHookHook('createRadialGradient') });
+  function create_radial_gradient(x0 = 0, y0 = 0, r0 = 1, x1 = 0, y1 = 0, r1 = 0) { return this[gfxContextAtom].createRadialGradient(x0, y0, r0, x1, y1, r1) }
 
-  exportAPI("create_pattern", create_pattern, { compileHook: CanvasRenderingContextFunctionHook('createPattern') });
-  function create_pattern(image, repetition = "repeat") { CanvasRenderingContextFunction(this, ctx => ctx.createPattern(image, repetition)) }
+  exportAPI("create_pattern", create_pattern, { compileHook: CtxFnHookHook('createPattern') });
+  function create_pattern(image, repetition = "repeat") { this[gfxContextAtom].createPattern(image, repetition) }
 
   const shadow_color = CanvasRenderingContextProperty("shadowColor");
   exportAPI("shadow_color", shadow_color, { compileHook: CanvasRenderingContextPropertyHook('shadowColor') });
@@ -281,66 +247,58 @@ export function createInstance(schemeOpts = {}) {
   const shadow_offset_y = CanvasRenderingContextProperty("shadowOffsetY");
   exportAPI("shadow_offset_y", shadow_offset_y, { compileHook: CanvasRenderingContextPropertyHook('shadowOffsetY') });
 
-  exportAPI("begin_path", begin_path, { compileHook: CanvasRenderingContextFunctionHook('beginPath') });
-  function begin_path() { return CanvasRenderingContextFunction(this, ctx => ctx.beginPath()) }
+  exportAPI("begin_path", begin_path, { compileHook: CtxFnHookHook('beginPath') });
+  function begin_path() { return this[gfxContextAtom].beginPath() }
 
-  exportAPI("close_path", close_path, { compileHook: CanvasRenderingContextFunctionHook('closePath') });
-  function close_path() { return CanvasRenderingContextFunction(this, ctx => ctx.closePath()) }
+  exportAPI("close_path", close_path, { compileHook: CtxFnHookHook('closePath') });
+  function close_path() { this[gfxContextAtom].closePath() }
 
-  exportAPI("move_to", move_to, { compileHook: CanvasRenderingContextFunctionHook('moveTo') });
-  function move_to(x = 0, y = 0) { return CanvasRenderingContextFunction(this, ctx => ctx.moveTo(x, y)) }
+  exportAPI("move_to", move_to, { compileHook: CtxFnHookHook('moveTo') });
+  function move_to(x = 0, y = 0) { return this[gfxContextAtom].moveTo(x, y) }
 
   // consistency demands defaults of 1,1, but usability suggests 0, 0
-  exportAPI("line_to", line_to, { compileHook: CanvasRenderingContextFunctionHook('lineTo') });
-  function line_to(x = 0, y = 0) { return CanvasRenderingContextFunction(this, ctx => ctx.lineTo(x, y)) }
+  exportAPI("line_to", line_to, { compileHook: CtxFnHookHook('lineTo') });
+  function line_to(x = 0, y = 0) { return this[gfxContextAtom].lineTo(x, y) }
 
-  exportAPI("bezier_curve_to", bezier_curve_to, { compileHook: CanvasRenderingContextFunctionHook('bezierCurveTo') });
-  function bezier_curve_to(cp1x = 1, cp1y = 0, cp2x = 0 , cp2y = 1, x = 1, y = 1) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y))
-  }
+  exportAPI("bezier_curve_to", bezier_curve_to, { compileHook: CtxFnHookHook('bezierCurveTo') });
+  function bezier_curve_to(cp1x = 1, cp1y = 0, cp2x = 0 , cp2y = 1, x = 1, y = 1) { return this[gfxContextAtom].bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y) }
 
-  exportAPI("quadratic_curve_to", quadratic_curve_to, { compileHook: CanvasRenderingContextFunctionHook('quadraticCurveTo') });
-  function quadratic_curve_to(cpx = 1, cpy = 0, x = 1, y = 1) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.quadraticCurveTo(cpx, cpy, x, y))
-  }
+  exportAPI("quadratic_curve_to", quadratic_curve_to, { compileHook: CtxFnHookHook('quadraticCurveTo') });
+  function quadratic_curve_to(cpx = 1, cpy = 0, x = 1, y = 1) { return this[gfxContextAtom].quadraticCurveTo(cpx, cpy, x, y) }
 
-  exportAPI("arc", arc, { compileHook: CanvasRenderingContextFunctionHook('arc') });
-  function arc(x = .5, y = .5, radius = .5, startAngle = 0, endAngle = 2*Math.pi, counterclockwise = false) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.arc(x, y, radius, startAngle, endAngle, counterclockwise))
-  }
+  exportAPI("arc", arc, { compileHook: CtxFnHookHook('arc') });
+  function arc(x = .5, y = .5, radius = .5, startAngle = 0, endAngle = 2*Math.pi, counterclockwise = false) { return this[gfxContextAtom].arc(x, y, radius, startAngle, endAngle, counterclockwise) }
 
-  exportAPI("arc_to", arc_to, { compileHook: CanvasRenderingContextFunctionHook('arcTo') });
-  function arc_to(x1 = 1, y1 = 0, x2 = 1, y2 = 1, radius = 1) { return CanvasRenderingContextFunction(this, ctx => ctx.arcTo(x1, y1, x2, y2, radius)) }
+  exportAPI("arc_to", arc_to, { compileHook: CtxFnHookHook('arcTo') });
+  function arc_to(x1 = 1, y1 = 0, x2 = 1, y2 = 1, radius = 1) { return this[gfxContextAtom].arcTo(x1, y1, x2, y2, radius) }
 
   // defaults to a circle inscribing (0,0,1,1)
-  exportAPI("ellipse", ellipse, { compileHook: CanvasRenderingContextFunctionHook('ellipse') });
-  function ellipse(x = .5, y = .5, radiusX = .5, radiusY = .5, rotation = 0, startAngle = 0, endAngle = 2*pi, counterclockwise = false) {
-    return CanvasRenderingContextFunction(this, ctx => ctx.ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise))
-  }
+  exportAPI("ellipse", ellipse, { compileHook: CtxFnHookHook('ellipse') });
+  function ellipse(x = .5, y = .5, radiusX = .5, radiusY = .5, rotation = 0, startAngle = 0, endAngle = 2*pi, counterclockwise = false) { return this[gfxContextAtom].ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise) }
 
-  exportAPI("rect", rect, { compileHook: CanvasRenderingContextFunctionHook('rect') });
-  function rect(x = 0, y, width, height) { return CanvasRenderingContextFunction(this, ctx => ctx.rect(x, y, width, height)) }
+  exportAPI("rect", rect, { compileHook: CtxFnHookHook('rect') });
+  function rect(x = 0, y, width, height) { return this[gfxContextAtom].rect(x, y, width, height) }
 
-  exportAPI("fill", fill, { compileHook: CanvasRenderingContextFunctionHook('fill') });
-  function fill(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.fill(...params)) }
+  exportAPI("fill", fill, { compileHook: CtxFnHookHook('fill') });
+  function fill(...params) { return this[gfxContextAtom].fill(...params) }
 
-  exportAPI("stroke", stroke, { compileHook: CanvasRenderingContextFunctionHook('stroke') });
-  function stroke(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.stroke(...params)) }
+  exportAPI("stroke", stroke, { compileHook: CtxFnHookHook('stroke') });
+  function stroke(...params) { return this[gfxContextAtom].stroke(...params) }
 
-  exportAPI("draw_focus_if_needed", draw_focus_if_needed, { compileHook: CanvasRenderingContextFunctionHook('drawFocusIfNeeded') });
-  function draw_focus_if_needed(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.drawFocusIfNeeded(...params)) }
+  exportAPI("draw_focus_if_needed", draw_focus_if_needed, { compileHook: CtxFnHookHook('drawFocusIfNeeded') });
+  function draw_focus_if_needed(...params) { return this[gfxContextAtom].drawFocusIfNeeded(...params) }
 
-  exportAPI("scroll_path_into_view", scroll_path_into_view, { compileHook: CanvasRenderingContextFunctionHook('scrollPathIntoView') });
-  function scroll_path_into_view(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.scrollPathIntoView(...params)) }
+  exportAPI("scroll_path_into_view", scroll_path_into_view, { compileHook: CtxFnHookHook('scrollPathIntoView') });
+  function scroll_path_into_view(...params) { return this[gfxContextAtom].scrollPathIntoView(...params) }
 
-  exportAPI("is_point_in_path", is_point_in_path, { compileHook: CanvasRenderingContextFunctionHook('isPointInPath') });
-  function is_point_in_path(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.isPointInPath(...params)) }
+  exportAPI("is_point_in_path", is_point_in_path, { compileHook: CtxFnHookHook('isPointInPath') });
+  function is_point_in_path(...params) { return this[gfxContextAtom].isPointInPath(...params) }
 
-  exportAPI("is_point_in_stroke", is_point_in_stroke, { compileHook: CanvasRenderingContextFunctionHook('isPointInStroke') });
-  function is_point_in_stroke(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.isPointInStroke(...params)) }
+  exportAPI("is_point_in_stroke", is_point_in_stroke, { compileHook: CtxFnHookHook('isPointInStroke') });
+  function is_point_in_stroke(...params) { return this[gfxContextAtom].isPointInStroke(...params) }
 
-  exportAPI("clip", clip, { compileHook: CanvasRenderingContextFunctionHook('clip') });
-  function clip(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.clip(...params)) }
+  exportAPI("clip", clip, { compileHook: CtxFnHookHook('clip') });
+  function clip(...params) { return this[gfxContextAtom].clip(...params) }
 
   const global_alpha = CanvasRenderingContextProperty("globalAlpha");
   exportAPI("global_alpha", global_alpha, { compileHook: CanvasRenderingContextPropertyHook('globalAlpha') });
@@ -348,17 +306,17 @@ export function createInstance(schemeOpts = {}) {
   const global_composite_operation = CanvasRenderingContextProperty("globalCompositeOperation");
   exportAPI("global_composite_operation", global_composite_operation, { compileHook: CanvasRenderingContextPropertyHook('globalCompositeOperation') });
 
-  exportAPI("draw_image", draw_image, { compileHook: CanvasRenderingContextFunctionHook('drawImage') });
-  function draw_image(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.drawImage(...params)) }
+  exportAPI("draw_image", draw_image, { compileHook: CtxFnHookHook('drawImage') });
+  function draw_image(...params) { return this[gfxContextAtom].drawImage(...params) }
 
-  exportAPI("create_image_data", createImageData, { compileHook: CanvasRenderingContextFunctionHook('createImageData') });
-  function createImageData(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.createImageData(...params)) }
+  exportAPI("create_image_data", createImageData, { compileHook: CtxFnHookHook('createImageData') });
+  function createImageData(...params) { return this[gfxContextAtom].createImageData(...params) }
 
-  exportAPI("get_image_data", get_image_data, { compileHook: CanvasRenderingContextFunctionHook('getImageData') });
-  function get_image_data(sx, sy, sw, sh) { return CanvasRenderingContextFunction(this, ctx => ctx.getImageData(sx, sy, sw, sh)) }
+  exportAPI("get_image_data", get_image_data, { compileHook: CtxFnHookHook('getImageData') });
+  function get_image_data(sx, sy, sw, sh) { return this[gfxContextAtom].getImageData(sx, sy, sw, sh) }
 
-  exportAPI("put_image_data", put_image_data, { compileHook: CanvasRenderingContextFunctionHook('putImageData') });
-  function put_image_data(...params) { return CanvasRenderingContextFunction(this, ctx => ctx.putImageData(...params)) }
+  exportAPI("put_image_data", put_image_data, { compileHook: CtxFnHookHook('putImageData') });
+  function put_image_data(...params) { return this[gfxContextAtom].putImageData(...params) }
 
   const image_smoothing_enabled = CanvasRenderingContextProperty("imageSmoothingEnabled");
   exportAPI("image_smoothing_enabled", image_smoothing_enabled, { compileHook: CanvasRenderingContextPropertyHook('imageSmoothingEnabled') });

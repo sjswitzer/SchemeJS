@@ -2196,7 +2196,7 @@ export function createInstance(schemeOpts = {}) {
   // particularly true of functions (closures) since a SchemeJS closure is
   // simultaneously a JavaScript function and a SchemeJS closure.
   //
-  exportAPI("to-string", a => string(a));
+  exportAPI("to_string", a => string(a));
   exportAPI("string", string, { dontInline: true });
   function string(obj, opts = {}) {
     opts = { ...schemeOpts, ...opts };

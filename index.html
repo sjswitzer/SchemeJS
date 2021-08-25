@@ -115,7 +115,7 @@
       .help dl dd {
         float: right;
         margin-inline-start: unset;
-        --definition-margin: 11ch;
+        --definition-margin: 15ch;
         --definition-percent: 80%;
         width: max(var(--definition-percent), calc(100% - var(--definition-margin)));
       }
@@ -142,6 +142,7 @@
       .help .js-name { padding-right: .5em; }
       .help .impl, .help .value, .help .js-names { display: none }
       div[data-show-impl="true"] .impl, div[data-show-impl="true"] .value { display: block; }
+      .help .impl.impl-always { display: block !important }
       div[data-show-javascript="true"] .js-names { display: block; }
 
       dl#helpgroup-js-op dd .tbd {
@@ -1049,10 +1050,14 @@
                 }
               }
               helpElement.appendChild(dd);
-              if (typeof value === 'function')
-                dd.appendChild(createElement('p', 'impl', string(value)));
-              else
+              if (typeof value === 'function') {
+                let implElement = createElement('p', 'impl', string(value));
+                if (helpGroup === 'javascript')
+                  implElement.classList.add('impl-always');
+                dd.appendChild(implElement);
+              } else {
                 dd.appendChild(createElement('p', 'value', string(value)));
+              }
               if (jsName) {
                 let fnInfo = value[COMPILE_INFO];
                 let requiresScopeStr = fnInfo?.requiresScope ? " (requires scope)" : "";
@@ -1624,7 +1629,7 @@
           return ssaCRC;
         }
         defineBinding("stash-point", "stash_point", { group: "web-gfx", sample: `(stash-point x y)`,
-          blurb: `Stashes the point with the containing canvas-widget so that subsequent ` +
+          blurb: `Stashes the point with the containing canvas widget so that subsequent ` +
                  `animation iterations can call (line-to-stashed) or (move-to-stashed).` });
 
         exportAPI("move_to_stashed", move_to_stashed, { compileHook: MoveLineStashHook('moveTo') });
@@ -1660,11 +1665,12 @@
           ctx.lineTo(schemeCanvasWidget._stashX, schemeCanvasWidget._stashY);
           return ctx;
         };
-        defineBinding("line-to-stashed", "line_to_stashed", { group: "web-gfx" });
+        defineBinding("line-to-stashed", "line_to_stashed", { group: "web-gfx", sample: `(line-to-stashed)`,
+            blurb: `Draws a lint to a point previously stashed using (stash-point x y)` });
 
         exportAPI("clear_canvas", clear_canvas, { compileHook: WidgetFunctionHook('clear_canvas') });
-        defineBinding("clear-canvas", "clear_canvas", { group: "web-gfx", sample: `(line-to-stashed)`,
-            blurb: `Adds a line segment to a point previously stashed using (stash-point x y)` });
+        defineBinding("clear-canvas", "clear_canvas", { group: "web-gfx", sample: `(clear-canvas)`,
+            blurb: `Clears the canvas)` });
 
         function clear_canvas() {
           let ctx = this[gfxContextAtom];
