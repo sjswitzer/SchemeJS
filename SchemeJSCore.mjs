@@ -1805,6 +1805,18 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("RETURN_SYMBOL", RETURN_SYMBOL);
 
   //
+  // Spread operator.
+  //
+  exportAPI("spread", spread, { tag: PARAMETER_MACRO_TAG });
+  function spread(args) {
+    if (!morelist[args])
+      throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
+    // Returns a list of cons(thing-to-eval-and-put-in-arglist, remaining-args),
+    // which happens to be args itself.
+    return args;
+  }
+
+  //
   // This is where the magic happens
   //
   // Beware that compileEval closely parallels this function, if you make a change
@@ -1832,10 +1844,10 @@ export function createInstance(schemeOpts = {}) {
         let args = form[REST];
         if (fn === QUOTE_ATOM) // QUOTE is a special function that will do this but catch it here anyway.
           return args[FIRST];
-        if (typeof fn === 'symbol') {  // check for a macro without evaluating
+        if (typeof fn === 'symbol') {  // check for a macro _without evaluating_
           let symVal = scope[fn];
           if (typeof symVal === 'function') {
-            let parameterDescriptor = fn[PARAMETER_DESCRIPTOR];
+            let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
             if (parameterDescriptor != null) {
               let tag = parameterDescriptor && 0xff;
               if (tag === MACRO_TAG) {
@@ -1854,30 +1866,40 @@ export function createInstance(schemeOpts = {}) {
         let requiredCount = (parameterDescriptor >> 8) & 0xfff;
         let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
         let tag = parameterDescriptor & 0xff;
-        if (tag === MACRO_TAG) {
-          form = fn.call(scope, args);
-          continue;
-        }
         // Run through the arg list evaluating args
-        let argCount = length(args), argv = new Array(argCount);
+        let argv = [];
         do { // for parameter macros
-        for (let i = 0; iterateAsList(args); ++i, args = args[REST]) {
-          let item = args[FIRST];
-          if (i < evalCount) {
-            item = _eval(item, scope);
-            if (scope[RETURN_SYMBOL]) return;
+          for (let i = 0; moreList(args); ++i, args = args[REST]) {
+            let item = args[FIRST];
+            if (typeof item === 'symbol') {
+              let symVal = scope[item];
+              if (typeof symval === 'function') {
+                let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+                if (parameterDescriptor != null) {
+                  let tag = parameterDescriptor && 0xff;
+                  if (tag === PARAMETER_MACRO_TAG) {
+                    let macroResult = symVal.call(scope, args[REST]);
+                    if (!moreList(macroResult))
+                      throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+                    args = macroResult[REST];
+                    let insertArgs = _eval(macroResult[FIRST], scope);
+                    for ( ; moreList(insertArgs); insertArgs = insertArgs[REST])
+                      argv.push(insertArgs[FIRST]);
+                    // if (!isNil(insertArgs)) // XXX todo
+                    //  throw new SchemeEvalError(`bad parameter macro evaluation result ${string(insertArgs)}`);
+                    continue;
+                  }
+                }
+              }
+            }
+            if (i < evalCount) {
+              item = _eval(item, scope);
+              if (scope[RETURN_SYMBOL]) return;
+            }
+            argv.push(item);
           }
-          argv[i] = item;
-        }
-        if (!isNil(args)) {
-          for (let item of args) {
-            item = _eval(item, scope);
-            if (scope[RETURN_SYMBOL]) return;
-            argv[i] = item;
-          }
-        }
-      } while (false);
-        argCount = argv.length;
+        } while (false);
+        let argCount = argv.length;
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled)
           fn = jitCompiled;
