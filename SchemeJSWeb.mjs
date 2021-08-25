@@ -383,10 +383,9 @@ export function createInstance(schemeOpts = {}) {
              `Returns the value of the last form.` });
     defineBinding("canvas-width", "canvas_width", { group: "web-gfx",
       sample: `(canvas width) -or- (canvas-width new-width)`,
-      blurb:  `Returns the current canvas width in "pixels" and optionally sets it to a new value.` });
+      blurb:  `Returns the current canvas width and optionally sets it to a new value.` });
     defineBinding("canvas-height", "canvas_height", { group: "web-gfx",
-      sample: `(canvas height) -or- (canvas-height new-width)`,
-      blurb:  `Returns the current canvas height in "pixels" and optionally sets it to a new value.` });
+      sample: `(canvas height) -or- (canvas-height new-width) in "pixels" and optionally sets it to a new value.` });
 
     //
     // Complete Canvas 2D drawing APIs:

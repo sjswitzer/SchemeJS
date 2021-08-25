@@ -2185,23 +2185,26 @@
         // Override canvas-width and canvas-height defined in SchemeJSWeb.mjs to use the width and height
         // of the non-backing canvas, regardless of which canvas the client is drawing on
         exportAPI("canvas_width", canvas_width, { compileHook: WidgetPropertyHook('width') });
-        defineBinding("canvas-width", "canvas_width", { group: "web-gfx" });
         function canvas_width() {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           return schemeCanvasWidget._canvasElement.width;
         };
+        defineBinding("canvas-width", "canvas_width", { group: "web-gfx",
+          sample: `(canvas width) -or- (canvas-width new-width)`,
+          blurb:  `Returns the current canvas width and optionally sets it to a new value.` });
 
         exportAPI("canvas_height", canvas_height, { compileHook: WidgetPropertyHook('height') });
-        defineBinding("canvas-height", "canvas_height", { group: "web-gfx" });
         function canvas_height() {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           return schemeCanvasWidget._canvasElement.height;
         };
+        defineBinding("canvas-height", "canvas_height", { group: "web-gfx",
+          sample: `(canvas height) -or- (canvas-height new-width)`,
+          blurb:  `Returns the current canvas height and optionally sets it to a new value.` });
 
         exportAPI("stash_point", stash_point, { compileHook: stash_point_hook });
-        defineBinding("stash-point", "stash_point", { group: "web-gfx" });
         function stash_point(x, y) {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
@@ -2221,9 +2224,11 @@
           emit(`${ssaWidget}._stashY = ${args[1] ?? undefined};`);
           return ssaCRC;
         }
+        defineBinding("stash-point", "stash_point", { group: "web-gfx", sample: `(stash-point x y)`,
+          blurb: `Stashes the point with the containing canvas-widget so that subsequent ` +
+                 `animation iterations can call (line-to-stashed) or (move-to-stashed).` });
 
         exportAPI("move_to_stashed", move_to_stashed, { compileHook: MoveLineStashHook('moveTo') });
-        defineBinding("move-to-stashed", "move_to_stashed", { group: "web-gfx" });
         function move_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
@@ -2245,9 +2250,10 @@
             return ssaCRC;
           }
         }
+        defineBinding("move-to-stashed", "move_to_stashed", { group: "web-gfx", sample: `(move-to-stashed)`,
+            blurb: `Moves to a point previously stashed using (stash-point x y)` });
 
         exportAPI("line_to_stashed", line_to_stashed, { compileHook: MoveLineStashHook('lineTo') });
-        defineBinding("line-to-stashed", "line_to_stashed", { group: "web-gfx" });
         function line_to_stashed() {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
@@ -2255,9 +2261,12 @@
           ctx.lineTo(schemeCanvasWidget._stashX, schemeCanvasWidget._stashY);
           return ctx;
         };
+        defineBinding("line-to-stashed", "line_to_stashed", { group: "web-gfx" });
 
         exportAPI("clear_canvas", clear_canvas, { compileHook: WidgetFunctionHook('clear_canvas') });
-        defineBinding("clear-canvas", "clear_canvas", { group: "web-gfx" });
+        defineBinding("clear-canvas", "clear_canvas", { group: "web-gfx", sample: `(line-to-stashed)`,
+            blurb: `Adds a line segment to a point previously stashed using (stash-point x y)` });
+
         function clear_canvas() {
           let ctx = this[gfxContextAtom];
           let schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
@@ -2266,12 +2275,12 @@
         };
 
         exportAPI("show_canvas", show_canvas, { compileHook: WidgetFunctionHook('show_canvas') });
-        defineBinding("show-canvas", "show_canvas", { group: "web-gfx" });
         function show_canvas(x = optional, y = optional, width = optional, height = optional) {
           let ctx = this[gfxContextAtom], schemeCanvasWidget = contextToSchemeCanvasWidget(ctx);
           schemeCanvasWidget.show(x, y, width, height);
           return ctx;
         };
+        defineBinding("show-canvas", "show_canvas", { group: "web-gfx" });
 
         exportAPI("hide_canvas", hide_canvas, { compileHook: WidgetFunctionHook('hide_canvas') });
         defineBinding("hide-canvas", "hide_canvas", { group: "web-gfx" });
