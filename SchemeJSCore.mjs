@@ -54,6 +54,7 @@ export function createInstance(schemeOpts = {}) {
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
   const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
+  const MACRO_TAG = 1, PARAMETER_MACRO_TAG = 2;
   const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
   const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
@@ -1826,28 +1827,28 @@ export function createInstance(schemeOpts = {}) {
     if (TRACE_INTERPRETER)
       console.log("EVAL", string(form));
     if (isList(form) && !isArray(form)) {
-      let fn = form[FIRST];
-      if (fn === QUOTE_ATOM) { // QUOTE is a special function that will do this but catch it here anyway.
-        if (!isList(form)) throwBadForm();
-        return form[REST][FIRST];
-      }
-      fn = _eval(fn, scope);
-      if (scope[RETURN_SYMBOL]) return;
-      if (typeof fn !== 'function') throwBadForm();
-      // See makeParameterDescriptor for the truth, but
-      //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
-      let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-      let requiredCount = (parameterDescriptor >> 8) & 0xfff;
-      let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-      let tag = parameterDescriptor & 0xff;
-      if (fn[FIRST] === SCLOSURE_ATOM) {
-        let fnCdr = fn[REST];
-        if (!isList(fnCdr)) throwBadForm();
-        scope = fnCdr[FIRST];
-      }
+      let fn, args, parameterDescriptor, requiredCount, evalCount, tag;
+      do {
+        fn = form[FIRST];
+        args = form[REST];
+        if (fn === QUOTE_ATOM) // QUOTE is a special function that will do this but catch it here anyway.
+          return args[FIRST];
+        fn = _eval(fn, scope);
+        if (scope[RETURN_SYMBOL]) return;
+        if (typeof fn !== 'function') throwBadForm();
+        // See makeParameterDescriptor for the truth, but
+        //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
+        parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+        requiredCount = (parameterDescriptor >> 8) & 0xfff;
+        evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+        tag = parameterDescriptor & 0xff;
+        if (tag === MACRO_TAG) {
+          form = fn.call(scope, args);
+          continue;
+        }
+      } while (false);
       // Run through the arg list evaluating args
-      let  args = form[REST], argCount = length(args);
-      let argv = new Array(argCount);
+      let argCount = length(args), argv = new Array(argCount);
       for (let i = 0; iterateAsList(args); ++i, args = args[REST]) {
         let item = args[FIRST];
         if (i < evalCount) {
@@ -1863,6 +1864,7 @@ export function createInstance(schemeOpts = {}) {
           argv[i] = item;
         }
       }
+      argCount = argv.length;
       let jitCompiled = fn[JITCOMPILED];
       if (jitCompiled)
         fn = jitCompiled;
