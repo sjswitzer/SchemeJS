@@ -1625,12 +1625,9 @@
               dt.appendChild(anchor);
               helpElement.appendChild(dt);
             } else {
-              helpElement.appendChild(createElement('dt', null, atom.description));
-            }
-            let elementId = "defn-" + atom.description;
-            let dd = document.getElementById(elementId);
-            if (!dd) {
-              dd = createElement('dd');
+              let dt = createElement('dt', null, atom.description);
+              helpElement.appendChild(dt);
+              let dd = createElement('dd');
               if (info.sample)
                 dd.textContent = info.sample;
               if (info.blurb)
@@ -1640,21 +1637,30 @@
                 let ddElement = document.getElementById(elementId);
                 if (ddElement)
                   dd = ddElement;
-                else
-                  dd.appendChild(createElement('span', 'tbd', `TBD defn-${atoms[0].description}`));
+                else {
+                  let gfxApi = info.gfxApi;
+                  if (gfxApi) {
+                    let anchor = createElement('a', 'see-online-docs');
+                    anchor.setAttribute('href', `https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/${gfxApi}`);
+                    anchor.textContent = "See online documentation";
+                    dd.appendChild(anchor);
+                  } else {
+                    dd.appendChild(createElement('span', 'tbd', `TBD defn-${atoms[0].description}`));
+                  }
+                }
               }
-            }
-            helpElement.appendChild(dd);
-            if (typeof value === 'function')
-              dd.appendChild(createElement('p', 'impl', string(value)));
-            else
-              dd.appendChild(createElement('p', 'value', string(value)));
-            if (jsName) {
-              let fnInfo = value[COMPILE_INFO];
-              let requiresScopeStr = fnInfo?.requiresScope ? " (requires scope)" : "";
-              let jsNamesElement = createElement('p', 'js-names');
-              dd.appendChild(jsNamesElement);
-              jsNamesElement.appendChild(createElement('span', 'js-name', jsName + requiresScopeStr));
+              helpElement.appendChild(dd);
+              if (typeof value === 'function')
+                dd.appendChild(createElement('p', 'impl', string(value)));
+              else
+                dd.appendChild(createElement('p', 'value', string(value)));
+              if (jsName) {
+                let fnInfo = value[COMPILE_INFO];
+                let requiresScopeStr = fnInfo?.requiresScope ? " (requires scope)" : "";
+                let jsNamesElement = createElement('p', 'js-names');
+                dd.appendChild(jsNamesElement);
+                jsNamesElement.appendChild(createElement('span', 'js-name', jsName + requiresScopeStr));
+              }
             }
           }
         }
