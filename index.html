@@ -578,7 +578,7 @@
         <dl class="definitions" id="helpgroup-main">
           <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h3> Mathematical Operations </h3>
+        <h3> Mathematical Operations and Constants</h3>
         <dl class="definitions" id="helpgroup-math">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
@@ -1627,7 +1627,7 @@
             } else {
               helpElement.appendChild(createElement('dt', null, atom.description));
             }
-            let elementId = "defnXXX-" + atom.description;
+            let elementId = "defn-" + atom.description;
             let dd = document.getElementById(elementId);
             if (!dd) {
               dd = createElement('dd');
@@ -1635,8 +1635,14 @@
                 dd.textContent = info.sample;
               if (info.blurb)
                 dd.appendChild(createElement('p', null, info.blurb));
-              if (!info.sample && !info.blurb)
-                dd.appendChild(createElement('span', 'tbd', `TBD defn-${atoms[0].description}`));
+              if (!info.sample && !info.blurb) {
+                let elementId = "defn-" + atom.description;
+                let ddElement = document.getElementById(elementId);
+                if (ddElement)
+                  dd = ddElement;
+                else
+                  dd.appendChild(createElement('span', 'tbd', `TBD defn-${atoms[0].description}`));
+              }
             }
             helpElement.appendChild(dd);
             if (typeof value === 'function')

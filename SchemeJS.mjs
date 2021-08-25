@@ -1638,43 +1638,53 @@ export function createInstance(schemeOpts = {}) {
     });
     defineBinding("throw", "throw", {
       group: "control-flow", sample: `(throw form ...)`, 
-      blurb: `TBD`
+      blurb: `JavaScript-style "throw." Evaluates the sequence of forms and and throws the value of the ` +
+             `last one, which will given to the (catch error-var ...) form as the value of error-var.`
     });
     defineBinding("catch", "catch", {
-      group: "control-flow", sample: `(catch (error-var form ...) form ...)`, 
-      blurb: `TBD`
+      group: "control-flow", sample: `(catch (error-var error-form ...) form ...)`, 
+      blurb: `JavaScript-style "catch." Evaluates and returns the sequence of forms and returns the value of the ` +
+             `last one, unless (throw ...) is called, in which case it the error-forms are evaluated with the thrown ` +
+             `value bound to error-var and the value of the last form is returned.`
     });
     defineBinding("*throw", "siod_throw", {
-      group: "control-flow", sample: `(throw form ...)`, 
-      blurb: `TBD`
+      group: "control-flow", sample: `(*throw form ...)`, 
+      blurb: `SIOD-style "throw." Evaluates the sequence of forms and and throws the value of the ` +
+             `last one, which will be returned as the value of the first enclosing (*catch ...) form.`
     });
     defineBinding("*catch", "siod_catch", {
-      group: "main", sample: `(catch form ...)`, 
-      blurb: `TBD`
+      group: "main", sample: `(*catch form ...)`, 
+      blurb: `SIOD-style "catch." Evaluates and returns the sequence of forms and returns the value of the ` +
+             `last one, unless (*throw ...) is called, in which case it returns the thrown value.`
     });
     defineBinding("for-in", "for_in", {
-      group: "control-flow", sample: `(for-in key value obj form ...)`, 
-      blurb: `TBD`
+      group: "control-flow", sample: `(for-in key-var value-var obj form ...)`, 
+      blurb: `If "obj" is an iterable object, the sequence of forms is evaluated with each item bound to ` +
+             `value-var and key-var is a sequence of indices beginning at 0. If "obj" is a non-iteable JavaScript Object ` +
+             `the forms are evaluated for each entry in the Object with key-var as the key and value-var as the value. ` +
+             `Returns the value of the last forn in the last iteration.`
     });
     defineBinding("for-of", "for_of", {
-      group: "control-flow", sample: `(for-of value obj form ...)`, 
-      blurb: `TBD`
+      group: "control-flow", sample: `(for-of value-var iterable-obj form ...)`, 
+      blurb: `Evaluates the sequence of forms repeatedly with each item bound to an item from the iterable object.` +
+             `Returns the falue of the last form in the final iteration.`
     });
     defineBinding("return", "return", {
       group: "control-flow", sample: `(return form ...)`, 
       blurb: `Returns the falue of the last form from the enclosing lambda.`
     });
     defineBinding("require", "require", {
-      group: "utility", sample: `(require "filename")`, 
-      blurb: `TBD`
+      group: "utility", sample: `(require "path")`, 
+      blurb: `Loads and evaluates the forms found at the given path. If the path has already been loaded, does nothing.`
     });
     defineBinding("load", "load", {
-      group: "utility", sample: `(load "filename")`, 
-      blurb: `TBD`
+      group: "utility", sample: `(load "filename" (noeval false))`, 
+      blurb: `Loads and evaluates the forms found at the given path unless noEval is true, in which case ` +
+             `it returns a list of forms from the file.`
     });
     defineBinding("println", "println", {
-      group: "utility", sample: `(println "string")`, 
-      blurb: `TBD`
+      group: "utility", sample: `(println "string" ...)`, 
+      blurb: `Prints the string or strings on the "console."`
     });
     defineBinding("to-string", "string", {
       group: "main", sample: `(to-strin gobj)`, 
