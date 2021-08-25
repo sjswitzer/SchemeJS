@@ -507,7 +507,7 @@
             the rest are unevaluated.
             In <code>(\# 2 (a1 a3 a3 a5) forms...)</code>, <i>a1</i> and <i>a2</i> are evaluated and the rest are not.
         <h4> Optional Parameters </h4>
-        <p> A function defined as <code>(def (fn p1 (? p2 expr) (? p3 expr) ) form ...)</code>
+        <p> A function defined as <code>(def (fn p1 (p2 expr) (p3 expr) ) form ...)</code>
             has optional parameters <code>p2</code> and <code>p3</code> with default values
             supplied by the expressions that follow them. The expressions are evaluated only
             if the parameter is absent.

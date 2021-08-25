@@ -1653,7 +1653,7 @@ export function createInstance(schemeOpts = {}) {
              `last one, which will be returned as the value of the first enclosing (*catch ...) form.`
     });
     defineBinding("*catch", "siod_catch", {
-      group: "main", sample: `(*catch form ...)`, 
+      group: "control-flow", sample: `(*catch form ...)`, 
       blurb: `SIOD-style "catch." Evaluates and returns the sequence of forms and returns the value of the ` +
              `last one, unless (*throw ...) is called, in which case it returns the thrown value.`
     });
