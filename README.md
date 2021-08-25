@@ -31,8 +31,8 @@ than on any Lisp's.
 
 ### JavaScript Integration and Interoperability
 
-Every SchemeJS function (whether compiled or not!) is a JavaScript function and can be
-invoked directly, and with no compatinbility APIs, from JavaScript. They are perfactly ordinary
+Every SchemeJS function, _whether compiled or not_, is a JavaScript function and can be
+invoked directly, with no bridging APIs, from JavaScript. They are perfactly ordinary
 JavaScript functions. Any JavaScript function can be invoked directly from SchemeJS as if it
 were an ordinary Scheme function.
 
@@ -58,9 +58,9 @@ returns "true" because each number is less than the next.
 ### Predicate Conditioals
 
 Predicates such as `boolean?`can be used
-as simple predicates `(boolean true if the object is a boolean
+as simple predicates `(boolean? obj)` to test if the object is a boolean,
 or as conditional branches `(boolean? obj (if-true-expr) (if-false-expr))` since you were
-probably going to write (? (boolean? obj) ((if-true-expr) (if-false-expr))` anyway.
+probably going to write `(? (boolean? obj) ((if-true-expr) (if-false-expr))` anyway.
 
 Because the expression `(< 10)` is a closure that returns true
 if 10 is less than its argument, the expression

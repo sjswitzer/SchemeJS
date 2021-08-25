@@ -484,17 +484,17 @@
             JavaScript primitives such as function closures and prototype resolution.
             These are the things that JavaScript JITs optimize most thouroughly.
         <h4> Iterable-Aware </h4>
-        <p> SchemeJS lists are iterable in JavaScript and JavaScript iterables can be
-            viewed as Scheme lists, either immediately or lazily.
-        <p> SchemeJS built-in functions that operate on lists also operate on any JavaScript
+        <p> SchemeJS lists are iterable in JavaScript and JavaScript iterables are
+            Scheme lists.
+            SchemeJS functions that operate on lists also operate on JavaScript
             iterable such as Arrays.
         <h4> N-ary Comparisons </h4>
         <p> Comparison functions such as "<" can be applied to arbitrarily many arguments. In this case
             it means that each argument is less than the previous. Evaluation ends as soon as
             the comparison fails.
         <h4> Partial Function Application </h4>
-        <p> Functions, whether user-defined, compiled, or implemented in JavaScript, when
-            invoked with fewer than their required number of parameters, result
+        <p> Functions, whether user-defined, compiled or implemented in JavaScript, when
+            invoked with fewer than their required number of arguments, result
             in a <i>closure</i> that binds the given arguments.
             For instance, <code>(+ 5)</code> results in a function (closure) that
             adds 5 to its argument(s).

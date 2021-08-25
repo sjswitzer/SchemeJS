@@ -11,7 +11,7 @@
       (scale (/ (canvas-width) (+ 1 (@ frequency-domain-data "length"))) (/ (canvas-height) 256))
       (fill-style "#a22")
       (for-in i value frequency-domain-data
-        (fill-rect i (- 256 value) 2 value) ;; make one pixel wider to overdraw a bit and not leave gaps
+        (fill-rect i (- 256 value) 1 value)
       )
     )
     (gfx-save  ;; Draw waveform
