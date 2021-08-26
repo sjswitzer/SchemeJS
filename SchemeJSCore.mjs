@@ -2307,7 +2307,7 @@ export function createInstance(schemeOpts = {}) {
         // MUST check SUPERLAZY before the isNil test, which will cause eager evaluation of
         // a LazyIteratorList, cause it to call next() and mutate into something else.
         if (obj[SUPERLAZY] && displayAsList(obj))
-          return put("{lazy}");
+          return put("{?}");
         if (obj[SCOPE_TYPE_SYMBOL]) {
           let symStrs = "";
           if (obj !== globalScope) {
@@ -2330,7 +2330,7 @@ export function createInstance(schemeOpts = {}) {
           put("(");
           sep = "";
           if (obj[LAZYFIRST])
-            put("{lazy}");
+            put("{?}");
           else
             toString(obj[FIRST], maxCarDepth-1, maxCdrDepth);
           sep = " ";
@@ -2375,7 +2375,7 @@ export function createInstance(schemeOpts = {}) {
           // displayAsList here so that hybrid lists will print as "(a b . [c d])"
           while (moreList(obj) && displayAsList(obj)) {
             if (obj[LAZYFIRST]) {
-              put("{lazy}");  // .. signifies a lazy FIRST
+              put("{?}");  // .. signifies a lazy FIRST
             } else if (obj[COMPILED]) {
               toString(obj[FIRST])
               sep = "";
@@ -2386,13 +2386,13 @@ export function createInstance(schemeOpts = {}) {
             }
             sep = " ";
             if (obj[LAZYREST])
-              return put("{lazy})", true);
+              return put(". {?})", true);
             obj = obj[REST];
             maxCdrDepth -= 1;
             if (maxCdrDepth < 0)
               return put("....)", true);
             if (obj != null && obj[SUPERLAZY])
-              return put("{lazy})", true);
+              return put(". {?})", true);
           }
           if (!isNil(obj)) {
             put(".");
