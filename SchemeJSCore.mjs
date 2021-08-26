@@ -2375,7 +2375,7 @@ export function createInstance(schemeOpts = {}) {
           // displayAsList here so that hybrid lists will print as "(a b . [c d])"
           while (moreList(obj) && displayAsList(obj)) {
             if (obj[LAZYFIRST]) {
-              put("{?}");  // .. signifies a lazy FIRST
+              put("{?}");
             } else if (obj[COMPILED]) {
               toString(obj[FIRST])
               sep = "";
