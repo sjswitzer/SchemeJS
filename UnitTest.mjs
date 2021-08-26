@@ -659,14 +659,14 @@ function runTestsInNewInstance(opts = {}) {
     { // Test "parameter macros" (essentially just the spread "..." operator currently).
       let savedScope = beginTestScope();
       EXPECT(` (defn (foo a . b) (list ...b a))`, ` 'foo `);
-      EXPECT(` (foo 1 2 3 4 5)`, ` '(2 3 4 5 1) `);
+      EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1,) `);
       endTestScope(savedScope);
     }
 
     { // Test "parameter macros", with the compiler
       let savedScope = beginTestScope();
       EXPECT(` (compile (foo a . b) (list ...b a))`, ` 'foo `);
-      EXPECT(` (foo 1 2 3 4 5)`, ` '(2 3 4 5 1) `);
+      EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1) `);
       endTestScope(savedScope);
     }
 
