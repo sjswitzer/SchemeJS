@@ -6,7 +6,7 @@ It’s an ideal runtime for Scheme.
 All it lacks is cons cells, an s-expression parser/printer,
 eval/apply, and a handful of Lisp primitives.
 
-And a compiler and JIT that compiles Scheme down to perfectly normal
+And a compiler and JIT that compiles Scheme down to perfectly ordinary
 JavaScript functions that JavaScript JITs can go to town on.
 
 SchemeJS fills that gap.
@@ -22,7 +22,7 @@ Which is a sin but not a crime.
 Run a demo by typing going to https://sjswitzer.github.io/SchemeJS/ and typing
 `(load "demo.scm")` or `(load "gfxdemo.scm")` or `(load "mediademo.scm")`.
 
-Since SchemeJS compiles (and JITs) into perfectly ordinary JavaScript and JavaScript's
+Since SchemeJS compiles (and JITs) into JavaScript and JavaScript's
 execution model so closely matches Scheme's, it's a surprisingly fast Scheme implementation.
 I venture to say that _much_ more work has been put into optimizing JavaScript's performance
 than on any Lisp's.
@@ -32,12 +32,12 @@ than on any Lisp's.
 ### JavaScript Integration and Interoperability
 
 Every SchemeJS function, _whether compiled or not_, is a JavaScript function and can be
-invoked directly, with no bridging APIs, from JavaScript. They are perfactly ordinary
+invoked directly, with no bridging APIs, from JavaScript. They are perfectly ordinary
 JavaScript functions. Any JavaScript function can be invoked directly from SchemeJS as if it
 were an ordinary Scheme function.
 
 SchemeJS supports Array and Object literals and every Array, generator (function*) and built-in
-iterable object appears as a "list" to SchemeJS functions. SchemeJS lists are
+iterable object (except String) appears as a "list" to SchemeJS functions. SchemeJS lists are
 iterable "for (let item of list) ..." in JavaScript and JavaScript iterables are lists to SchemeJS.
 
 ### Optional and Rest Parameters
