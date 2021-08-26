@@ -1814,13 +1814,15 @@ export function createInstance(schemeOpts = {}) {
   //  (There may be other uses for parameter macros but I doubt it!)
   //
   exportAPI("spread", spread, { tag: PARAMETER_MACRO_TAG });
-  function spread(args) {
-    if (!isList[args] || !isList(args[FIRST] || !isList(args[REST])))
+  function spread(needsEval, args) {
+    if (!isList(args))
       throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
-    // Returns Pair of arhuments to stuff w/o eveluation
+      let spreadArgs = args[FIRST];
+      if (needsEval)
+        spreadArgs = _eval(args[FIRST], this);
+      // Returns Pair of arhuments to stuff w/o eveluation
     // and args still subject to evaluation.
-    // ... which happens to be just the value of args!
-    return args;
+    return new Pair(spreadArgs, args[REST]);
   }
 
   //
@@ -1906,34 +1908,35 @@ export function createInstance(schemeOpts = {}) {
         let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
         let tag = parameterDescriptor & 0xff;
         // Run through the arg list evaluating args
-        let argCount = length(args), argv = Array(argCount), i = 0;
-        for (; moreList(args); args = args[REST]) {
+        let argv = [];
+        while (moreList(args)) {
           let arg = args[FIRST];
           if (typeof arg === 'symbol') {
             let symVal = scope[arg];
-            if (typeof symval === 'function') {
+            if (typeof symVal === 'function') {
               let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
               if (parameterDescriptor != null) {
                 let tag = parameterDescriptor & 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
-                  let macroResult = symVal.call(scope, args[REST]);
+                  let macroResult = symVal.call(scope, argv.length < evalCount, args[REST]);
                   if (!moreList(macroResult))
                     throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
                   args = macroResult[REST];
                   for (let arg of macroResult[FIRST])
-                    argv[i++] = arg;
+                    argv.push(arg);
                   continue;
                 }
               }
             }
           }
-          if (i < evalCount) {
+          if (argv.length < evalCount) {
             arg = _eval(arg, scope);
             if (scope[RETURN_SYMBOL]) return;
           }
-          argv[i++] = arg;
+          argv.push(arg);
+          args = args[REST];
         }
-        argCount = argv.length;
+        let argCount = argv.length;
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled)
           fn = jitCompiled;
