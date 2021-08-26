@@ -670,10 +670,12 @@ function runTestsInNewInstance(opts = {}) {
       endTestScope(savedScope);
     }
 
-    { // Test spreaf parameters in array literals
+    if (true) { // Test spread parameters in array literals
       let savedScope = beginTestScope();
       EXPECT( ` (def a [1 2 'z "foo" {} 10n]) `, ` 'a `);
       EXPECT( ` ["x" 'x ...a 100] `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      EXPECT(` (defn (b . a) ["x" 'x ...a 100]) `, ` 'b `)
+      EXPECT( ` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
       endTestScope(savedScope);
     }
 
