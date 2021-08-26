@@ -2821,7 +2821,7 @@ export function createInstance(schemeOpts = {}) {
         let ssaValue = ssaScope[sym];
         if (ssaValue)
           return ssaValue;
-        // For now, only bind _functions_ (and macros) from outside scope
+        // For now, only bind _functions_ from outside scope
         let scopedVal = scope[sym];
         if (scopedVal && typeof scopedVal === 'function') {
           let fn = scopedVal;
@@ -2859,6 +2859,19 @@ export function createInstance(schemeOpts = {}) {
             return bind(quotedVal);
           return bind(quotedVal, 'quoted');
         }
+        if (typeof fn === 'symbol') {  // check for a macro _without evaluating_
+          let symVal = scope[fn];
+          if (typeof symVal === 'function') {
+            let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+            if (parameterDescriptor != null) {
+              let tag = parameterDescriptor && 0xff;
+              if (tag === MACRO_TAG) {
+                form = symVal.call(scope, args /*, ssaScope, tools */);
+                continue;
+              }
+            }
+          }
+        }
         if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
           return compileLambda(null, fn.description, form, ssaScope, tools);
         let ssaFunction = compileEval(fn, ssaScope, tools);
@@ -2883,10 +2896,6 @@ export function createInstance(schemeOpts = {}) {
         let bodyTemplate = functionDescriptor.bodyTemplate;
         let requiresScope = functionDescriptor.requiresScope;
 
-        if (tag === MACRO_TAG) {
-          form = fn.call(scope, args, ssaScope);
-          continue;
-        }
         // A compile hook decides for itself whether or not to set ssaScope.dynamicScopeUsed
         if (requiresScope && !compileHook) 
           ssaScope.dynamicScopeUsed = true;
@@ -2898,7 +2907,7 @@ export function createInstance(schemeOpts = {}) {
         dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
         for ( ; moreList(args) ; ++argCount, args = args[REST]) {
           let arg = args[FIRST];
-          if (typeof arg === 'symbol') {
+          if (typeof arg === 'symbol') { // check for parameter macro
             let symVal = scope[arg];
             if (typeof symval === 'function') {
               let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
@@ -2939,15 +2948,32 @@ export function createInstance(schemeOpts = {}) {
               }
             }
           }
+          /*
           let ssaArg;
           if (argCount < evalCount)
-            ssaArg  = use(compileEval(arg, ssaScope, tools));
-          else if (!compileHook)  // hooks get unbound unevaluated args
+            ssaArg = use(compileEval(arg, ssaScope, tools));
+          else if (compileHook) // hooks get unbound unevaluated args
+            ssaArg = arg;
+          else 
             ssaArg = use(bind(arg, `arg_${argCount}`));
           dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaArg})`));
           ssaArgv.push(ssaArg);
           ssaArgStr += `${sep}${ssaArg}`;
           sep = ', ';
+          */
+
+          let ssaArg;
+          if (argCount < evalCount)
+            arg = ssaArg  = use(compileEval(arg, ssaScope, tools));
+          else if (!compileHook)  // hooks get unbound unevaluated args
+            arg = ssaArg = use(bind(arg, `arg_${argCount}`));
+          ssaArgv.push(arg);
+          if (ssaArg) {
+            ssaArgStr += `${sep}${ssaArg}`;
+            sep = ', ';
+          }
+  
+
         }
         if (!usesDynamicArgv) {
           tools.deleteEmitted(dynamicArgvLines);
