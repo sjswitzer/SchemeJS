@@ -2045,9 +2045,8 @@ export function createInstance(schemeOpts = {}) {
           return res;
         }
       }
-      break; // not a macro
+      throw new LogicError(`Shouldn't happen. All cases should be handled above`);
     }  // macro loop
-    throw new LogicError(`Shouldn't happen. All cases should be handled above`);
 
     function throwBadForm() {
       throw new SchemeEvalError(`Bad form ${string(form)}`);
@@ -2774,12 +2773,14 @@ export function createInstance(schemeOpts = {}) {
           name = newTemp(name);
         }
       } else {
-        if (typeof obj === 'symbol')
+        if (typeof obj === 'symbol') {
           name = newTemp(obj.description+'_atom');
-        else if (typeof obj === 'function')
-          name = newTemp(obj.name);
-        else
-          name = newTemp();
+        } else {
+          name = namedObjects.get(obj);
+          if (!name && typeof obj === 'function')
+            name = obj.name;
+          name = newTemp(name);
+        }
       }
       bindSymToObj[name] = obj;
       bindObjToSym.set(obj, name);
@@ -2851,7 +2852,13 @@ export function createInstance(schemeOpts = {}) {
         if (form === NIL) return "NIL";
         return bind(form, "nil");
       }
-      if (isPrimitive(form)) throw new LogicError(`All primitives should be handled by now`)
+      if (typeof form === 'function') { // a naked function in the form
+        let ssaValue = bind(form);  // no guard sym!
+        registerFunctionDescriptor(form, ssaValue);
+        return ssaValue;
+      }
+      if (isPrimitive(form))
+        throw new LogicError(`All primitives should be handled by now`)
       if (typeof form === 'symbol') {
         let sym = form;
         let ssaValue = ssaScope[sym];
@@ -2861,24 +2868,9 @@ export function createInstance(schemeOpts = {}) {
         let scopedVal = scope[sym];
         if (scopedVal && typeof scopedVal === 'function') {
           let fn = scopedVal;
-          let name = namedObjects.get(fn) ?? fn.name ?? sym.description;
           let guardSym = sym;
-          ssaValue = bind(fn, newTemp(name), guardSym);
-          if (!tools.functionDescriptors[ssaValue]) {
-            let fnInfo = fn[COMPILE_INFO];
-            if (!fnInfo) {  // Neither a builtin nor a lambdaClosure
-              let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-              let requiredCount = (parameterDescriptor >> 8) & 0xfff;
-              let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-              let tag = parameterDescriptor & 0xff;
-              fnInfo = analyzeJSFunction(fn);
-              fnInfo.requiredCount = requiredCount;
-              fnInfo.evalCount = evalCount;
-              fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-            }
-            // Everything you need to know about invoking a JS function is right here
-            tools.functionDescriptors[ssaValue] = fnInfo;
-          }
+          ssaValue = bind(fn, null, guardSym);
+          registerFunctionDescriptor(fn, ssaValue);
           return ssaValue;
         }
         tools.dynamicScopeUsed = true;
@@ -2900,9 +2892,9 @@ export function createInstance(schemeOpts = {}) {
           if (typeof symVal === 'function') {
             let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
             if (parameterDescriptor != null) {
-              let tag = parameterDescriptor && 0xff;
+              let tag = parameterDescriptor & 0xff;
               if (tag === MACRO_TAG) {
-                form = symVal.call(scope, args /*, ssaScope, tools */);
+                form = symVal.call(scope, form[REST] /*, ssaScope, tools */);
                 continue;
               }
             }
@@ -3197,8 +3189,25 @@ export function createInstance(schemeOpts = {}) {
         return ssaObjectLiteral;
       }
       throw new LogicError(`Shouldn't happen. All cases should be handled above`);
-      break;  // not a macro
     } // macro loop
+
+    function registerFunctionDescriptor(fn, ssaValue) {
+      if (!tools.functionDescriptors[ssaValue]) {
+        let fnInfo = fn[COMPILE_INFO];
+        if (!fnInfo) {  // Neither a builtin nor a lambdaClosure
+          let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+          let requiredCount = (parameterDescriptor >> 8) & 0xfff;
+          let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+          let tag = parameterDescriptor & 0xff;
+          fnInfo = analyzeJSFunction(fn);
+          fnInfo.requiredCount = requiredCount;
+          fnInfo.evalCount = evalCount;
+          fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
+        }
+        // Everything you need to know about invoking a JS function is right here
+        tools.functionDescriptors[ssaValue] = fnInfo;
+      }
+    }
 
     function throwBadForm() {
       throw new SchemeCompileError(`BadForm ${string(form)}`);
