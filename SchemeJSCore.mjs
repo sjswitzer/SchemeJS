@@ -516,7 +516,7 @@ export function createInstance(schemeOpts = {}) {
     }
     if (opts.dontInline) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-    } else if (fnInfo.native) {
+    } else if (fnInfo.native || tag === MACRO_TAG || tag === PARAMETER_MACRO_TAG) {
       // not an error
     } else if (!compileHook && evalCount !== MAX_INTEGER) {
       throw new LogicError(`Special function requires compile hook ${name}`);
@@ -1870,32 +1870,30 @@ export function createInstance(schemeOpts = {}) {
         let tag = parameterDescriptor & 0xff;
         // Run through the arg list evaluating args
         let argCount = length(args), argv = Array(argCount), i = 0;
-        do { // for parameter macros
-          for (; moreList(args); args = args[REST]) {
-            let arg = args[FIRST];
-            if (typeof arg === 'symbol') {
-              let symVal = scope[arg];
-              if (typeof symval === 'function') {
-                let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
-                if (parameterDescriptor != null) {
-                  let tag = parameterDescriptor && 0xff;
-                  if (tag === PARAMETER_MACRO_TAG) {
-                    let macroResult = symVal.call(scope, args[REST]);
-                    if (!isList(macroResult))
-                      throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
-                    args = macroResult;
-                    continue;
-                  }
+        for (; moreList(args); args = args[REST]) {
+          let arg = args[FIRST];
+          if (typeof arg === 'symbol') {
+            let symVal = scope[arg];
+            if (typeof symval === 'function') {
+              let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+              if (parameterDescriptor != null) {
+                let tag = parameterDescriptor && 0xff;
+                if (tag === PARAMETER_MACRO_TAG) {
+                  let macroResult = symVal.call(scope, args[REST]);
+                  if (!isList(macroResult))
+                    throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+                  args = macroResult;
+                  continue;
                 }
               }
             }
-            if (i < evalCount) {
-              arg = _eval(arg, scope);
-              if (scope[RETURN_SYMBOL]) return;
-            }
-            argv[i++] = arg;
           }
-        } while (false);
+          if (i < evalCount) {
+            arg = _eval(arg, scope);
+            if (scope[RETURN_SYMBOL]) return;
+          }
+          argv[i++] = arg;
+        }
         argCount = argv.length;
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled)
@@ -2908,29 +2906,31 @@ export function createInstance(schemeOpts = {}) {
                 let tag = parameterDescriptor && 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
                   let macroResult = symVal.call(scope, args[REST], ssaScope);
-                  if (!moreList(macroResult))
+                  if (!isList(macroResult))
                     throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
-                  args = macroResult[REST];
-                  ssaArgs = use(bind(args[REST]));
-                  let ssaInsertArgs = compileEval(list(macroResult[FIRST], ssaArgs), ssaScope, tools);
                   usesDynamicArgv = true;
+                  ssaArgs = use(bind(macroResult));
                   tools.bindLiterally(moreList, "moreList");
                   tools.bindLiterally(_eval, "_eval");
                   tools.bindLiterally(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR");
                   tools.bindLiterally(SchemeEvalError, "SchemeEvalError");
-                  emit(`for (let args = ${ssaInsertArgs}; moreList(args); args = arg[REST]) {`);
+                  emit(`for (let args = ${ssaArgs}; moreList(args); args = arg[REST]) {`);
                   emit(`  if (typeof arg === 'symbol') {`);
                   emit(`    let symVal = scope[arg];`);
                   emit(`    if (typeof symval === 'function') {`);
                   emit(`      let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];`);
-                  emit('        if (parameterDescriptor != null) {');
-                  emit(`           let tag = parameterDescriptor && 0xff;`);
-                  emit(`           if (tag === ${PARAMETER_MACRO_TAG}) {`);
-                  emit(`             let macroResult = symVal.call(scope, args[REST]);`)
-                  emit(`             if (!moreList(macroResult))`);
-                  emit(`               throw new SchemeEvalError(\`bad parameter macro result \${string(macroResult)}\`)`);
-                  emit(`             args = `)
-                  emit(`             for (let tmp =  ; )`)
+                  emit('      if (parameterDescriptor != null) {');
+                  emit(`        let tag = parameterDescriptor && 0xff;`);
+                  emit(`        if (tag === ${PARAMETER_MACRO_TAG}) {`);
+                  emit(`          let macroResult = symVal.call(scope, args[REST]);`)
+                  emit(`          if (!isList(macroResult))`);
+                  emit(`            throw new SchemeEvalError(\`bad parameter macro result \${string(macroResult)}\`)`);
+                  emit(`          args = macroResult;`);
+                  emit(`          continue;`);
+                  emit(`        }`);
+                  emit(`      }`);
+                  emit(`    }`);
+                  emit('  }');
                   emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`)
                   emit(`  ${ssaDynamicArgv}.push(arg)`);
                   emit(`}`);
