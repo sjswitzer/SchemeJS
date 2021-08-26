@@ -2896,6 +2896,9 @@ export function createInstance(schemeOpts = {}) {
             return bind(quotedVal);
           return bind(quotedVal, 'quoted');
         }
+        if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
+          return compileLambda(null, fn.description, form, ssaScope, tools);
+        let ssaFunction;
         if (typeof fn === 'symbol') {  // check for a macro _without evaluating_
           let symVal = scope[fn];
           if (typeof symVal === 'function') {
@@ -2903,15 +2906,23 @@ export function createInstance(schemeOpts = {}) {
             if (parameterDescriptor != null) {
               let tag = parameterDescriptor & 0xff;
               if (tag === MACRO_TAG) {
-                form = symVal.call(scope, form[REST] /*, ssaScope, tools */);
-                continue;
+                let saveMacroCompiled = tools.macroCompiled;
+                tools.macroCompiled = false;
+                form = symVal.call(scope, form[REST], ssaScope, tools);
+                let macroCompiled = tools.macroCompiled;
+                tools.macroCompiled = saveMacroCompiled;
+                if (!macroCompiled)
+                  continue;
+                // If the macro flags that it compiled the function; it returns the SSA variable
+                // representing the compiled function. I don't expect this to be used much
+                // since macros are powerful enough as it is.
+                ssaFunction = form;
               }
             }
           }
         }
-        if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
-          return compileLambda(null, fn.description, form, ssaScope, tools);
-        let ssaFunction = compileEval(fn, ssaScope, tools);
+        if (!ssaFunction)
+          ssaFunction = compileEval(fn, ssaScope, tools);
         let args = form[REST];
         let functionDescriptor = tools.functionDescriptors[ssaFunction];
         if (!functionDescriptor) {
@@ -2951,36 +2962,47 @@ export function createInstance(schemeOpts = {}) {
               if (parameterDescriptor != null) {
                 let tag = parameterDescriptor && 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
+                  let saveMacroCompiled = tools.macroCompiled;
+                  tools.macroCompiled = false;
                   let macroResult = symVal.call(scope, args[REST], ssaScope);
-                  if (!isList(macroResult))
-                    throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
-                  usesDynamicArgv = true;
-                  ssaArgs = use(bind(macroResult));
-                  tools.bindLiterally(moreList, "moreList");
-                  tools.bindLiterally(_eval, "_eval");
-                  tools.bindLiterally(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR");
-                  tools.bindLiterally(SchemeEvalError, "SchemeEvalError");
-                  emit(`for (let args = ${ssaArgs}; moreList(args); args = arg[REST]) {`);
-                  emit(`  if (typeof arg === 'symbol') {`);
-                  emit(`    let symVal = scope[arg];`);
-                  emit(`    if (typeof symval === 'function') {`);
-                  emit(`      let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];`);
-                  emit('      if (parameterDescriptor != null) {');
-                  emit(`        let tag = parameterDescriptor && 0xff;`);
-                  emit(`        if (tag === ${PARAMETER_MACRO_TAG}) {`);
-                  emit(`          let macroResult = symVal.call(scope, args[REST]);`)
-                  emit(`          if (!isList(macroResult))`);
-                  emit(`            throw new SchemeEvalError(\`bad parameter macro result \${string(macroResult)}\`)`);
-                  emit(`          args = macroResult;`);
-                  emit(`          continue;`);
-                  emit(`        }`);
-                  emit(`      }`);
-                  emit(`    }`);
-                  emit('  }');
-                  emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`)
-                  emit(`  ${ssaDynamicArgv}.push(arg)`);
-                  emit(`}`);
-                  break;
+                  let macroCompiled = tools.macroCompiled;
+                  tools.macroCompiled = saveMacroCompiled;
+                  if (macroCompiled) {
+                    // TODO!
+                  } else {
+                    if (!moreList(macroResult))
+                      throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
+                    usesDynamicArgv = true;
+                    ssaArgs = use(bind(macroResult));
+                    tools.bindLiterally(moreList, "moreList");
+                    tools.bindLiterally(_eval, "_eval");
+                    tools.bindLiterally(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR");
+                    tools.bindLiterally(SchemeEvalError, "SchemeEvalError");
+                    emit(`for (let args = ${ssaArgs}; moreList(args); ) {`);
+                    emit(`  if (typeof arg === 'symbol') {`);
+                    emit(`    let symVal = scope[arg];`);
+                    emit(`    if (typeof symval === 'function') {`);
+                    emit(`      let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];`);
+                    emit('      if (parameterDescriptor != null) {');
+                    emit(`        let tag = parameterDescriptor && 0xff;`);
+                    emit(`        if (tag === ${PARAMETER_MACRO_TAG}) {`);
+                    emit(`          let macroResult = symVal.call(scope, args.length < ${evalCount}, args[REST]);`)
+                    emit(`          if (!moreList(macroResult))`);
+                    emit(`            throw new SchemeEvalError(\`bad parameter macro result \${string(macroResult)}\`)`);
+                    emit(`          args = macroResult;`);
+                    emit(`          for (let arg of macroResult[FIRST])`);
+                    emit(`             ${ssaDynamicArgv}.push(arg)`);
+                    emit(`          continue;`);
+                    emit(`        }`);
+                    emit(`      }`);
+                    emit(`    }`);
+                    emit(`    args = args[REST];`);
+                    emit('  }');
+                    emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`)
+                    emit(`  ${ssaDynamicArgv}.push(arg)`);
+                    emit(`}`);
+                    break;
+                  }
                 }
               }
             }
