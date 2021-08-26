@@ -1923,26 +1923,34 @@ export function createInstance(schemeOpts = {}) {
         let argv = [], argCount = 0;
         while (moreList(args)) {
           let arg = args[FIRST];
-          if (typeof arg === 'symbol') {
-            let symVal = scope[arg];
-            if (typeof symVal === 'function') {
-              let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
-              if (parameterDescriptor != null) {
-                let tag = parameterDescriptor & 0xff;
-                if (tag === PARAMETER_MACRO_TAG) {
-                  let macroResult = symVal.call(scope, args[REST]);
-                  if (!moreList(macroResult))
-                    throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
-                  let insert = macroResult[FIRST];
-                  args = macroResult[REST];
-                  if (argCount < evalCount)
-                  insert = _eval(insert, scope);
-                  for (let arg of insert)
-                    argv.push(arg), argCount += 1;
-                  continue;
+          let nextArg = handleParameterMacroIfPresent(argv, evalCount, arg, args[REST]);
+          if (nextArg !== undefined) {
+            args = nextArg;
+            argCount = argv.length;
+            continue;
+          }
+          function handleParameterMacroIfPresent(argv, evalCount, arg, args) {
+            if (typeof arg === 'symbol') {
+              let symVal = scope[arg];
+              if (typeof symVal === 'function') {
+                let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+                if (parameterDescriptor != null) {
+                  let tag = parameterDescriptor & 0xff;
+                  if (tag === PARAMETER_MACRO_TAG) {
+                    let macroResult = symVal.call(scope, args);
+                    if (!moreList(macroResult))
+                      throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+                    let insert = macroResult[FIRST], nextArg = macroResult[REST];
+                    if (argv.length < evalCount)
+                      insert = _eval(insert, scope);
+                    for (let arg of insert)
+                      argv.push(arg);
+                    return nextArg;
+                  }
                 }
               }
             }
+            return undefined;
           }
           if (argCount < evalCount) {
             arg = _eval(arg, scope);
@@ -2044,9 +2052,11 @@ export function createInstance(schemeOpts = {}) {
       if (form !== null && typeof form === 'object') {
         if (isArray(form)) {
           let res = [];
-          for (let element of form) {
+          while (moreList(form)) {
+            let element = form[FIRST]
             res.push(_eval(element, scope));
             if (scope[RETURN_SYMBOL]) return;
+            form = form[REST];
           }
           return res;
         } else {
