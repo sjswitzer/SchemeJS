@@ -388,6 +388,7 @@ export function createInstance(schemeOpts = {}) {
   const NIL = Object.create( null, {
     NIL: { value: "NIL" },  // Makes it clear in the debugger
     [FIRST]: {
+      // TODO: make these TypeError
       get: () => { throw new SchemeEvalError(`${firstName} of ${nilName}`) },
       set: _ => { throw new SchemeEvalError(`set ${firstName} of ${nilName}`) }
     },
@@ -1929,29 +1930,6 @@ export function createInstance(schemeOpts = {}) {
             argCount = argv.length;
             continue;
           }
-          function handleParameterMacroIfPresent(argv, evalCount, arg, args) {
-            if (typeof arg === 'symbol') {
-              let symVal = scope[arg];
-              if (typeof symVal === 'function') {
-                let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
-                if (parameterDescriptor != null) {
-                  let tag = parameterDescriptor & 0xff;
-                  if (tag === PARAMETER_MACRO_TAG) {
-                    let macroResult = symVal.call(scope, args);
-                    if (!moreList(macroResult))
-                      throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
-                    let insert = macroResult[FIRST], nextArg = macroResult[REST];
-                    if (argv.length < evalCount)
-                      insert = _eval(insert, scope);
-                    for (let arg of insert)
-                      argv.push(arg);
-                    return nextArg;
-                  }
-                }
-              }
-            }
-            return undefined;
-          }
           if (argCount < evalCount) {
             arg = _eval(arg, scope);
             if (scope[RETURN_SYMBOL]) return;
@@ -2053,7 +2031,12 @@ export function createInstance(schemeOpts = {}) {
         if (isArray(form)) {
           let res = [];
           while (moreList(form)) {
-            let element = form[FIRST]
+            let element = form[FIRST];
+            let nextArg = handleParameterMacroIfPresent(res, MAX_INTEGER, element, form[REST]);
+            if (nextArg !== undefined) {
+              form = nextArg;
+              continue;
+            }
             res.push(_eval(element, scope));
             if (scope[RETURN_SYMBOL]) return;
             form = form[REST];
@@ -2081,6 +2064,30 @@ export function createInstance(schemeOpts = {}) {
 
     function throwBadForm() {
       throw new SchemeEvalError(`Bad form ${string(form)}`);
+    }
+
+    function handleParameterMacroIfPresent(argv, evalCount, arg, args) {
+      if (typeof arg === 'symbol') {
+        let symVal = scope[arg];
+        if (typeof symVal === 'function') {
+          let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+          if (parameterDescriptor != null) {
+            let tag = parameterDescriptor & 0xff;
+            if (tag === PARAMETER_MACRO_TAG) {
+              let macroResult = symVal.call(scope, args);
+              if (!moreList(macroResult))
+                throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+              let insert = macroResult[FIRST], nextArg = macroResult[REST];
+              if (argv.length < evalCount)
+                insert = _eval(insert, scope);
+              for (let arg of insert)
+                argv.push(arg);
+              return nextArg;
+            }
+          }
+        }
+      }
+      return undefined;
     }
   }
 
