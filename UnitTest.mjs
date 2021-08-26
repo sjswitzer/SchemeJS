@@ -10,11 +10,9 @@ import * as SchemeJS from './SchemeJS.mjs';
 
 export let succeeded = 0, failed = 0;
 
-let string; // So that TestFailure Error can access it
-
 export class TestFailureError extends Error {
   constructor(message, test, result, expected, report) {
-    super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
+    super(message);
     this.test = test;
     this.result = result;
     this.expected = expected;
@@ -41,7 +39,7 @@ function runTestsInNewInstance(opts = {}) {
   let testScope = globalScope;
   const setGlobalScope = globalScope._setGlobalScope_test_hook_ ?? required();
   const NIL = globalScope.NIL ?? required();
-  string = globalScope.string ?? required();
+  const string = globalScope.string ?? required();
   const newScope = globalScope.newScope ?? required();
   const equal = globalScope.equal ?? required();
   const isList = globalScope.isList ?? required();
@@ -805,6 +803,7 @@ function runTestsInNewInstance(opts = {}) {
   }
 
   function testFailed(message, test, result, expected, report) {
+    message = `${string(test)}; ${message}; result: ${string(result)}, expected: ${string(expected)}`
     reportTestFailed(message, test, result, expected, report);
     failed += 1;
     if (throwOnError)

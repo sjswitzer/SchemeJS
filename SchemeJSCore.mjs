@@ -1910,7 +1910,7 @@ export function createInstance(schemeOpts = {}) {
         let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
         let tag = parameterDescriptor & 0xff;
         // Run through the arg list evaluating args
-        let argv = [];
+        let argv = [], argCount = 0;
         while (moreList(args)) {
           let arg = args[FIRST];
           if (typeof arg === 'symbol') {
@@ -1920,25 +1920,24 @@ export function createInstance(schemeOpts = {}) {
               if (parameterDescriptor != null) {
                 let tag = parameterDescriptor & 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
-                  let macroResult = symVal.call(scope, argv.length < evalCount, args[REST]);
+                  let macroResult = symVal.call(scope, argCount < evalCount, args[REST]);
                   if (!moreList(macroResult))
                     throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
                   args = macroResult[REST];
                   for (let arg of macroResult[FIRST])
-                    argv.push(arg);
+                    argv.push(arg), argCount += 1;
                   continue;
                 }
               }
             }
           }
-          if (argv.length < evalCount) {
+          if (argCount < evalCount) {
             arg = _eval(arg, scope);
             if (scope[RETURN_SYMBOL]) return;
           }
-          argv.push(arg);
+          argv.push(arg), argCount += 1;
           args = args[REST];
         }
-        let argCount = argv.length;
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled)
           fn = jitCompiled;
@@ -2959,14 +2958,14 @@ export function createInstance(schemeOpts = {}) {
           let arg = args[FIRST];
           if (typeof arg === 'symbol') { // check for parameter macro
             let symVal = scope[arg];
-            if (typeof symval === 'function') {
+            if (typeof symVal === 'function') {
               let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
               if (parameterDescriptor != null) {
                 let tag = parameterDescriptor & 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
                   let saveMacroCompiled = tools.macroCompiled;
                   tools.macroCompiled = false;
-                  let macroResult = symVal.call(scope, args[REST], ssaScope);
+                  let macroResult = symVal.call(scope, argCount < evalCount, args[REST], ssaScope, tools);
                   let macroCompiled = tools.macroCompiled;
                   tools.macroCompiled = saveMacroCompiled;
                   if (macroCompiled) {
