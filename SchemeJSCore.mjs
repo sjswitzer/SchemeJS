@@ -1817,8 +1817,10 @@ export function createInstance(schemeOpts = {}) {
   function spread(args) {
     if (!isList[args] || !isList(args[FIRST] || !isList(args[REST])))
       throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
-    // Returns the new arg list.
-    return append(args[FIRST], args[REST]);
+    // Returns Pair of arhuments to stuff w/o eveluation
+    // and args still subject to evaluation.
+    // ... which happens to be just the value of args!
+    return args;
   }
 
   //
@@ -1915,9 +1917,11 @@ export function createInstance(schemeOpts = {}) {
                 let tag = parameterDescriptor & 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
                   let macroResult = symVal.call(scope, args[REST]);
-                  if (!isList(macroResult))
+                  if (!moreList(macroResult))
                     throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
-                  args = macroResult;
+                  args = macroResult[REST];
+                  for (let arg of macroResult[FIRST])
+                    argv[i++] = arg;
                   continue;
                 }
               }
@@ -2442,8 +2446,10 @@ export function createInstance(schemeOpts = {}) {
           return put(`{${params} => ${fnDesc.valueTemplate}}`);
         if (printBody && (printBody.length > 80 || printBody.includes('\n')))
           printBody = '';
-        let hash = evalCount === MAX_INTEGER ? '' : `# ${evalCount}`;
-        put(`{function${hash} ${name}${params}${printBody}`);
+        let deets = evalCount === MAX_INTEGER ? '' : `# ${evalCount}`;
+        if (tag === MACRO_TAG) deets = '-macro';
+        else if (tag === PARAMETER_MACRO_TAG) deets = '-parameter-macro';
+        put(`{function${deets} ${name}${params}${printBody}`);
         sep = "";
         return put("}", true);
       }
