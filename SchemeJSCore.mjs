@@ -2985,39 +2985,46 @@ export function createInstance(schemeOpts = {}) {
         dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
         while (moreList(args)) {
           let arg = args[FIRST];
-          if (typeof arg === 'symbol') { // check for parameter macro
-            let symVal = scope[arg];
-            if (typeof symVal === 'function') {
-              let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
-              if (parameterDescriptor != null) {
-                let tag = parameterDescriptor & 0xff;
-                if (tag === PARAMETER_MACRO_TAG) {
-                  let saveMacroCompiled = tools.macroCompiled;
-                  tools.macroCompiled = false;
-                  let macroResult = symVal.call(scope, args[REST], ssaScope, tools);
-                  let macroCompiled = tools.macroCompiled;
-                  tools.macroCompiled = saveMacroCompiled;
-                  usesDynamicArgv = true;
-                  if (!isList(macroResult))
-                    throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
-                  let ssaInsert = macroResult[FIRST], ssaInsertValues = newTemp("macro_insert");
-                  args = macroResult[REST];
-                  if (!macroCompiled)
-                    ssaInsert = use(bind(ssaInsert));
-                  tools.bindLiterally(_eval, "_eval");
-                  if (evalCount !== MAX_INTEGER) {
-                    emit(`let ${ssaInsertValues} = ${ssaInsert};`);
-                    emit(`if (${ssaDynamicArgv}.length < ${evalCount})`);
-                    emit(`  ${ssaInsertValues} = _eval(${ssaInsertValues}, scope);`)
-                  } else {
-                    emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
+          let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, evalCount, arg, args[REST]);
+          if (nextArg !== undefined) {
+            args = nextArg;
+            continue;
+          }
+          function handleParameterMacroIfPresent(ssaDynamicArgv, evalCount, arg, args) {
+            if (typeof arg === 'symbol') { // check for parameter macro
+              let symVal = scope[arg];
+              if (typeof symVal === 'function') {
+                let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+                if (parameterDescriptor != null) {
+                  let tag = parameterDescriptor & 0xff;
+                  if (tag === PARAMETER_MACRO_TAG) {
+                    let saveMacroCompiled = tools.macroCompiled;
+                    tools.macroCompiled = false;
+                    let macroResult = symVal.call(scope, args, ssaScope, tools);
+                    let macroCompiled = tools.macroCompiled;
+                    tools.macroCompiled = saveMacroCompiled;
+                    usesDynamicArgv = true;
+                    if (!isList(macroResult))
+                      throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
+                    let ssaInsert = macroResult[FIRST], ssaInsertValues = newTemp("macro_insert");
+                    let nextArg = macroResult[REST];
+                    if (!macroCompiled)
+                      ssaInsert = use(bind(ssaInsert));
+                    tools.bindLiterally(_eval, "_eval");
+                    if (evalCount !== MAX_INTEGER) {
+                      emit(`let ${ssaInsertValues} = ${ssaInsert};`);
+                      emit(`if (${ssaDynamicArgv}.length < ${evalCount})`);
+                      emit(`  ${ssaInsertValues} = _eval(${ssaInsertValues}, scope);`)
+                    } else {
+                      emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
+                    }
+                    tools.dynamicScopeUsed = true;
+                    emit(`for (let arg of ${ssaInsertValues}) {`);
+                    emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`);
+                    emit(`  ${ssaDynamicArgv}.push(arg)`);
+                    emit(`}`)
+                    return nextArg;
                   }
-                  tools.dynamicScopeUsed = true;
-                  emit(`for (let arg of ${ssaInsertValues}) {`);
-                  emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`);
-                  emit(`  ${ssaDynamicArgv}.push(arg)`);
-                  emit(`}`)
-                  continue;
                 }
               }
             }
