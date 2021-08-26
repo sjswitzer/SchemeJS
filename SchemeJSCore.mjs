@@ -1815,6 +1815,9 @@ export function createInstance(schemeOpts = {}) {
   // The main use of parameter macros will be for the spread operator (...), but it could
   // also be used for constants like __FILE__, __LINE__, and __DATE__.
   //
+  // It's never _necessary_ to specialize for the comppiled case, but if not the
+  // compiler will kick out to the interpreter for evaluation.
+  //
   exportAPI("spread", spread, { tag: PARAMETER_MACRO_TAG });
   function spread(args, ssaScope, tools) {
     if (!isList(args))
