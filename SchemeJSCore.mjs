@@ -2948,20 +2948,6 @@ export function createInstance(schemeOpts = {}) {
               }
             }
           }
-          /*
-          let ssaArg;
-          if (argCount < evalCount)
-            ssaArg = use(compileEval(arg, ssaScope, tools));
-          else if (compileHook) // hooks get unbound unevaluated args
-            ssaArg = arg;
-          else 
-            ssaArg = use(bind(arg, `arg_${argCount}`));
-          dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaArg})`));
-          ssaArgv.push(ssaArg);
-          ssaArgStr += `${sep}${ssaArg}`;
-          sep = ', ';
-          */
-
           let ssaArg;
           if (argCount < evalCount)
             arg = ssaArg  = use(compileEval(arg, ssaScope, tools));
@@ -2970,10 +2956,9 @@ export function createInstance(schemeOpts = {}) {
           ssaArgv.push(arg);
           if (ssaArg) {
             ssaArgStr += `${sep}${ssaArg}`;
+            dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaArg})`));
             sep = ', ';
           }
-  
-
         }
         if (!usesDynamicArgv) {
           tools.deleteEmitted(dynamicArgvLines);
