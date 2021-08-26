@@ -2962,7 +2962,7 @@ export function createInstance(schemeOpts = {}) {
             if (typeof symval === 'function') {
               let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
               if (parameterDescriptor != null) {
-                let tag = parameterDescriptor && 0xff;
+                let tag = parameterDescriptor & 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
                   let saveMacroCompiled = tools.macroCompiled;
                   tools.macroCompiled = false;
@@ -2970,7 +2970,7 @@ export function createInstance(schemeOpts = {}) {
                   let macroCompiled = tools.macroCompiled;
                   tools.macroCompiled = saveMacroCompiled;
                   if (macroCompiled) {
-                    // TODO!
+                    // XXX TODO!
                   } else {
                     if (!moreList(macroResult))
                       throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
@@ -2986,7 +2986,7 @@ export function createInstance(schemeOpts = {}) {
                     emit(`    if (typeof symval === 'function') {`);
                     emit(`      let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];`);
                     emit('      if (parameterDescriptor != null) {');
-                    emit(`        let tag = parameterDescriptor && 0xff;`);
+                    emit(`        let tag = parameterDescriptor & 0xff;`);
                     emit(`        if (tag === ${PARAMETER_MACRO_TAG}) {`);
                     emit(`          let macroResult = symVal.call(scope, args.length < ${evalCount}, args[REST]);`)
                     emit(`          if (!moreList(macroResult))`);

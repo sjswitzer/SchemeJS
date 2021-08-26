@@ -76,7 +76,7 @@ function runTestsInNewInstance(opts = {}) {
   testSuite();
 
   // This is kinda hacky, but the only way to change the JIT params is instantiate a new Scheme instance.
-  // Calling run() recursively, with new parameters, accomplishes that. But it should probably be reworked.
+  // Calling runTestsInNewInstance() recursively, with new parameters, accomplishes that. But it should probably be reworked.
 
   let jitThreshold = 0;  // Means: JIT immediately (zero iterations of the interpreter)
   runTestsInNewInstance({ justTestJIT: true, jitThreshold });
@@ -650,9 +650,24 @@ function runTestsInNewInstance(opts = {}) {
       EXPECT(` (when (> 2 3) 'a 2 (+ 4 5))`, false);
     }
 
+    { // Test macros with the compiler
+      let savedScope = beginTestScope();
+      EXPECT(` (compile (foo bool) (when bool 'a 2 (+ 4 5)))`, ` 'foo `);
+      EXPECT(` (foo (< 2 3))`, 9);
+      EXPECT(` (foo (> 2 3))`, false);
+      endTestScope(savedScope);
+    }
+
     { // Test "parameter macros" (essentially just the spread "..." operator currently).
       let savedScope = beginTestScope();
       EXPECT(` (defn (foo a . b) (list ...b a))`, ` 'foo `);
+      EXPECT(` (foo 1 2 3 4 5)`, ` '(2 3 4 5 1) `);
+      endTestScope(savedScope);
+    }
+
+    { // Test "parameter macros", with the compiler
+      let savedScope = beginTestScope();
+      EXPECT(` (compile (foo a . b) (list ...b a))`, ` 'foo `);
       EXPECT(` (foo 1 2 3 4 5)`, ` '(2 3 4 5 1) `);
       endTestScope(savedScope);
     }
