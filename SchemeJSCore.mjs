@@ -1811,20 +1811,27 @@ export function createInstance(schemeOpts = {}) {
 
   //
   // Spread operator.
-  //   (There may be other uses for parameter macros but I doubt it!)
-  // Parameter macros must be aware of whether the argument should be evaluated
-  // so that parameter comes first to make it hard to ignore.
+  //
+  // The main use of parameter macros will be for the spread operator (...), but it could
+  // also be used for constants like __FILE__, __LINE__, and __DATE__.
   //
   exportAPI("spread", spread, { tag: PARAMETER_MACRO_TAG });
-  function spread(needsEval, args) {
+  function spread(args, ssaScope, tools) {
     if (!isList(args))
       throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
-      let spreadArgs = args[FIRST];
-      if (needsEval)
-        spreadArgs = _eval(args[FIRST], this);
-      // Returns Pair of arhuments to stuff w/o eveluation
+      let spreadArg = args[FIRST];
+      if (ssaScope) {
+        let ssaSpreadArg = ssaScope[spreadArg];
+        if (!ssaSpreadArg) {
+          tools.dynamicScopeUsed = true;
+          ssaSpreadArg = `resolveUnbound(${use(bind(sym))})`;
+        }
+        tools.macroCompiled = true;
+        spreadArg = ssaSpreadArg;
+      }
+    // Returns Pair of arguments to stuff w/o eveluation
     // and args still subject to evaluation.
-    return new Pair(spreadArgs, args[REST]);
+    return new Pair(spreadArg, args[REST]);
   }
 
   //
@@ -1920,11 +1927,14 @@ export function createInstance(schemeOpts = {}) {
               if (parameterDescriptor != null) {
                 let tag = parameterDescriptor & 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
-                  let macroResult = symVal.call(scope, argCount < evalCount, args[REST]);
+                  let macroResult = symVal.call(scope, args[REST]);
                   if (!moreList(macroResult))
                     throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+                  let insert = macroResult[FIRST];
                   args = macroResult[REST];
-                  for (let arg of macroResult[FIRST])
+                  if (argCount < evalCount)
+                  insert = _eval(insert, scope);
+                  for (let arg of insert)
                     argv.push(arg), argCount += 1;
                   continue;
                 }
@@ -2297,7 +2307,7 @@ export function createInstance(schemeOpts = {}) {
         // MUST check SUPERLAZY before the isNil test, which will cause eager evaluation of
         // a LazyIteratorList, cause it to call next() and mutate into something else.
         if (obj[SUPERLAZY] && displayAsList(obj))
-          return put("(...)");
+          return put("{lazy}");
         if (obj[SCOPE_TYPE_SYMBOL]) {
           let symStrs = "";
           if (obj !== globalScope) {
@@ -2320,7 +2330,7 @@ export function createInstance(schemeOpts = {}) {
           put("(");
           sep = "";
           if (obj[LAZYFIRST])
-            put("..");  // .. signifies a lazy FIRST
+            put("{lazy}");
           else
             toString(obj[FIRST], maxCarDepth-1, maxCdrDepth);
           sep = " ";
@@ -2365,7 +2375,7 @@ export function createInstance(schemeOpts = {}) {
           // displayAsList here so that hybrid lists will print as "(a b . [c d])"
           while (moreList(obj) && displayAsList(obj)) {
             if (obj[LAZYFIRST]) {
-              put("..");  // .. signifies a lazy FIRST
+              put("{lazy}");  // .. signifies a lazy FIRST
             } else if (obj[COMPILED]) {
               toString(obj[FIRST])
               sep = "";
@@ -2376,13 +2386,13 @@ export function createInstance(schemeOpts = {}) {
             }
             sep = " ";
             if (obj[LAZYREST])
-              return put("...)", true);
+              return put("{lazy})", true);
             obj = obj[REST];
             maxCdrDepth -= 1;
             if (maxCdrDepth < 0)
               return put("....)", true);
             if (obj != null && obj[SUPERLAZY])
-              return put("...)", true);
+              return put("{lazy})", true);
           }
           if (!isNil(obj)) {
             put(".");
@@ -2954,7 +2964,7 @@ export function createInstance(schemeOpts = {}) {
         let dynamicArgvLines = [], usesDynamicArgv;
         let ssaDynamicArgv = newTemp('dynamic_argv');
         dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
-        for ( ; moreList(args) ; ++argCount, args = args[REST]) {
+        while (moreList(args)) {
           let arg = args[FIRST];
           if (typeof arg === 'symbol') { // check for parameter macro
             let symVal = scope[arg];
@@ -2968,42 +2978,25 @@ export function createInstance(schemeOpts = {}) {
                   let macroResult = symVal.call(scope, argCount < evalCount, args[REST], ssaScope, tools);
                   let macroCompiled = tools.macroCompiled;
                   tools.macroCompiled = saveMacroCompiled;
-                  if (macroCompiled) {
-                    // XXX TODO!
-                  } else {
-                    if (!moreList(macroResult))
-                      throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
-                    usesDynamicArgv = true;
-                    ssaArgs = use(bind(macroResult));
-                    tools.bindLiterally(moreList, "moreList");
-                    tools.bindLiterally(_eval, "_eval");
-                    tools.bindLiterally(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR");
-                    tools.bindLiterally(SchemeEvalError, "SchemeEvalError");
-                    emit(`for (let args = ${ssaArgs}; moreList(args); ) {`);
-                    emit(`  if (typeof arg === 'symbol') {`);
-                    emit(`    let symVal = scope[arg];`);
-                    emit(`    if (typeof symval === 'function') {`);
-                    emit(`      let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];`);
-                    emit('      if (parameterDescriptor != null) {');
-                    emit(`        let tag = parameterDescriptor & 0xff;`);
-                    emit(`        if (tag === ${PARAMETER_MACRO_TAG}) {`);
-                    emit(`          let macroResult = symVal.call(scope, args.length < ${evalCount}, args[REST]);`)
-                    emit(`          if (!moreList(macroResult))`);
-                    emit(`            throw new SchemeEvalError(\`bad parameter macro result \${string(macroResult)}\`)`);
-                    emit(`          args = macroResult;`);
-                    emit(`          for (let arg of macroResult[FIRST])`);
-                    emit(`             ${ssaDynamicArgv}.push(arg)`);
-                    emit(`          continue;`);
-                    emit(`        }`);
-                    emit(`      }`);
-                    emit(`    }`);
-                    emit(`    args = args[REST];`);
-                    emit('  }');
-                    emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`)
-                    emit(`  ${ssaDynamicArgv}.push(arg)`);
-                    emit(`}`);
-                    break;
-                  }
+                  usesDynamicArgv = true;
+                  if (!isList(macroResult))
+                    throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
+                  let ssaInsert = macroResult[FIRST], ssaInsert2 = newTemp("macro_insert");
+                  args = macroResult[REST];
+                  if (!macroCompiled)
+                    ssaInsert = use(bind(ssaInsert));
+                  emit(`let ${ssaInsert2} = ${ssaInsert};`);
+                  emit(`if (${ssaDynamicArgv}.length < ${evalCount})`);
+                  tools.bindLiterally(_eval, "_eval");
+                  emit(`  ${ssaInsert2} = _eval(${ssaInsert2}, scope);`)
+                  tools.dynamicScopeUsed = true;
+                  tools.bindLiterally(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR");
+                  tools.bindLiterally(SchemeEvalError, "SchemeEvalError");
+                  emit(`for (let arg of ${ssaInsert} {`);
+                  emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`);
+                  emit(`  ${ssaDynamicArgv}.push(arg)`);
+                  emit(`}`)
+                  continue;
                 }
               }
             }
@@ -3014,11 +3007,13 @@ export function createInstance(schemeOpts = {}) {
           else if (!compileHook)  // hooks get unbound unevaluated args
             arg = ssaArg = use(bind(arg, `arg_${argCount}`));
           ssaArgv.push(arg);
+          argCount += 1;
           if (ssaArg) {
             ssaArgStr += `${sep}${ssaArg}`;
             dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaArg})`));
             sep = ', ';
           }
+          args = args[REST];
         }
         if (!usesDynamicArgv) {
           tools.deleteEmitted(dynamicArgvLines);
