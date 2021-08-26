@@ -11,6 +11,9 @@ export const LogicError = Error;
 const isArray = Array.isArray;
 const MUL = '\u00d7', DIV = '\u00f7';
 
+// So that optional parameters show up pretty when printed
+const optional = undefined;
+
 //
 // Creates a SchemeJSCore instance.
 //
@@ -919,7 +922,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // Conditionals
   //
-  exportAPI("if", ifelse, { evalArgs: 1, compileHook: ifelse_hook });
+  exportAPI("ifelse", ifelse, { evalArgs: 1, compileHook: ifelse_hook });
   function ifelse(p, t = true, f = false) {
     p = schemeTrue(p);
     if (p)
@@ -1819,6 +1822,38 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
+  // Macros
+  //
+
+  exportAPI("defmacro", defmacro, { requiresScope: true, evalArgs: 0, dontInline: true });
+  function defmacro(nameAndParams, ...forms) {
+    if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
+    let name = Atom(nameAndParams[FIRST]);
+    let params = nameAndParams[REST];
+    if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
+    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
+    let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
+    examineFunctionForCompilerTemplates(name, compiledFunction, { tag: MACRO_TAG });
+    namedObjects.set(compiledFunction, name.description);
+    globalScope[name] = compiledFunction;
+    // Make available to JavaScript as well
+    let jsName = normalizeExportToJavaScriptName(name);
+    if (jsName)
+      globalScope[jsName] = compiledFunction;
+    globalScope[name] = compiledFunction;
+    return name;
+  }
+
+  // (when (cond) form...) => (if (cond) (begin form...))
+  exportAPI("when", when, { tag: MACRO_TAG });
+  function when(params) {
+    return list(
+        globalScope.ifelse,
+        params[FIRST],
+        new Pair(globalScope.begin, params[REST]));
+  }
+
+  //
   // This is where the magic happens
   //
   // Beware that compileEval closely parallels this function, if you make a change
@@ -1831,7 +1866,7 @@ export function createInstance(schemeOpts = {}) {
     // is effectively a keyword in JavaScript.
     if (scope[RETURN_SYMBOL])
       throw new LogicError(`someone forgot to check scope[RETURNS_SYMBOL]`)
-    do { // Macro expansion loop
+    for (;;) { // Macro expansion loop
       if (isNil(form)) return form;
       if (isPrimitive(form)) return form;
       if (typeof form === 'symbol') { // atom resolution is the most common case
@@ -1851,7 +1886,7 @@ export function createInstance(schemeOpts = {}) {
           if (typeof symVal === 'function') {
             let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
             if (parameterDescriptor != null) {
-              let tag = parameterDescriptor && 0xff;
+              let tag = parameterDescriptor & 0xff;
               if (tag === MACRO_TAG) {
                 form = symVal.call(scope, args);
                 continue;
@@ -1877,7 +1912,7 @@ export function createInstance(schemeOpts = {}) {
             if (typeof symval === 'function') {
               let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
               if (parameterDescriptor != null) {
-                let tag = parameterDescriptor && 0xff;
+                let tag = parameterDescriptor & 0xff;
                 if (tag === PARAMETER_MACRO_TAG) {
                   let macroResult = symVal.call(scope, args[REST]);
                   if (!isList(macroResult))
@@ -2010,7 +2045,8 @@ export function createInstance(schemeOpts = {}) {
           return res;
         }
       }
-    } while (false);
+      break; // not a macro
+    }  // macro loop
     throw new LogicError(`Shouldn't happen. All cases should be handled above`);
 
     function throwBadForm() {
@@ -2399,7 +2435,7 @@ export function createInstance(schemeOpts = {}) {
         let fnDesc = analyzeJSFunction(obj);
         let parameterDescriptor = obj[PARAMETER_DESCRIPTOR] ?? (MAX_INTEGER << 16);
         let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-        let tag = parameterDescriptor & 0xfff;
+        let tag = parameterDescriptor & 0xff;
         let name = namedObjects.get(obj) ?? fnDesc.name ?? obj.name;
         let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
@@ -2635,7 +2671,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("compile_lambda", compile_lambda, { dontInline: true });
-  function compile_lambda(name, displayName, lambdaForm, jitFunction) {
+  function compile_lambda(name, displayName, lambdaForm, jitFunction = optional) {
     let scope = this;
     if (!isList(lambdaForm) && typeof lambdaForm === 'symbol' ) throw new SchemeEvalError(`Bad lambda ${string(lambda)}`);
     let { code, bindSymToObj } = lambda_compiler.call(this, name, displayName, lambdaForm, jitFunction);
@@ -2802,7 +2838,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("compileEval", compileEval, { dontInline: true });
   function compileEval(form, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
-    do { // for macros
+    for (;;) { // for macros
       if (--tools.evalLimit < 0)
         throw new SchemeCompileError(`Too comlpex ${string(form)}`);
       if (form === undefined) return "undefined";
@@ -3161,7 +3197,8 @@ export function createInstance(schemeOpts = {}) {
         return ssaObjectLiteral;
       }
       throw new LogicError(`Shouldn't happen. All cases should be handled above`);
-  } while (false); // macro loop
+      break;  // not a macro
+    } // macro loop
 
     function throwBadForm() {
       throw new SchemeCompileError(`BadForm ${string(form)}`);

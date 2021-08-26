@@ -1625,8 +1625,12 @@ export function createInstance(schemeOpts = {}) {
              `and returns the value of the last one, but only the first "n" parameters are evaluated.`
     });
     defineBinding("def", "def", {
-      group: "main", sample: `(def var value) -or- (def (fn param ...) form ...)`, 
-      blurb: `Defines a global variable or function.`
+      group: "main", sample: `(def var value)`, 
+      blurb: `Defines a global variable.`
+    });
+    defineBinding("defn", "def", {
+      group: "main", sample: `(def (fn param ...) form ...)`, 
+      blurb: `Defines a global function.`
     });
     defineBinding("compile", "compile", {
       group: "main", sample: `(compile (fn param ...) form ...)`, 
@@ -1853,11 +1857,17 @@ export function createInstance(schemeOpts = {}) {
       group: "compare", sample: `(nequal value value [options])`, 
       blurb: `Returns false if the two values are "deeply equal"`
     });
-    defineBinding("?", "if", "if", {
+    defineBinding("?", "ifelse", "if", {
       group: "pred-op", sample: `(? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is "true" in the Scheme sense (neither false, undefined, null nor nil), ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
+    });
+    defineBinding("when", "when", {
+      group: "pred-op", sample: `(when value form...)`, 
+      blurb: `If the value is "true" in the SchemeJS sense (neither false, undefined, null nor nil), ` +
+         `evaluates the series of forms and returns the result of the last. ` +
+         `Otherwise, returns false.`
     });
     defineBinding("bigint?", "is_bigint", {
       group: "pred-op", sample: `(?bigint value [t-expr true] [f-expr false])`, 

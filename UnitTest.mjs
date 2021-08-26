@@ -645,6 +645,11 @@ function innerRun(opts = {}) {
       EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
     }
 
+    { // Test macros
+      EXPECT(` (when < 2 3) 'a 2 (+ 4 5)`, 9);
+      EXPECT(` (when > 2 3) 'a 2 (+ 4 5)`, false);
+    }
+
     { // Test that when a when a bound function changes, the JIT's guards catch it.
       let savedScope = beginTestScope();
       EXPECT(` (def op +) `, ` 'op `);
