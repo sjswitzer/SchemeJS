@@ -98,8 +98,8 @@ function runTestsInNewInstance(opts = {}) {
     EXPECT(` (car '[1 2 3]) `, ` '1 `);
     EXPECT(` (cdr '(1 2 3)) `, ` '(2 3) `);
     EXPECT(` (cdr '[1 2 3]) `, ` '(2 3) `);
-    EXPECT_ERROR( ` (car nil) `, SchemeEvalError );
-    EXPECT_ERROR( ` (cdr nil) `, SchemeEvalError );
+    EXPECT_ERROR( ` (car nil) `, TypeError );
+    EXPECT_ERROR( ` (cdr nil) `, TypeError );
     const testList = ` '(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd))) `;
     EXPECT(` (caaar ${testList}) `, ` 'aaa `);
     EXPECT(` (cdaar ${testList}) `, ` 'daa `);
@@ -411,7 +411,7 @@ function runTestsInNewInstance(opts = {}) {
     EXPECT(` (cond) `, BOTTOM);
     EXPECT_ERROR(` (cond a) `, isCompileOrEvalError);
     EXPECT_ERROR(` (cond 1) `, isCompileOrEvalError);
-    EXPECT_ERROR(` (cond ()) `, isCompileOrEvalError);
+    EXPECT_ERROR(` (cond ()) `, TypeError);
     EXPECT_ERROR(` (cond (true) 1) `, isCompileOrEvalError);
     EXPECT(` (cond ((< 4 5) (+ 5 6))) `, 11);
     EXPECT(` (cond ((< 4 5) (+ 5 6) (* 5 6))) `, 30);

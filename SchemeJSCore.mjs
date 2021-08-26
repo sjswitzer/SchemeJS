@@ -194,7 +194,7 @@ export function createInstance(schemeOpts = {}) {
     [MORELIST]: { get: function() { return this.length > 0 ? true : null } },
     [FIRST]: { get: function() {
       if (this.length > 0) return this[0];
-      throw new SchemeEvalError(`${firstName} of []`);
+      throw new TypeError(`${firstName} of []`);
     } },
     [REST]: { get: function() {
       return new ArrayList(this, 1);
@@ -276,7 +276,7 @@ export function createInstance(schemeOpts = {}) {
       let array = this._array, pos = this._pos;
       if (pos < this._max && pos < array.length)
         return array[pos];
-      throw new SchemeEvalError(`${firstName} beyond end of array`);
+      throw new TypeError(`${firstName} beyond end of array`);
     }
     get [REST]() {
       return new ArrayList(this._array, this._pos + 1, this._max);
@@ -300,13 +300,13 @@ export function createInstance(schemeOpts = {}) {
         let moreList = this[MORELIST];
         if (moreList)
           return moreList[0];
-        throw new SchemeEvalError(`${firstName} on exhausted iterator`);
+        throw new TypeError(`${firstName} on exhausted iterator`);
       } },
       [REST]: { get: function() {
         let moreList = this[MORELIST];
         if (moreList)
           return moreList[1];
-        throw new SchemeEvalError(`${restName} on exhausted iterator`);
+        throw new TypeError(`${restName} on exhausted iterator`);
       } },
       [MORELIST]: { get: function iterableMoreList() {
         // Note that typical loops will first test whether something is a list or try accessing
@@ -360,7 +360,7 @@ export function createInstance(schemeOpts = {}) {
             let { done, value } = iter.next();
             if (done) {
               Object.defineProperties(this, {
-                [FIRST]: { get: function() { throw new SchemeEvalError(`${firstName} on exhausted iterator`)} },
+                [FIRST]: { get: function() { throw new TypeError(`${firstName} on exhausted iterator`)} },
                 [REST]: { value },
                 [MORELIST]: { value: false },
               });
@@ -388,13 +388,12 @@ export function createInstance(schemeOpts = {}) {
   const NIL = Object.create( null, {
     NIL: { value: "NIL" },  // Makes it clear in the debugger
     [FIRST]: {
-      // TODO: make these TypeError
-      get: () => { throw new SchemeEvalError(`${firstName} of ${nilName}`) },
-      set: _ => { throw new SchemeEvalError(`set ${firstName} of ${nilName}`) }
+      get: () => { throw new TypeError(`${firstName} of ${nilName}`) },
+      set: _ => { throw new TypeError(`set ${firstName} of ${nilName}`) }
     },
     [REST]: {
-      get: () => { throw new SchemeEvalError(`${restName} of ${nilName}`) },
-      set: _ => { throw new SchemeEvalError(`set ${restName} of ${nilName}`) }
+      get: () => { throw new TypeError(`${restName} of ${nilName}`) },
+      set: _ => { throw new TypeError(`set ${restName} of ${nilName}`) }
     },
     [Symbol.iterator]: { value: function createNilIterator() {
       return {
@@ -435,7 +434,7 @@ export function createInstance(schemeOpts = {}) {
     // If they pass in an atom, just return it
     if (isAtom(name)) return name;
     if (typeof name !== 'string')
-      throw new SchemeEvalError(`Not a string ${name}`);
+      throw new TypeError(`Not a string ${name}`);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -3014,8 +3013,6 @@ export function createInstance(schemeOpts = {}) {
                     emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
                   }
                   tools.dynamicScopeUsed = true;
-                  tools.bindLiterally(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR");
-                  tools.bindLiterally(SchemeEvalError, "SchemeEvalError");
                   emit(`for (let arg of ${ssaInsertValues}) {`);
                   emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`);
                   emit(`  ${ssaDynamicArgv}.push(arg)`);
