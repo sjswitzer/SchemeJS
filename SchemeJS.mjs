@@ -1296,12 +1296,12 @@ export function createInstance(schemeOpts = {}) {
             if (token().type === 'end' || token().type === 'partial')
               throw new SchemeParseIncompleteError(path, token(), parseContext);
             if (token().type === 'garbage') throwSyntaxError();
-            if (token().type === ',')  // Comma is optional
-              consumeToken();
             let item = parseExpr();
             item = cons(item, NIL);
             if (tail) tail = tail[REST] = item;
             else head = tail = item;
+            if (token().type === ',')  // Comma is optional
+              consumeToken();
           }
         }
       }
