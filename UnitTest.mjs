@@ -670,6 +670,13 @@ function runTestsInNewInstance(opts = {}) {
       endTestScope(savedScope);
     }
 
+    { // Test spreaf parameters in array literals
+      let savedScope = beginTestScope();
+      EXPECT( ` (def a [1 2 'z "foo" {} 10n]) `, ` 'a `);
+      EXPECT( ` ["x" 'x ...a 100] `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      endTestScope(savedScope);
+    }
+
     { // Test that when a when a bound function changes, the JIT's guards catch it.
       let savedScope = beginTestScope();
       EXPECT(` (def op +) `, ` 'op `);
