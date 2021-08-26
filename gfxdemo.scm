@@ -62,7 +62,7 @@
   ;; If the alpha is too low, things won't fade things completely; they just converge on light
   ;; gray. So instead use a slightly higer alpha and only apply it every several frames.
   (fill-style "#00000004")
-  (? (== 0 (% tick 5))  ;; "%" is remainder, so this is true every 5 ticks
+  (when (== 0 (% tick 5))  ;; "%" is remainder, so this is true every 5 ticks
     (fill-rect 0 0 (canvas-width) (canvas-height))
   )
   ;; Scale to a 100 x 100 coordinate system and move the origin to the center
@@ -92,7 +92,7 @@
   (let ((angle (* 2 *pi* (/ (Date-now) 1000 period))))
     ;; Fade the canvas by drawing over it with white and a very low alpha every several ticks
     (fill-style "#ffffff0c")
-    (? (== 0 (% tick 30))
+    (when (== 0 (% tick 30))
       (fill-rect 0 0 (canvas-width) (canvas-height))
     )
     ;; Scale to a 100 x 100 coordinate system with the origin in the center
