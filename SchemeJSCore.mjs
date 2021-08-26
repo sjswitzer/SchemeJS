@@ -1811,7 +1811,9 @@ export function createInstance(schemeOpts = {}) {
 
   //
   // Spread operator.
-  //  (There may be other uses for parameter macros but I doubt it!)
+  //   (There may be other uses for parameter macros but I doubt it!)
+  // Parameter macros must be aware of whether the argument should be evaluated
+  // so that parameter comes first to make it hard to ignore.
   //
   exportAPI("spread", spread, { tag: PARAMETER_MACRO_TAG });
   function spread(needsEval, args) {

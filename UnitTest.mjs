@@ -650,6 +650,13 @@ function runTestsInNewInstance(opts = {}) {
       EXPECT(` (when (> 2 3) 'a 2 (+ 4 5))`, false);
     }
 
+    { // Test "parameter macros" (essentially just the spread "..." operator currently).
+      let savedScope = beginTestScope();
+      EXPECT(` (defn (foo a . b) (list ...b a))`, ` 'foo `);
+      EXPECT(` (foo 1 2 3 4 5)`, ` '(2 3 4 5 1) `);
+      endTestScope(savedScope);
+    }
+
     { // Test that when a when a bound function changes, the JIT's guards catch it.
       let savedScope = beginTestScope();
       EXPECT(` (def op +) `, ` 'op `);
