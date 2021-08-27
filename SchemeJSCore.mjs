@@ -3182,7 +3182,7 @@ export function createInstance(schemeOpts = {}) {
           dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
           while (moreList(form)) {
             let element = form[FIRST];
-            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, MAX_INTEGER, element, form[REST]);
+            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, 0, element, form[REST]);
             if (nextArg !== undefined) {
               form = nextArg;
               usesDynamicArgv = true;
@@ -3191,6 +3191,7 @@ export function createInstance(schemeOpts = {}) {
             let ssaValue = compileEval(element, ssaScope, tools);
             use(ssaValue);
             evalledSsaValues.push(ssaValue);
+            dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaValue})`));
             form = form[REST];
           }
           if (!usesDynamicArgv) {
@@ -3267,7 +3268,9 @@ export function createInstance(schemeOpts = {}) {
               if (!macroCompiled)
                 ssaInsert = use(bind(ssaInsert));
               tools.bindLiterally(_eval, "_eval");
-              if (evalCount !== MAX_INTEGER) {
+              if (evalCount === 0) {
+                ssaInsertValues = ssaInsert;
+              } else if (evalCount !== MAX_INTEGER) {
                 emit(`let ${ssaInsertValues} = ${ssaInsert};`);
                 emit(`if (${ssaDynamicArgv}.length < ${evalCount}) ${ssaInsertValues} = _eval(${ssaInsertValues}, scope);`)
               } else {
@@ -3275,7 +3278,6 @@ export function createInstance(schemeOpts = {}) {
               }
               tools.dynamicScopeUsed = true;
               emit(`for (let arg of ${ssaInsertValues}) {`);
-              emit(`  arg = _eval(arg, scope);`);
               emit(`  ${ssaDynamicArgv}.push(arg)`);
               emit(`}`)
               return nextArg;
