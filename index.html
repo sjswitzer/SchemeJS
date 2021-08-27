@@ -1051,8 +1051,10 @@
               }
               helpElement.appendChild(dd);
               if (typeof value === 'function') {
-                let implElement = createElement('p', 'impl', string(value));
-                if (helpGroup === 'javascript')
+                let implStr = info.implStr;
+                if (!implStr) implStr = string(value);
+                let implElement = createElement('p', 'impl', implStr);
+                if (helpGroup === 'javascript' || helpGroup === 'web-gfx')
                   implElement.classList.add('impl-always');
                 dd.appendChild(implElement);
               } else {

@@ -46,15 +46,62 @@ const optional = undefined;
 export function createInstance(schemeOpts = {}) {
   let globalScope = SchemeJS.createInstance(schemeOpts);
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
+  const defineBinding = defineSchemeBindings ? (globalScope.defineBinding ?? required()) : _ => undefined;
 
   const string = globalScope.string ?? required();
   const exportAPI = globalScope.exportAPI ?? required();
+  const list = globalScope.list ?? required();
+  const isList = globalScope.isList ?? required();
+  const FIRST = globalScope.FIRST ?? required();
+  const REST = globalScope.REST ?? required();
   const Atom = globalScope.Atom ?? required();
+  const MACRO_TAG = globalScope.MACRO_TAG ?? required();
   const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   function required() { throw "required" }
 
   const gfxContextAtom = Atom("gfx-context");
   const htmlDocumentAtom = Atom("html-document");
+
+  function gfxFunction(boundName, name, functionName, params, opts = {}) {
+    exportAPI(name, macro, { tag: MACRO_TAG });
+    function macro(params) {
+      const fn = (gfx_context, ...args) => gfx_context[functionName](...args);
+      return list(fn, gfxContextAtom, ...params);
+    }
+    let paramStr = '', argStr = '', sep = '';
+    for (let param of params) {
+      let paramName = param;
+      let defaultStr = '';
+      if (isList(param)) {
+        paramName = param[REST][FIRST].description;
+        let paramDefault = param[REST][REST][FIRST];
+        if (typeof paramDefault === 'symbol') paramDefault = paramDefault.description;
+        defaultStr = ` = ${paramDefault}`;
+      }
+      paramStr += `${sep}${paramName}${defaultStr}`;
+      argStr += `${sep}${paramName}`;
+      sep = ', ';
+    }
+    defineBinding(boundName, name, { group: "web-gfx", gfxApi: functionName,
+      implStr: `(${[paramStr]}) => gfx_context.${functionName}(${argStr})` });
+  }
+  
+  /*
+  exportAPI("gfx_opt", gfx_opt, { tag: MACRO_TAG });
+  function gfx_opt(params) {
+    let param = params[0], dflt = params[1];
+    let paramAtom = Atom(param);
+    return list( ((paramVal, dflt) => paramVal !== undefined ? paramVal : dflt), paramAtom, dflt );
+  }
+  const opt = (...params) => globalScope.gfx_opt(params);
+  */
+  function opt(param, dflt) {
+    let paramAtom = Atom(param);
+    return list( ((paramVal, dflt) => paramVal !== undefined ? paramVal : dflt), paramAtom, dflt );
+  }
+
+  gfxFunction("move-to", "move_to", "moveTo", [ opt("x", 0), opt("y", 0)]);
+  gfxFunction("line-to", "line_to", "lineTo", [ opt("x", 0), opt("y", 1)]);
 
   // When there are macros, this can be rewritten as a LET binding, probably
   exportAPI("gfx_save", gfx_save, { evalArgs: 0, compileHook: gfx_save_hook });
@@ -329,7 +376,6 @@ export function createInstance(schemeOpts = {}) {
   //
 
   if (defineSchemeBindings) {
-    const defineBinding = globalScope.defineBinding ?? required();
 
     defineBinding("VERSION", "VERSION", {
       group: "main", sample: `VERSION`,
@@ -393,8 +439,8 @@ export function createInstance(schemeOpts = {}) {
     defineBinding("shadow-offset-y", "shadow_offset_y", { group: "web-gfx", gfxApi: 'shadowOffsetY' });
     defineBinding("begin-path", "begin_path", { group: "web-gfx", gfxApi: 'beginPath' });
     defineBinding("close-path", "close_path", { group: "web-gfx", gfxApi: 'closePath' });
-    defineBinding("move-to", "move_to", { group: "web-gfx", gfxApi: 'moveTo' });
-    defineBinding("line-to", "line_to", { group: "web-gfx", gfxApi: 'lineTo' });
+    //defineBinding("move-to", "move_to", { group: "web-gfx", gfxApi: 'moveTo' });
+    //defineBinding("line-to", "line_to", { group: "web-gfx", gfxApi: 'lineTo' });
     defineBinding("bezier-curve-to", "bezier_curve_to", { group: "web-gfx", gfxApi: 'bezierCurveTo' });
     defineBinding("quadratic-curve-to", "quadratic_curve_to", { group: "web-gfx", gfxApi: 'quadraticCurveTo' });
     defineBinding("arc", "arc", { group: "web-gfx", gfxApi: 'arc' });
