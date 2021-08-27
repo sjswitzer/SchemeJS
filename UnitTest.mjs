@@ -683,7 +683,7 @@ function runTestsInNewInstance(opts = {}) {
       let savedScope = beginTestScope();
       EXPECT(` (def a { foo: "bar" bar: 2 "z": 10n } ) `, ` 'a `);
       EXPECT(` { "x": 1, ...: a, 100: "hundred" } `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
-      EXPECT(` (defn (b a) { "x": 1, ...: a, 100: "hundred" } `, ` 'b `)
+      EXPECT(` (defn (b a) { "x": 1, ...: a, 100: "hundred" }) `, ` 'b `)
       EXPECT(` (b { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
       endTestScope(savedScope);
     }
