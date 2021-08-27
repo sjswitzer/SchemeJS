@@ -97,6 +97,10 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("COMPILE_INFO", COMPILE_INFO);
+  exportAPI("FUNCTION_TAG", FUNCTION_TAG  );
+  exportAPI("MACRO_TAG", MACRO_TAG);
+  exportAPI("PARAMETER_MACRO_TAG", PARAMETER_MACRO_TAG);
+  
 
   //
   // Unlike most Lisps, the Cons cell (Pair) is not central to this design, but a _list_ is.
@@ -1827,8 +1831,8 @@ export function createInstance(schemeOpts = {}) {
       tools.macroCompiled = true;
       spreadArg = compileEval(spreadArg, ssaScope, tools);
     }
-    // Returns Pair of arguments to stuff w/o eveluation
-    // and args still subject to evaluation.
+    // Returns Pair of arguments to stuff
+    // and the rewritten (or not) remainder of the arg list.
     return new Pair(spreadArg, args[REST]);
   }
 
@@ -3347,7 +3351,7 @@ export function createInstance(schemeOpts = {}) {
               let nextArg = macroResult[REST];
               if (!macroCompiled) {
                 ssaInsert = use(bind(ssaInsert));
-                tools.dynamicScopeUsed = true;
+                ssaScope.dynamicScopeUsed = true;
                 ssaInsertObj = newTemp("macro_insert");
                 tools.bindLiterally(_eval, "_eval");
                 emit(`let ${ssaInsertObj} = _eval(${ssaInsert}, scope);`)

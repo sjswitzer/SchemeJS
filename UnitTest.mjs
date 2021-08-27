@@ -49,6 +49,9 @@ function runTestsInNewInstance(opts = {}) {
   const parseSExpr = globalScope.parseSExpr ?? required();
   const list = globalScope.list ?? required();
   const Atom = globalScope.Atom ?? required();
+  const FIRST = globalScope.FIRST ?? required();
+  const REST = globalScope.REST ?? required();
+  const Pair = globalScope.Pair ?? required();
   const compile_lambda = globalScope.compile_lambda ?? required();
   const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   const justTestJIT = opts.justTestJIT;
@@ -676,6 +679,8 @@ function runTestsInNewInstance(opts = {}) {
       EXPECT(` ["x" 'x ...a 100] `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
       EXPECT(` (defn (b . a) ["x" 'x ...a 100]) `, ` 'b `)
       EXPECT(` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      EXPECT(` (compile (c . a) ["x" 'x ...a 100]) `, ` 'c `)
+      EXPECT(` (c 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
       endTestScope(savedScope);
     }
 
@@ -685,6 +690,35 @@ function runTestsInNewInstance(opts = {}) {
       EXPECT(` { "x": 1, ...: a, 100: "hundred" } `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
       EXPECT(` (defn (b a) { "x": 1, ...: a, 100: "hundred" }) `, ` 'b `)
       EXPECT(` (b { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
+      EXPECT(` (compile (c a) { "x": 1, ...: a, 100: "hundred" }) `, ` 'c `)
+      EXPECT(` (c { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
+      endTestScope(savedScope);
+    }
+
+    { // Test that spread works OK with a macro that _doesn_ specialize for the compiled
+      // case.
+      let savedScope = beginTestScope();
+
+      // First, define our own spread macro without compiler specialization
+      globalScope.exportAPI("spread2", spread2, { tag: globalScope.PARAMETER_MACRO_TAG });
+      function spread2(args,) {
+        if (!isList(args))
+          throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
+        let spreadArg = args[FIRST];
+        // Returns Pair of arguments to stuff
+        // and the rewritten (or not) remainder of the arg list.
+        return new Pair(spreadArg, args[REST]);
+      }
+      globalScope.defineBinding("_spread_", "spread2");
+
+      // Now some tests
+      EXPECT(` (compile (foo a . b) (list _spread_ b a))`, ` 'foo `);
+      EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1) `);
+      EXPECT(` (compile (b . a) ["x" 'x _spread_ a 100]) `, ` 'b `)
+      EXPECT(` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      EXPECT(` (compile (c a) { "x": 1, _spread_: a, 100: "hundred" }) `, ` 'c `)
+      EXPECT(` (c { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
+
       endTestScope(savedScope);
     }
 

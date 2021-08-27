@@ -1363,6 +1363,9 @@ export function createInstance(schemeOpts = {}) {
                 res[EVALUATE_KEY_VALUE_SYMBOL] = [sym, val];
               else
                 res[sym] = val;
+            } else {
+              // No colon? value is BOTTOM. Can't just drop it!
+              res[sym] = BOTTOM;
             }
             gotIt = true;
             if (token().type === ',')  // Comma is optional
