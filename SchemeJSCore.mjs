@@ -1826,8 +1826,9 @@ export function createInstance(schemeOpts = {}) {
       if (ssaScope) {
         let ssaSpreadArg = ssaScope[spreadArg];
         if (!ssaSpreadArg) {
+          let use = tools.use, bind = tools.bind;
           tools.dynamicScopeUsed = true;
-          ssaSpreadArg = `resolveUnbound(${use(bind(sym))})`;
+          ssaSpreadArg = `resolveUnbound(${use(bind(spreadArg))})`;
         }
         tools.macroCompiled = true;
         spreadArg = ssaSpreadArg;
@@ -2735,7 +2736,7 @@ export function createInstance(schemeOpts = {}) {
     let scope = this;
     let bindSymToObj = {}, guardedSymbols = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
-    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 10000000,
+    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 100000000,
       bindLiterally, functionDescriptors, compileEval };
     let ssaScope = new Object();
     ssaScope[SCOPE_TYPE_SYMBOL] = "compile-scope";
@@ -2879,8 +2880,9 @@ export function createInstance(schemeOpts = {}) {
   function compileEval(form, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
     for (;;) { // for macros
+      // TODO: This is for debugging, mostly. Should eventually be removed.
       if (--tools.evalLimit < 0)
-        throw new SchemeCompileError(`Too comlpex ${string(form)}`);
+        throw new SchemeCompileError(`Too complex ${string(form)}`);
       if (form === undefined) return "undefined";
       if (form === null) return "null";
       if (typeof form === 'number' || typeof form === 'bigint' || typeof form === 'string')
@@ -3151,41 +3153,56 @@ export function createInstance(schemeOpts = {}) {
           emit(`}`);
           tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name, noScope: true };
           return ssaResult;
-        } else {
-          // We have a dynamic number of arguments, all evaluated.
-          // But we don't know how many at compile time except that there's a minimum
-          let ssaResult = newTemp(`${fName}_result`);
-          use(ssaFunction);
-          if (argCount >= requiredCount) {
-            emit(`let ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaDynamicArgv});`);
-            return ssaResult;
-          }
-          // Here, we have to determine at runtime time whether a closure is required
-          emit(`;et ${ssaResult};`);
-          emit(`if (${ssaDynamicArgv}.length >= ${requiredCount})`);
-          emit(`  ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaDynamicArgv});`);
-          emit(`else`);
-          if (requiresScope)
-            emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.call(scope, ...${ssaDynamicArgv}, ...args);  } `);
-          else
-            emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}(...${ssaDynamicArgv}, ...args);  } `);
         }
+        // We have a dynamic number of arguments, all evaluated.
+        // But we don't know how many at compile time except that there's a minimum
+        let ssaResult = newTemp(`${fName}_result`);
+        use(ssaFunction);
+        if (argCount >= requiredCount) {
+          emit(`let ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaDynamicArgv});`);
+          return ssaResult;
+        }
+        // Here, we have to determine at runtime time whether a closure is required
+        emit(`;et ${ssaResult};`);
+        emit(`if (${ssaDynamicArgv}.length >= ${requiredCount})`);
+        emit(`  ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaDynamicArgv});`);
+        emit(`else`);
+        if (requiresScope)
+          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.call(scope, ...${ssaDynamicArgv}, ...args);  } `);
+        else
+          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}(...${ssaDynamicArgv}, ...args);  } `);
       }
       // Special eval for JS Arrays and Objects
       if (form !== null && typeof form === 'object') {
         if (isArray(form )) {
           let ssaArrayLiteral = newTemp("arrayliteral");
           let evalledSsaValues = [];
-          for (let element of form) {
+          let dynamicArgvLines = [], usesDynamicArgv;
+          let ssaDynamicArgv = newTemp('dynamic_argv');
+          dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
+          while (moreList(form)) {
+            let element = form[FIRST];
+            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, MAX_INTEGER, element, form[REST]);
+            if (nextArg !== undefined) {
+              form = nextArg;
+              usesDynamicArgv = true;
+              continue;
+            }
             let ssaValue = compileEval(element, ssaScope, tools);
             use(ssaValue);
             evalledSsaValues.push(ssaValue);
+            form = form[REST];
           }
-          emit(`let ${ssaArrayLiteral} = [`);
-          for (let ssaElement of evalledSsaValues)
-            emit(`  ${ssaElement},`);
-          emit(`];`);
-          return ssaArrayLiteral;
+          if (!usesDynamicArgv) {
+            tools.deleteEmitted(dynamicArgvLines);
+            emit(`let ${ssaArrayLiteral} = [`);
+            for (let ssaElement of evalledSsaValues) {
+              emit(`  ${ssaElement},`);
+            }
+            emit(`];`);
+            return ssaArrayLiteral;
+          }
+          return ssaDynamicArgv;
         }
         let ssaObjectLiteral = newTemp("objectliteral");
         emit(`let ${ssaObjectLiteral} = {};`);
@@ -3252,14 +3269,13 @@ export function createInstance(schemeOpts = {}) {
               tools.bindLiterally(_eval, "_eval");
               if (evalCount !== MAX_INTEGER) {
                 emit(`let ${ssaInsertValues} = ${ssaInsert};`);
-                emit(`if (${ssaDynamicArgv}.length < ${evalCount})`);
-                emit(`  ${ssaInsertValues} = _eval(${ssaInsertValues}, scope);`)
+                emit(`if (${ssaDynamicArgv}.length < ${evalCount}) ${ssaInsertValues} = _eval(${ssaInsertValues}, scope);`)
               } else {
                 emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
               }
               tools.dynamicScopeUsed = true;
               emit(`for (let arg of ${ssaInsertValues}) {`);
-              emit(`  if (${ssaDynamicArgv}.length < ${evalCount}) arg = _eval(arg, scope);`);
+              emit(`  arg = _eval(arg, scope);`);
               emit(`  ${ssaDynamicArgv}.push(arg)`);
               emit(`}`)
               return nextArg;
