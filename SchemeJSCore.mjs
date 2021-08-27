@@ -3312,7 +3312,6 @@ export function createInstance(schemeOpts = {}) {
     if (!isList(body)) throwBadCompiledLambda(lambda);
     let params = body[FIRST];
     let forms = body[REST];
-    if (!isList(params)) throwBadCompiledLambda(lambda);
     let ssaParamv = [], ssaRestParam, paramv = [], restParam;
     let originalSsaScope = ssaScope;
     ssaScope = newScope(ssaScope, "compiler-lambda-scope");
