@@ -513,10 +513,10 @@
             supplied by the expressions that follow them. The expressions are evaluated only
             if the parameter is absent.
         <h4> Rest Parameters </h4>
-        <p> A function defined as <code>(def (fn p1 p2 . p3) form ...)</code> takes two
+        <p> A function defined as <code>(def (fn p1 p2 ...p3) form ...)</code> takes two
             normal parameters (<i>p1</i> and <i>p2</i>) and receives a third parameter <i>p3</i>,
             that recieves a list of the remaining arguments.
-        <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 . p3) form ...)</code> has a
+        <p> Similarly, a lambda of the form <code>(&lambda; (p1 p2 ...p3) form ...)</code> has a
             rest parameter <i>p3</i>.
         <h4> Predicates as Conditionals </h4>
         <p> Predicates such as <code>number?</code> can be used to test a value's type

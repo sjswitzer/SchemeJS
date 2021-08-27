@@ -74,7 +74,7 @@ _factoral
 ((opt 1) 8)
 
 ;; Rest paramaters
-(def (foo a b . c) c)
+(def (foo a b ...c) c)
 foo
 (foo 1 2 3 4 5 6)
 
