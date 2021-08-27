@@ -52,7 +52,7 @@ export function createInstance(schemeOpts = {}) {
   const nilName = schemeOpts.nilName ?? "NIL";
   const schemeTrueOverride = schemeOpts.schemeTrueOverride;
   const bottomIsLNIL = schemeOpts.bottomIsLNIL ?? true;
-  const restParamStr = schemeOpts.restParamStr ?? "...";
+  const restParamStr = schemeOpts.restParamStr ?? "&";
 
   const COMPILE_INFO = Symbol("COMPILE-INFO");
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");

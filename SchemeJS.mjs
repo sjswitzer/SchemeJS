@@ -20,7 +20,6 @@ const optional = undefined;
 // Creates a SchemeJS instance.
 //
 export function createInstance(schemeOpts = {}) {
-  let globalScope = SchemeJSCore.createInstance(schemeOpts);
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
   const readFile = schemeOpts.readFile;
   const latin1Only = schemeOpts.latin1Only ?? false;
@@ -28,10 +27,14 @@ export function createInstance(schemeOpts = {}) {
   const dumpIdentifierMap = schemeOpts.dumpIdentifierMap ?? false;
   const _reportError = schemeOpts.reportError = error => console.log(error); // Don't call this one
   const reportSchemeError = schemeOpts.reportSchemeError ?? _reportError; // Call these instead
-  const reportSystemError = schemeOpts.reportError ?? _reportError;
+  const reportSystemError = schemeOpts.reportSystemError ?? _reportError;
   const reportLoadInput = schemeOpts.reportLoadInput ?? (expr => undefined);
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
+  const restParamStr = schemeOpts.restParamStr ?? "..."; // override the default "&"
+
+  schemeOpts = { ... schemeOpts, restParamStr };
+  const globalScope = SchemeJSCore.createInstance(schemeOpts);
 
   const string = globalScope.string ?? required();
   const exportAPI = globalScope.exportAPI ?? required();
@@ -521,8 +524,8 @@ export function createInstance(schemeOpts = {}) {
       
       if (schemeTrue(evaled)) {
         let res = BOTTOM;
-        for ( ; iterateAsList(forms); forms = forms[REST])
-          res = _eval(forms[FIRST], this);
+        for (let form of forms)
+          res = _eval(form, this);
         if (this[RETURN_SYMBOL]) return;
           if (!isNil(forms)) {
           for (let form of forms) {

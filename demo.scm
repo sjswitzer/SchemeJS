@@ -1,6 +1,6 @@
 ;; SchemeJS Demo
 
-(def (factoral x)
+(def [factoral x]
   (? (<= x 1) 
      (? (bigint? x) 1n 1)
      (* x (factoral (- x (? (bigint? x) 1n 1))))
@@ -12,7 +12,7 @@
 (factoral 171n)
 
 ;; Simpler version using conditional predicate notation
-(def (_factoral x)
+(def [_factoral x]
   (? (<= x 1) 
      (bigint? x 1n 1)
      (* x (_factoral (- x (bigint? x 1n 1))))
@@ -22,7 +22,7 @@
 (_factoral 50n)
 
 ;; Compile it
-(compile (factoral x)
+(compile [factoral x]
   (? (<= x 1) 
      (? (bigint? x) 1n 1)
      (* x (factoral (- x (? (bigint? x) 1n 1))))
@@ -38,7 +38,7 @@ factoral
 (factoral 50n)
 
 ;; Compile using conditional predicates
-(compile (_factoral x)
+(compile [_factoral x]
   (? (<= x 1) 
      (bigint? x 1n 1)
      (* x (_factoral (- x (bigint? x 1n 1))))
@@ -54,7 +54,7 @@ _factoral
 (_factoral 50n)
 
 ;; Optional parameters
-(def (opt a b (c (+ 2 3))) (list a b c))
+(def [opt a b [c (+ 2 3)]] (list a b c))
 (opt 1 2 3)
 (opt 1 2)
 (opt 1)  ;; Note the binding in the closure scope
@@ -64,7 +64,7 @@ _factoral
 ((opt 1) 8)
 
 ;; Let's compile a function with optional parameters
-(compile (opt a b (c (+ 2 3))) (list a b c))
+(compile [opt a b [c (+ 2 3)]] (list a b c))
 ;; And see what we get
 (println (String opt))
 
@@ -74,7 +74,7 @@ _factoral
 ((opt 1) 8)
 
 ;; Rest paramaters
-(def (foo a b ...c) c)
+(def [foo a b ...c] c)
 foo
 (foo 1 2 3 4 5 6)
 
@@ -84,10 +84,10 @@ foo
 
 ;; "Switch statement"
 (cond
-  ((< 6 4) "a" "b")
-  ((< 4 4) "c" "d")
-  ((< 3 4) "e" "f")
-  ((< 2 4) "g" "h"))
+  [(< 6 4) "a" "b"]
+  [(< 4 4) "c" "d"]
+  [(< 3 4) "e" "f"]
+  [(< 2 4) "g" "h"])
 
 ;; Lazy lists
 (def a (list-view (apropos)))
@@ -110,7 +110,7 @@ b
 b
 
 ;; Partial evaluation binds a closure
-(def (increment-by n) (\(x) (+ x n)))
+(def [increment-by n] (\[x] (+ x n)))
 increment-by
 (def increment-by-3 (increment-by 3))
 increment-by-3  ;; Again, note the binding in the closure scope
@@ -126,7 +126,7 @@ times-3
 (def b 20)
 
 ;; Array literal
-[ 1 2 3 4 5 6 7 a 3 b 4]
+[1 2 3 4 5 6 7 a 3 b 4]
 
 ;; Object literal
 { "a": "foo", "b": "bar" [a]: [ 1, 2, 3 ]}
@@ -139,8 +139,8 @@ times-3
 (@ { a: "foo", b: "bar"} 'b)
 
 ;; Let
-(let ((a 1 2 3)  ;; assigns last value
-     (b (+ a 5)))
+(let [[a 1 2 3]  ;; assigns last value
+      [b (+ a 5)]]
   (- a b)
   (* a b))  ;; results last value
 
@@ -148,7 +148,7 @@ times-3
 (*catch "foo" (+ 2 (* 5 (*throw "foo" "ha!"))))
 
 ;; JavaScript-style throw/catch
-(catch (e (+ "thrown: " e))
+(catch [e (+ "thrown: " e)]
   (+ 1 2)
   (+ 3 (throw "ha ha!"))
 )

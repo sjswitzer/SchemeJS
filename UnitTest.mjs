@@ -35,7 +35,7 @@ function runTestsInNewInstance(opts = {}) {
   let reportTestSucceeded = opts.reportTestSucceeded ?? ((test, result, expected) =>
       console.info("SUCCEEDED", test, result, expected));
 
-  let globalScope = SchemeJS.createInstance(opts);
+  const globalScope = SchemeJS.createInstance(opts);
   let testScope = globalScope;
   const setGlobalScope = globalScope._setGlobalScope_test_hook_ ?? required();
   const NIL = globalScope.NIL ?? required();
@@ -528,7 +528,7 @@ function runTestsInNewInstance(opts = {}) {
 
     { // "Rest" parameters
       let savedScope = beginTestScope();
-      EXPECT(` (def (foo a b ...c) c) `, ` 'foo `)
+      EXPECT(` (def [foo a b ...c] c) `, ` 'foo `)
       EXPECT(` (foo 1 2 3 (+ 2 2) 5) `, ` '[3 4 5] `);
       endTestScope(savedScope);
     }
@@ -552,7 +552,27 @@ function runTestsInNewInstance(opts = {}) {
 
     { // optional paramaters, compiled
       let savedScope = beginTestScope();
-      EXPECT(` (compile (opt a b (c (+ 2 3))) (list a b c)) `, ` 'opt `)
+      EXPECT(` (compile [opt a b (c (+ 2 3))] (list a b c)) `, ` 'opt `)
+      EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
+      EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
+      EXPECT(` (opt 1) `, isClosure);
+      EXPECT(` ((opt 1) 8) `, ` '(1 8 5) `);
+      endTestScope(savedScope);
+    }
+
+    { // optional paramaters with []
+      let savedScope = beginTestScope();
+      EXPECT(` (def (opt a b [c (+ 2 3)]%) (list a b c)) `, ` 'opt `)
+      EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
+      EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
+      EXPECT(` (opt 1) `, isClosure);
+      EXPECT(` ((opt 1) 8) `, ` '(1 8 5) `);
+      endTestScope(savedScope);
+    }
+
+    { // optional paramaters with [], compiled
+      let savedScope = beginTestScope();
+      EXPECT(` (compile [opt a b [c (+ 2 3)]] (list a b c)) `, ` 'opt `)
       EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
       EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
       EXPECT(` (opt 1) `, isClosure);
@@ -612,7 +632,7 @@ function runTestsInNewInstance(opts = {}) {
     {
       let savedScope = beginTestScope();
       EXPECT(`
-        (def (factoral x)
+        (def [factoral x]
           (? (<= x 1) 
             (? (bigint? x) 1n 1)
             (* x (factoral (- x (? (bigint? x) 1n 1))))
@@ -630,7 +650,7 @@ function runTestsInNewInstance(opts = {}) {
     {
       let savedScope = beginTestScope();
       EXPECT(`
-        (compile (factoral x)
+        (compile [factoral x]
           (? (<= x 1) 
             (? (bigint? x) 1n 1)
             (* x (factoral (- x (? (bigint? x) 1n 1))))

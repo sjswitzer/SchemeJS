@@ -2,9 +2,9 @@
 ;; Media Demo
 ;;
 
-(compile (o-scope gfx-context)
-  (let ( (time-domain-data (@ o-scope-canvas 'time-domain-data))
-         (frequency-domain-data (@ o-scope-canvas 'frequency-domain-data)) )
+(compile [o-scope gfx-context]
+  (let [ [time-domain-data (@ o-scope-canvas 'time-domain-data)]
+         [frequency-domain-data (@ o-scope-canvas 'frequency-domain-data)] ]
     (gfx-save  ;; Draw spectrum
       ;; Scale to the number of samples + one (one is the width of the rectangles) along the x axis,
       ;; and 256 (the range of values) along the y axis.
