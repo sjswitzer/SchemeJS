@@ -3294,16 +3294,17 @@ export function createInstance(schemeOpts = {}) {
               tools.macroCompiled = saveMacroCompiled;
               if (!isList(macroResult))
                 throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
-              let ssaInsert = macroResult[FIRST], ssaInsertValues = newTemp("macro_insert");
+              let ssaInsert = macroResult[FIRST], ssaInsertValues;
               let nextArg = macroResult[REST];
               tools.bindLiterally(_eval, "_eval"); // TODO: move
               if (!macroCompiled) {
                 ssaInsert = use(bind(ssaInsert));
+                tools.dynamicScopeUsed = true;
+                ssaInsertValues = newTemp("macro_insert");
                 emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
               } else {
                 ssaInsertValues = ssaInsert;
               }
-              tools.dynamicScopeUsed = true;
               emit(`for (let arg of ${ssaInsertValues}) {`);
               emit(`  ${ssaDynamicArgv}.push(arg)`);
               emit(`}`)
