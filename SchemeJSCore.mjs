@@ -52,6 +52,7 @@ export function createInstance(schemeOpts = {}) {
   const nilName = schemeOpts.nilName ?? "NIL";
   const schemeTrueOverride = schemeOpts.schemeTrueOverride;
   const bottomIsLNIL = schemeOpts.bottomIsLNIL ?? true;
+  const restParamStr = schemeOpts.restParamStr ?? "...";
 
   const COMPILE_INFO = Symbol("COMPILE-INFO");
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
@@ -453,11 +454,13 @@ export function createInstance(schemeOpts = {}) {
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%closure#");
   const QUOTE_ATOM = Atom("quote");
+  const REST_ATOM = Atom(restParamStr);
   ATOMS["'"] = QUOTE_ATOM;
   exportAPI("LAMBDA_CHAR", LAMBDA_CHAR);
   exportAPI("LAMBDA_ATOM", LAMBDA_ATOM);
   exportAPI("SLAMBDA_ATOM", SLAMBDA_ATOM);
   exportAPI("QUOTE_ATOM", QUOTE_ATOM);
+  exportAPI("REST_ATOM", REST_ATOM);
 
   exportAPI("iteratorFor", iteratorFor, { dontInline: true });
   function iteratorFor(obj, throwException = TypeError) {
@@ -2206,21 +2209,27 @@ export function createInstance(schemeOpts = {}) {
     for ( ; moreList(params); params = params[REST]) {
       let param = params[FIRST];
       if (isList(param)) {
-        if (typeof param[FIRST] !== 'symbol')
+        if (!isAtom(param[FIRST]) )
           throwBadLambda(lambda, `what's this?  ${string(param)}`);
         if (!requiredCount)
           requiredCount = paramCount;
         param = param[FIRST];
-      } else if (typeof param !== 'symbol') {
+      } else if (!isAtom(param)) {
         throwBadLambda(lambda, `parameter ${string(param)} not an atom`);
+      }
+      if (param === REST_ATOM) {
+        if (!isList(params[REST]) || !isNil(params[REST][REST]))
+          throwBadLambda(lambda, `bad "rest" parameter ${string(param)}`);
+        params = params[REST];
+        restParam = params[FIRST];
+        params = params[REST];
+        break;
       }
       paramCount += 1;
       paramv.push(param.description);
     }
-    if (typeof params === 'symbol')
-      restParam = params.description;
-    else if (!isNil(params))
-      throwBadLambda(`bad "rest" parameter ${string(params)}`);
+    if (!isNil(params))
+      throwBadLambda(`bad parameter list ${string(params)}`);
     if (!requiredCount)
       requiredCount = paramCount;
     let jitCount = JIT_THRESHOLD != null ? JIT_THRESHOLD|0 : undefined;
@@ -2244,6 +2253,11 @@ export function createInstance(schemeOpts = {}) {
           optionalForms = param[REST];
           param = param[FIRST];
         }
+        if (param === REST_ATOM) {
+          let param = params[REST][FIRST], val = args.slice(i);
+          scope[param] = val;
+          break;
+        }
         arg = args[i];  // undefined if i >= length OR if deliberately undefined
         if (arg === undefined) {
           arg = NIL;
@@ -2255,8 +2269,6 @@ export function createInstance(schemeOpts = {}) {
         }
         scope[param] = arg;
       }
-      if (typeof params === 'symbol')
-        scope[params] = args.slice(i);
       scope[RETURN_SCOPE_SYMBOL] = scope;
       let result = BOTTOM;
       for (let form of forms) {
@@ -2287,7 +2299,7 @@ export function createInstance(schemeOpts = {}) {
     let returnScope = scope[RETURN_SCOPE_SYMBOL];
     returnScope[RETURNS_VALUE_SYMBOL] = value;
     returnScope[RETURN_SYMBOL] = true;
-    return undefined;  // just to be clear... this does not return the value
+    return undefined;  // just to be clear... this does NOT return the value
   }
   function return_hook(args, ssaScope, tools) {
     let ssaValue = `${BOTTOM}`;
@@ -3399,14 +3411,26 @@ export function createInstance(schemeOpts = {}) {
     for (; moreList(params); ++paramCount, params = params[REST]) {
       let param = params[FIRST], ssaParam;
       if (isList(param)) {
-        if (typeof param[FIRST] !== 'symbol')
-          throwBadCompiledLambda(lambda, `Bad param ${string(param)}`);
+        if (!isAtom(param[FIRST]))
+          throwBadCompiledLambda(lambda, `what's this? ${string(param)}`);
         optionalFormsVec.push(param[REST]);
         param = param[FIRST];
         ssaParam = newTemp(param);
         if (requiredCount === undefined)
           requiredCount = paramCount;
+      } else if (!isAtom(param)) {
+        throwBadLambda(lambda, `parameter ${string(param)} not an atom`);
       } else {
+        if (param === REST_ATOM) {
+          if (!isList(params[REST]) || !isNil(params[REST][REST]))
+            throwBadLambda(lambda, `bad "rest" parameter ${string(param)}`);
+          params = params[REST];
+          restParam = params[FIRST];
+          params = params[REST];
+          ssaRestParam = newTemp(restParam);
+          ssaScope[params] = ssaRestParam;
+          break;
+        }
         ssaParam = newTemp(param);
         optionalFormsVec.push(undefined);
       }
@@ -3414,12 +3438,7 @@ export function createInstance(schemeOpts = {}) {
       ssaScope[param] = ssaParam;
       paramv.push(param);
     }
-    if (typeof params === 'symbol') {  // rest param (does not increment paramCount)
-      restParam = params;
-      ssaRestParam = newTemp(params);
-      ssaScope[params] = ssaRestParam;
-    }
-    else if (!isNil(params))
+    if (!isNil(params))
       throw new throwBadCompiledLambda(lambda,`bad parameter list ${string(params)}`);
     if (requiredCount === undefined)
       requiredCount = paramCount;  // paramCount does NOT contain rest param

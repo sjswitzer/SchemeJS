@@ -528,14 +528,14 @@ function runTestsInNewInstance(opts = {}) {
 
     { // "Rest" parameters
       let savedScope = beginTestScope();
-      EXPECT(` (def (foo a b . c) c) `, ` 'foo `)
+      EXPECT(` (def (foo a b ...c) c) `, ` 'foo `)
       EXPECT(` (foo 1 2 3 (+ 2 2) 5) `, ` '[3 4 5] `);
       endTestScope(savedScope);
     }
 
     { // "Rest" parameters, compiled
       let savedScope = beginTestScope();
-      EXPECT(` (compile (foo a b . c) c) `, ` 'foo `)
+      EXPECT(` (compile (foo a b ...c) c) `, ` 'foo `)
       EXPECT(` (foo 1 2 3 (+ 2 2) 5) `, ` '[3 4 5] `);
       endTestScope(savedScope);
     }
