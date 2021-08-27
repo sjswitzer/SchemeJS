@@ -2042,15 +2042,16 @@ export function createInstance(schemeOpts = {}) {
           let res = {};
           for (let key of [...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form)]) {
             let value = form[key];
-            let insertkeys = handleParameterMacroIfPresentInObjectLiteral(key, value, scope);
-            if (insertkeys !== undefined) {
+            let insertion = handleParameterMacroIfPresentInObjectLiteral(key, value, scope);
+            if (insertion !== undefined) {
+              let insert = insertion[0];
               let [obj, symKeys, strKeys] = insertkeys;
-              for (let k of symKeys) {
-                let v = obj[k];
+              for (let k of Object.getOwnPropertySymbols(insert)) {
+                let v = insert[k];
                 res[k] = v;
               }
-              for (let k of strKeys) {
-                let v = obj[k];
+              for (let k of Object.getOwnPropertyNames(insert)) {
+                let v = insert[k];
                 res[k] = v;
               }
               continue;
@@ -2110,8 +2111,9 @@ export function createInstance(schemeOpts = {}) {
               if (!moreList(macroResult))
                 throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
               let insert = macroResult[FIRST];
-              insert = _eval(insert, scope)
-              return [insert, Object.getOwnPropertySymbols(insert), Object.getOwnPropertyNames(insert)];
+              insert = _eval(insert, scope);
+              // return in array so that the undefined case is distinguised
+              return [insert];
             }
           }
         }
@@ -3296,11 +3298,11 @@ export function createInstance(schemeOpts = {}) {
                 throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
               let ssaInsert = macroResult[FIRST], ssaInsertValues;
               let nextArg = macroResult[REST];
-              tools.bindLiterally(_eval, "_eval"); // TODO: move
               if (!macroCompiled) {
                 ssaInsert = use(bind(ssaInsert));
                 tools.dynamicScopeUsed = true;
                 ssaInsertValues = newTemp("macro_insert");
+                tools.bindLiterally(_eval, "_eval");
                 emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
               } else {
                 ssaInsertValues = ssaInsert;
@@ -3315,8 +3317,7 @@ export function createInstance(schemeOpts = {}) {
       }
     }
 
-/*
-    function handleParameterMacroIfPresentInObjectLiteral(key, value, scope) {
+    function handleParameterMacroIfPresentInObjectLiteral(key, value) {
       if (typeof key === 'symbol') {
         let symVal = scope[key];
         if (typeof symVal === 'function') {
@@ -3324,17 +3325,29 @@ export function createInstance(schemeOpts = {}) {
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
             if (tag === PARAMETER_MACRO_TAG) {
-              let macroResult = symVal.call(scope, new Pair(value, NIL));
-              if (!moreList(macroResult))
-                throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
-              let insert = macroResult[FIRST];
-              let ssaInsert = compileEval(insert, scope)
-              return [insert, Object.getOwnPropertySymbols(insert), Object.getOwnPropertyNames(insert)];
+              let saveMacroCompiled = tools.macroCompiled;
+              tools.macroCompiled = false;
+              let macroResult = symVal.call(scope, args, ssaScope, tools);
+              let macroCompiled = tools.macroCompiled;
+              tools.macroCompiled = saveMacroCompiled;
+              if (!isList(macroResult))
+                throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
+              let ssaInsert = macroResult[FIRST], ssaInsertValues;
+              let nextArg = macroResult[REST];
+              if (!macroCompiled) {
+                ssaInsert = use(bind(ssaInsert));
+                tools.dynamicScopeUsed = true;
+                ssaInsertValues = newTemp("macro_insert");
+                tools.bindLiterally(_eval, "_eval");
+                emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
+              } else {
+                ssaInsertValues = ssaInsert;
+              }
             }
           }
         }
       }
-*/
+    }
 
   }
 
