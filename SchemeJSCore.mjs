@@ -3311,7 +3311,7 @@ export function createInstance(schemeOpts = {}) {
               let nextArg = macroResult[REST];
               if (!macroCompiled) {
                 ssaInsert = use(bind(ssaInsert));
-                tools.dynamicScopeUsed = true;
+                ssaScope.dynamicScopeUsed = true;
                 ssaInsertValues = newTemp("macro_insert");
                 tools.bindLiterally(_eval, "_eval");
                 emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
