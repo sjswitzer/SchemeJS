@@ -35,4 +35,3 @@
 
 ;; Here's what o-scope compiles into
 (println (String o-scope))
-
