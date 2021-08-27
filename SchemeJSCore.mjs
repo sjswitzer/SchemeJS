@@ -3320,6 +3320,28 @@ export function createInstance(schemeOpts = {}) {
         }
       }
     }
+
+/*
+    function handleParameterMacroIfPresentInObjectLiteral(key, value, scope) {
+      if (typeof key === 'symbol') {
+        let symVal = scope[key];
+        if (typeof symVal === 'function') {
+          let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+          if (parameterDescriptor != null) {
+            let tag = parameterDescriptor & 0xff;
+            if (tag === PARAMETER_MACRO_TAG) {
+              let macroResult = symVal.call(scope, new Pair(value, NIL));
+              if (!moreList(macroResult))
+                throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+              let insert = macroResult[FIRST];
+              let ssaInsert = compileEval(insert, scope)
+              return [insert, Object.getOwnPropertySymbols(insert), Object.getOwnPropertyNames(insert)];
+            }
+          }
+        }
+      }
+*/
+
   }
 
   //
