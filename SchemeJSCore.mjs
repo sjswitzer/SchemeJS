@@ -3338,7 +3338,7 @@ export function createInstance(schemeOpts = {}) {
             if (tag === PARAMETER_MACRO_TAG) {
               let saveMacroCompiled = tools.macroCompiled;
               tools.macroCompiled = false;
-              let macroResult = symVal.call(scope, args, ssaScope, tools);
+              let macroResult = symVal.call(scope, new Pair(value, NIL), ssaScope, tools);
               let macroCompiled = tools.macroCompiled;
               tools.macroCompiled = saveMacroCompiled;
               if (!isList(macroResult))
