@@ -661,14 +661,14 @@ function runTestsInNewInstance(opts = {}) {
 
     { // Test "parameter macros" (essentially just the spread "..." operator currently).
       let savedScope = beginTestScope();
-      EXPECT(` (defn (foo a . b) (list ...b a))`, ` 'foo `);
+      EXPECT(` (defn (foo a ...b) (list ...b a))`, ` 'foo `);
       EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1,) `);
       endTestScope(savedScope);
     }
 
     { // Test "parameter macros", with the compiler
       let savedScope = beginTestScope();
-      EXPECT(` (compile (foo a . b) (list ...b a))`, ` 'foo `);
+      EXPECT(` (compile (foo a ...b) (list ...b a))`, ` 'foo `);
       EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1) `);
       endTestScope(savedScope);
     }
@@ -677,9 +677,9 @@ function runTestsInNewInstance(opts = {}) {
       let savedScope = beginTestScope();
       EXPECT(` (def a [1 2 'z "foo" {} 10n]) `, ` 'a `);
       EXPECT(` ["x" 'x ...a 100] `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
-      EXPECT(` (defn (b . a) ["x" 'x ...a 100]) `, ` 'b `)
+      EXPECT(` (defn (b ...a) ["x" 'x ...a 100]) `, ` 'b `)
       EXPECT(` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
-      EXPECT(` (compile (c . a) ["x" 'x ...a 100]) `, ` 'c `)
+      EXPECT(` (compile (c ...a) ["x" 'x ...a 100]) `, ` 'c `)
       EXPECT(` (c 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
       endTestScope(savedScope);
     }
@@ -712,9 +712,9 @@ function runTestsInNewInstance(opts = {}) {
       globalScope.defineBinding("_spread_", "spread2");
 
       // Now some tests
-      EXPECT(` (compile (foo a . b) (list _spread_ b a))`, ` 'foo `);
+      EXPECT(` (compile (foo a ...b) (list _spread_ b a))`, ` 'foo `);
       EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1) `);
-      EXPECT(` (compile (b . a) ["x" 'x _spread_ a 100]) `, ` 'b `)
+      EXPECT(` (compile (b ...a) ["x" 'x _spread_ a 100]) `, ` 'b `)
       EXPECT(` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
       EXPECT(` (compile (c a) { "x": 1, _spread_: a, 100: "hundred" }) `, ` 'c `)
       EXPECT(` (c { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);

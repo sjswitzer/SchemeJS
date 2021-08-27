@@ -3428,7 +3428,7 @@ export function createInstance(schemeOpts = {}) {
           restParam = params[FIRST];
           params = params[REST];
           ssaRestParam = newTemp(restParam);
-          ssaScope[params] = ssaRestParam;
+          ssaScope[restParam] = ssaRestParam;
           break;
         }
         ssaParam = newTemp(param);
