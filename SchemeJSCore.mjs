@@ -1822,17 +1822,11 @@ export function createInstance(schemeOpts = {}) {
   function spread(args, ssaScope, tools) {
     if (!isList(args))
       throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
-      let spreadArg = args[FIRST];
-      if (ssaScope) {
-        let ssaSpreadArg = ssaScope[spreadArg];
-        if (!ssaSpreadArg) {
-          let use = tools.use, bind = tools.bind;
-          tools.dynamicScopeUsed = true;
-          ssaSpreadArg = `resolveUnbound(${use(bind(spreadArg))})`;
-        }
-        tools.macroCompiled = true;
-        spreadArg = ssaSpreadArg;
-      }
+    let spreadArg = args[FIRST];
+    if (ssaScope) {
+      tools.macroCompiled = true;
+      spreadArg = compileEval(spreadArg, ssaScope, tools);
+    }
     // Returns Pair of arguments to stuff w/o eveluation
     // and args still subject to evaluation.
     return new Pair(spreadArg, args[REST]);
@@ -3302,16 +3296,12 @@ export function createInstance(schemeOpts = {}) {
                 throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
               let ssaInsert = macroResult[FIRST], ssaInsertValues = newTemp("macro_insert");
               let nextArg = macroResult[REST];
-              if (!macroCompiled)
+              tools.bindLiterally(_eval, "_eval"); // TODO: move
+              if (!macroCompiled) {
                 ssaInsert = use(bind(ssaInsert));
-              tools.bindLiterally(_eval, "_eval");
-              if (evalCount === 0) {
-                ssaInsertValues = ssaInsert;
-              } else if (evalCount !== MAX_INTEGER) {
-                emit(`let ${ssaInsertValues} = ${ssaInsert};`);
-                emit(`if (${ssaDynamicArgv}.length < ${evalCount}) ${ssaInsertValues} = _eval(${ssaInsertValues}, scope);`)
-              } else {
                 emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
+              } else {
+                ssaInsertValues = ssaInsert;
               }
               tools.dynamicScopeUsed = true;
               emit(`for (let arg of ${ssaInsertValues}) {`);
