@@ -3017,7 +3017,7 @@ export function createInstance(schemeOpts = {}) {
         while (moreList(args)) {
           let arg = args[FIRST];
           if (argCount < evalCount) {
-            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, evalCount, arg, args[REST]);
+            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, arg, args[REST]);
             if (nextArg !== undefined) {
               args = nextArg;
               usesDynamicArgv = true;
@@ -3213,7 +3213,7 @@ export function createInstance(schemeOpts = {}) {
           dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
           while (moreList(form)) {
             let element = form[FIRST];
-            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, 0, element, form[REST]);
+            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, element, form[REST]);
             if (nextArg !== undefined) {
               form = nextArg;
               usesDynamicArgv = true;
@@ -3279,7 +3279,7 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeCompileError(`BadForm ${string(form)}`);
     }
 
-    function handleParameterMacroIfPresent(ssaDynamicArgv, evalCount, arg, args) {  
+    function handleParameterMacroIfPresent(ssaDynamicArgv, arg, args) {  
       if (typeof arg === 'symbol') { // check for parameter macro
         let symVal = scope[arg];
         if (typeof symVal === 'function') {
