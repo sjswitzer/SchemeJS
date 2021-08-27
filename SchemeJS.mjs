@@ -1003,14 +1003,14 @@ export function createInstance(schemeOpts = {}) {
 
       if (ch === '/' && peekc() === '*') {
         parseContext.push({ type: 'comment', value: '/*', position, line, lineChar });
-        nextc(); nextc();
+        nextc(2);
         while (ch && !(ch === '*' && peekc() === '/'))
           nextc();
         parseContext.currentToken = { type: 'endcomment', value: '*/', endPosition: charCount-2, endWidth: 2, line, lineChar };
         parseContext.pop();
         if (!ch)
           yield { type: 'partial', position, line, lineChar };
-        nextc(); nextc();
+        nextc(2);
         continue;
       }
 
@@ -1049,14 +1049,13 @@ export function createInstance(schemeOpts = {}) {
                   yield { type: 'garbage', value: `\\u{${str}${peekc(pos)}`,  position, line, lineChar };
                 if (codePoint >= 0x110000)
                   yield { type: 'garbage', value: `\\u{${str}}`,  position, line, lineChar };
-                nextc();
-                while (pos-- > 0) nextc();
+                nextc(pos+1);
                 ch = String.fromCodePoint(codePoint);
               } else {
                 if (!(HEXDIGITS[ch] && HEXDIGITS[peekc(0)] && HEXDIGITS[peekc(1)] && HEXDIGITS[peekc(2)]))
                   yield { type: 'garbage', value: `\\u${ch}${peekc(0)}${peekc(1)}${peekc(2)}`,  position, line, lineChar };
                 let str = `0x${ch}${peekc(0)}${peekc(1)}${peekc(2)}`;
-                nextc(), nextc(), nextc();
+                nextc(3);
                 ch = String.fromCharCode(Number(str));
               }
             } else {
@@ -1099,6 +1098,13 @@ export function createInstance(schemeOpts = {}) {
           yield { type: 'string', value: str, position, endPosition: charCount-1, endWidth: 1, line, lineChar };
           nextc();
         }
+        continue;
+      }
+
+      // Special ... token
+      if (ch === '.' && peekc() === '.' && peekc(1) === '.') {
+        yield { type: 'atom', value: Atom('...'), position, line, lineChar };
+        nextc(3);
         continue;
       }
 
@@ -1176,22 +1182,26 @@ export function createInstance(schemeOpts = {}) {
     yield { type: 'end', position, line, lineChar };
     return;
 
-    function nextc() {
-      if (_peek.length > 0)
-        return ch = _peek.shift();
-      if (_done) return ch = '';
-      let { done, value } = characterGenerator.next();
-      if (done) {
-        _done = true;
-        return ch = '';
-      }
-      charCount += 1;
-      lineCharCount += 1;
-      // Among the [NL] chars, only use '\n' in the line count;
-      // there may still be CRLFs in the wild.
-      if (ch === '\n') {
-        lineCount += 1;
-        lineCharCount = 0;
+    function nextc(n = 1) {
+      let value = '';
+      for ( ; n > 0; --n) {
+        if (_peek.length > 0) {
+          value = _peek.shift();
+          continue;
+        }
+        if (_done) return ch = '';
+        ({ _done, value } = characterGenerator.next());
+        if (_done) {
+          return ch = '';
+        }
+        charCount += 1;
+        lineCharCount += 1;
+        // Among the [NL] chars, only use '\n' in the line count;
+        // there may still be CRLFs in the wild.
+        if (ch === '\n') {
+          lineCount += 1;
+          lineCharCount = 0;
+        }
       }
       return ch = value;
     }
@@ -1290,6 +1300,8 @@ export function createInstance(schemeOpts = {}) {
             item = cons(item, NIL);
             if (tail) tail = tail[REST] = item;
             else head = tail = item;
+            if (token().type === ',')  // Comma is optional
+              consumeToken();
           }
         }
       }
@@ -1351,6 +1363,9 @@ export function createInstance(schemeOpts = {}) {
                 res[EVALUATE_KEY_VALUE_SYMBOL] = [sym, val];
               else
                 res[sym] = val;
+            } else {
+              // No colon? value is BOTTOM. Can't just drop it!
+              res[sym] = BOTTOM;
             }
             gotIt = true;
             if (token().type === ',')  // Comma is optional
@@ -1625,8 +1640,12 @@ export function createInstance(schemeOpts = {}) {
              `and returns the value of the last one, but only the first "n" parameters are evaluated.`
     });
     defineBinding("def", "def", {
-      group: "main", sample: `(def var value) -or- (def (fn param ...) form ...)`, 
-      blurb: `Defines a global variable or function.`
+      group: "main", sample: `(def var value)`, 
+      blurb: `Defines a global variable.`
+    });
+    defineBinding("defn", "def", {
+      group: "main", sample: `(def (fn param ...) form ...)`, 
+      blurb: `Defines a global function.`
     });
     defineBinding("compile", "compile", {
       group: "main", sample: `(compile (fn param ...) form ...)`, 
@@ -1853,11 +1872,21 @@ export function createInstance(schemeOpts = {}) {
       group: "compare", sample: `(nequal value value [options])`, 
       blurb: `Returns false if the two values are "deeply equal"`
     });
-    defineBinding("?", "if", "if", {
+    defineBinding("?", "ifelse", "if", {
       group: "pred-op", sample: `(? value [t-expr true] [f-expr false])`, 
       blurb: `If the value is "true" in the Scheme sense (neither false, undefined, null nor nil), ` +
          `evaluates t-expr and returns its value (default true). ` +
          `Otherwise, evaluates and returns f-expr (default false).`
+    });
+    defineBinding("when", "when", {
+      group: "pred-op", sample: `(when value form...)`, 
+      blurb: `If the value is "true" in the SchemeJS sense (neither false, undefined, null nor nil), ` +
+         `evaluates the series of forms and returns the result of the last. ` +
+         `Otherwise, returns false.`
+    });
+    defineBinding("...", "spread", {
+      group: "main", sample: `(<stuff> ... value <more stuff>)`, 
+      blurb: `Expands the value (a list), into the argument list .`
     });
     defineBinding("bigint?", "is_bigint", {
       group: "pred-op", sample: `(?bigint value [t-expr true] [f-expr false])`, 

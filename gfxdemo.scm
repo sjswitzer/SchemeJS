@@ -23,18 +23,18 @@
 ;; but can't be messed up.
 ;;
 
-(def defn compile)
-;; (def defn def)
+(def define compile)  ;; compile
+;; (def define defn)     ;; interpret
 
 ;; Animation helper: a sinusoidal time-varying value of a given magintude,
 ;; period (in seconds) and phase.
 ;; (Date.now) is the number of milliseconds since midnight Jan 1, 1970 (the Unix epoch).
-(defn (sinusoidal (magnitude 1) (period 1) (phase 0))
+(define (sinusoidal (magnitude 1) (period 1) (phase 0))
   (* magnitude (sin (+ phase (* 2 *pi* (/ (Date-now) period 1000)))))
 )
 
 ;; Ship Arriving Too Late to Save a Drowning Witch
-(defn (satltsadw gfx-context)
+(define (satltsadw gfx-context)
   (gfx-save ;; Saves then restores the graphics state (scale, colors, etc) afterwards
     (scale (/ (canvas-width) 10))  ;; Scale to a 10 x 10 coordinate system
     (line-width .2)
@@ -57,12 +57,12 @@
 (@! ship-canvas 'show 20 20)      ;; Move the canvas widget from its default position
 
 ;; Now a lissajous figure
-(defn (lissajous gfx-context tick)
-  ;; Fade the canvas by drawing over it with black and a very low alpha every several ticks
+(define (lissajous gfx-context tick)
+  ;; Fade the canvas by drawing over it with black and a very low alpha every several ticks.
   ;; If the alpha is too low, things won't fade things completely; they just converge on light
   ;; gray. So instead use a slightly higer alpha and only apply it every several frames.
   (fill-style "#00000004")
-  (? (== 0 (% tick 5))  ;; "%" is remainder, so this is true every 5 ticks
+  (when (== 0 (% tick 5))  ;; "%" is remainder, so this is true every 5 ticks
     (fill-rect 0 0 (canvas-width) (canvas-height))
   )
   ;; Scale to a 100 x 100 coordinate system and move the origin to the center
@@ -88,11 +88,11 @@
 (println (String lissajous))
 
 ;; Spirograph
-(defn (spirograph gfx-context tick)
+(define (spirograph gfx-context tick)
   (let ((angle (* 2 *pi* (/ (Date-now) 1000 period))))
     ;; Fade the canvas by drawing over it with white and a very low alpha every several ticks
     (fill-style "#ffffff0c")
-    (? (== 0 (% tick 30))
+    (when (== 0 (% tick 30))
       (fill-rect 0 0 (canvas-width) (canvas-height))
     )
     ;; Scale to a 100 x 100 coordinate system with the origin in the center

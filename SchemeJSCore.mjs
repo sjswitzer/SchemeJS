@@ -11,6 +11,9 @@ export const LogicError = Error;
 const isArray = Array.isArray;
 const MUL = '\u00d7', DIV = '\u00f7';
 
+// So that optional parameters show up pretty when printed
+const optional = undefined;
+
 //
 // Creates a SchemeJSCore instance.
 //
@@ -54,6 +57,7 @@ export function createInstance(schemeOpts = {}) {
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
   const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
+  const FUNCTION_TAG = 0, MACRO_TAG = 1, PARAMETER_MACRO_TAG = 2;
   const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
   const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
@@ -93,6 +97,10 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("COMPILE_INFO", COMPILE_INFO);
+  exportAPI("FUNCTION_TAG", FUNCTION_TAG  );
+  exportAPI("MACRO_TAG", MACRO_TAG);
+  exportAPI("PARAMETER_MACRO_TAG", PARAMETER_MACRO_TAG);
+  
 
   //
   // Unlike most Lisps, the Cons cell (Pair) is not central to this design, but a _list_ is.
@@ -190,7 +198,7 @@ export function createInstance(schemeOpts = {}) {
     [MORELIST]: { get: function() { return this.length > 0 ? true : null } },
     [FIRST]: { get: function() {
       if (this.length > 0) return this[0];
-      throw new SchemeEvalError(`${firstName} of []`);
+      throw new TypeError(`${firstName} of []`);
     } },
     [REST]: { get: function() {
       return new ArrayList(this, 1);
@@ -272,7 +280,7 @@ export function createInstance(schemeOpts = {}) {
       let array = this._array, pos = this._pos;
       if (pos < this._max && pos < array.length)
         return array[pos];
-      throw new SchemeEvalError(`${firstName} beyond end of array`);
+      throw new TypeError(`${firstName} beyond end of array`);
     }
     get [REST]() {
       return new ArrayList(this._array, this._pos + 1, this._max);
@@ -296,13 +304,13 @@ export function createInstance(schemeOpts = {}) {
         let moreList = this[MORELIST];
         if (moreList)
           return moreList[0];
-        throw new SchemeEvalError(`${firstName} on exhausted iterator`);
+        throw new TypeError(`${firstName} on exhausted iterator`);
       } },
       [REST]: { get: function() {
         let moreList = this[MORELIST];
         if (moreList)
           return moreList[1];
-        throw new SchemeEvalError(`${restName} on exhausted iterator`);
+        throw new TypeError(`${restName} on exhausted iterator`);
       } },
       [MORELIST]: { get: function iterableMoreList() {
         // Note that typical loops will first test whether something is a list or try accessing
@@ -356,7 +364,7 @@ export function createInstance(schemeOpts = {}) {
             let { done, value } = iter.next();
             if (done) {
               Object.defineProperties(this, {
-                [FIRST]: { get: function() { throw new SchemeEvalError(`${firstName} on exhausted iterator`)} },
+                [FIRST]: { get: function() { throw new TypeError(`${firstName} on exhausted iterator`)} },
                 [REST]: { value },
                 [MORELIST]: { value: false },
               });
@@ -384,12 +392,12 @@ export function createInstance(schemeOpts = {}) {
   const NIL = Object.create( null, {
     NIL: { value: "NIL" },  // Makes it clear in the debugger
     [FIRST]: {
-      get: () => { throw new SchemeEvalError(`${firstName} of ${nilName}`) },
-      set: _ => { throw new SchemeEvalError(`set ${firstName} of ${nilName}`) }
+      get: () => { throw new TypeError(`${firstName} of ${nilName}`) },
+      set: _ => { throw new TypeError(`set ${firstName} of ${nilName}`) }
     },
     [REST]: {
-      get: () => { throw new SchemeEvalError(`${restName} of ${nilName}`) },
-      set: _ => { throw new SchemeEvalError(`set ${restName} of ${nilName}`) }
+      get: () => { throw new TypeError(`${restName} of ${nilName}`) },
+      set: _ => { throw new TypeError(`set ${restName} of ${nilName}`) }
     },
     [Symbol.iterator]: { value: function createNilIterator() {
       return {
@@ -430,7 +438,7 @@ export function createInstance(schemeOpts = {}) {
     // If they pass in an atom, just return it
     if (isAtom(name)) return name;
     if (typeof name !== 'string')
-      throw new SchemeEvalError(`Not a string ${name}`);
+      throw new TypeError(`Not a string ${name}`);
     let atom = ATOMS[name];
     if (atom !== undefined) return atom;
     atom = Symbol(name);
@@ -503,9 +511,11 @@ export function createInstance(schemeOpts = {}) {
     let evalCount = opts.evalArgs ?? MAX_INTEGER;
     let compileHook = opts.compileHook;
     let requiresScope = opts.requiresScope;
-    examineFunctionForParameterDescriptor(fn, evalCount);
+    let tag = opts.tag ?? 0;
+    examineFunctionForParameterDescriptor(fn, evalCount, tag);
     let fnInfo = analyzeJSFunction(fn);
     fnInfo.evalCount = evalCount;
+    fnInfo.tag = tag;
     if (compileHook)
       fnInfo.compileHook = compileHook;
     if (compileHook || evalCount !== MAX_INTEGER) {
@@ -513,7 +523,7 @@ export function createInstance(schemeOpts = {}) {
     }
     if (opts.dontInline) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-    } else if (fnInfo.native) {
+    } else if (fnInfo.native || tag === MACRO_TAG || tag === PARAMETER_MACRO_TAG) {
       // not an error
     } else if (!compileHook && evalCount !== MAX_INTEGER) {
       throw new LogicError(`Special function requires compile hook ${name}`);
@@ -916,7 +926,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // Conditionals
   //
-  exportAPI("if", ifelse, { evalArgs: 1, compileHook: ifelse_hook });
+  exportAPI("ifelse", ifelse, { evalArgs: 1, compileHook: ifelse_hook });
   function ifelse(p, t = true, f = false) {
     p = schemeTrue(p);
     if (p)
@@ -1804,6 +1814,61 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("RETURN_SYMBOL", RETURN_SYMBOL);
 
   //
+  // Spread operator.
+  //
+  // The main use of parameter macros will be for the spread operator (...), but it could
+  // also be used for constants like __FILE__, __LINE__, and __DATE__.
+  //
+  // It's never _necessary_ to specialize for the comppiled case, but if not the
+  // compiler will kick out to the interpreter for evaluation.
+  //
+  exportAPI("spread", spread, { tag: PARAMETER_MACRO_TAG });
+  function spread(args, ssaScope, tools) {
+    if (!isList(args))
+      throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
+    let spreadArg = args[FIRST];
+    if (ssaScope) {
+      tools.macroCompiled = true;
+      spreadArg = compileEval(spreadArg, ssaScope, tools);
+    }
+    // Returns Pair of arguments to stuff
+    // and the rewritten (or not) remainder of the arg list.
+    return new Pair(spreadArg, args[REST]);
+  }
+
+  //
+  // Macros
+  //
+
+  exportAPI("defmacro", defmacro, { requiresScope: true, evalArgs: 0, dontInline: true });
+  function defmacro(nameAndParams, ...forms) {
+    if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
+    let name = Atom(nameAndParams[FIRST]);
+    let params = nameAndParams[REST];
+    if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
+    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
+    let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
+    examineFunctionForCompilerTemplates(name, compiledFunction, { tag: MACRO_TAG });
+    namedObjects.set(compiledFunction, name.description);
+    globalScope[name] = compiledFunction;
+    // Make available to JavaScript as well
+    let jsName = normalizeExportToJavaScriptName(name);
+    if (jsName)
+      globalScope[jsName] = compiledFunction;
+    globalScope[name] = compiledFunction;
+    return name;
+  }
+
+  // (when (cond) form...) => (if (cond) (begin form...))
+  exportAPI("when", when, { tag: MACRO_TAG });
+  function when(params) {
+    return list(
+        globalScope.ifelse,
+        params[FIRST],
+        new Pair(globalScope.begin, params[REST]));
+  }
+
+  //
   // This is where the magic happens
   //
   // Beware that compileEval closely parallels this function, if you make a change
@@ -1816,172 +1881,247 @@ export function createInstance(schemeOpts = {}) {
     // is effectively a keyword in JavaScript.
     if (scope[RETURN_SYMBOL])
       throw new LogicError(`someone forgot to check scope[RETURNS_SYMBOL]`)
-    if (isNil(form)) return form;
-    if (isPrimitive(form)) return form;
-    if (typeof form === 'symbol') { // atom resolution is the most common case
-      let val = scope[form];
-      if (val === undefined) checkUndefinedInScope(form, scope);
-      return val;
-    }
-    if (TRACE_INTERPRETER)
-      console.log("EVAL", string(form));
-    if (isList(form) && !isArray(form)) {
-      let fn = form[FIRST];
-      if (fn === QUOTE_ATOM) { // QUOTE is a special function that will do this but catch it here anyway.
-        if (!isList(form)) throwBadForm();
-        return form[REST][FIRST];
+    for (;;) { // Macro expansion loop
+      if (isNil(form)) return form;
+      if (isPrimitive(form)) return form;
+      if (typeof form === 'symbol') { // atom resolution is the most common case
+        let val = scope[form];
+        if (val === undefined) checkUndefinedInScope(form, scope);
+        return val;
       }
-      fn = _eval(fn, scope);
-      if (scope[RETURN_SYMBOL]) return;
-      if (typeof fn !== 'function') throwBadForm();
-      // See makeParameterDescriptor for the truth, but
-      //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
-      let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-      let requiredCount = (parameterDescriptor >> 8) & 0xfff;
-      let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-      let tag = parameterDescriptor & 0xff;
-      if (fn[FIRST] === SCLOSURE_ATOM) {
-        let fnCdr = fn[REST];
-        if (!isList(fnCdr)) throwBadForm();
-        scope = fnCdr[FIRST];
-      }
-      // Run through the arg list evaluating args
-      let  args = form[REST], argCount = length(args);
-      let argv = new Array(argCount);
-      for (let i = 0; iterateAsList(args); ++i, args = args[REST]) {
-        let item = args[FIRST];
-        if (i < evalCount) {
-          item = _eval(item, scope);
-          if (scope[RETURN_SYMBOL]) return;
+      if (TRACE_INTERPRETER)
+        console.log("EVAL", string(form));
+      if (isList(form) && !isArray(form)) {
+        let fn = form[FIRST];
+        let args = form[REST];
+        if (fn === QUOTE_ATOM) // QUOTE is a special function that will do this but catch it here anyway.
+          return args[FIRST];
+        if (typeof fn === 'symbol') {  // check for a macro _without evaluating_
+          let symVal = scope[fn];
+          if (typeof symVal === 'function') {
+            let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+            if (parameterDescriptor != null) {
+              let tag = parameterDescriptor & 0xff;
+              if (tag === MACRO_TAG) {
+                form = symVal.call(scope, args);
+                continue;
+              }
+            }
+          }
         }
-        argv[i] = item;
-      }
-      if (!isNil(args)) {
-        for (let item of args) {
-          item = _eval(item, scope);
-          if (scope[RETURN_SYMBOL]) return;
-          argv[i] = item;
-        }
-      }
-      let jitCompiled = fn[JITCOMPILED];
-      if (jitCompiled)
-        fn = jitCompiled;
-      let fName = namedObjects.get(fn) ?? fn.name; // Used for more than just tracing!
-      if (argCount >= requiredCount) {
-        if (TRACE_INTERPRETER) {
-          let logArgs = [ "APPLY (eval)", fName, ...argv ];
-          console.log.apply(scope, logArgs);
-        }
-        let result = fn.apply(scope, argv);
-        if (TRACE_INTERPRETER)
-          console.log("RETURNS", fName, result);
-        return result;
-      }
-      // Insufficient # of parameters. If there is at least one argument, create a closure.
-      // Otherwise, call the function with no arguments. Returning the function is tempting
-      // but that would be error-prone and create an asymmetry between functions with zero
-      // required parameters, like apropos, and those that have required parameters.
-      // The function itself can decide what to do if it receives "undefined" as its first argument.
-      if (argCount === 0) {
-        if (TRACE_INTERPRETER) {
-          let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
-          console.log.apply(scope, logArgs);
-        }
-        let result = fn.apply(scope, argv);
-        if (TRACE_INTERPRETER)
-          console.log("RETURNS", fName, result);
-        return result;
-      }
-
-      // OK, now create a closure.
-      const boundArgv = argv, boundFunction = fn;
-      let bindingClosure = (...args) => boundFunction.call(scope, ...boundArgv, ...args);
-      // A closure function leads a double life: as a closure function but also a closure form!
-      // Dig out the original function's closure, if it had one.
-      let closureBody = fn[REST];
-      let closureParams = NIL, closureForms;
-      if (closureBody) {
-        scope = closureBody[FIRST];
-        scope = newScope(scope, "closure-scope");
-        let lambdaBody = closureBody[REST];
-        if (fn[FIRST] === SCLOSURE_ATOM)  // Skip the evalCount param
-          lambdaBody = lambdaBody[REST];
-        closureParams = lambdaBody[FIRST];
-        closureForms = lambdaBody[REST];
-        for (let i = 0; i < argCount; ++i, closureParams = closureParams[REST]) {
-          if (!isList(closureParams)) throw new LogicError(`Shouldn't happen`);
-          let param = closureParams[FIRST];
-          if (isList(param) && typeof param[FIRST] === 'symbol')
-            param = [FIRST];
-          scope[param] = argv[i];
-        }
-      } else {
-        scope = newScope(scope, "closure-scope");
-        let fnInfo = analyzeJSFunction(fn);
-        let params = fnInfo.params, restParam = fnInfo.restParam, paramStr = '', sep = '';
-        for (let i = 0, lng = params.length; i < lng; ++i)
-          paramStr += sep + params[i], sep = ", ";
-        if (restParam)
-          paramStr += `${sep}...${restParam}`;
-        closureForms = new Pair(Atom(`{*js-function-${fName}(${paramStr})*}`), NIL);
-        if (restParam)
-          closureParams = Atom(restParam);
-        for (let i = params.length; i > argCount; --i)
-          closureParams = new Pair(Atom(params[i-1]), closureParams);
-        for (let i = 0; i < argCount; ++i)
-          scope[Atom(params[i])] = argv[i];
-      }
-      if (evalCount !== MAX_INTEGER) {
-        evalCount -= argCount;
-        if (evalCount < 0)
-          evalCount = 0;
-        bindingClosure[FIRST] = SCLOSURE_ATOM;
-        bindingClosure[REST] = new Pair(scope, new Pair(evalCount, new Pair(closureParams, closureForms)));
-      } else {
-        bindingClosure[FIRST] = CLOSURE_ATOM;
-        bindingClosure[REST] = new Pair(scope, new Pair(closureParams, closureForms));
-      }
-      bindingClosure[LIST] = bindingClosure[MORELIST] = bindingClosure[ITERATE_AS_LIST] = true;
-      bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
-      requiredCount -= argCount;
-      if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
-      bindingClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
-      return bindingClosure;
-    }
-
-    // Special eval for JS arrays and objects:
-    //   Values that are evaluated and placed in
-    //   a new Object or Array in correspoding position.
-    // TODO: Investigate Symbol.species (also for map, etc.)
-    if (form !== null && typeof form === 'object') {
-      if (isArray(form)) {
-        let res = [];
-        for (let element of form) {
-          res.push(_eval(element, scope));
-          if (scope[RETURN_SYMBOL]) return;
-        }
-        return res;
-      } else {
-        let res = {};
-        for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
-          let value = form[key];
-          if (key === EVALUATE_KEY_VALUE_SYMBOL) {
-            key = value[0];
-            value = value[1];
-            key = _eval(key, scope);
+        fn = _eval(fn, scope);
+        if (scope[RETURN_SYMBOL]) return;
+        if (typeof fn !== 'function') throwBadForm();
+        // See makeParameterDescriptor for the truth, but
+        //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
+        let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+        let requiredCount = (parameterDescriptor >> 8) & 0xfff;
+        let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+        let tag = parameterDescriptor & 0xff;
+        // Run through the arg list evaluating args
+        let argv = [], argCount = 0;
+        while (moreList(args)) {
+          let arg = args[FIRST];
+          if (argCount < evalCount) {
+            let nextArg = handleParameterMacroIfPresent(argv, arg, args[REST]);
+            if (nextArg !== undefined) {
+              args = nextArg;
+              argCount = argv.length;
+              continue;
+            }
+          }
+          if (argCount < evalCount) {
+            arg = _eval(arg, scope);
             if (scope[RETURN_SYMBOL]) return;
           }
-          value = _eval(value, scope);
-          if (scope[RETURN_SYMBOL]) return;
-          res[key] = value;
+          argv.push(arg), argCount += 1;
+          args = args[REST];
         }
-        return res;
+        let jitCompiled = fn[JITCOMPILED];
+        if (jitCompiled)
+          fn = jitCompiled;
+        let fName = namedObjects.get(fn) ?? fn.name; // Used for more than just tracing!
+        if (argCount >= requiredCount) {
+          if (TRACE_INTERPRETER) {
+            let logArgs = [ "APPLY (eval)", fName, ...argv ];
+            console.log.apply(scope, logArgs);
+          }
+          let result = fn.apply(scope, argv);
+          if (TRACE_INTERPRETER)
+            console.log("RETURNS", fName, result);
+          return result;
+        }
+        // Insufficient # of parameters. If there is at least one argument, create a closure.
+        // Otherwise, call the function with no arguments. Returning the function is tempting
+        // but that would be error-prone and create an asymmetry between functions with zero
+        // required parameters, like apropos, and those that have required parameters.
+        // The function itself can decide what to do if it receives "undefined" as its first argument.
+        if (argCount === 0) {
+          if (TRACE_INTERPRETER) {
+            let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
+            console.log.apply(scope, logArgs);
+          }
+          let result = fn.apply(scope, argv);
+          if (TRACE_INTERPRETER)
+            console.log("RETURNS", fName, result);
+          return result;
+        }
+
+        // OK, now create a closure.
+        const boundArgv = argv, boundFunction = fn;
+        let bindingClosure = (...args) => boundFunction.call(scope, ...boundArgv, ...args);
+        // A closure function leads a double life: as a closure function but also a closure form!
+        // Dig out the original function's closure, if it had one.
+        let closureBody = fn[REST];
+        let closureParams = NIL, closureForms;
+        if (closureBody) {
+          scope = closureBody[FIRST];
+          scope = newScope(scope, "closure-scope");
+          let lambdaBody = closureBody[REST];
+          if (fn[FIRST] === SCLOSURE_ATOM)  // Skip the evalCount param
+            lambdaBody = lambdaBody[REST];
+          closureParams = lambdaBody[FIRST];
+          closureForms = lambdaBody[REST];
+          for (let i = 0; i < argCount; ++i, closureParams = closureParams[REST]) {
+            if (!isList(closureParams)) throw new LogicError(`Shouldn't happen`);
+            let param = closureParams[FIRST];
+            if (isList(param) && typeof param[FIRST] === 'symbol')
+              param = [FIRST];
+            scope[param] = argv[i];
+          }
+        } else {
+          scope = newScope(scope, "closure-scope");
+          let fnInfo = analyzeJSFunction(fn);
+          let params = fnInfo.params, restParam = fnInfo.restParam, paramStr = '', sep = '';
+          for (let i = 0, lng = params.length; i < lng; ++i)
+            paramStr += sep + params[i], sep = ", ";
+          if (restParam)
+            paramStr += `${sep}...${restParam}`;
+          closureForms = new Pair(Atom(`{*js-function-${fName}(${paramStr})*}`), NIL);
+          if (restParam)
+            closureParams = Atom(restParam);
+          for (let i = params.length; i > argCount; --i)
+            closureParams = new Pair(Atom(params[i-1]), closureParams);
+          for (let i = 0; i < argCount; ++i)
+            scope[Atom(params[i])] = argv[i];
+        }
+        if (evalCount !== MAX_INTEGER) {
+          evalCount -= argCount;
+          if (evalCount < 0)
+            evalCount = 0;
+          bindingClosure[FIRST] = SCLOSURE_ATOM;
+          bindingClosure[REST] = new Pair(scope, new Pair(evalCount, new Pair(closureParams, closureForms)));
+        } else {
+          bindingClosure[FIRST] = CLOSURE_ATOM;
+          bindingClosure[REST] = new Pair(scope, new Pair(closureParams, closureForms));
+        }
+        bindingClosure[LIST] = bindingClosure[MORELIST] = bindingClosure[ITERATE_AS_LIST] = true;
+        bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
+        requiredCount -= argCount;
+        if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
+        bindingClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
+        return bindingClosure;
       }
-    }
-    throw new LogicError(`Shouldn't happen. All cases should be handled above`);
+
+      // Special eval for JS arrays and objects:
+      //   Values that are evaluated and placed in
+      //   a new Object or Array in correspoding position.
+      // TODO: Investigate Symbol.species (also for map, etc.)
+      if (form !== null && typeof form === 'object') {
+        if (isArray(form)) {
+          let res = [];
+          while (moreList(form)) {
+            let element = form[FIRST];
+            let nextArg = handleParameterMacroIfPresent(res, element, form[REST]);
+            if (nextArg !== undefined) {
+              form = nextArg;
+              continue;
+            }
+            res.push(_eval(element, scope));
+            if (scope[RETURN_SYMBOL]) return;
+            form = form[REST];
+          }
+          return res;
+        } else {
+          let res = {};
+          for (let key of [...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form)]) {
+            let value = form[key];
+            let insertion = handleParameterMacroIfPresentInObjectLiteral(key, value, scope);
+            if (insertion !== undefined) {
+              let insert = insertion[0];
+              for (let k of Object.getOwnPropertySymbols(insert)) {
+                let v = insert[k];
+                res[k] = v;
+              }
+              for (let k of Object.getOwnPropertyNames(insert)) {
+                let v = insert[k];
+                res[k] = v;
+              }
+              continue;
+            }
+            if (key === EVALUATE_KEY_VALUE_SYMBOL) {
+              key = value[0];
+              value = value[1];
+              key = _eval(key, scope);
+              if (scope[RETURN_SYMBOL]) return;
+            }
+            value = _eval(value, scope);
+            if (scope[RETURN_SYMBOL]) return;
+            res[key] = value;
+          }
+          return res;
+        }
+      }
+      throw new LogicError(`Shouldn't happen. All cases should be handled above`);
+    }  // macro loop
 
     function throwBadForm() {
       throw new SchemeEvalError(`Bad form ${string(form)}`);
+    }
+
+    function handleParameterMacroIfPresent(argv, arg, args) {
+      if (typeof arg === 'symbol') {
+        let symVal = scope[arg];
+        if (typeof symVal === 'function') {
+          let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+          if (parameterDescriptor != null) {
+            let tag = parameterDescriptor & 0xff;
+            if (tag === PARAMETER_MACRO_TAG) {
+              let macroResult = symVal.call(scope, args);
+              if (!moreList(macroResult))
+                throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+              let insert = macroResult[FIRST], nextArg = macroResult[REST];
+              insert = _eval(insert, scope);
+              for (let insertion of insert)
+                argv.push(insertion);
+              return nextArg;
+            }
+          }
+        }
+      }
+      return undefined;
+    }
+
+    function handleParameterMacroIfPresentInObjectLiteral(key, value, scope) {
+      if (typeof key === 'symbol') {
+        let symVal = scope[key];
+        if (typeof symVal === 'function') {
+          let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+          if (parameterDescriptor != null) {
+            let tag = parameterDescriptor & 0xff;
+            if (tag === PARAMETER_MACRO_TAG) {
+              let macroResult = symVal.call(scope, new Pair(value, NIL));
+              if (!moreList(macroResult))
+                throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+              let insert = macroResult[FIRST];
+              insert = _eval(insert, scope);
+              // return in array so that the undefined case is distinguised
+              return [insert];
+            }
+          }
+        }
+      }
+      return undefined;
     }
   }
 
@@ -1997,9 +2137,9 @@ export function createInstance(schemeOpts = {}) {
     throw new SchemeEvalError(`Undefined ${string(sym)}`);
   }
 
-  function examineFunctionForParameterDescriptor(fn, evalCount = MAX_INTEGER) {
+  function examineFunctionForParameterDescriptor(fn, evalCount = MAX_INTEGER, tag = 0) {
     let { requiredCount } = analyzeJSFunction(fn);
-    return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
+    return fn[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount, tag);
   }
 
   function makeParameterDescriptor(requiredCount, evalCount = MAX_INTEGER, tag = 0) {
@@ -2221,7 +2361,7 @@ export function createInstance(schemeOpts = {}) {
         // MUST check SUPERLAZY before the isNil test, which will cause eager evaluation of
         // a LazyIteratorList, cause it to call next() and mutate into something else.
         if (obj[SUPERLAZY] && displayAsList(obj))
-          return put("(...)");
+          return put("{?}");
         if (obj[SCOPE_TYPE_SYMBOL]) {
           let symStrs = "";
           if (obj !== globalScope) {
@@ -2244,7 +2384,7 @@ export function createInstance(schemeOpts = {}) {
           put("(");
           sep = "";
           if (obj[LAZYFIRST])
-            put("..");  // .. signifies a lazy FIRST
+            put("{?}");
           else
             toString(obj[FIRST], maxCarDepth-1, maxCdrDepth);
           sep = " ";
@@ -2289,7 +2429,7 @@ export function createInstance(schemeOpts = {}) {
           // displayAsList here so that hybrid lists will print as "(a b . [c d])"
           while (moreList(obj) && displayAsList(obj)) {
             if (obj[LAZYFIRST]) {
-              put("..");  // .. signifies a lazy FIRST
+              put("{?}");
             } else if (obj[COMPILED]) {
               toString(obj[FIRST])
               sep = "";
@@ -2300,13 +2440,13 @@ export function createInstance(schemeOpts = {}) {
             }
             sep = " ";
             if (obj[LAZYREST])
-              return put("...)", true);
+              return put(". {?})", true);
             obj = obj[REST];
             maxCdrDepth -= 1;
             if (maxCdrDepth < 0)
               return put("....)", true);
             if (obj != null && obj[SUPERLAZY])
-              return put("...)", true);
+              return put(". {?})", true);
           }
           if (!isNil(obj)) {
             put(".");
@@ -2366,7 +2506,7 @@ export function createInstance(schemeOpts = {}) {
         let fnDesc = analyzeJSFunction(obj);
         let parameterDescriptor = obj[PARAMETER_DESCRIPTOR] ?? (MAX_INTEGER << 16);
         let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-        let tag = parameterDescriptor & 0xfff;
+        let tag = parameterDescriptor & 0xff;
         let name = namedObjects.get(obj) ?? fnDesc.name ?? obj.name;
         let params = fnDesc.printParams;
         let printBody = fnDesc.printBody;
@@ -2374,8 +2514,10 @@ export function createInstance(schemeOpts = {}) {
           return put(`{${params} => ${fnDesc.valueTemplate}}`);
         if (printBody && (printBody.length > 80 || printBody.includes('\n')))
           printBody = '';
-        let hash = evalCount === MAX_INTEGER ? '' : `# ${evalCount}`;
-        put(`{function${hash} ${name}${params}${printBody}`);
+        let deets = evalCount === MAX_INTEGER ? '' : `# ${evalCount}`;
+        if (tag === MACRO_TAG) deets = '-macro';
+        else if (tag === PARAMETER_MACRO_TAG) deets = '-parameter-macro';
+        put(`{function${deets} ${name}${params}${printBody}`);
         sep = "";
         return put("}", true);
       }
@@ -2602,7 +2744,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   exportAPI("compile_lambda", compile_lambda, { dontInline: true });
-  function compile_lambda(name, displayName, lambdaForm, jitFunction) {
+  function compile_lambda(name, displayName, lambdaForm, jitFunction = optional) {
     let scope = this;
     if (!isList(lambdaForm) && typeof lambdaForm === 'symbol' ) throw new SchemeEvalError(`Bad lambda ${string(lambda)}`);
     let { code, bindSymToObj } = lambda_compiler.call(this, name, displayName, lambdaForm, jitFunction);
@@ -2628,7 +2770,7 @@ export function createInstance(schemeOpts = {}) {
     let scope = this;
     let bindSymToObj = {}, guardedSymbols = {}, bindObjToSym = new Map(), functionDescriptors = {};
     let tempNames = {}, varNum = 0, emitted = [], usedSsaValues = {};
-    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 10000000,
+    let tools = { emit, bind, use, newTemp, scope, deleteEmitted, indent: '', evalLimit: 100000000,
       bindLiterally, functionDescriptors, compileEval };
     let ssaScope = new Object();
     ssaScope[SCOPE_TYPE_SYMBOL] = "compile-scope";
@@ -2705,12 +2847,14 @@ export function createInstance(schemeOpts = {}) {
           name = newTemp(name);
         }
       } else {
-        if (typeof obj === 'symbol')
+        if (typeof obj === 'symbol') {
           name = newTemp(obj.description+'_atom');
-        else if (typeof obj === 'function')
-          name = newTemp(obj.name);
-        else
-          name = newTemp();
+        } else {
+          name = namedObjects.get(obj);
+          if (!name && typeof obj === 'function')
+            name = obj.name;
+          name = newTemp(name);
+        }
       }
       bindSymToObj[name] = obj;
       bindObjToSym.set(obj, name);
@@ -2769,286 +2913,459 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("compileEval", compileEval, { dontInline: true });
   function compileEval(form, ssaScope, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind, scope = tools.scope, newTemp = tools.newTemp;
-    if (--tools.evalLimit < 0)
-      throw new SchemeCompileError(`Too comlpex ${string(form)}`);
-    if (form === undefined) return "undefined";
-    if (form === null) return "null";
-    if (typeof form === 'number' || typeof form === 'bigint' || typeof form === 'string')
-      return string(form);
-    if (form === true) return "true";
-    if (form === false) return "false";
-    if (isNil(form)) {
-      if (form === NIL) return "NIL";
-      return bind(form, "nil");
-    }
-    if (isPrimitive(form)) throw new LogicError(`All primitives should be handled by now`)
-    if (typeof form === 'symbol') {
-      let sym = form;
-      let ssaValue = ssaScope[sym];
-      if (ssaValue)
+    for (;;) { // for macros
+      // TODO: This is for debugging, mostly. Should eventually be removed.
+      if (--tools.evalLimit < 0)
+        throw new SchemeCompileError(`Too complex ${string(form)}`);
+      if (form === undefined) return "undefined";
+      if (form === null) return "null";
+      if (typeof form === 'number' || typeof form === 'bigint' || typeof form === 'string')
+        return string(form);
+      if (form === true) return "true";
+      if (form === false) return "false";
+      if (isNil(form)) {
+        if (form === NIL) return "NIL";
+        return bind(form, "nil");
+      }
+      if (typeof form === 'function') { // a naked function in the form
+        let ssaValue = bind(form);  // no guard sym!
+        registerFunctionDescriptor(form, ssaValue);
         return ssaValue;
-      // For now, only bind _functions_ from outside scope
-      let scopedVal = scope[sym];
-      if (scopedVal && typeof scopedVal === 'function') {
-        let fn = scopedVal;
-        let name = namedObjects.get(fn) ?? fn.name ?? sym.description;
-        let guardSym = sym;
-        ssaValue = bind(fn, newTemp(name), guardSym);
-        if (!tools.functionDescriptors[ssaValue]) {
-          let fnInfo = fn[COMPILE_INFO];
-          if (!fnInfo) {  // Neither a builtin nor a lambdaClosure
-            let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-            let requiredCount = (parameterDescriptor >> 8) & 0xfff;
-            let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-            let tag = parameterDescriptor & 0xff;
-            fnInfo = analyzeJSFunction(fn);
-            fnInfo.requiredCount = requiredCount;
-            fnInfo.evalCount = evalCount;
-            fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
+      }
+      if (isPrimitive(form))
+        throw new LogicError(`All primitives should be handled by now`)
+      if (typeof form === 'symbol') {
+        let sym = form;
+        let ssaValue = ssaScope[sym];
+        if (ssaValue)
+          return ssaValue;
+        // For now, only bind _functions_ from outside scope
+        let scopedVal = scope[sym];
+        if (scopedVal && typeof scopedVal === 'function') {
+          let fn = scopedVal;
+          let guardSym = sym;
+          ssaValue = bind(fn, null, guardSym);
+          registerFunctionDescriptor(fn, ssaValue);
+          return ssaValue;
+        }
+        tools.dynamicScopeUsed = true;
+        return `resolveUnbound(${use(bind(sym))})`;
+      }
+      if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
+        console.log("COMPILE EVAL", string(form));
+      if (isList(form) && !isArray(form)) {
+        let fn = form[FIRST];
+        if (fn === QUOTE_ATOM) {
+          if (!isList(form)) throwBadForm();
+          let quotedVal = form[REST][FIRST];
+          if (isAtom(quotedVal))
+            return bind(quotedVal);
+          return bind(quotedVal, 'quoted');
+        }
+        if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
+          return compileLambda(null, fn.description, form, ssaScope, tools);
+        let ssaFunction;
+        if (typeof fn === 'symbol') {  // check for a macro _without evaluating_
+          let symVal = scope[fn];
+          if (typeof symVal === 'function') {
+            let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+            if (parameterDescriptor != null) {
+              let tag = parameterDescriptor & 0xff;
+              if (tag === MACRO_TAG) {
+                let saveMacroCompiled = tools.macroCompiled;
+                tools.macroCompiled = false;
+                form = symVal.call(scope, form[REST], ssaScope, tools);
+                let macroCompiled = tools.macroCompiled;
+                tools.macroCompiled = saveMacroCompiled;
+                if (!macroCompiled)
+                  continue;
+                // If the macro flags that it compiled the function; it returns the SSA variable
+                // representing the compiled function. I don't expect this to be used much
+                // since macros are powerful enough as it is.
+                ssaFunction = form;
+              }
+            }
           }
-          // Everything you need to know about invoking a JS function is right here
-          tools.functionDescriptors[ssaValue] = fnInfo;
         }
-        return ssaValue;
-      }
-      tools.dynamicScopeUsed = true;
-      return `resolveUnbound(${use(bind(sym))})`;
-    }
-    if (TRACE_COMPILER)  // too noisy and not very informative to trace the above
-      console.log("COMPILE EVAL", string(form));
-    if (isList(form) && !isArray(form)) {
-      let fn = form[FIRST];
-      if (fn === QUOTE_ATOM) {
-        if (!isList(form)) throwBadForm();
-        let quotedVal = form[REST][FIRST];
-        if (isAtom(quotedVal))
-          return bind(quotedVal);
-        return bind(quotedVal, 'quoted');
-      }
-      if (fn === LAMBDA_ATOM || fn === SLAMBDA_ATOM)
-        return compileLambda(null, fn.description, form, ssaScope, tools);
-      let ssaFunction = compileEval(fn, ssaScope, tools);
-      let args = form[REST];
-      let functionDescriptor = tools.functionDescriptors[ssaFunction];
-      if (!functionDescriptor) {
-        use(ssaFunction);
-        let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
-        let ssaResult = newTemp(`${fName}_result`);
-        let ssaArgList = use(bind(args));
-        emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
-        return ssaResult;
-      }
-      let requiredCount = functionDescriptor.requiredCount;
-      let evalCount = functionDescriptor.evalCount;
-      let fName = functionDescriptor.name ?? "anon";
-      let params = functionDescriptor.params;
-      let restParam = functionDescriptor.restParam;
-      let compileHook = functionDescriptor.compileHook;
-      let valueTemplate = functionDescriptor.valueTemplate;
-      let bodyTemplate = functionDescriptor.bodyTemplate;
-      let requiresScope = functionDescriptor.requiresScope;
-      // A compile hook decides for itself whether or not to set ssaScope.dynamicScopeUsed
-      if (requiresScope && !compileHook) 
-        ssaScope.dynamicScopeUsed = true;
-
-      // Run through the arg list evaluating args
-      let ssaArgv = [], ssaArgStr = '', sep = '', argCount = 0;
-      for ( ; moreList(args) ; ++argCount, args = args[REST]) {
-        let arg = args[FIRST], ssaArg;
-        if (argCount < evalCount)
-          arg = ssaArg  = use(compileEval(arg, ssaScope, tools));
-        else if (!compileHook)  // hooks get unbound unevaluated args
-          arg = ssaArg = use(bind(arg, `arg_${argCount}`));
-        ssaArgv.push(arg);
-        if (ssaArg) {
-          ssaArgStr += `${sep}${ssaArg}`;
-          sep = ', ';
-        }
-      }
-      // Cases where we simply invoke the function:
-      //  - we have at least required number of arguments
-      //  - we have no arguments
-      // Otherwise, return a closure.
-      if (argCount >= requiredCount || argCount === 0) {
-        if (compileHook) {
-          let ssaResult = compileHook(ssaArgv, ssaScope, tools);
-          use(ssaResult);
+        if (!ssaFunction)
+          ssaFunction = compileEval(fn, ssaScope, tools);
+        let args = form[REST];
+        let functionDescriptor = tools.functionDescriptors[ssaFunction];
+        if (!functionDescriptor) {
+          use(ssaFunction);
+          let fName = typeof fn === 'symbol' ? fn.description : 'unbound';
+          let ssaResult = newTemp(`${fName}_result`);
+          let ssaArgList = use(bind(args));
+          emit(`let ${ssaResult} = invokeUnbound(${ssaFunction}, ${ssaArgList});`);
           return ssaResult;
         }
-        if (valueTemplate) {
-          let ssaResult = newTemp(fName+'_result');
+        let requiredCount = functionDescriptor.requiredCount;
+        let evalCount = functionDescriptor.evalCount;
+        let fName = functionDescriptor.name ?? "anon";
+        let params = functionDescriptor.params;
+        let tag = functionDescriptor.tag;
+        let restParam = functionDescriptor.restParam;
+        let compileHook = functionDescriptor.compileHook;
+        let valueTemplate = functionDescriptor.valueTemplate;
+        let bodyTemplate = functionDescriptor.bodyTemplate;
+        let requiresScope = functionDescriptor.requiresScope;
+
+        // A compile hook decides for itself whether or not to set ssaScope.dynamicScopeUsed
+        if (requiresScope && !compileHook) 
+          ssaScope.dynamicScopeUsed = true;
+
+        // Run through the arg list evaluating args
+        let ssaArgv = [], ssaArgStr = '', sep = '', argCount = 0;
+        let dynamicArgvLines = [], usesDynamicArgv;
+        let ssaDynamicArgv = newTemp('dynamic_argv');
+        dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
+        while (moreList(args)) {
+          let arg = args[FIRST];
+          if (argCount < evalCount) {
+            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, arg, args[REST]);
+            if (nextArg !== undefined) {
+              args = nextArg;
+              usesDynamicArgv = true;
+              continue;
+            }
+          }
+          let ssaArg;
+          if (argCount < evalCount)
+            arg = ssaArg  = use(compileEval(arg, ssaScope, tools));
+          else if (!compileHook)  // hooks get unbound unevaluated args
+            arg = ssaArg = use(bind(arg, `arg_${argCount}`));
+          ssaArgv.push(arg);
+          argCount += 1;
+          if (ssaArg) {
+            ssaArgStr += `${sep}${ssaArg}`;
+            dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaArg})`));
+            sep = ', ';
+          }
+          args = args[REST];
+        }
+        if (!usesDynamicArgv) {
+          tools.deleteEmitted(dynamicArgvLines);
+          // Cases where we simply invoke the function:
+          //  - we have at least required number of arguments
+          //  - we have no arguments
+          // Otherwise, return a closure.
+          if (argCount >= requiredCount || argCount === 0) {
+            if (compileHook) {
+              let ssaResult = compileHook(ssaArgv, ssaScope, tools);
+              use(ssaResult);
+              return ssaResult;
+            }
+            if (valueTemplate) {
+              let ssaResult = newTemp(fName+'_result');
+              emit(`let ${ssaResult}; {`);
+              let saveIndent = tools.indent;
+              tools.indent += '  ';
+              for (let i = 0; i < params.length; ++i) {
+                let ssaVal = i < ssaArgv.length ? ssaArgv[i] : 'undefined';
+                emit(`let ${params[i]} = ${ssaVal};`);
+              }
+              if (restParam) {
+                let str = '';
+                for (let i = params.length; i < ssaArgv.length; ++i)
+                  str += `${ssaArgv[i]}, `;
+                emit(`let ${restParam} = [${str}];`);
+              }
+              if (bodyTemplate)
+                emit(bodyTemplate); 
+              emit(`${ssaResult} = (${valueTemplate});`);
+              tools.indent = saveIndent;
+              emit(`}`);
+              return ssaResult;
+            }
+            let ssaResult = newTemp(fName+'_result');
+            if (TRACE_COMPILER)
+              console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
+            use(ssaFunction);
+            if (requiresScope) {
+              if (ssaArgStr) ssaArgStr = `, ${ssaArgStr}`;
+              emit(`let ${ssaResult} = ${ssaFunction}.call(scope${ssaArgStr});`);
+            } else {
+              emit(`let ${ssaResult} = ${ssaFunction}(${ssaArgStr});`);
+            }
+            return ssaResult;
+          }
+          //
+          // Generate closure (see "_eval", I ain't gonna splain it agin)
+          //
+          if (compileHook) {
+            // If there were compile hooks, ssaArgv is a lie after evalCount. Rectify that.
+            for (let i = evalCount; i < ssaArgv.length; ++i) {
+              ssaArgv[i] = use(bind(ssaArgv[i]));
+              ssaArgStr += `, ${ssaArgv[i]}`;
+            }
+          }
+          let name = fName + '_closure';
+          let ssaResult = newTemp(name), ssaTmpScope = newTemp("tmp_scope")
+          ssaScope = newScope(ssaScope, "compiler-closure-scope");
+          emit(`let ${ssaTmpScope} = scope;`);
           emit(`let ${ssaResult}; {`);
           let saveIndent = tools.indent;
           tools.indent += '  ';
-          for (let i = 0; i < params.length; ++i) {
-            let ssaVal = i < ssaArgv.length ? ssaArgv[i] : 'undefined';
-            emit(`let ${params[i]} = ${ssaVal};`);
+          emit(`let scope = newScope(${ssaTmpScope}, "compiled-closure-scope");`);
+          // First, cons up the closure S-expr.
+          let closureBody;
+          let innerParams = NIL, innerForms = NIL;
+          requiredCount -= argCount;
+          if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
+          if (fn[FIRST] === CLOSURE_ATOM || fn[FIRST] === SCLOSURE_ATOM) {
+            closureBody = fn[REST];
+            if (fn[FIRST] === SCLOSURE_ATOM) // Skip the evalCount param
+              closureBody = closureBody[REST];
+            innerParams = closureBody[FIRST];
+            innerForms = closureBody[REST];
+          } else {
+            if (restParam)
+              innerParams = Atom(restParam);
+            for (let i = params.length; i > 0; --i)
+              innerParams = new Pair(Atom(params[i-1]), innerParams);
+            innerForms = new Pair(new Pair(fn, innerParams), NIL);
           }
-          if (restParam) {
-            let str = '';
-            for (let i = params.length; i < ssaArgv.length; ++i)
-              str += `${ssaArgv[i]}, `;
-            emit(`let ${restParam} = [${str}];`);
+          // Peel off the number of parameters we have arguments for
+          let capturedParams = NIL, last;
+          for (let i = argCount; i > 0; --i, innerParams = innerParams[REST]) {
+            if (!isList(innerParams))
+              throw new LogicError(`There should be enough params`);
+            let item = new Pair(innerParams[FIRST], NIL);
+            if (last) last = last[REST] = item;
+            else capturedParams = last = item;
           }
-          if (bodyTemplate)
-            emit(bodyTemplate); 
-          emit(`${ssaResult} = (${valueTemplate});`);
+          if (!last) throw new LogicError(`There should be at least one param`);
+          closureBody = new Pair(innerParams, innerForms);
+          let closureForm = new Pair();
+          if (evalCount !== MAX_INTEGER) {
+            evalCount -= argCount;
+            if (evalCount < 0)
+              evalCount = 0;
+            closureForm[FIRST] = SCLOSURE_ATOM;
+            closureForm[REST] = new Pair("PATCH", new Pair(evalCount, closureBody));
+          } else {
+            closureForm[FIRST] = CLOSURE_ATOM;
+            closureForm[REST] = new Pair("PATCH", closureBody);
+          }
+          // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
+          // and to the scope.
+          let closedArgStr = '';
+          sep = '';
+          for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[REST]) {
+            let arg = ssaArgv[i];
+            if (isList(tmp)) {
+              let param = tmp[FIRST];
+              let ssaParam = newTemp(param);
+              ssaScope[params[i]] = ssaParam;
+              let ssaParamName = use(bind((param)));
+              emit(`let ${ssaParam} = scope[${ssaParamName}] = ${arg};`)
+              closedArgStr += `${sep}${ssaParam}`;
+              sep = ', ';
+            }
+          }
+          let paramStr = '';
+          let ssaParamv = [], ssaRestParam;
+          sep = '';
+          for (; moreList(innerParams); innerParams = innerParams[REST]) {
+            let param = innerParams[FIRST];
+            let ssaParam = newTemp(param);
+            ssaParamv.push(ssaParam);
+            paramStr += sep + ssaParam;
+            sep = ', ';
+          }
+          if (typeof innerParams === 'symbol') {
+            let ssaRest = newTemp(innerParams);
+            paramStr += `${sep}...${ssaRest}`;
+            ssaRestParam = ssaRest;
+          }
+          use(ssaFunction);
+          ssaScope.dynamicScopeUsed = true;
+          emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
+          let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
+          // closures do not need a scope!
+          let fnInfo = { requiredCount, evalCount, params: ssaParamv, restParam: ssaRestParam, requiresScope: false };
+          decorateCompiledClosure(ssaResult, displayName, closureForm, fnInfo, tools);
           tools.indent = saveIndent;
           emit(`}`);
+          tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name, noScope: true };
           return ssaResult;
         }
-        let ssaResult = newTemp(fName+'_result');
-        if (TRACE_COMPILER)
-          console.log("COMPILE APPLY (eval)", fName, ssaResult, ssaFunction, ...ssaArgv);
+        // We have a dynamic number of arguments, all evaluated.
+        // But we don't know how many at compile time except that there's a minimum
+        let ssaResult = newTemp(`${fName}_result`);
         use(ssaFunction);
-        if (requiresScope) {
-          if (ssaArgStr) ssaArgStr = `, ${ssaArgStr}`;
-          emit(`let ${ssaResult} = ${ssaFunction}.call(scope${ssaArgStr});`);
-        } else {
-          emit(`let ${ssaResult} = ${ssaFunction}(${ssaArgStr});`);
+        if (argCount >= requiredCount) {
+          emit(`let ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaDynamicArgv});`);
+          return ssaResult;
         }
-        return ssaResult;
+        // Here, we have to determine at runtime time whether a closure is required
+        emit(`;et ${ssaResult};`);
+        emit(`if (${ssaDynamicArgv}.length >= ${requiredCount})`);
+        emit(`  ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaDynamicArgv});`);
+        emit(`else`);
+        if (requiresScope)
+          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.call(scope, ...${ssaDynamicArgv}, ...args);  } `);
+        else
+          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}(...${ssaDynamicArgv}, ...args);  } `);
       }
-      //
-      // Generate closure (see "_eval", I ain't gonna splain it agin)
-      //
-      if (compileHook) {
-        // If there were compile hooks, ssaArgv is a lie after evalCount. Rectify that.
-        for (let i = evalCount; i < ssaArgv.length; ++i) {
-          ssaArgv[i] = use(bind(ssaArgv[i]));
-          ssaArgStr += `, ${ssaArgv[i]}`;
+      // Special eval for JS Arrays and Objects
+      if (form !== null && typeof form === 'object') {
+        if (isArray(form )) {
+          let ssaArrayLiteral = newTemp("arrayliteral");
+          let evalledSsaValues = [];
+          let dynamicArgvLines = [], usesDynamicArgv;
+          let ssaDynamicArgv = newTemp('dynamic_argv');
+          dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
+          while (moreList(form)) {
+            let element = form[FIRST];
+            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, element, form[REST]);
+            if (nextArg !== undefined) {
+              form = nextArg;
+              usesDynamicArgv = true;
+              continue;
+            }
+            let ssaValue = compileEval(element, ssaScope, tools);
+            use(ssaValue);
+            evalledSsaValues.push(ssaValue);
+            dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaValue})`));
+            form = form[REST];
+          }
+          if (!usesDynamicArgv) {
+            tools.deleteEmitted(dynamicArgvLines);
+            emit(`let ${ssaArrayLiteral} = [`);
+            for (let ssaElement of evalledSsaValues) {
+              emit(`  ${ssaElement},`);
+            }
+            emit(`];`);
+            return ssaArrayLiteral;
+          }
+          return ssaDynamicArgv;
         }
-      }
-      let name = fName + '_closure';
-      let ssaResult = newTemp(name), ssaTmpScope = newTemp("tmp_scope")
-      ssaScope = newScope(ssaScope, "compiler-closure-scope");
-      emit(`let ${ssaTmpScope} = scope;`);
-      emit(`let ${ssaResult}; {`);
-      let saveIndent = tools.indent;
-      tools.indent += '  ';
-      emit(`let scope = newScope(${ssaTmpScope}, "compiled-closure-scope");`);
-      // First, cons up the closure S-expr.
-      let closureBody;
-      let innerParams = NIL, innerForms = NIL;
-      requiredCount -= argCount;
-      if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
-      if (fn[FIRST] === CLOSURE_ATOM || fn[FIRST] === SCLOSURE_ATOM) {
-        closureBody = fn[REST];
-        if (fn[FIRST] === SCLOSURE_ATOM) // Skip the evalCount param
-          closureBody = closureBody[REST];
-        innerParams = closureBody[FIRST];
-        innerForms = closureBody[REST];
-      } else {
-        if (restParam)
-          innerParams = Atom(restParam);
-        for (let i = params.length; i > 0; --i)
-          innerParams = new Pair(Atom(params[i-1]), innerParams);
-        innerForms = new Pair(new Pair(fn, innerParams), NIL);
-      }
-      // Peel off the number of parameters we have arguments for
-      let capturedParams = NIL, last;
-      for (let i = argCount; i > 0; --i, innerParams = innerParams[REST]) {
-        if (!isList(innerParams))
-          throw new LogicError(`There should be enough params`);
-        let item = new Pair(innerParams[FIRST], NIL);
-        if (last) last = last[REST] = item;
-        else capturedParams = last = item;
-      }
-      if (!last) throw new LogicError(`There should be at least one param`);
-      closureBody = new Pair(innerParams, innerForms);
-      let closureForm = new Pair();
-      if (evalCount !== MAX_INTEGER) {
-        evalCount -= argCount;
-        if (evalCount < 0)
-          evalCount = 0;
-        closureForm[FIRST] = SCLOSURE_ATOM;
-        closureForm[REST] = new Pair("PATCH", new Pair(evalCount, closureBody));
-      } else {
-        closureForm[FIRST] = CLOSURE_ATOM;
-        closureForm[REST] = new Pair("PATCH", closureBody);
-      }
-      // Now go through the arguments, matching to capturedParams, adding to both the ssaScope
-      // and to the scope.
-      let closedArgStr = '';
-      sep = '';
-      for (let i = 0, tmp = capturedParams; i < ssaArgv.length; ++i, tmp = tmp[REST]) {
-        let arg = ssaArgv[i];
-        if (isList(tmp)) {
-          let param = tmp[FIRST];
-          let ssaParam = newTemp(param);
-          ssaScope[params[i]] = ssaParam;
-          let ssaParamName = use(bind((param)));
-          emit(`let ${ssaParam} = scope[${ssaParamName}] = ${arg};`)
-          closedArgStr += `${sep}${ssaParam}`;
-          sep = ', ';
-        }
-      }
-      let paramStr = '';
-      let ssaParamv = [], ssaRestParam;
-      sep = '';
-      for (; moreList(innerParams); innerParams = innerParams[REST]) {
-        let param = innerParams[FIRST];
-        let ssaParam = newTemp(param);
-        ssaParamv.push(ssaParam);
-        paramStr += sep + ssaParam;
-        sep = ', ';
-      }
-      if (typeof innerParams === 'symbol') {
-        let ssaRest = newTemp(innerParams);
-        paramStr += `${sep}...${ssaRest}`;
-        ssaRestParam = ssaRest;
-      }
-      use(ssaFunction);
-      ssaScope.dynamicScopeUsed = true;
-      emit(`${ssaResult} = (${paramStr}) => ${ssaFunction}.call(scope, ${closedArgStr}, ${paramStr});`);
-      let displayName = `(${paramStr}) => ${ssaFunction}.call(scope${closedArgStr}, ${paramStr})`;
-      // closures do not need a scope!
-      let fnInfo = { requiredCount, evalCount, params: ssaParamv, restParam: ssaRestParam, requiresScope: false };
-      decorateCompiledClosure(ssaResult, displayName, closureForm, fnInfo, tools);
-      tools.indent = saveIndent;
-      emit(`}`);
-      tools.functionDescriptors[ssaResult] = { requiredCount, evalCount, name, noScope: true };
-      return ssaResult;
-    }
-    // Special eval for JS Arrays and Objects
-    if (form !== null && typeof form === 'object') {
-      if (isArray(form )) {
-        let ssaArrayLiteral = newTemp("arrayliteral");
-        let evalledSsaValues = [];
-        for (let element of form) {
-          let ssaValue = compileEval(element, ssaScope, tools);
+        let ssaObjectLiteral = newTemp("objectliteral");
+        emit(`let ${ssaObjectLiteral} = {};`);
+        for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
+          let value = form[key];
+          let ssaInsertObj = handleParameterMacroIfPresentInObjectLiteral(key, value);
+          if (ssaInsertObj !== undefined) {
+            emit(`for (let k of Object.getOwnPropertySymbols(${ssaInsertObj})) {`);
+            emit(`  let v = ${ssaInsertObj}[k];`);
+            emit(`  ${ssaObjectLiteral}[k] = v;`);
+            emit(`}`);
+            emit(`for (let k of Object.getOwnPropertyNames(${ssaInsertObj})) {`);
+            emit(`  let v = ${ssaInsertObj}[k];`);
+            emit(`  ${ssaObjectLiteral}[k] = v;`);
+            emit(`}`);
+            continue;
+          }
+          let ssaKey;
+          if (key === EVALUATE_KEY_VALUE_SYMBOL) {
+            ssaKey = compileEval(value[0], ssaScope, tools);
+            value = value[1];
+          } else {
+            ssaKey = bind(key)
+          }
+          let ssaValue = compileEval(value, ssaScope, tools);
+          use(ssaKey);
           use(ssaValue);
-          evalledSsaValues.push(ssaValue);
+          emit(`${ssaObjectLiteral}[${ssaKey}] = ${ssaValue};`);
         }
-        emit(`let ${ssaArrayLiteral} = [`);
-        for (let ssaElement of evalledSsaValues)
-          emit(`  ${ssaElement},`);
-        emit(`];`);
-        return ssaArrayLiteral;
+        return ssaObjectLiteral;
       }
-      let ssaObjectLiteral = newTemp("objectliteral");
-      emit(`let ${ssaObjectLiteral} = {};`);
-      for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
-        let value = form[key];
-        let ssaKey;
-        if (key === EVALUATE_KEY_VALUE_SYMBOL) {
-          ssaKey = compileEval(value[0], ssaScope, tools);
-          value = value[1];
-        } else {
-          ssaKey = bind(key)
+      throw new LogicError(`Shouldn't happen. All cases should be handled above`);
+    } // macro loop
+
+    function registerFunctionDescriptor(fn, ssaValue) {
+      if (!tools.functionDescriptors[ssaValue]) {
+        let fnInfo = fn[COMPILE_INFO];
+        if (!fnInfo) {  // Neither a builtin nor a lambdaClosure
+          let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+          let requiredCount = (parameterDescriptor >> 8) & 0xfff;
+          let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+          let tag = parameterDescriptor & 0xff;
+          fnInfo = analyzeJSFunction(fn);
+          fnInfo.requiredCount = requiredCount;
+          fnInfo.evalCount = evalCount;
+          fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
         }
-        let ssaValue = compileEval(value, ssaScope, tools);
-        use(ssaKey);
-        use(ssaValue);
-        emit(`${ssaObjectLiteral}[${ssaKey}] = ${ssaValue};`);
+        // Everything you need to know about invoking a JS function is right here
+        tools.functionDescriptors[ssaValue] = fnInfo;
       }
-      return ssaObjectLiteral;
     }
-    throw new LogicError(`Shouldn't happen. All cases should be handled above`);
 
     function throwBadForm() {
       throw new SchemeCompileError(`BadForm ${string(form)}`);
     }
+
+    function handleParameterMacroIfPresent(ssaDynamicArgv, arg, args) {  
+      if (typeof arg === 'symbol') { // check for parameter macro
+        let symVal = scope[arg];
+        if (typeof symVal === 'function') {
+          let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+          if (parameterDescriptor != null) {
+            let tag = parameterDescriptor & 0xff;
+            if (tag === PARAMETER_MACRO_TAG) {
+              let saveMacroCompiled = tools.macroCompiled;
+              tools.macroCompiled = false;
+              let macroResult = symVal.call(scope, args, ssaScope, tools);
+              let macroCompiled = tools.macroCompiled;
+              tools.macroCompiled = saveMacroCompiled;
+              if (!isList(macroResult))
+                throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
+              let ssaInsert = macroResult[FIRST], ssaInsertValues;
+              let nextArg = macroResult[REST];
+              if (!macroCompiled) {
+                ssaInsert = use(bind(ssaInsert));
+                ssaScope.dynamicScopeUsed = true;
+                ssaInsertValues = newTemp("macro_insert");
+                tools.bindLiterally(_eval, "_eval");
+                emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
+              } else {
+                ssaInsertValues = ssaInsert;
+              }
+              emit(`for (let arg of ${ssaInsertValues}) {`);
+              emit(`  ${ssaDynamicArgv}.push(arg)`);
+              emit(`}`)
+              return nextArg;
+            }
+          }
+        }
+      }
+    }
+
+    function handleParameterMacroIfPresentInObjectLiteral(key, value) {
+      if (typeof key === 'symbol') {
+        let symVal = scope[key];
+        if (typeof symVal === 'function') {
+          let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+          if (parameterDescriptor != null) {
+            let tag = parameterDescriptor & 0xff;
+            if (tag === PARAMETER_MACRO_TAG) {
+              let saveMacroCompiled = tools.macroCompiled;
+              tools.macroCompiled = false;
+              let macroResult = symVal.call(scope, new Pair(value, NIL), ssaScope, tools);
+              let macroCompiled = tools.macroCompiled;
+              tools.macroCompiled = saveMacroCompiled;
+              if (!isList(macroResult))
+                throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
+              let ssaInsert = macroResult[FIRST], ssaInsertObj;
+              let nextArg = macroResult[REST];
+              if (!macroCompiled) {
+                ssaInsert = use(bind(ssaInsert));
+                ssaScope.dynamicScopeUsed = true;
+                ssaInsertObj = newTemp("macro_insert");
+                tools.bindLiterally(_eval, "_eval");
+                emit(`let ${ssaInsertObj} = _eval(${ssaInsert}, scope);`)
+              } else {
+                ssaInsertObj = ssaInsert;
+              }
+              return ssaInsertObj;
+            }
+          }
+        }
+      }
+      return undefined
+    }
+
   }
 
   //
@@ -3075,7 +3392,6 @@ export function createInstance(schemeOpts = {}) {
     if (!isList(body)) throwBadCompiledLambda(lambda);
     let params = body[FIRST];
     let forms = body[REST];
-    if (!isList(params)) throwBadCompiledLambda(lambda);
     let ssaParamv = [], ssaRestParam, paramv = [], restParam;
     let originalSsaScope = ssaScope;
     ssaScope = newScope(ssaScope, "compiler-lambda-scope");

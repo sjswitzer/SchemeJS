@@ -10,11 +10,9 @@ import * as SchemeJS from './SchemeJS.mjs';
 
 export let succeeded = 0, failed = 0;
 
-let string; // So that TestFailure Error can access it
-
 export class TestFailureError extends Error {
   constructor(message, test, result, expected, report) {
-    super(`${string(test)}; ${message}: ${string(result)}, expected: ${string(expected)}`);
+    super(message);
     this.test = test;
     this.result = result;
     this.expected = expected;
@@ -24,13 +22,13 @@ export class TestFailureError extends Error {
 TestFailureError.prototype.name = "TestFailureError";
 
 export function run(opts = {}) {
-  innerRun({ ... opts, bottomIsLNIL: true });
-  innerRun({ ... opts, bottomIsLNIL: false });
+  runTestsInNewInstance({ ... opts, bottomIsLNIL: true });
+  runTestsInNewInstance({ ... opts, bottomIsLNIL: false });
   console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
   return { succeeded, failed };
 }
 
-function innerRun(opts = {}) {
+function runTestsInNewInstance(opts = {}) {
   let throwOnError = opts.throwOnError ?? true;
   let reportTestFailed = opts.reportTestFailed ?? ((message, test, result, expected, report) =>
       console.error("FAILED", message, test, result, expected, report));
@@ -41,7 +39,7 @@ function innerRun(opts = {}) {
   let testScope = globalScope;
   const setGlobalScope = globalScope._setGlobalScope_test_hook_ ?? required();
   const NIL = globalScope.NIL ?? required();
-  string = globalScope.string ?? required();
+  const string = globalScope.string ?? required();
   const newScope = globalScope.newScope ?? required();
   const equal = globalScope.equal ?? required();
   const isList = globalScope.isList ?? required();
@@ -51,6 +49,9 @@ function innerRun(opts = {}) {
   const parseSExpr = globalScope.parseSExpr ?? required();
   const list = globalScope.list ?? required();
   const Atom = globalScope.Atom ?? required();
+  const FIRST = globalScope.FIRST ?? required();
+  const REST = globalScope.REST ?? required();
+  const Pair = globalScope.Pair ?? required();
   const compile_lambda = globalScope.compile_lambda ?? required();
   const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   const justTestJIT = opts.justTestJIT;
@@ -76,10 +77,10 @@ function innerRun(opts = {}) {
   testSuite();
 
   // This is kinda hacky, but the only way to change the JIT params is instantiate a new Scheme instance.
-  // Calling run() recursively, with new parameters, accomplishes that. But it should probably be reworked.
+  // Calling runTestsInNewInstance() recursively, with new parameters, accomplishes that. But it should probably be reworked.
 
   let jitThreshold = 0;  // Means: JIT immediately (zero iterations of the interpreter)
-  innerRun({ justTestJIT: true, jitThreshold });
+  runTestsInNewInstance({ justTestJIT: true, jitThreshold });
 
   if (testScope !== globalScope) throw new Error("Unpaired begin/endTestScope() calls");
 
@@ -100,8 +101,8 @@ function innerRun(opts = {}) {
     EXPECT(` (car '[1 2 3]) `, ` '1 `);
     EXPECT(` (cdr '(1 2 3)) `, ` '(2 3) `);
     EXPECT(` (cdr '[1 2 3]) `, ` '(2 3) `);
-    EXPECT_ERROR( ` (car nil) `, SchemeEvalError );
-    EXPECT_ERROR( ` (cdr nil) `, SchemeEvalError );
+    EXPECT_ERROR( ` (car nil) `, TypeError );
+    EXPECT_ERROR( ` (cdr nil) `, TypeError );
     const testList = ` '(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd))) `;
     EXPECT(` (caaar ${testList}) `, ` 'aaa `);
     EXPECT(` (cdaar ${testList}) `, ` 'daa `);
@@ -413,7 +414,7 @@ function innerRun(opts = {}) {
     EXPECT(` (cond) `, BOTTOM);
     EXPECT_ERROR(` (cond a) `, isCompileOrEvalError);
     EXPECT_ERROR(` (cond 1) `, isCompileOrEvalError);
-    EXPECT_ERROR(` (cond ()) `, isCompileOrEvalError);
+    EXPECT_ERROR(` (cond ()) `, TypeError);
     EXPECT_ERROR(` (cond (true) 1) `, isCompileOrEvalError);
     EXPECT(` (cond ((< 4 5) (+ 5 6))) `, 11);
     EXPECT(` (cond ((< 4 5) (+ 5 6) (* 5 6))) `, 30);
@@ -645,6 +646,82 @@ function innerRun(opts = {}) {
       EXPECT_ERROR(` (factoral 10) `, SchemeEvalError);
     }
 
+    { // Test macros
+      EXPECT(` (when (< 2 3) 'a 2 (+ 4 5))`, 9);
+      EXPECT(` (when (> 2 3) 'a 2 (+ 4 5))`, false);
+    }
+
+    { // Test macros with the compiler
+      let savedScope = beginTestScope();
+      EXPECT(` (compile (foo bool) (when bool 'a 2 (+ 4 5)))`, ` 'foo `);
+      EXPECT(` (foo (< 2 3))`, 9);
+      EXPECT(` (foo (> 2 3))`, false);
+      endTestScope(savedScope);
+    }
+
+    { // Test "parameter macros" (essentially just the spread "..." operator currently).
+      let savedScope = beginTestScope();
+      EXPECT(` (defn (foo a . b) (list ...b a))`, ` 'foo `);
+      EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1,) `);
+      endTestScope(savedScope);
+    }
+
+    { // Test "parameter macros", with the compiler
+      let savedScope = beginTestScope();
+      EXPECT(` (compile (foo a . b) (list ...b a))`, ` 'foo `);
+      EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1) `);
+      endTestScope(savedScope);
+    }
+
+    { // Test spread parameters in array literals
+      let savedScope = beginTestScope();
+      EXPECT(` (def a [1 2 'z "foo" {} 10n]) `, ` 'a `);
+      EXPECT(` ["x" 'x ...a 100] `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      EXPECT(` (defn (b . a) ["x" 'x ...a 100]) `, ` 'b `)
+      EXPECT(` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      EXPECT(` (compile (c . a) ["x" 'x ...a 100]) `, ` 'c `)
+      EXPECT(` (c 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      endTestScope(savedScope);
+    }
+
+    { // Test spread parameters in object literals
+      let savedScope = beginTestScope();
+      EXPECT(` (def a { foo: "bar" bar: 2 "z": 10n } ) `, ` 'a `);
+      EXPECT(` { "x": 1, ...: a, 100: "hundred" } `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
+      EXPECT(` (defn (b a) { "x": 1, ...: a, 100: "hundred" }) `, ` 'b `)
+      EXPECT(` (b { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
+      EXPECT(` (compile (c a) { "x": 1, ...: a, 100: "hundred" }) `, ` 'c `)
+      EXPECT(` (c { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
+      endTestScope(savedScope);
+    }
+
+    { // Test that spread works OK with a macro that _doesn_ specialize for the compiled
+      // case.
+      let savedScope = beginTestScope();
+
+      // First, define our own spread macro without compiler specialization
+      globalScope.exportAPI("spread2", spread2, { tag: globalScope.PARAMETER_MACRO_TAG });
+      function spread2(args,) {
+        if (!isList(args))
+          throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
+        let spreadArg = args[FIRST];
+        // Returns Pair of arguments to stuff
+        // and the rewritten (or not) remainder of the arg list.
+        return new Pair(spreadArg, args[REST]);
+      }
+      globalScope.defineBinding("_spread_", "spread2");
+
+      // Now some tests
+      EXPECT(` (compile (foo a . b) (list _spread_ b a))`, ` 'foo `);
+      EXPECT(` (foo 1 2 3 4 5)`, ` '(2, 3, 4, 5, 1) `);
+      EXPECT(` (compile (b . a) ["x" 'x _spread_ a 100]) `, ` 'b `)
+      EXPECT(` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      EXPECT(` (compile (c a) { "x": 1, _spread_: a, 100: "hundred" }) `, ` 'c `)
+      EXPECT(` (c { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
+
+      endTestScope(savedScope);
+    }
+
     { // Test that when a when a bound function changes, the JIT's guards catch it.
       let savedScope = beginTestScope();
       EXPECT(` (def op +) `, ` 'op `);
@@ -778,6 +855,7 @@ function innerRun(opts = {}) {
   }
 
   function testFailed(message, test, result, expected, report) {
+    message = `${string(test)}; ${message}; result: ${string(result)}, expected: ${string(expected)}`
     reportTestFailed(message, test, result, expected, report);
     failed += 1;
     if (throwOnError)
