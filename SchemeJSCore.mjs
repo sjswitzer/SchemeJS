@@ -2046,15 +2046,18 @@ export function createInstance(schemeOpts = {}) {
           let res = {};
           for (let key of [...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form)]) {
             let value = form[key];
-            let insertions = [];
-            let insertObj = handleParameterMacroIfPresent(insertions, MAX_INTEGER, key, new Pair(value, NIL));
-            if (insertObj !== undefined) {
-              for (obj in insertions) {
-                for (let k of [...Object.getOwnPropertyNames(obj), ...Object.getOwnPropertySymbols(obj)]) {
-                  let v = obj[k];
-                  res[k] = v;
-                }
+            let insertkeys = handleParameterMacroIfPresentInObjectLiteral(key, value, scope);
+            if (insertkeys !== undefined) {
+              let [obj, symKeys, strKeys] = insertkeys;
+              for (let k of symKeys) {
+                let v = obj[k];
+                res[k] = v;
               }
+              for (let k of strKeys) {
+                let v = obj[k];
+                res[k] = v;
+              }
+              continue;
             }
             if (key === EVALUATE_KEY_VALUE_SYMBOL) {
               key = value[0];
@@ -2090,9 +2093,30 @@ export function createInstance(schemeOpts = {}) {
               let insert = macroResult[FIRST], nextArg = macroResult[REST];
               if (argv.length < evalCount)
                 insert = _eval(insert, scope);
-              for (let arg of insert)
-                argv.push(arg);
+              for (let insertion of insert)
+                argv.push(insertion);
               return nextArg;
+            }
+          }
+        }
+      }
+      return undefined;
+    }
+
+    function handleParameterMacroIfPresentInObjectLiteral(key, value, scope) {
+      if (typeof key === 'symbol') {
+        let symVal = scope[key];
+        if (typeof symVal === 'function') {
+          let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
+          if (parameterDescriptor != null) {
+            let tag = parameterDescriptor & 0xff;
+            if (tag === PARAMETER_MACRO_TAG) {
+              let macroResult = symVal.call(scope, new Pair(value, NIL));
+              if (!moreList(macroResult))
+                throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
+              let insert = macroResult[FIRST];
+              insert = _eval(insert, scope)
+              return [insert, Object.getOwnPropertySymbols(insert), Object.getOwnPropertyNames(insert)];
             }
           }
         }

@@ -670,12 +670,21 @@ function runTestsInNewInstance(opts = {}) {
       endTestScope(savedScope);
     }
 
-    if (true) { // Test spread parameters in array literals
+    { // Test spread parameters in array literals
       let savedScope = beginTestScope();
-      EXPECT( ` (def a [1 2 'z "foo" {} 10n]) `, ` 'a `);
+      EXPECT(` (def a [1 2 'z "foo" {} 10n]) `, ` 'a `);
       EXPECT(` ["x" 'x ...a 100] `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
       EXPECT(` (defn (b . a) ["x" 'x ...a 100]) `, ` 'b `)
-      EXPECT( ` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      EXPECT(` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
+      endTestScope(savedScope);
+    }
+
+    { // Test spread parameters in object literals
+      let savedScope = beginTestScope();
+      EXPECT(` (def a { foo: "bar" bar: 2 "z": 10n } ) `, ` 'a `);
+      EXPECT(` { "x": 1, ...: a, 100: "hundred" } `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
+      EXPECT(` (defn (b a) { "x": 1, ...: a, 100: "hundred" } `, ` 'b `)
+      EXPECT(` (b { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
       endTestScope(savedScope);
     }
 
