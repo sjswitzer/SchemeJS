@@ -2044,8 +2044,18 @@ export function createInstance(schemeOpts = {}) {
           return res;
         } else {
           let res = {};
-          for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
+          for (let key of [...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form)]) {
             let value = form[key];
+            let insertions = [];
+            let insertObj = handleParameterMacroIfPresent(insertions, MAX_INTEGER, key, new Pair(value, NIL));
+            if (insertObj !== undefined) {
+              for (obj in insertions) {
+                for (let k of [...Object.getOwnPropertyNames(obj), ...Object.getOwnPropertySymbols(obj)]) {
+                  let v = obj[k];
+                  res[k] = v;
+                }
+              }
+            }
             if (key === EVALUATE_KEY_VALUE_SYMBOL) {
               key = value[0];
               value = value[1];
