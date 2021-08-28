@@ -21,7 +21,7 @@
 //
 // If you want to encapsulate a series of operations to draw on any canvas,
 // just define a function that takes a parameter named gfx-context and you're
-// done. As a general rule, drawing functions should, by convention, take no placement
+// set. As a general rule, drawing functions should, by convention, take no placement
 // or scale operations and instead draw inside of a 1x1 box with an origin
 // at (0, 0). You can use any coordinate system you want in your drawing function
 // by writing
@@ -29,6 +29,11 @@
 // to draw in a 100x200 box for instance. And if a client wants to place
 // it at (15, 20) and have it be 30 x 40 in size, they can write
 //     (gfx-save (translate 15 20) (scale 30 40) (your-function))
+//
+// To faclitatee this convention, the defaults of all of the drawing primitives have been
+// set so that, assuming the current point is (0,0) the resulting figure will be bounded
+// by (0,0,1,1). This occasionally leads to strange defaults, for instance the defaults
+// for line-to are (1,1).
 //
 
 import * as SchemeJS from './SchemeJS.mjs';
@@ -45,7 +50,7 @@ const optional = undefined;
 //
 export function createInstance(schemeOpts = {}) {
   let globalScope = SchemeJS.createInstance(schemeOpts);
-  const defineSchemeBindings = schemeOpts.defineSchemeBindings;
+  const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
   const defineBinding = defineSchemeBindings? (globalScope.defineBinding ?? required()) : _ => undefined;
   const string = globalScope.string ?? required();
   const exportAPI = globalScope.exportAPI ?? required();
@@ -99,29 +104,31 @@ export function createInstance(schemeOpts = {}) {
     let gfxContextFnName = `gfx-context-${boundName}`, gfxContextFnAtom = Atom(gfxContextFnName);
     let fnBody =  `let pi = Math.PI, optional = undefined; ` +
       `return function ${jsGfxContextFnName} (gfx_context${commaParamStr}) { ` +
-      `return gfx_context.${jsFunctionName}(${argStr}) }`;
+      `let result = gfx_context.${jsFunctionName}(${argStr}); return result }`;
     let fn = (new Function(fnBody))();
-    exportAPI(jsGfxContextFnName, jsGfxContextFnName, { requiredCount: 0 });
-    defineBinding(gfxContextFnName, fn, { group: "web-gfx-context", gfxApi: jsGfxContextFnName,
-      implStr: `(gfx_context${commaParamStr} => gfx_context.${jsFunctionName}(${argStr})`, ...opts });
+    exportAPI(jsGfxContextFnName, fn, { requiredCount: 0 });
+    defineBinding(gfxContextFnName, jsGfxContextFnName, { group: "web-gfx-context", gfxApi: jsGfxContextFnName,
+      /*implStr: `(gfx_context${commaParamStr} => gfx_context.${jsFunctionName}(${argStr})`,*/ ...opts });
 
     // Not using defMacro so I can give it some descriptive info in defBinding, below
     exportAPI(name, params => new Pair(gfxContextFnAtom, params), { tag: MACRO_TAG });
     defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsFunctionName,
-      implStr: `(${[paramStr]}) => gfx_context.${jsFunctionName}(${argStr})`, ...opts });
+      /* implStr: `(${[paramStr]}) => gfx_context.${jsFunctionName}(${argStr})`,*/ ...opts });
   }
 
   function gfxProp(boundName, name, jsPropName, opts = {}) {
-    let jsGfxContextPropFnName = `gfx_context_${jsPropName.replace('.', '_')}`;
+    let jsGfxContextPropFnName = `gfx_context_${name}`;
     let gfxContextPropName = `gfx-context-${boundName}`, gfxContextFnAtom = Atom(gfxContextPropName);
     let fnBody = `let optional = undefined; ` +
       `return function ${jsGfxContextPropFnName}(gfx_context, value = optional) { ` +
       `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
-    const fn = (new Function(fnBody))();
+    const fn = (new Function(fnBody))()
+    exportAPI(jsGfxContextPropFnName, fn, { requiredCount: 0 });
+    defineBinding(gfxContextPropName, jsGfxContextPropFnName, { group: "web-gfx-context", gfxApi: jsGfxContextPropFnName, ...opts });
+
+    // Not using defMacro so I can give it some descriptive info in defBinding, below
     exportAPI(name, params => new Pair(gfxContextFnAtom, params), { tag: MACRO_TAG });
-    defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsPropName,
-      implStr: `(value = optional) => { let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`,
-      ...opts });
+    defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsGfxContextPropFnName, ...opts });
   }
 
   exportAPI("gfx_save", gfx_save, { tag: MACRO_TAG });
@@ -156,7 +163,7 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("is-point-in-path", "is_point_in_path", "isPointInPath", [REST_PARAM_ATOM, Atom("params")]);
   gfxFunction("is-point-in-stroke", "is_point_in_stroke", "isPointInStroke", [REST_PARAM_ATOM, Atom("params")]);
   gfxFunction("move-to", "move_to", "moveTo", [ [Atom("x"), 0], [Atom("y"), 0] ]);
-  gfxFunction("line-to", "line_to", "lineTo", [ [Atom("x"), 0], [Atom("y"), 1] ]);
+  gfxFunction("line-to", "line_to", "lineTo", [ [Atom("x"), 1], [Atom("y"), 1] ]);
   gfxFunction("bezier-curve-to", "bezier_curve_to", "bezierCurveTo",
     [ [Atom("cp1x"), 1], [Atom("cp1y"), 0], [Atom("cp2x"), 0], [Atom("cp2y"), 1], [Atom("x"), 1], [Atom("y"), 1] ]);
   gfxFunction("quadratic_curve_to", "quadratic_curve_to", "quadraticCurveTo",
@@ -170,6 +177,8 @@ export function createInstance(schemeOpts = {}) {
       [Atom("rotation"), 0], [Atom("startAngle"), 0], [Atom("endAngle"), .2*pi], [Atom("counterclockwise"), false] ]);
   gfxFunction("rect", "rect", "rect",
     [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
+  gfxFunction("round-rect", "round_rect", "roundRect",
+    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1], [Atom("radii"), 0] ]);
   gfxFunction("fill-rect", "fill_rect", "fillRect",
     [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
   gfxFunction("clear-rect", "clear_rect", "clearRect",
