@@ -59,9 +59,6 @@ export function createInstance(schemeOpts = {}) {
   const call = globalScope.call ?? required();
   const isList = globalScope.isList ?? required();
   const isAtom = globalScope.isAtom ?? required();
-  const def = globalScope.def ?? required;
-  const compile = globalScope.compile ?? required();
-  const defmacro = globalScope.defmacro ?? required();
   const augmentFunctionInfo = globalScope.augmentFunctionInfo ?? required();
   const FIRST = globalScope.FIRST ?? required();
   const REST = globalScope.REST ?? required();
@@ -113,14 +110,13 @@ export function createInstance(schemeOpts = {}) {
 
     // Compile the wrapper function (so that default paraameters specified in Scheme are processed)
     let definedAtom = Atom(jsGfxContextFnName);
-    compile([definedAtom, ...params], list(fn, ...stripOptional(params)));
+    globalScope.compile([definedAtom, ...params], list(fn, ...stripOptional(params)));
     // Decorate it for "help" purposes and make available to JavaScript
     augmentFunctionInfo(definedAtom, { group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
-    exportAPI(jsGfxContextFnName, fn, { requiredCount: 0 });
 
     // Define a macro that adds the graphics context and calls it
     let macroAtom = Atom(name), paramsAtom = Atom("params");
-    defmacro([macroAtom, paramsAtom],
+    globalScope.defmacro([macroAtom, paramsAtom],
       list(params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params), paramsAtom)));
     
     // Decorate it for the help system
@@ -148,12 +144,11 @@ export function createInstance(schemeOpts = {}) {
       `return function ${jsGfxContextPropFnName}(gfx_context, value = optional) { ` +
       `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
     const fn = (new Function(fnBody))()
-    exportAPI(jsGfxContextPropFnName, fn, { requiredCount: 0 });
     defineBinding(gfxContextPropName, jsGfxContextPropFnName, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
 
     // Define a macro that adds the graphics context and calls it
     let macroAtom = Atom(name), paramsAtom = Atom("params");
-    defmacro([macroAtom, paramsAtom],
+    globalScope.defmacro([macroAtom, paramsAtom],
       list(params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params), paramsAtom)));
     // Decorate it for the help system
     augmentFunctionInfo(macroAtom,  { group: "web-gfx", gfxApi: jsPropName,
