@@ -94,8 +94,18 @@ export function createInstance(schemeOpts = {}) {
     return list( ((paramVal, dflt) => paramVal !== undefined ? paramVal : dflt), paramAtom, dflt );
   }
 
+  function gfxVarArgFunction(boundName, name, functionName, opts = {}) {
+    const fn = (gfx_context, ...args) => gfx_context[functionName](...args);
+    exportAPI(name, macro, { tag: MACRO_TAG });
+    function macro(params) {
+      return list(fn, gfxContextAtom, ...params);
+    }
+    defineBinding(boundName, name, { group: "web-gfx", gfxApi: functionName,
+      implStr: `(...params) => gfx_context.${functionName}(...params)`, ...opts });
+  }
+
   function gfxProp(boundName, name, propName, opts = {}) {
-    // Normally I'd use a closure but this lets me use "propName" of "canvas.width".
+    // Normally I'd use a closure here but this lets me use a "propName" of "canvas.width".
     const fn = new Function('gfx_context', 'value',
       `let oldValue = gfx_context.${propName}; if (value !== undefined) gfx_context.${propName} = value; return oldValue`);
     exportAPI(name, macro, { tag: MACRO_TAG });
@@ -134,14 +144,13 @@ export function createInstance(schemeOpts = {}) {
     blurb: `Saves the graphics context on a stack which can later be "popped" with ` +
            `pop-gfx-context. You should generally use gfx-save instead, but these operations ` +
            `can be useful in a REPL.` });
-
   gfxFunction("restore-gfx-context", "restore_gfx_context", "restore", [], {
     blurb: `Saves the graphics context on a stack which can later be "popped" with ` +
            `pop-gfx-context. You should generally use gfx-save instead, but these operations ` +
            `can be useful in a REPL.` });
-
   gfxFunction("begin-path", "begin_path", "beginPath", []);
   gfxFunction("close-path", "close_path", "closePath", []);
+  gfxVarArgFunction("clip", "clip", "clip");
   gfxFunction("move-to", "move_to", "moveTo", [ opt("x", 0), opt("y", 0) ]);
   gfxFunction("line-to", "line_to", "lineTo", [ opt("x", 0), opt("y", 1) ]);
   gfxFunction("bezier-curve-to", "bezier_curve_to", "bezierCurveTo",
@@ -200,119 +209,15 @@ export function createInstance(schemeOpts = {}) {
     [ opt("sx", 0), opt("sy", 0), opt("sw", 1), opt("sh", 1) ]);
   gfxProp("image-smoothing-enabled", "image_smoothing_enabled", "imageSmoothingEnabled");
   gfxProp("image-smoothing-quality", "image_smoothing_quality", "imageSmoothingQuality");
-  
-  exportAPI("draw_focus_if_needed", draw_focus_if_needed, { compileHook: CtxFnHookHook('drawFocusIfNeeded') });
-  function draw_focus_if_needed(...params) { return this[gfxContextAtom].drawFocusIfNeeded(...params) }
 
-  exportAPI("scroll_path_into_view", scroll_path_into_view, { compileHook: CtxFnHookHook('scrollPathIntoView') });
-  function scroll_path_into_view(...params) { return this[gfxContextAtom].scrollPathIntoView(...params) }
-
-  exportAPI("is_point_in_path", is_point_in_path, { compileHook: CtxFnHookHook('isPointInPath') });
-  function is_point_in_path(...params) { return this[gfxContextAtom].isPointInPath(...params) }
-
-  exportAPI("is_point_in_stroke", is_point_in_stroke, { compileHook: CtxFnHookHook('isPointInStroke') });
-  function is_point_in_stroke(...params) { return this[gfxContextAtom].isPointInStroke(...params) }
-
-  exportAPI("clip", clip, { compileHook: CtxFnHookHook('clip') });
-  function clip(...params) { return this[gfxContextAtom].clip(...params) }
-
-  exportAPI("draw_image", draw_image, { compileHook: CtxFnHookHook('drawImage') });
-  function draw_image(...params) { return this[gfxContextAtom].drawImage(...params) }
-
-  exportAPI("create_image_data", createImageData, { compileHook: CtxFnHookHook('createImageData') });
-  function createImageData(...params) { return this[gfxContextAtom].createImageData(...params) }
-
-  //
-  // Bindings!
-  //
-
-  if (defineSchemeBindings) {
-    defineBinding("VERSION", "VERSION", {
-      group: "main", sample: `VERSION`,
-      blurb: `The SchemeJSWeb version`
-    });
-
-    defineBinding("gfx-save", "gfx_save", { group: "web-gfx", sample: `(gfx-save form ...)`,
-      blurb: `Saves the graphics context, executes the forms then restores the context. ` +
-             `Returns the value of the last form.` });
-    defineBinding("canvas-width", "canvas_width", { group: "web-gfx",
-      sample: `(canvas width) -or- (canvas-width new-width)`,
-      blurb:  `Returns the current canvas width and optionally sets it to a new value.` });
-    defineBinding("canvas-height", "canvas_height", { group: "web-gfx",
-      sample: `(canvas height) -or- (canvas-height new-width) in "pixels" and optionally sets it to a new value.` });
-
-    //
-    // Complete Canvas 2D drawing APIs:
-    //
-
-    // You probably shouldn't be using these two operations (use gfx-save instead!),
-    // but for completeness...
-    defineBinding("save-context", "save_context", { group: "web-gfx", gfxApi: 'save',
-      sample: `(save-context)`,
-      blurb: `Saves the current graphics state until the corresponding call to ` +
-              `(restore-context). Generally, you should avoid these operations and use (gfx-save form ...)` +
-              `which saves the context, invokes the forms, then restores it when done.`});
-    defineBinding("restore-context", "restore_context", { group: "web-gfx", gfxApi: 'restore',
-      sample: `(save-context)`,
-      blurb: `Restores the graphics state saved at the corresponding call to ` +
-            `(save-context). Generally, you should avoid these operations and use (gfx-save form ...)` +
-            `which saves the context, invokes the forms, then restores it when done.` });
-
-    // But all of these are just fine...
-    defineBinding("translate", "translate", { group: "web-gfx", gfxApi: 'translate' })
-    defineBinding("scale", "scale", { group: "web-gfx", gfxApi: 'scale' });
-    defineBinding("rotate", "rotate", { group: "web-gfx", gfxApi: 'rotate' });
-    defineBinding("fill-rect", "fill_rect", { group: "web-gfx", gfxApi: 'fillRect' });
-    defineBinding("clear-rect", "clear_rect", { group: "web-gfx", gfxApi: 'clearRect' });
-    defineBinding("stroke-rect", "stroke_rect", { group: "web-gfx", gfxApi: 'strokeRect' });
-    defineBinding("fill-text", "fill_text", { group: "web-gfx", gfxApi: 'fillText' });
-    defineBinding("measure-text", "measure_text", { group: "web-gfx", gfxApi: 'measureText' });
-    defineBinding("line-width", "line_width", { group: "web-gfx", gfxApi: 'lineWidth' });
-    defineBinding("line-cap", "line_cap", { group: "web-gfx", gfxApi: 'lineCap' });
-    defineBinding("line-join", "line_join", { group: "web-gfx", gfxApi: 'lineJoin' });
-    defineBinding("miter-limit", "miter_limit", { group: "web-gfx", gfxApi: 'miterLimit' });
-    defineBinding("get-line-dash", "get_line_dash", { group: "web-gfx", gfxApi: 'getLineDash' });
-    defineBinding("set-line-dash", "set_line_dash", { group: "web-gfx", gfxApi: 'setLineDash' });
-    defineBinding("line-dash-offset", "line_dash_offset", { group: "web-gfx", gfxApi: 'lineDashOffser' });
-    defineBinding("font", "font", { group: "web-gfx", gfxApi: 'font' });
-    defineBinding("text-align", "text_align", { group: "web-gfx", gfxApi: 'textAlign' });
-    defineBinding("text-baseline", "text_baseline", { group: "web-gfx", gfxApi: 'textBaseline' });
-    defineBinding("direction", "direction", { group: "web-gfx", gfxApi: 'direction' })
-    defineBinding("fill-style", "fill_style", { group: "web-gfx", gfxApi: 'fillStyle' });
-    defineBinding("stroke-style", "stroke_style", { group: "web-gfx", gfxApi: 'strokeStyle' });
-    defineBinding("create-conic-gradient", "create_conic_gradient", { group: "web-gfx", gfxApi: 'createConicGradient' });
-    defineBinding("create-linear-gradient", "create_linear_gradient", { group: "web-gfx", gfxApi: 'createLinearGradient' });
-    defineBinding("create-radial-gradient", "create_radial_gradient", { group: "web-gfx", gfxApi: 'createRadialGradient' });
-    defineBinding("create-pattern", "create_pattern", { group: "web-gfx", gfxApi: 'createPattern' });
-    defineBinding("shadow-color", "shadow_color", { group: "web-gfx", gfxApi: 'shadowColor' });
-    defineBinding("shadow-offset-x", "shadow_offset_x", { group: "web-gfx", gfxApi: 'shadowOffsetX' });
-    defineBinding("shadow-offset-y", "shadow_offset_y", { group: "web-gfx", gfxApi: 'shadowOffsetY' });
-    defineBinding("begin-path", "begin_path", { group: "web-gfx", gfxApi: 'beginPath' });
-    defineBinding("close-path", "close_path", { group: "web-gfx", gfxApi: 'closePath' });
-    //defineBinding("move-to", "move_to", { group: "web-gfx", gfxApi: 'moveTo' });
-    //defineBinding("line-to", "line_to", { group: "web-gfx", gfxApi: 'lineTo' });
-    defineBinding("bezier-curve-to", "bezier_curve_to", { group: "web-gfx", gfxApi: 'bezierCurveTo' });
-    defineBinding("quadratic-curve-to", "quadratic_curve_to", { group: "web-gfx", gfxApi: 'quadraticCurveTo' });
-    defineBinding("arc", "arc", { group: "web-gfx", gfxApi: 'arc' });
-    defineBinding("arc-to", "arc_to", { group: "web-gfx", gfxApi: 'arcTo' });
-    defineBinding("ellipse", "ellipse", { group: "web-gfx", gfxApi: 'ellipse' });
-    defineBinding("rect", "rect", { group: "web-gfx", gfxApi: 'rect' });
-    defineBinding("fill", "fill", { group: "web-gfx", gfxApi: 'fill' });
-    defineBinding("stroke", "stroke", { group: "web-gfx", gfxApi: 'stroke' });
-    defineBinding("draw-focus-if-needed", "draw_focus_if_needed", { group: "web-gfx", gfxApi: 'drawFocusIfNeeded' });
-    defineBinding("scroll-path-into-view", "scroll_path_into_view", { group: "web-gfx", gfxApi: 'scrollPathIntoView' });
-    defineBinding("is-point-in-path", "is_point_in_path", { group: "web-gfx", gfxApi: 'isPointInPath' });
-    defineBinding("is-point-in-stroke", "is_point_in_stroke", { group: "web-gfx", gfxApi: 'isPointInStroke' });
-    defineBinding("clip", "clip", { group: "web-gfx", gfxApi: 'clip' });
-    defineBinding("global-alpha", "global_alpha", { group: "web-gfx", gfxApi: 'globalAlpha' });
-    defineBinding("global-composite-operation", "global_composite_operation", { group: "web-gfx", gfxApi: 'globalCompositeOperation' });
-    defineBinding("draw-image", "draw_image", { group: "web-gfx", gfxApi: 'drawImage' });
-    defineBinding("create-image-data", "create_image_data", { group: "web-gfx", gfxApi: 'createImageData' });
-    defineBinding("get-image-data", "get_image_data", { group: "web-gfx", gfxApi: 'getImageData' });
-    defineBinding("put-image-data", "put_image_data", { group: "web-gfx", gfxApi: 'putImageData' });
-    defineBinding("image-smoothing-enabled", "image_smoothing_enabled", { group: "web-gfx", gfxApi: 'imageSmoothingEnabled' });
-    defineBinding("image_smoothing_quality", "image_smoothing_quality", { group: "web-gfx", gfxApi: 'imageSmoothingQuality' });
-  }
+  // Buncha APIs with variable args
+  function gfxVarArgFunction(boundName, name, functionName, opts = {}) {};
+  gfxVarArgFunction("draw-focus-if-needed", "draw_focus_if_needed", "drawFocusIfNeeded");
+  gfxVarArgFunction("scroll-path-into-view", "scroll_path_into_view", "scrollPathIntoView");
+  gfxVarArgFunction("is-point-in-path", "is_point_in_path", "isPointInPath");
+  gfxVarArgFunction("is-point-in-stroke", "is_point_in_stroke", "isPointInStroke");
+  gfxVarArgFunction("draw-image", "draw_image", "drawImage");
+  gfxVarArgFunction("create-image-data", "create_image_data", "createImageData");
 
   return globalScope;
 }
