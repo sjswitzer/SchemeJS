@@ -58,7 +58,7 @@ export function createInstance(schemeOpts = {}) {
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
   const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
-  const FUNCTION_TAG = 0, MACRO_TAG = 1, PARAMETER_MACRO_TAG = 2;
+  const FUNCTION_TAG = 0, MACRO_TAG = 1, EVALUATED_PARAMETER_MACRO_TAG = 2, FORM_ELEMENT_MACRO_TAG = 3;
   const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
   const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
@@ -100,7 +100,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("COMPILE_INFO", COMPILE_INFO);
   exportAPI("FUNCTION_TAG", FUNCTION_TAG  );
   exportAPI("MACRO_TAG", MACRO_TAG);
-  exportAPI("PARAMETER_MACRO_TAG", PARAMETER_MACRO_TAG);
+  exportAPI("EVALUATED_PARAMETER_MACRO_TAG", EVALUATED_PARAMETER_MACRO_TAG);
   
 
   //
@@ -528,7 +528,7 @@ export function createInstance(schemeOpts = {}) {
     }
     if (opts.dontInline) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-    } else if (fnInfo.native || tag === MACRO_TAG || tag === PARAMETER_MACRO_TAG) {
+    } else if (fnInfo.native || tag === MACRO_TAG || tag === EVALUATED_PARAMETER_MACRO_TAG || tag === FORM_ELEMENT_MACRO_TAG) {
       // not an error
     } else if (!compileHook && evalCount !== MAX_INTEGER) {
       throw new LogicError(`Special function requires compile hook ${name}`);
@@ -1884,7 +1884,7 @@ export function createInstance(schemeOpts = {}) {
   // It's never _necessary_ to specialize for the comppiled case, but if not the
   // compiler will kick out to the interpreter for evaluation.
   //
-  exportAPI("spread", spread, { tag: PARAMETER_MACRO_TAG });
+  exportAPI("spread", spread, { tag: EVALUATED_PARAMETER_MACRO_TAG });
   function spread(args, ssaScope, tools) {
     if (!isList(args))
       throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
@@ -1965,7 +1965,7 @@ export function createInstance(schemeOpts = {}) {
             let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
             if (parameterDescriptor != null) {
               let tag = parameterDescriptor & 0xff;
-              if (tag === MACRO_TAG) {
+              if (tag === MACRO_TAG || tag === FORM_ELEMENT_MACRO_TAG) {
                 form = symVal.call(scope, args);
                 continue;
               }
@@ -1985,13 +1985,11 @@ export function createInstance(schemeOpts = {}) {
         let argv = [], argCount = 0;
         while (moreList(args)) {
           let arg = args[FIRST];
-          if (argCount < evalCount) {
-            let nextArg = handleParameterMacroIfPresent(argv, arg, args[REST]);
-            if (nextArg !== undefined) {
-              args = nextArg;
-              argCount = argv.length;
-              continue;
-            }
+          let nextArg = handleParameterMacroIfPresent(argv, arg, args[REST], argCount, evalCount);
+          if (nextArg !== undefined) {
+            args = nextArg;
+            argCount = argv.length;
+            continue;
           }
           if (argCount < evalCount) {
             arg = _eval(arg, scope);
@@ -2095,7 +2093,7 @@ export function createInstance(schemeOpts = {}) {
           let res = [];
           while (moreList(form)) {
             let element = form[FIRST];
-            let nextArg = handleParameterMacroIfPresent(res, element, form[REST]);
+            let nextArg = handleParameterMacroIfPresent(res, element, form[REST], 0, MAX_INTEGER);
             if (nextArg !== undefined) {
               form = nextArg;
               continue;
@@ -2109,17 +2107,9 @@ export function createInstance(schemeOpts = {}) {
           let res = {};
           for (let key of [...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form)]) {
             let value = form[key];
-            let insertion = handleParameterMacroIfPresentInObjectLiteral(key, value, scope);
+            let insertion = handleParameterMacroIfPresentInObjectLiteral(key, value);
             if (insertion !== undefined) {
-              let insert = insertion[0];
-              for (let k of Object.getOwnPropertySymbols(insert)) {
-                let v = insert[k];
-                res[k] = v;
-              }
-              for (let k of Object.getOwnPropertyNames(insert)) {
-                let v = insert[k];
-                res[k] = v;
-              }
+              Object.assign(res, insertion);
               continue;
             }
             if (key === EVALUATE_KEY_VALUE_SYMBOL) {
@@ -2142,21 +2132,26 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeEvalError(`Bad form ${string(form)}`);
     }
 
-    function handleParameterMacroIfPresent(argv, arg, args) {
+    function handleParameterMacroIfPresent(argv, arg, args, argCount, evalCount) {
       if (typeof arg === 'symbol') {
         let symVal = scope[arg];
         if (typeof symVal === 'function') {
           let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
-            if (tag === PARAMETER_MACRO_TAG) {
+            if (tag === FORM_ELEMENT_MACRO_TAG || (argCount < evalCount && tag === EVALUATED_PARAMETER_MACRO_TAG)) {
               let macroResult = symVal.call(scope, args);
               if (!moreList(macroResult))
                 throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
               let insert = macroResult[FIRST], nextArg = macroResult[REST];
-              insert = _eval(insert, scope);
-              for (let insertion of insert)
-                argv.push(insertion);
+              if (tag === EVALUATED_PARAMETER_MACRO_TAG)
+                insert = _eval(insert, scope);
+              if (isArray(insert)) {
+                argv.concat(insert);
+              } else {
+                for (let insertion of insert)
+                  argv.push(insertion);
+              }
               return nextArg;
             }
           }
@@ -2165,14 +2160,14 @@ export function createInstance(schemeOpts = {}) {
       return undefined;
     }
 
-    function handleParameterMacroIfPresentInObjectLiteral(key, value, scope) {
+    function handleParameterMacroIfPresentInObjectLiteral(key, value) {
       if (typeof key === 'symbol') {
         let symVal = scope[key];
         if (typeof symVal === 'function') {
           let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
-            if (tag === PARAMETER_MACRO_TAG) {
+            if (tag === EVALUATED_PARAMETER_MACRO_TAG) {
               let macroResult = symVal.call(scope, new Pair(value, NIL));
               if (!moreList(macroResult))
                 throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
@@ -2588,7 +2583,7 @@ export function createInstance(schemeOpts = {}) {
           printBody = '';
         let deets = evalCount === MAX_INTEGER ? '' : `# ${evalCount}`;
         if (tag === MACRO_TAG) deets = '-macro';
-        else if (tag === PARAMETER_MACRO_TAG) deets = '-parameter-macro';
+        else if (tag === EVALUATED_PARAMETER_MACRO_TAG) deets = '-parameter-macro';
         put(`{function${deets} ${name}${params}${printBody}`);
         sep = "";
         return put("}", true);
@@ -3043,7 +3038,7 @@ export function createInstance(schemeOpts = {}) {
             let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
             if (parameterDescriptor != null) {
               let tag = parameterDescriptor & 0xff;
-              if (tag === MACRO_TAG) {
+              if (tag === MACRO_TAG || tag === FORM_ELEMENT_MACRO_TAG) {
                 let saveMacroCompiled = tools.macroCompiled;
                 tools.macroCompiled = false;
                 form = symVal.call(scope, form[REST], ssaScope, tools);
@@ -3087,19 +3082,20 @@ export function createInstance(schemeOpts = {}) {
           ssaScope.dynamicScopeUsed = true;
 
         // Run through the arg list evaluating args
-        let ssaArgv = [], ssaArgStr = '', sep = '', argCount = 0;
-        let dynamicArgvLines = [], usesDynamicArgv;
-        let ssaDynamicArgv = newTemp('dynamic_argv');
-        dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
+        let ssaArgv = [], ssaArgStr = '', sep = '', argCount = 0, usesDynamicArgv = false;
         while (moreList(args)) {
           let arg = args[FIRST];
-          if (argCount < evalCount) {
-            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, arg, args[REST]);
-            if (nextArg !== undefined) {
-              args = nextArg;
+          let res = handleParameterMacroIfPresent(arg, args[REST], argCount, evalCount);
+          if (res !== undefined) {
+            let ssaInsert = res[FIRST];
+            args = res[REST];
+            if (ssaInsert) {
               usesDynamicArgv = true;
-              continue;
+              use(ssaInsert);
+              ssaArgStr += `${sep} ...${ssaInsert}`;
+              sep = ', ';
             }
+            continue;
           }
           let ssaArg;
           if (argCount < evalCount)
@@ -3110,13 +3106,11 @@ export function createInstance(schemeOpts = {}) {
           argCount += 1;
           if (ssaArg) {
             ssaArgStr += `${sep}${ssaArg}`;
-            dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaArg})`));
             sep = ', ';
           }
           args = args[REST];
         }
         if (!usesDynamicArgv) {
-          tools.deleteEmitted(dynamicArgvLines);
           // Cases where we simply invoke the function:
           //  - we have at least required number of arguments
           //  - we have no arguments
@@ -3266,68 +3260,58 @@ export function createInstance(schemeOpts = {}) {
         // But we don't know how many at compile time except that there's a minimum
         let ssaResult = newTemp(`${fName}_result`);
         use(ssaFunction);
+        let ssaDynamicArgv = newTemp('dynamic_argv');
         if (argCount >= requiredCount) {
-          emit(`let ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaDynamicArgv});`);
+          emit(`let ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaArgStr});`);
           return ssaResult;
         }
         // Here, we have to determine at runtime time whether a closure is required
-        emit(`;et ${ssaResult};`);
+        emit(`let ${ssaResult};`);
         emit(`if (${ssaDynamicArgv}.length >= ${requiredCount})`);
-        emit(`  ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaDynamicArgv});`);
+        emit(`  ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaArgStr});`);
         emit(`else`);
         if (requiresScope)
-          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.call(scope, ...${ssaDynamicArgv}, ...args);  } `);
+          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.call(scope, ${ssaArgStr}, ...args);  } `);
         else
-          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}(...${ssaDynamicArgv}, ...args);  } `);
+          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}(...${ssaArgStr}, ...args);  } `);
         return ssaRessult;
       }
       // Special eval for JS Arrays and Objects
       if (form !== null && typeof form === 'object') {
         if (isArray(form )) {
-          let ssaArrayLiteral = newTemp("arrayliteral");
           let evalledSsaValues = [];
-          let dynamicArgvLines = [], usesDynamicArgv;
-          let ssaDynamicArgv = newTemp('dynamic_argv');
-          dynamicArgvLines.push(emit(`let ${ssaDynamicArgv} = [];`));
           while (moreList(form)) {
             let element = form[FIRST];
-            let nextArg = handleParameterMacroIfPresent(ssaDynamicArgv, element, form[REST]);
-            if (nextArg !== undefined) {
-              form = nextArg;
-              usesDynamicArgv = true;
+            let res = handleParameterMacroIfPresent(element, form[REST], 0, MAX_INTEGER);
+            if (res !== undefined) {
+              let ssaInsert = res[FIRST];
+              form = res[REST];
+              if (ssaInsert) {
+                use(ssaInsert);
+                evalledSsaValues.push(`...${ssaInsert}`);
+              }
               continue;
             }
             let ssaValue = compileEval(element, ssaScope, tools);
             use(ssaValue);
             evalledSsaValues.push(ssaValue);
-            dynamicArgvLines.push(emit(`${ssaDynamicArgv}.push(${ssaValue})`));
             form = form[REST];
           }
-          if (!usesDynamicArgv) {
-            tools.deleteEmitted(dynamicArgvLines);
-            emit(`let ${ssaArrayLiteral} = [`);
-            for (let ssaElement of evalledSsaValues) {
-              emit(`  ${ssaElement},`);
-            }
-            emit(`];`);
-            return ssaArrayLiteral;
+          let ssaArrayLiteral = newTemp("arrayliteral");
+          emit(`let ${ssaArrayLiteral} = [`);
+          for (let ssaElement of evalledSsaValues) {
+            emit(`  ${ssaElement},`);
           }
-          return ssaDynamicArgv;
+          emit(`];`);
+          return ssaArrayLiteral;
         }
         let ssaObjectLiteral = newTemp("objectliteral");
         emit(`let ${ssaObjectLiteral} = {};`);
         for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
           let value = form[key];
           let ssaInsertObj = handleParameterMacroIfPresentInObjectLiteral(key, value);
-          if (ssaInsertObj !== undefined) {
-            emit(`for (let k of Object.getOwnPropertySymbols(${ssaInsertObj})) {`);
-            emit(`  let v = ${ssaInsertObj}[k];`);
-            emit(`  ${ssaObjectLiteral}[k] = v;`);
-            emit(`}`);
-            emit(`for (let k of Object.getOwnPropertyNames(${ssaInsertObj})) {`);
-            emit(`  let v = ${ssaInsertObj}[k];`);
-            emit(`  ${ssaObjectLiteral}[k] = v;`);
-            emit(`}`);
+          if (ssaInsertObj) {
+            emit(`Object.assign( ${ssaObjectLiteral}, (${ssaInsertObj});`)
             continue;
           }
           let ssaKey;
@@ -3369,14 +3353,14 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeCompileError(`BadForm ${string(form)}`);
     }
 
-    function handleParameterMacroIfPresent(ssaDynamicArgv, arg, args) {  
+    function handleParameterMacroIfPresent(arg, args, argCount, evalCount) {  
       if (typeof arg === 'symbol') { // check for parameter macro
         let symVal = scope[arg];
         if (typeof symVal === 'function') {
           let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
-            if (tag === PARAMETER_MACRO_TAG) {
+            if (tag === FORM_ELEMENT_MACRO_TAG || (argCount < evalCount && tag === EVALUATED_PARAMETER_MACRO_TAG)) {
               let saveMacroCompiled = tools.macroCompiled;
               tools.macroCompiled = false;
               let macroResult = symVal.call(scope, args, ssaScope, tools);
@@ -3384,21 +3368,31 @@ export function createInstance(schemeOpts = {}) {
               tools.macroCompiled = saveMacroCompiled;
               if (!isList(macroResult))
                 throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
-              let ssaInsert = macroResult[FIRST], ssaInsertValues;
+              let insert = macroResult[FIRST], ssaInsertValues;
               let nextArg = macroResult[REST];
-              if (!macroCompiled) {
-                ssaInsert = use(bind(ssaInsert));
-                ssaScope.dynamicScopeUsed = true;
-                ssaInsertValues = newTemp("macro_insert");
-                tools.bindLiterally(_eval, "_eval");
-                emit(`let ${ssaInsertValues} = _eval(${ssaInsert}, scope);`)
+              if (macroCompiled && tag === FORM_ELEMENT_MACRO_TAG)
+                throw new SchemeCompileError(`Form element macros not currently allowed to do compiler extensions`);
+              if (macroCompiled) {
+                ssaInsertValues = insert;
               } else {
-                ssaInsertValues = ssaInsert;
+                if (insert.length > 0) {
+                  let ssaInsert = use(bind(insert));
+                  ssaScope.dynamicScopeUsed = true;
+                  ssaInsertValues = newTemp("macro_insert");
+                  emit(`let ${ssaInsertValues} = Array(${insert.length});`);
+                  emit(`for (let i = 0; i < ${insert.length}; ++i) {`);
+                  emit(`  let arg = ${ssaInsert}[i];`);
+                  if (argCount < evalCount && evalCount !== MAX_INTEGER) {
+                    tools.bindLiterally(_eval, "_eval");
+                    emit(`if (i < ${evalCount-argCount}) arg = _eval(arg, scope);`);
+                  } else if (argCount >= evalCount || evalCount === MAX_INTEGER) {
+                    tools.bindLiterally(_eval, "_eval");
+                    emit(`arg = _eval(arg, scope);`);
+                  }
+                  emit(`  ${ssaInsertValues}[i] = arg;`);
+                }
               }
-              emit(`for (let arg of ${ssaInsertValues}) {`);
-              emit(`  ${ssaDynamicArgv}.push(arg)`);
-              emit(`}`)
-              return nextArg;
+              return new Pair(ssaInsertValues, nextArg);
             }
           }
         }
@@ -3412,7 +3406,7 @@ export function createInstance(schemeOpts = {}) {
           let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
-            if (tag === PARAMETER_MACRO_TAG) {
+            if (tag === EVALUATED_PARAMETER_MACRO_TAG) {
               let saveMacroCompiled = tools.macroCompiled;
               tools.macroCompiled = false;
               let macroResult = symVal.call(scope, new Pair(value, NIL), ssaScope, tools);

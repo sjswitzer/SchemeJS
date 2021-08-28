@@ -720,7 +720,7 @@ function runTestsInNewInstance(opts = {}) {
       let savedScope = beginTestScope();
 
       // First, define our own spread macro without compiler specialization
-      globalScope.exportAPI("spread2", spread2, { tag: globalScope.PARAMETER_MACRO_TAG });
+      globalScope.exportAPI("spread2", spread2, { tag: globalScope.EVALUATED_PARAMETER_MACRO_TAG });
       function spread2(args,) {
         if (!isList(args))
           throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
