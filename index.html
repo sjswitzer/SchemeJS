@@ -1597,7 +1597,7 @@
           return schemeCanvasWidget._canvasElement.width;
         };
         defineBinding("canvas-width", "canvas_width", { group: "web-gfx",
-          sample: `(canvas width) -or- (canvas-width new-width)`,
+          sample: `(canvas-width) -or- (canvas-width new-width)`,
           blurb:  `Returns the current canvas width and optionally sets it to a new value.` });
 
         exportAPI("canvas_height", canvas_height, { compileHook: WidgetPropertyHook('height') });
@@ -1607,7 +1607,7 @@
           return schemeCanvasWidget._canvasElement.height;
         };
         defineBinding("canvas-height", "canvas_height", { group: "web-gfx",
-          sample: `(canvas height) -or- (canvas-height new-width)`,
+          sample: `(canvas-height) -or- (canvas-height new-width)`,
           blurb:  `Returns the current canvas height and optionally sets it to a new value.` });
 
         exportAPI("stash_point", stash_point, { compileHook: stash_point_hook });

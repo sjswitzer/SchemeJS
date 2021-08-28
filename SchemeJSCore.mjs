@@ -454,13 +454,13 @@ export function createInstance(schemeOpts = {}) {
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%closure#");
   const QUOTE_ATOM = Atom("quote");
-  const REST_ATOM = Atom(restParamStr);
+  const REST_PARAM_ATOM = Atom(restParamStr);
   ATOMS["'"] = QUOTE_ATOM;
   exportAPI("LAMBDA_CHAR", LAMBDA_CHAR);
   exportAPI("LAMBDA_ATOM", LAMBDA_ATOM);
   exportAPI("SLAMBDA_ATOM", SLAMBDA_ATOM);
   exportAPI("QUOTE_ATOM", QUOTE_ATOM);
-  exportAPI("REST_ATOM", REST_ATOM);
+  exportAPI("REST_PARAM_ATOM", REST_PARAM_ATOM);
 
   exportAPI("iteratorFor", iteratorFor, { dontInline: true });
   function iteratorFor(obj, throwException = TypeError) {
@@ -2266,7 +2266,7 @@ export function createInstance(schemeOpts = {}) {
       } else if (!isAtom(param)) {
         throwBadLambda(lambda, `parameter ${string(param)} not an atom`);
       }
-      if (param === REST_ATOM) {
+      if (param === REST_PARAM_ATOM) {
         if (!isList(params[REST]) || !isNil(params[REST][REST]))
           throwBadLambda(lambda, `bad "rest" parameter ${string(param)}`);
         params = params[REST];
@@ -2302,7 +2302,7 @@ export function createInstance(schemeOpts = {}) {
           optionalForms = param[REST];
           param = param[FIRST];
         }
-        if (param === REST_ATOM) {
+        if (param === REST_PARAM_ATOM) {
           let param = params[REST][FIRST], val = args.slice(i);
           scope[param] = val;
           break;
@@ -3470,7 +3470,7 @@ export function createInstance(schemeOpts = {}) {
       } else if (!isAtom(param)) {
         throwBadLambda(lambda, `parameter ${string(param)} not an atom`);
       } else {
-        if (param === REST_ATOM) {
+        if (param === REST_PARAM_ATOM) {
           if (!isList(params[REST]) || !isNil(params[REST][REST]))
             throwBadLambda(lambda, `bad "rest" parameter ${string(param)}`);
           params = params[REST];

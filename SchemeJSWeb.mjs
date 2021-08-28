@@ -60,13 +60,12 @@ export function createInstance(schemeOpts = {}) {
   const Atom = globalScope.Atom ?? required();
   const js_finally = globalScope.finally ?? required();
   const MACRO_TAG = globalScope.MACRO_TAG ?? required();
-  const restParamStr = schemeOpts.restParamStr ?? required();
+  const REST_PARAM_ATOM = globalScope.REST_PARAM_ATOM ?? required();
   const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   function required() { throw "required" }
 
   const gfxContextAtom = Atom("gfx-context");
   const htmlDocumentAtom = Atom("html-document");
-  const restParamAtom = Atom(restParamStr);
   const pi = Math.PI;
 
   // Defines the graphics function and a macro to call it
@@ -83,7 +82,7 @@ export function createInstance(schemeOpts = {}) {
         if (paramDefault === undefined) paramDefault = "optional";
         else paramDefault = string(paramDefault);
         defaultStr = ` = ${paramDefault}`;
-      } else if (param === restParamAtom) {
+      } else if (param === REST_PARAM_ATOM) {
         nextIsRest = true;
         continue;
       } else if (nextIsRest) {
@@ -101,7 +100,7 @@ export function createInstance(schemeOpts = {}) {
     let fnBody =  `let pi = Math.PI, optional = undefined; ` +
       `return function ${jsGfxContextFnName} (gfx_context${commaParamStr}) { ` +
       `return gfx_context.${jsFunctionName}(${argStr}) }`;
-    let fn = new Function(fnBody);
+    let fn = (new Function(fnBody))();
     exportAPI(jsGfxContextFnName, jsGfxContextFnName, { requiredCount: 0 });
     defineBinding(gfxContextFnName, fn, { group: "web-gfx-context", gfxApi: jsGfxContextFnName,
       implStr: `(gfx_context${commaParamStr} => gfx_context.${jsFunctionName}(${argStr})`, ...opts });
@@ -112,12 +111,16 @@ export function createInstance(schemeOpts = {}) {
       implStr: `(${[paramStr]}) => gfx_context.${jsFunctionName}(${argStr})`, ...opts });
   }
 
-  function gfxProp(boundName, name, propName, opts = {}) {
-    const fn = new Function('gfx_context', 'value',
-      `let oldValue = gfx_context.${propName}; if (value !== undefined) gfx_context.${propName} = value; return oldValue`);
+  function gfxProp(boundName, name, jsPropName, opts = {}) {
+    let jsGfxContextPropFnName = `gfx_context_${jsPropName.replace('.', '_')}`;
+    let gfxContextPropName = `gfx-context-${boundName}`, gfxContextFnAtom = Atom(gfxContextPropName);
+    let fnBody = `let optional = undefined; ` +
+      `return function ${jsGfxContextPropFnName}(gfx_context, value = optional) { ` +
+      `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
+    const fn = (new Function(fnBody))();
     exportAPI(name, params => new Pair(gfxContextFnAtom, params), { tag: MACRO_TAG });
-    defineBinding(boundName, name, { group: "web-gfx", gfxApi: propName,
-      implStr: `(value = optional) => { let oldValue = gfx_context.${propName}; if (value !== undefined) gfx_context.${propName} = value; return oldValue }`,
+    defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsPropName,
+      implStr: `(value = optional) => { let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`,
       ...opts });
   }
 
@@ -149,9 +152,9 @@ export function createInstance(schemeOpts = {}) {
            `can be useful in a REPL.` });
   gfxFunction("begin-path", "begin_path", "beginPath", []);
   gfxFunction("close-path", "close_path", "closePath", []);
-  gfxVarArgFunction("clip", "clip", "clip", []);
-  gfxFunction("is-point-in-path", "is_point_in_path", "isPointInPath", [restParamAtom, Atom("params")]);
-  gfxFunction("is-point-in-stroke", "is_point_in_stroke", "isPointInStroke", [restParamAtom, Atom("params")]);
+  gfxFunction("clip", "clip", "clip", []);
+  gfxFunction("is-point-in-path", "is_point_in_path", "isPointInPath", [REST_PARAM_ATOM, Atom("params")]);
+  gfxFunction("is-point-in-stroke", "is_point_in_stroke", "isPointInStroke", [REST_PARAM_ATOM, Atom("params")]);
   gfxFunction("move-to", "move_to", "moveTo", [ [Atom("x"), 0], [Atom("y"), 0] ]);
   gfxFunction("line-to", "line_to", "lineTo", [ [Atom("x"), 0], [Atom("y"), 1] ]);
   gfxFunction("bezier-curve-to", "bezier_curve_to", "bezierCurveTo",
@@ -176,6 +179,7 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("fill-text", "fill_text", "fillText",
     [ "text", [Atom("x"), 0], [Atom("y"), 0], [Atom("maxWidth"), optional]]);
   gfxFunction("measure-text", "measure_text", "measureText", [ "text" ]);
+  gfxProp("canvas-element", "canvas_element", "canvas");
   gfxProp("canvas-width", "canvas_width", "canvas.width");
   gfxProp("canvas-height", "canvas_height", "canvas.height");
   gfxProp("line-width", "line_width", "lineWidth");
@@ -203,12 +207,12 @@ export function createInstance(schemeOpts = {}) {
   gfxProp("shadow-offset-y", "shadow_offset_y", "shadowOffsetY");
   gfxFunction("fill", "fill", "fill", []);
   gfxFunction("stroke", "stroke", "stroke", []);
-  gfxFunction("draw-focus-if-needed", "draw_focus_if_needed", "drawFocusIfNeeded", [restParamAtom, Atom("params")]);
-  gfxFunction("scroll-path-into-view", "scroll_path_into_view", "scrollPathIntoView", [restParamAtom, Atom("params")]);
+  gfxFunction("draw-focus-if-needed", "draw_focus_if_needed", "drawFocusIfNeeded", [REST_PARAM_ATOM, Atom("params")]);
+  gfxFunction("scroll-path-into-view", "scroll_path_into_view", "scrollPathIntoView", [REST_PARAM_ATOM, Atom("params")]);
   gfxProp("global-alpha", "global_alpha", "globalAlpha");
   gfxProp("global-composite-operation", "global_composite_operation", "globalCompositeOperation");
-  gfxFunction("draw-image", "draw_image", "drawImage", [restParamAtom, Atom("params")]);
-  gfxFunction("create-image-data", "create_image_data", "createImageData", [restParamAtom, Atom("params")]);
+  gfxFunction("draw-image", "draw_image", "drawImage", [REST_PARAM_ATOM, Atom("params")]);
+  gfxFunction("create-image-data", "create_image_data", "createImageData", [REST_PARAM_ATOM, Atom("params")]);
   gfxFunction("get-image-data", "get_image_data", "getImageData",
     [ [Atom("sx"), 0], [Atom("sy"), 0], [Atom("sw"), 1], [Atom("sh"), 1] ]);
   gfxProp("image-smoothing-enabled", "image_smoothing_enabled", "imageSmoothingEnabled");

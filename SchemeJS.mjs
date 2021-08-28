@@ -1888,8 +1888,8 @@ export function createInstance(schemeOpts = {}) {
          `Otherwise, returns false.`
     });
     defineBinding(restParamStr, "spread", {
-      group: "main", sample: `(<stuff> ... value <more stuff>)`, 
-      blurb: `Expands the value (a list), into the argument list .`
+      group: "main", sample: `(<stuff> ${restParamStr} value <more stuff>)`, 
+      blurb: `Spread macro. Expands the value (an iterable), into a list literal or argument list .`
     });
     defineBinding("bigint?", "is_bigint", {
       group: "pred-op", sample: `(?bigint value [t-expr true] [f-expr false])`, 
