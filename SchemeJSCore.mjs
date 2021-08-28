@@ -3279,6 +3279,7 @@ export function createInstance(schemeOpts = {}) {
           emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.call(scope, ...${ssaDynamicArgv}, ...args);  } `);
         else
           emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}(...${ssaDynamicArgv}, ...args);  } `);
+        return ssaRessult;
       }
       // Special eval for JS Arrays and Objects
       if (form !== null && typeof form === 'object') {

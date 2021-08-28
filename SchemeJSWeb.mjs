@@ -110,7 +110,7 @@ export function createInstance(schemeOpts = {}) {
 
     // Compile the wrapper function (so that default paraameters specified in Scheme are processed)
     let definedAtom = Atom(jsGfxContextFnName);
-    globalScope.compile([definedAtom, ...params], list(fn, ...stripOptional(params)));
+    globalScope.compile([definedAtom, gfxContextAtom, ...params], list(fn, gfxContextAtom, ...stripOptional(params)));
     // Decorate it for "help" purposes and make available to JavaScript
     augmentFunctionInfo(definedAtom, { group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
 
