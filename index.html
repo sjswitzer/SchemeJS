@@ -628,7 +628,11 @@
         <dl class="definitions" id="helpgroup-web-gfx">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
-        <h3> Uncategorized </h2>
+        <h3> Web Graphics Taking Explicit Context </h2>
+          <dl class="definitions" id="helpgroup-web-gfx-context">
+             <!-- definitions inserted here when SchemeJS module is loaded -->
+          </dl>
+          <h3> Uncategorized </h2>
         <dl class="definitions" id="helpgroup-undefined">
            <!-- definitions inserted here when SchemeJS module is loaded -->
         </dl>
@@ -1054,7 +1058,7 @@
                 let implStr = info.implStr;
                 if (!implStr) implStr = string(value);
                 let implElement = createElement('p', 'impl', implStr);
-                if (helpGroup === 'javascript' || helpGroup === 'web-gfx')
+                if (helpGroup === 'javascript' || helpGroup.includes('web-gfx'))
                   implElement.classList.add('impl-always');
                 dd.appendChild(implElement);
               } else {

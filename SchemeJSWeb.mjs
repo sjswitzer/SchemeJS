@@ -83,8 +83,9 @@ export function createInstance(schemeOpts = {}) {
       if (isList(param)) {
         paramName = param[FIRST].description;
         let paramDefault = param[REST][FIRST];
-        if (paramDefault === 2*pi) paramDefault = "2*pi";
-        if (paramDefault === undefined) paramDefault = "optional";
+        if (paramDefault === pi) paramDefault = "pi";
+        else if (paramDefault === 2*pi) paramDefault = "2*pi";
+        else if (paramDefault === undefined) paramDefault = "optional";
         else paramDefault = string(paramDefault);
         defaultStr = ` = ${paramDefault}`;
       } else if (param === REST_PARAM_ATOM) {
@@ -107,13 +108,15 @@ export function createInstance(schemeOpts = {}) {
       `let result = gfx_context.${jsFunctionName}(${argStr}); return result }`;
     let fn = (new Function(fnBody))();
     exportAPI(jsGfxContextFnName, fn, { requiredCount: 0 });
-    defineBinding(gfxContextFnName, jsGfxContextFnName, { group: "web-gfx-context", gfxApi: jsGfxContextFnName,
-      /*implStr: `(gfx_context${commaParamStr} => gfx_context.${jsFunctionName}(${argStr})`,*/ ...opts });
+    defineBinding(gfxContextFnName, jsGfxContextFnName, { group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
 
     // Not using defMacro so I can give it some descriptive info in defBinding, below
     exportAPI(name, params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params)), { tag: MACRO_TAG });
+    paramStr = string(params);
+    if (paramStr) paramStr = ' ' + paramStr;
+    paramStr = paramStr.replace(String(2*pi), '(* 2 *pi*)');
     defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsFunctionName,
-      /* implStr: `(${[paramStr]}) => gfx_context.${jsFunctionName}(${argStr})`,*/ ...opts });
+      implStr: `(${gfxContextFnName} ${gfxContextAtom.description} ${paramStr})`, ...opts });
   }
 
   function gfxProp(boundName, name, jsPropName, opts = {}) {
@@ -124,11 +127,12 @@ export function createInstance(schemeOpts = {}) {
       `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
     const fn = (new Function(fnBody))()
     exportAPI(jsGfxContextPropFnName, fn, { requiredCount: 0 });
-    defineBinding(gfxContextPropName, jsGfxContextPropFnName, { group: "web-gfx-context", gfxApi: jsGfxContextPropFnName, ...opts });
+    defineBinding(gfxContextPropName, jsGfxContextPropFnName, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
 
     // Not using defMacro so I can give it some descriptive info in defBinding, below
     exportAPI(name, params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params)), { tag: MACRO_TAG });
-    defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsGfxContextPropFnName, ...opts });
+    defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsPropName,
+      implStr:`(${gfxContextPropName} ${gfxContextAtom.description} [value])`, ...opts });
   }
 
   exportAPI("gfx_save", gfx_save, { tag: MACRO_TAG });
@@ -169,12 +173,12 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("quadratic_curve_to", "quadratic_curve_to", "quadraticCurveTo",
     [ [Atom("cpx"), 1], [Atom("cpy"), 0], [Atom("x"), 1], [Atom("y"), 1] ]);
   gfxFunction("arc", "arc", "arc",
-    [ [Atom("x"), 1], [Atom("y"), 1], [Atom("radius"), .5], [Atom("startAngle"), 0], [Atom("endAngle"), .2*pi], [Atom("counterclockwise"), false] ]);
+    [ [Atom("x"), 1], [Atom("y"), 1], [Atom("radius"), .5], [Atom("startAngle"), 0], [Atom("endAngle"), 2*pi], [Atom("counterclockwise"), false] ]);
   gfxFunction("arc-to", "arc_to", "arcTo",
     [ [Atom("x1"), 1], [Atom("y1"), 0], [Atom("x2"), 1], [Atom("y2"), 1], [Atom("radius"), 1] ]);
   gfxFunction("ellipse", "ellipse", "ellipse", // defaults to a circle inscribing (0,0,1,1)
     [ [Atom("x"), .5], [Atom("y"), .5], [Atom("radiusX"), .5], [Atom("radiusY"), .5],
-      [Atom("rotation"), 0], [Atom("startAngle"), 0], [Atom("endAngle"), .2*pi], [Atom("counterclockwise"), false] ]);
+      [Atom("rotation"), 0], [Atom("startAngle"), 0], [Atom("endAngle"), 2*pi], [Atom("counterclockwise"), false] ]);
   gfxFunction("rect", "rect", "rect",
     [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
   gfxFunction("round-rect", "round_rect", "roundRect",
