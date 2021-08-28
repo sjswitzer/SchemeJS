@@ -152,29 +152,29 @@ export function createInstance(schemeOpts = {}) {
   gfxVarArgFunction("clip", "clip", "clip", []);
   gfxFunction("is-point-in-path", "is_point_in_path", "isPointInPath", [restParamAtom, Atom("params")]);
   gfxFunction("is-point-in-stroke", "is_point_in_stroke", "isPointInStroke", [restParamAtom, Atom("params")]);
-  gfxFunction("move-to", "move_to", "moveTo", [ [Atom("x"], 0], [Atom("y", 0) ]);
-  gfxFunction("line-to", "line_to", "lineTo", [ [Atom("x", 0), [Atom("y", 1) ]);
+  gfxFunction("move-to", "move_to", "moveTo", [ [Atom("x"), 0], [Atom("y"), 0] ]);
+  gfxFunction("line-to", "line_to", "lineTo", [ [Atom("x"), 0], [Atom("y"), 1] ]);
   gfxFunction("bezier-curve-to", "bezier_curve_to", "bezierCurveTo",
-    [ [Atom("cp1x", 1), [Atom("cp1y", 0), [Atom("cp2x", 0), [Atom("cp2y", 1), [Atom("x", 1), [Atom("y", 1) ]);
+    [ [Atom("cp1x"), 1], [Atom("cp1y"), 0], [Atom("cp2x"), 0], [Atom("cp2y"), 1], [Atom("x"), 1], [Atom("y"), 1] ]);
   gfxFunction("quadratic_curve_to", "quadratic_curve_to", "quadraticCurveTo",
-    [ [Atom("cpx", 1), [Atom("cpy", 0), [Atom("x", 1), [Atom("y", 1) ]);
+    [ [Atom("cpx"), 1], [Atom("cpy"), 0], [Atom("x"), 1], [Atom("y"), 1] ]);
   gfxFunction("arc", "arc", "arc",
-    [ [Atom("x", 1), [Atom("y", 1), [Atom("radius", .5), [Atom("startAngle", 0), [Atom("endAngle", 2*pi), [Atom("counterclockwise", false) ]);
+    [ [Atom("x"), 1], [Atom("y"), 1], [Atom("radius"), .5], [Atom("startAngle"), 0], [Atom("endAngle"), .2*pi], [Atom("counterclockwise"), false] ]);
   gfxFunction("arc-to", "arc_to", "arcTo",
-    [ [Atom("x1", 1), [Atom("y1", 0), [Atom("x2", 1), [Atom("y2", 1), [Atom("radius", 1) ]);
+    [ [Atom("x1"), 1], [Atom("y1"), 0], [Atom("x2"), 1], [Atom("y2"), 1], [Atom("radius"), 1] ]);
   gfxFunction("ellipse", "ellipse", "ellipse", // defaults to a circle inscribing (0,0,1,1)
-    [ [Atom("x", .5), [Atom("y", .5), [Atom("radiusX", .5), [Atom("radiusY", .5),
-      [Atom("rotation", 0), [Atom("startAngle", 0), [Atom("endAngle", 2*pi), [Atom("counterclockwise", false) ]);
+    [ [Atom("x"), .5], [Atom("y"), .5], [Atom("radiusX"), .5], [Atom("radiusY"), .5],
+      [Atom("rotation"), 0], [Atom("startAngle"), 0], [Atom("endAngle"), .2*pi], [Atom("counterclockwise"), false] ]);
   gfxFunction("rect", "rect", "rect",
-    [ [Atom("x", 0), [Atom("y", 0), [Atom("width", 1), [Atom("height", 1) ]);
+    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
   gfxFunction("fill-rect", "fill_rect", "fillRect",
-    [ [Atom("x", 0), [Atom("y", 0), [Atom("width", 1), [Atom("height", 1) ]);
+    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
   gfxFunction("clear-rect", "clear_rect", "clearRect",
-    [ [Atom("x", 0), [Atom("y", 0), [Atom("width", 1), [Atom("height", 1) ]);
+    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
   gfxFunction("stroke-rect", "stroke_rect", "strokeRect",
-    [ [Atom("x", 0), [Atom("y", 0), [Atom("width", 1), [Atom("height", 1) ]);
+    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
   gfxFunction("fill-text", "fill_text", "fillText",
-    [ "text", [Atom("x", 0), [Atom("y", 0), [Atom("maxWidth", optional)]);
+    [ "text", [Atom("x"), 0], [Atom("y"), 0], [Atom("maxWidth"), optional]]);
   gfxFunction("measure-text", "measure_text", "measureText", [ "text" ]);
   gfxProp("canvas-width", "canvas_width", "canvas.width");
   gfxProp("canvas-height", "canvas_height", "canvas.height");
@@ -192,12 +192,12 @@ export function createInstance(schemeOpts = {}) {
   gfxProp("fill-style", "fill_style", "fillStyle");
   gfxProp("stroke-style", "stroke_style", "strokeStyle");
   gfxFunction("create-conic-gradient", "create_conic_gradient", "createConicGradient",
-    [ [Atom("startAngle", 0), [Atom("x", 0), [Atom("y", 1) ]);
+    [ [Atom("startAngle"), 0], [Atom("x"), 0], [Atom("y"), 1] ]);
   gfxFunction("create-linear-gradient", "create_linear_gradient", "createLinearGradient",
-    [ [Atom("x0", 0), [Atom("y0", 0), [Atom("x1", 1), [Atom("y1", 1) ]);
+    [ [Atom("x0"), 0], [Atom("y0"), 0], [Atom("x1"), 1], [Atom("y1"), 1] ]);
   gfxFunction("create-radial-gradient", "create_radial_gradient", "createRadialGradient",
-    [ [Atom("x0", 0), [Atom("y0", 0), [Atom("r0", 1), [Atom("x1", 1), [Atom("y1", 1), [Atom("r1", 0) ]);
-  gfxFunction("create-pattern", "create_pattern", "createPattern", [ "image", [Atom("repetition", "repeat") ]);
+    [ [Atom("x0"), 0], [Atom("y0"), 0], [Atom("r0"), 1], [Atom("x1"), 1], [Atom("y1"), 1], [Atom("r1"), 0] ]);
+  gfxFunction("create-pattern", "create_pattern", "createPattern", [ "image", [Atom("repetition"), "repeat"] ]);
   gfxProp("shadow-color", "shadow_color", "shadowColor");
   gfxProp("shadow-offset-x", "shadow_offset_x", "shadowOffsetX");
   gfxProp("shadow-offset-y", "shadow_offset_y", "shadowOffsetY");
@@ -210,7 +210,7 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("draw-image", "draw_image", "drawImage", [restParamAtom, Atom("params")]);
   gfxFunction("create-image-data", "create_image_data", "createImageData", [restParamAtom, Atom("params")]);
   gfxFunction("get-image-data", "get_image_data", "getImageData",
-    [ [Atom("sx", 0), [Atom("sy", 0), [Atom("sw", 1), [Atom("sh", 1) ]);
+    [ [Atom("sx"), 0], [Atom("sy"), 0], [Atom("sw"), 1], [Atom("sh"), 1] ]);
   gfxProp("image-smoothing-enabled", "image_smoothing_enabled", "imageSmoothingEnabled");
   gfxProp("image-smoothing-quality", "image_smoothing_quality", "imageSmoothingQuality");
 
