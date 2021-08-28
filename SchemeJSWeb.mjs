@@ -144,7 +144,7 @@ export function createInstance(schemeOpts = {}) {
       `return function ${jsGfxContextPropFnName}(gfx_context, value = optional) { ` +
       `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
     const fn = (new Function(fnBody))()
-    defineBinding(gfxContextPropName, jsGfxContextPropFnName, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
+    defineBinding(gfxContextPropName, fn, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
 
     // Define a macro that adds the graphics context and calls it
     let macroAtom = Atom(name), paramsAtom = Atom("params");
@@ -210,8 +210,8 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("stroke-rect", "stroke_rect", "strokeRect",
     [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
   gfxFunction("fill-text", "fill_text", "fillText",
-    [ "text", [Atom("x"), 0], [Atom("y"), 0], [Atom("maxWidth"), optional]]);
-  gfxFunction("measure-text", "measure_text", "measureText", [ "text" ]);
+    [ Atom("text"), [Atom("x"), 0], [Atom("y"), 0], [Atom("maxWidth"), optional]]);
+  gfxFunction("measure-text", "measure_text", "measureText", [ Atom("text") ]);
   gfxProp("canvas-element", "canvas_element", "canvas");
   gfxProp("canvas-width", "canvas_width", "canvas.width");
   gfxProp("canvas-height", "canvas_height", "canvas.height");
@@ -220,7 +220,7 @@ export function createInstance(schemeOpts = {}) {
   gfxProp("line-join", "line_join", "lineJoin");
   gfxProp("miter-limit", "miter_limit", "miterLimit");
   gfxFunction("get-line-dash", "get_line_dash", "getLineDash", []);
-  gfxFunction("set-line-dash", "set_line_dash", "setLineDash", ["value"]);
+  gfxFunction("set-line-dash", "set_line_dash", "setLineDash", [Atom("value")]);
   gfxProp("line-dash-offset", "line_dash_offset", "lineDashOffset");
   gfxProp("font", "font", "font");
   gfxProp("text-align", "text_align", "textAlign");
@@ -234,7 +234,7 @@ export function createInstance(schemeOpts = {}) {
     [ [Atom("x0"), 0], [Atom("y0"), 0], [Atom("x1"), 1], [Atom("y1"), 1] ]);
   gfxFunction("create-radial-gradient", "create_radial_gradient", "createRadialGradient",
     [ [Atom("x0"), 0], [Atom("y0"), 0], [Atom("r0"), 1], [Atom("x1"), 1], [Atom("y1"), 1], [Atom("r1"), 0] ]);
-  gfxFunction("create-pattern", "create_pattern", "createPattern", [ "image", [Atom("repetition"), "repeat"] ]);
+  gfxFunction("create-pattern", "create_pattern", "createPattern", [ Atom("image"), [Atom("repetition"), "repeat"] ]);
   gfxProp("shadow-color", "shadow_color", "shadowColor");
   gfxProp("shadow-offset-x", "shadow_offset_x", "shadowOffsetX");
   gfxProp("shadow-offset-y", "shadow_offset_y", "shadowOffsetY");
