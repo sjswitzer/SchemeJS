@@ -51,6 +51,8 @@
   (fill-text "Ship Arriving Too Late to Save a Drowning Witch" 0.1 (canvas-width))
 )
 
+(println (String satltsadw)) ;; XXX debugging
+
 (def ship-canvas (create-canvas-widget "Too Late!" 300 320))
 (@= ship-canvas 'draw satltsadw)  ;; Set the draw function
 (@= ship-canvas 'animate true)    ;; Enable animation; otherwise just draws initially and when resized
@@ -75,6 +77,9 @@
   (line-to-stashed)
   (stroke-style "green") (line-width 1.5) (stroke)
 )
+
+(println (String lissajous)) ;; XXX debugging
+
 
 (def lissajous-canvas (create-canvas-widget "Lissajous"  300 300))
 (@= lissajous-canvas 'draw lissajous)         ;; Set the draw function

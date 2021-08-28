@@ -511,13 +511,15 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function examineFunctionForCompilerTemplates(name, fn, opts = {}) {
-    let evalCount = opts.evalArgs ?? MAX_INTEGER;
+    let evalCount = opts.evalCount ?? MAX_INTEGER;
     let compileHook = opts.compileHook;
     let requiresScope = opts.requiresScope;
     let tag = opts.tag ?? 0;
     examineFunctionForParameterDescriptor(fn, evalCount, tag);
     let fnInfo = analyzeJSFunction(fn);
     fnInfo.evalCount = evalCount;
+    if (opts.requiredCount !== undefined) // allows override
+      fnInfo.requiredCount = opts.requiredCount;
     fnInfo.tag = tag;
     if (compileHook)
       fnInfo.compileHook = compileHook;
@@ -576,7 +578,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("schemeTrue", schemeTrue);
 
   let quote = quoted => quoted[FIRST];
-  exportAPI("quote", quote, { dontInline: true, evalArgs: 0 }, "quote");
+  exportAPI("quote", quote, { dontInline: true, evalCount: 0 }, "quote");
 
   exportAPI("this", function scope() { return this }, { requiresScope: true });
 
@@ -705,7 +707,7 @@ export function createInstance(schemeOpts = {}) {
     return str;
   }
 
-  exportAPI("lt", lt, { evalArgs: 2, compileHook: lt_hook });
+  exportAPI("lt", lt, { evalCount: 2, compileHook: lt_hook });
   function lt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -751,7 +753,7 @@ export function createInstance(schemeOpts = {}) {
     return result;
   }
 
-  exportAPI("le", le, { evalArgs: 2, compileHook: le_hook });
+  exportAPI("le", le, { evalCount: 2, compileHook: le_hook });
   function le(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -767,7 +769,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A <= B', 'le');
   }
 
-  exportAPI("gt", gt, { evalArgs: 2, compileHook: gt_hook });
+  exportAPI("gt", gt, { evalCount: 2, compileHook: gt_hook });
   function gt(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -783,7 +785,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A > B', 'gt');
   }
 
-  exportAPI("ge", ge, { evalArgs: 2, compileHook: ge_hook });
+  exportAPI("ge", ge, { evalCount: 2, compileHook: ge_hook });
   function ge(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -799,7 +801,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A >= B', 'ge');
   }
 
-  exportAPI("eq", eq, { evalArgs: 2, compileHook: eq_hook });
+  exportAPI("eq", eq, { evalCount: 2, compileHook: eq_hook });
   function eq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -816,7 +818,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A == B', 'eq');
   }
 
-  exportAPI("eeq", eeq, { evalArgs: 2, compileHook: eeq_hook });
+  exportAPI("eeq", eeq, { evalCount: 2, compileHook: eeq_hook });
   function eeq(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -833,7 +835,7 @@ export function createInstance(schemeOpts = {}) {
     return compare_hooks(args, ssaScope, tools, 'A === B', 'eeq');
   }
 
-  exportAPI("neq", neq, { evalArgs: 2, compileHook: neq_hook });
+  exportAPI("neq", neq, { evalCount: 2, compileHook: neq_hook });
   function neq(a, b, ...rest) {
     return !eq.call(this, a, b, ...rest);
   }
@@ -843,7 +845,7 @@ export function createInstance(schemeOpts = {}) {
     return `(!${eq})`;
   }
 
-  exportAPI("neeq", neeq, { evalArgs: 2, compileHook: neeq });
+  exportAPI("neeq", neeq, { evalCount: 2, compileHook: neeq });
   function neeq(a, b, ...rest) {
     return !eeq.call(this, a, b, ...rest);
   }
@@ -854,7 +856,7 @@ export function createInstance(schemeOpts = {}) {
 
   // Logical & Conditional
 
-  exportAPI("and", and, { evalArgs: 0, compileHook: and_hook });
+  exportAPI("and", and, { evalCount: 0, compileHook: and_hook });
   function and(...forms) {
     let val = true;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -885,7 +887,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  exportAPI("or", or, { evalArgs: 0, compileHook: or_hook });
+  exportAPI("or", or, { evalCount: 0, compileHook: or_hook });
   function or(...forms) {
     let val = false;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -899,7 +901,7 @@ export function createInstance(schemeOpts = {}) {
     return and_or_hook(args, ssaScope, tools, 'or', 'false', 'schemeTrue');
   }
 
-  exportAPI("nullish", nullish, { evalArgs: 0, compileHook: nullish_hook });
+  exportAPI("nullish", nullish, { evalCount: 0, compileHook: nullish_hook });
   function nullish(...forms) {
     let val = undefined;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -929,7 +931,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // Conditionals
   //
-  exportAPI("ifelse", ifelse, { evalArgs: 1, compileHook: ifelse_hook });
+  exportAPI("ifelse", ifelse, { evalCount: 1, compileHook: ifelse_hook });
   function ifelse(p, t = true, f = false) {
     p = schemeTrue(p);
     if (p)
@@ -970,7 +972,7 @@ export function createInstance(schemeOpts = {}) {
   // The pattern here is that you can either write
   //   (? (bigint x) a b) or simply (bigint? x a b)
   //
-  exportAPI("is_bigint", is_bigint, { evalArgs: 1, compileHook: is_bigint_hook });
+  exportAPI("is_bigint", is_bigint, { evalCount: 1, compileHook: is_bigint_hook });
   function is_bigint(a, t = true, f = false) {
     if (typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -981,7 +983,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_bigint', `typeof * === 'bigint'`);
   }
 
-  exportAPI("is_atom", is_atom, { evalArgs: 1, compileHook: is_atom_hook });
+  exportAPI("is_atom", is_atom, { evalCount: 1, compileHook: is_atom_hook });
   function is_atom(a, t = true, f = false) {
     if (isAtom(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -992,7 +994,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_atom', `isAtom(*)`);
   }
 
-  exportAPI("is_list", isList, { evalArgs: 1, compileHook: is_list_hook } );
+  exportAPI("is_list", isList, { evalCount: 1, compileHook: is_list_hook } );
   function is_list(a, t = true, f = false) {
     if (isList(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1003,7 +1005,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_list', `isList(*)`);
   }
 
-  exportAPI("is_undefined", is_undefined, { evalArgs: 1, compileHook: is_undefined_hook })
+  exportAPI("is_undefined", is_undefined, { evalCount: 1, compileHook: is_undefined_hook })
   function is_undefined(a, t = true, f = false) {
     if (a === undefined)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1014,7 +1016,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_undefined', `* === undefined`);
   }
 
-  exportAPI("is_null", is_null, { evalArgs: 1, compileHook: is_null_hook });
+  exportAPI("is_null", is_null, { evalCount: 1, compileHook: is_null_hook });
   function is_null(a, t = true, f = false) {
     if (a === null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1025,7 +1027,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_null', `* === null`);
   }
 
-  exportAPI("is_nil", is_nil, { evalArgs: 1, compileHook: is_nil_hook });
+  exportAPI("is_nil", is_nil, { evalCount: 1, compileHook: is_nil_hook });
   function is_nil(a, t = true, f = false) {
     if (isNil(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1036,7 +1038,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nil', `isNil(*)`);
   }
 
-  exportAPI("is_nullish", is_nullish, { evalArgs: 1, compileHook: is_nullish_hook });
+  exportAPI("is_nullish", is_nullish, { evalCount: 1, compileHook: is_nullish_hook });
   function is_nullish(a, t = true, f = false) {
     if (a == null)
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1047,7 +1049,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nullish', `* == null`);
   }
 
-  exportAPI("is_boolean", is_boolean, { evalArgs: 1, compileHook: is_boolean_hook });
+  exportAPI("is_boolean", is_boolean, { evalCount: 1, compileHook: is_boolean_hook });
   function is_boolean(a, t = true, f = false) {
     if (typeof a === 'boolean')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1058,7 +1060,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_boolean', `typeof * === 'boolean'`);
   }
 
-  exportAPI("is_number", is_number, { evalArgs: 1, compileHook: is_number_hook });
+  exportAPI("is_number", is_number, { evalCount: 1, compileHook: is_number_hook });
   function is_number(a, t = true, f = false) {
     if (typeof a === 'number')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1069,7 +1071,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_number', `typeof * === 'number'`);
   }
 
-  exportAPI("is_numeric", is_numeric, { evalArgs: 1, compileHook: is_numeric_hook });
+  exportAPI("is_numeric", is_numeric, { evalCount: 1, compileHook: is_numeric_hook });
   function is_numeric(a, t = true, f = false) {
     if (typeof a === 'number' || typeof a === 'bigint')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1080,7 +1082,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_numeric', `typeof * === 'number' || typeof a === 'bigint`);
   }
 
-  exportAPI("is_string", is_string, { evalArgs: 1, compileHook: is_string_hook });
+  exportAPI("is_string", is_string, { evalCount: 1, compileHook: is_string_hook });
   function is_string(a, t = true, f = false) {
     if (typeof a === 'string')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1091,7 +1093,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_string', `typeof * === 'string'`);
   }
 
-  exportAPI("is_symbol", is_symbol, { evalArgs: 1, compileHook: is_symbol_hook });
+  exportAPI("is_symbol", is_symbol, { evalCount: 1, compileHook: is_symbol_hook });
   function is_symbol(a, t = true, f = false) {
     if (typeof a === 'symbol')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1102,7 +1104,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_symbol', `typeof * === 'symbol'`);
   }
 
-  exportAPI("is_function", is_function, { evalArgs: 1, compileHook: is_function_hook });
+  exportAPI("is_function", is_function, { evalCount: 1, compileHook: is_function_hook });
   function is_function(a, t = true, f = false) {
     if (typeof a === 'function')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1113,7 +1115,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_function', `typeof * === 'function'`);
   }
 
-  exportAPI("is_object", is_object, { evalArgs: 1, compileHook: is_object_hook });
+  exportAPI("is_object", is_object, { evalCount: 1, compileHook: is_object_hook });
   function is_object(a, t = true, f = false) {
     if (a !== null && typeof a === 'object')
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1124,7 +1126,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_object', `* !== null && typeof * === 'object'`);
   }
 
-  exportAPI("is_array", is_array, { evalArgs: 1, compileHook: is_array_hook });
+  exportAPI("is_array", is_array, { evalCount: 1, compileHook: is_array_hook });
   function is_array(a, t = true, f = false) {
     if (isArray(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1135,7 +1137,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_array', `Array.isArray(*)`);
   }
 
-  exportAPI("is_NaN", is_nan, { evalArgs: 1, compileHook: is_nan_hook });
+  exportAPI("is_NaN", is_nan, { evalCount: 1, compileHook: is_nan_hook });
   function is_nan(a, t = true, f = false) {
     if (isNaN(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1146,7 +1148,7 @@ export function createInstance(schemeOpts = {}) {
     return conditionalHooks(args, ssaScope, tools, 'is_nan', `isNaN(*)`);
   }
 
-  exportAPI("is_finite", is_finite, { evalArgs: 1, compileHook: is_finite_hook });
+  exportAPI("is_finite", is_finite, { evalCount: 1, compileHook: is_finite_hook });
   function is_finite(a, t = true, f = false) {
     if (isFinite(a))
       return isPrimitive(t) ? t : _eval(t, this);
@@ -1158,7 +1160,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (begin form1 form2 ...)
-  exportAPI("begin", begin, { evalArgs: 0, compileHook: begin_hook });
+  exportAPI("begin", begin, { evalCount: 0, compileHook: begin_hook });
   function begin(...forms) {
     let res = BOTTOM;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -1396,7 +1398,7 @@ export function createInstance(schemeOpts = {}) {
   // "letrec" can be partially-applied, returning a function that
   // evaluates its arguments in the let scope!
   //
-  exportAPI("letrec", letrec, { requiresScope: true, evalArgs: 0, compileHook: letrec_hook });
+  exportAPI("letrec", letrec, { requiresScope: true, evalCount: 0, compileHook: letrec_hook });
   function letrec(bindings, form, ...forms) {
     let scope = newScope(this, "letrec-scope");
     for ( ; moreList(bindings); bindings = bindings[REST]) {
@@ -1470,7 +1472,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (for-in key-symbol value-symbol obj form forms...)
-  exportAPI("for_in", for_in, { evalArgs: 0, compileHook: for_in_hook });
+  exportAPI("for_in", for_in, { evalCount: 0, compileHook: for_in_hook });
   function for_in(keySymbol, valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope);
@@ -1551,7 +1553,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (for-of value-symbol obj form forms...)
-  exportAPI("for_of", for_of, { evalArgs: 0, compileHook: for_of_hook });
+  exportAPI("for_of", for_of, { evalCount: 0, compileHook: for_of_hook });
   function for_of(valueSymbol, obj, form, ...forms) {
     let scope = this;
     obj = _eval(obj, scope);
@@ -1604,7 +1606,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (while predicate obj form forms...)
-  exportAPI("while", _while, { evalArgs: 0, compileHook: while_hook });
+  exportAPI("while", _while, { evalCount: 0, compileHook: while_hook });
   function _while(predicate, form, ...forms) {
     let scope = this;
     let val = BOTTOM;
@@ -1644,7 +1646,7 @@ export function createInstance(schemeOpts = {}) {
   // The point is that the JavaScript runtime HAS a suitable primitive; I just don't
   // think you can get at it directly from user code.
 
-  exportAPI("setq", setq, { evalArgs: 0, compileHook: setq_hook });
+  exportAPI("setq", setq, { evalCount: 0, compileHook: setq_hook });
   function setq(symbol, valueForm, ...values) {
     let value = _eval(valueForm, this);
     if (this[RETURN_SYMBOL]) return;
@@ -1701,7 +1703,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("throw", js_throw);
 
   // (catch (var forms) forms) -- JavaScript style
-  exportAPI("catch", js_catch, { evalArgs: 0, compileHook: js_catch_hook });
+  exportAPI("catch", js_catch, { evalCount: 0, compileHook: js_catch_hook });
   function js_catch(catchClause, form, ...forms) {
     if (!isList(catchClause))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
@@ -1769,7 +1771,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (finally (forms) forms) -- finally
-  exportAPI("finally", js_finally, { evalArgs: 0, compileHook: js_finally_hook });
+  exportAPI("finally", js_finally, { evalCount: 0, compileHook: js_finally_hook });
   function js_finally(finallyForms, form, ...forms) {
     if (!isList(finallyForms))
       throw new SchemeEvalError(`bad finally forms ${string(finallyForms)}`);
@@ -1817,7 +1819,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (def variable value)
   // (def (fn args) forms)
-  exportAPI("def", def, { requiresScope: true, evalArgs: 0, dontInline: true });
+  exportAPI("def", def, { requiresScope: true, evalCount: 0, dontInline: true });
   function def(defined, value, ...rest) {
     let scope = this, name = defined;
     if (isList(defined)) {
@@ -1890,7 +1892,7 @@ export function createInstance(schemeOpts = {}) {
   // Macros
   //
 
-  exportAPI("defmacro", defmacro, { requiresScope: true, evalArgs: 0, dontInline: true });
+  exportAPI("defmacro", defmacro, { requiresScope: true, evalCount: 0, dontInline: true });
   function defmacro(nameAndParams, ...forms) {
     if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[FIRST]);
@@ -2223,7 +2225,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\ (params) (form1) (form2) ...)
-  exportAPI("lambda", lambda, { requiresScope: true, evalArgs: 0, dontInline: true });
+  exportAPI("lambda", lambda, { requiresScope: true, evalCount: 0, dontInline: true });
   function lambda(params, ...forms) {
     let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
     let scope = this;
@@ -2232,7 +2234,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (\# evalCount (params) (body1) (body2) ...)
-  exportAPI("special_lambda", special_lambda, { requiresScope: true, evalArgs: 0, dontInline: true });
+  exportAPI("special_lambda", special_lambda, { requiresScope: true, evalCount: 0, dontInline: true });
   function special_lambda(evalCount, params, ...forms) {
     let lambda = new Pair(SLAMBDA_ATOM, new Pair(evalCount, new Pair(params, forms)));
     let scope = this;
@@ -2356,7 +2358,7 @@ export function createInstance(schemeOpts = {}) {
     return ssaValue;
   }
 
-  exportAPI("is_closure", is_closure, { evalArgs: 1, compileHook: closureP_hook })
+  exportAPI("is_closure", is_closure, { evalCount: 1, compileHook: closureP_hook })
   function is_closure(a, t = true, f = false) {
     if (isClosure(a)) return isPrimitive(t) ? t : _eval(t, this);
     else return isPrimitive(f) ? f : eval(f, this);
@@ -2784,7 +2786,7 @@ export function createInstance(schemeOpts = {}) {
 
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
-  exportAPI("compile", compile, { requiresScope: true, evalArgs: 0, dontInline: true });
+  exportAPI("compile", compile, { requiresScope: true, evalCount: 0, dontInline: true });
   function compile(nameAndParams, ...forms) {
     if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[FIRST]);

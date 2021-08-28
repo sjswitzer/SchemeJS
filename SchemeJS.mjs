@@ -229,7 +229,7 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  exportAPI("is_equal", is_equal, { evalArgs: 2, compileHook: is_equal_hook });
+  exportAPI("is_equal", is_equal, { evalCount: 2, compileHook: is_equal_hook });
   function is_equal(a, b, ...rest) {
     let i = 0, restLength = rest.length;
     for (;;) {
@@ -487,7 +487,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("abs", a => a < 0 ? -a : a);
 
   // (prog1 form1 form2 form3 ...)
-  exportAPI("prog1", prog1, { evalArgs: 0, compileHook: prog1_hook });
+  exportAPI("prog1", prog1, { evalCount: 0, compileHook: prog1_hook });
   function prog1(...forms) {
     let res = BOTTOM;
     for (let i = 0, formsLength = forms.length; i < formsLength; ++i) {
@@ -509,7 +509,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (cond clause1 clause2 ...)  -- clause is (predicate-expression form1 form2 ...)
-  exportAPI("cond", cond, { evalArgs: 0, compileHook: cond_hook });
+  exportAPI("cond", cond, { evalCount: 0, compileHook: cond_hook });
   function cond(...clauses) {
     // Prescan for errors; the compiler needs to do it so the interpreter should too
     for (let i = 0, clausesLength = clauses.length; i < clausesLength; ++i) {
@@ -748,7 +748,7 @@ export function createInstance(schemeOpts = {}) {
   function siod_throw(tag, value) { throw new SchemeJSThrow(tag, value)}
 
   // (*catch tag form ...) -- SIOD style
-  exportAPI("siod_catch", siod_catch, { evalArgs: 1, compileHook: siod_catch_hook });
+  exportAPI("siod_catch", siod_catch, { evalCount: 1, compileHook: siod_catch_hook });
   function siod_catch(tag, form, ...forms) {
     let val;
     try {
@@ -1887,7 +1887,7 @@ export function createInstance(schemeOpts = {}) {
          `evaluates the series of forms and returns the result of the last. ` +
          `Otherwise, returns false.`
     });
-    defineBinding("...", "spread", {
+    defineBinding(restParamStr, "spread", {
       group: "main", sample: `(<stuff> ... value <more stuff>)`, 
       blurb: `Expands the value (a list), into the argument list .`
     });
