@@ -58,7 +58,6 @@ export function createInstance(schemeOpts = {}) {
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
   const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
-  const FUNCTION_TAG = 0, MACRO_TAG = 1, EVALUATED_PARAMETER_MACRO_TAG = 2, FORM_ELEMENT_MACRO_TAG = 3;
   const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
   const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
@@ -69,6 +68,20 @@ export function createInstance(schemeOpts = {}) {
     WS[ch] = ch.codePointAt(0);
   for (let ch of "\n\r")
     WSNL[ch] = ch.codePointAt(0);
+
+  // Three kinds of macros:
+  //   MACRO_TAG: Conventional macro
+  //      Called with the remainder of the form.
+  //      Returns what to replace the form it heads with
+  //   EVALUATED_PARAMETER_MACRO_TAG: For evaluated parameters only
+  //      Called with the remainder of the form.
+  //      Returns a pair of what to replace the current item with (undefined if nothing) and
+  //      what to replace the remainder of the argument list with. The returned current item will
+  //      be evaluated.
+  //   FORM_ELEMENT_MACRO_TAG: For every form element, including the first
+  //      Called with the remainder of the form.
+  //      Returns what to replace itself and its successors with.
+  const FUNCTION_TAG = 0, MACRO_TAG = 1, EVALUATED_PARAMETER_MACRO_TAG = 2, FORM_ELEMENT_MACRO_TAG = 3;
 
   // Create a new scope with newScope(enclosingScope, "description").
   // A new scope's prototype is the enclosing scope.

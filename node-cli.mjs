@@ -12,7 +12,7 @@
 //   If file.scm is not provided, it runs the REPL,
 //   otherwise, loads and executes file.scm.
 
-import * as SchemeJS from './SchemeJS.mjs';
+import * as SchemeJS from './SchemeJSWeb.mjs'; // XXXXX revert!
 import * as fs from 'fs';
 
 let loadFiles = [], runREPL = true;
