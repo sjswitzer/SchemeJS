@@ -58,6 +58,7 @@
 (@= ship-canvas 'animate true)    ;; Enable animation; otherwise just draws initially and when resized
 (@! ship-canvas 'show 20 20)      ;; Move the canvas widget from its default position
 
+/*
 ;; Now a lissajous figure
 (define [lissajous gfx-context tick]
   ;; Fade the canvas by drawing over it with black and a very low alpha every several ticks.
@@ -138,3 +139,4 @@
 (stroke-style "blue")
 (stroke-rect 10 10 40 40)
 (fill-text "Try it! Just enter drawing commands below." 10 65)
+*/

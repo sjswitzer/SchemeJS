@@ -60,6 +60,9 @@ export function createInstance(schemeOpts = {}) {
   const isList = globalScope.isList ?? required();
   const isAtom = globalScope.isAtom ?? required();
   const def = globalScope.def ?? required;
+  const compile = globalScope.compile ?? required();
+  const defmacro = globalScope.defmacro ?? required();
+  const augmentFunctionInfo = globalScope.augmentFunctionInfo ?? required();
   const FIRST = globalScope.FIRST ?? required();
   const REST = globalScope.REST ?? required();
   const Atom = globalScope.Atom ?? required();
@@ -73,8 +76,8 @@ export function createInstance(schemeOpts = {}) {
   const htmlDocumentAtom = Atom("html-document");
   const pi = Math.PI;
 
-  // Defines the graphics function and a macro to call it
-  // This is how you write scheme with no parser or bindings :)
+  // Defines the graphics function and a macro to call it.
+  // This is how you write Scheme with no parser or bindings :)
   function gfxFunction(boundName, name, jsFunctionName, params, opts = {}) {
     let paramStr = '', argStr = '', sep = '', nextIsRest = false;
     for (let param of params) {
@@ -107,16 +110,35 @@ export function createInstance(schemeOpts = {}) {
       `return function ${jsGfxContextFnName} (gfx_context${commaParamStr}) { ` +
       `let result = gfx_context.${jsFunctionName}(${argStr}); return result }`;
     let fn = (new Function(fnBody))();
-    exportAPI(jsGfxContextFnName, fn, { requiredCount: 0 });
-    defineBinding(gfxContextFnName, jsGfxContextFnName, { group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
 
-    // Not using defMacro so I can give it some descriptive info in defBinding, below
-    exportAPI(name, params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params)), { tag: MACRO_TAG });
+    // Compile the wrapper function (so that default paraameters specified in Scheme are processed)
+    let definedAtom = Atom(jsGfxContextFnName);
+    compile([definedAtom, ...params], list(fn, ...stripOptional(params)));
+    // Decorate it for "help" purposes and make available to JavaScript
+    augmentFunctionInfo(definedAtom, { group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
+    exportAPI(jsGfxContextFnName, fn, { requiredCount: 0 });
+
+    // Define a macro that adds the graphics context and calls it
+    let macroAtom = Atom(name), paramsAtom = Atom("params");
+    defmacro([macroAtom, paramsAtom],
+      list(params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params), paramsAtom)));
+    
+    // Decorate it for the help system
     paramStr = string(params);
     if (paramStr) paramStr = ' ' + paramStr;
     paramStr = paramStr.replace(String(2*pi), '(* 2 *pi*)');
-    defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsFunctionName,
+    augmentFunctionInfo(macroAtom,  { group: "web-gfx", gfxApi: jsFunctionName,
       implStr: `(${gfxContextFnName} ${gfxContextAtom.description} ${paramStr})`, ...opts });
+  }
+
+  function stripOptional(params) {
+    let res = [];
+    for (let param of params) {
+      if (isList(param))
+        param = param[FIRST];
+      res.push(param);
+    }
+    return res;
   }
 
   function gfxProp(boundName, name, jsPropName, opts = {}) {
@@ -129,11 +151,14 @@ export function createInstance(schemeOpts = {}) {
     exportAPI(jsGfxContextPropFnName, fn, { requiredCount: 0 });
     defineBinding(gfxContextPropName, jsGfxContextPropFnName, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
 
-    // Not using defMacro so I can give it some descriptive info in defBinding, below
-    exportAPI(name, params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params)), { tag: MACRO_TAG });
-    defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsPropName,
+    // Define a macro that adds the graphics context and calls it
+    let macroAtom = Atom(name), paramsAtom = Atom("params");
+    defmacro([macroAtom, paramsAtom],
+      list(params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params), paramsAtom)));
+    // Decorate it for the help system
+    augmentFunctionInfo(macroAtom,  { group: "web-gfx", gfxApi: jsPropName,
       implStr:`(${gfxContextPropName} ${gfxContextAtom.description} [value])`, ...opts });
-  }
+    }
 
   exportAPI("gfx_save", gfx_save, { tag: MACRO_TAG });
   function gfx_save(params) {

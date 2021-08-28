@@ -542,6 +542,16 @@ export function createInstance(schemeOpts = {}) {
     fn[COMPILE_INFO] = fnInfo;
   }
 
+  exportAPI("augmentFunctionInfo", augmentFunctionInfo, { dontInline: true });
+  function augmentFunctionInfo(fn, info) {
+    if (typeof fn === 'string') fn = Atom(fn);
+    if (isAtom(fn)) fn = globalScope[fn];
+    if (typeof fn !== 'function') throw new LogicError(`not a function ${string(fn)}`);
+    let fnInfo = fn[COMPILE_INFO];
+    if (fnInfo) Object.assign(fnInfo, info);
+    else fn[COMPILE_INFO] = Object.assign({}, info);
+  }
+
   exportAPI("VERSION", VERSION);
 
   class SchemeError extends Error {};
@@ -1912,6 +1922,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (when (cond) form...) => (if (cond) (begin form...))
+  // Not using defmacro since that creates a binding, and the core doesn't do that.
   exportAPI("when", when, { tag: MACRO_TAG });
   function when(params) {
     return list(
