@@ -111,7 +111,7 @@ export function createInstance(schemeOpts = {}) {
       /*implStr: `(gfx_context${commaParamStr} => gfx_context.${jsFunctionName}(${argStr})`,*/ ...opts });
 
     // Not using defMacro so I can give it some descriptive info in defBinding, below
-    exportAPI(name, params => new Pair(gfxContextFnAtom, params), { tag: MACRO_TAG });
+    exportAPI(name, params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params)), { tag: MACRO_TAG });
     defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsFunctionName,
       /* implStr: `(${[paramStr]}) => gfx_context.${jsFunctionName}(${argStr})`,*/ ...opts });
   }
@@ -127,7 +127,7 @@ export function createInstance(schemeOpts = {}) {
     defineBinding(gfxContextPropName, jsGfxContextPropFnName, { group: "web-gfx-context", gfxApi: jsGfxContextPropFnName, ...opts });
 
     // Not using defMacro so I can give it some descriptive info in defBinding, below
-    exportAPI(name, params => new Pair(gfxContextFnAtom, params), { tag: MACRO_TAG });
+    exportAPI(name, params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params)), { tag: MACRO_TAG });
     defineBinding(boundName, name, { group: "web-gfx", gfxApi: jsGfxContextPropFnName, ...opts });
   }
 
