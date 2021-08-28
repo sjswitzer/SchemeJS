@@ -55,6 +55,8 @@ export function createInstance(schemeOpts = {}) {
   const FIRST = globalScope.FIRST ?? required();
   const REST = globalScope.REST ?? required();
   const Atom = globalScope.Atom ?? required();
+  const js_try = globalScope.try ?? required();
+  const js_finally = globalScope.finally ?? required();
   const MACRO_TAG = globalScope.MACRO_TAG ?? required();
   const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   function required() { throw "required" }
@@ -63,9 +65,9 @@ export function createInstance(schemeOpts = {}) {
   const htmlDocumentAtom = Atom("html-document");
 
   function gfxFunction(boundName, name, functionName, params, opts = {}) {
+    const fn = (gfx_context, ...args) => gfx_context[functionName](...args);
     exportAPI(name, macro, { tag: MACRO_TAG });
     function macro(params) {
-      const fn = (gfx_context, ...args) => gfx_context[functionName](...args);
       return list(fn, gfxContextAtom, ...params);
     }
     let paramStr = '', argStr = '', sep = '';
@@ -93,9 +95,11 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function gfxProp(boundName, name, propName, opts = {}) {
+    // Normally I'd use a closure but this lets me use "propName" of "canvas.width".
+    const fn = new Function('gfx_context', 'value',
+      `let oldValue = gfx_context.${propName}; if (value !== undefined) gfx_context.${propName} = value; return oldValue`);
     exportAPI(name, macro, { tag: MACRO_TAG });
     function macro(params) {
-      const fn = (gfx_context, value = optional) => { let oldValue = gfx_context[propName]; if (value !== undefined) gfx_context[propName] = value; return oldValue };
       return list(fn, gfxContextAtom, ...params);
     }
     defineBinding(boundName, name, { group: "web-gfx", gfxApi: propName,
@@ -103,8 +107,56 @@ export function createInstance(schemeOpts = {}) {
       ...opts });
   }
 
+  exportAPI("gfx_save", gfx_save, { tag: MACRO_TAG });
+  function gfx_save(params) {
+    let forms = params;
+    return list( js_finally, [ list( (gfx_context => gfx_context.restore()), gfxContextAtom ) ],
+      list( (gfx_context => gfx_context.save()), gfxContextAtom ),
+      ... forms );
+  }
+  defineBinding("gfx-save", "gfx_save", { group: "web-gfx", sample: `(gfx-save form ...)`,
+    blurb: `Saves the graphics context, executes the forms, then restores the context afterward. ` +
+           `you should generally use this instead of save-gfx-context and restore-gfx-context, though ` +
+           `though those can be useful in a REPL.` });
+
+  gfxFunction("translate", "translate", "translate", [ opt("x", 0), opt("y", 0) ]);
+  gfxFunction("rotate", "rotate", "rotate", [ opt("angle", 0)]);
+
+  exportAPI("scale", gfx_scale, { tag: MACRO_TAG });
+  function gfx_scale(params) {
+    let x = params[0] ?? 0, y = params[1] ?? x;
+    return list( ((gfx_context, x, y) => gfx_context.scale(x, y)), gfxContextAtom, x, y );
+  }
+  defineBinding("scale", "gfx_scale", { group: "web-gfx", sample: `(gfx-save form ...)`,
+    blurb: `Saves the graphics context, executes the forms, then restores the context afterward.` });
+
+  gfxFunction("save-gfx-context", "save_gfx_context", "save", [], {
+    blurb: `Saves the graphics context on a stack which can later be "popped" with ` +
+           `pop-gfx-context. You should generally use gfx-save instead, but these operations ` +
+           `can be useful in a REPL.` });
+
+  gfxFunction("restore-gfx-context", "restore_gfx_context", "restore", [], {
+    blurb: `Saves the graphics context on a stack which can later be "popped" with ` +
+           `pop-gfx-context. You should generally use gfx-save instead, but these operations ` +
+           `can be useful in a REPL.` });
+
+  gfxFunction("begin-path", "begin_path", "beginPath", []);
+  gfxFunction("close-path", "close_path", "closePath", []);
   gfxFunction("move-to", "move_to", "moveTo", [ opt("x", 0), opt("y", 0) ]);
   gfxFunction("line-to", "line_to", "lineTo", [ opt("x", 0), opt("y", 1) ]);
+  gfxFunction("bezier-curve-to", "bezier_curve_to", "bezierCurveTo",
+    [ opt("cp1x", 1), opt("cp1y", 0), opt("cp2x", 0), opt("cp2y", 1), opt("x", 1), opt("y", 1) ]);
+  gfxFunction("quadratic_curve_to", "quadratic_curve_to", "quadraticCurveTo",
+    [ opt("cpx", 1), opt("cpy", 0), opt("x", 1), opt("y", 1) ]);
+  gfxFunction("arc", "arc", "arc",
+    [ opt("x", 1), opt("y", 1), opt("radius", .5), opt("startAngle", 0), opt("endAngle", 2*pi), opt("counterclockwise", false) ]);
+  gfxFunction("arc-to", "arc_to", "arcTo",
+    [ opt("x1", 1), opt("y1", 0), opt("x2", 1), opt("y2", 1), opt("radius", 1) ]);
+  gfxFunction("ellipse", "ellipse", "ellipse", // defaults to a circle inscribing (0,0,1,1)
+    [ opt("x", .5), opt("y", .5), opt("radiusX", .5), opt("radiusY", .5),
+      opt("rotation", 0), opt("startAngle", 0), opt("endAngle", 2*pi), opt("counterclockwise", false) ]);
+  gfxFunction("rect", "rect", "rect",
+    [ opt("x", 0), opt("y", 0), opt("width", 1), opt("height", 1) ]);
   gfxFunction("fill-rect", "fill_rect", "fillRect",
     [ opt("x", 0), opt("y", 0), opt("width", 1), opt("height", 1) ]);
   gfxFunction("clear-rect", "clear_rect", "clearRect",
@@ -114,6 +166,8 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("fill-text", "fill_text", "fillText",
     [ "text", opt("x", 0), opt("y", 0), opt("maxWidth", optional)]);
   gfxFunction("measure-text", "measure_text", "measureText", [ "text" ]);
+  gfxProp("canvas-width", "canvas_width", "canvas.width");
+  gfxProp("canvas-height", "canvas_height", "canvas.height");
   gfxProp("line-width", "line_width", "lineWidth");
   gfxProp("line-cap", "line_cap", "lineCap");
   gfxProp("line-join", "line_join", "lineJoin");
@@ -137,21 +191,6 @@ export function createInstance(schemeOpts = {}) {
   gfxProp("shadow-color", "shadow_color", "shadowColor");
   gfxProp("shadow-offset-x", "shadow_offset_x", "shadowOffsetX");
   gfxProp("shadow-offset-y", "shadow_offset_y", "shadowOffsetY");
-  gfxFunction("begin-path", "begin_path", "beginPath", []);
-  gfxFunction("close-path", "close_path", "closePath", []);
-  gfxFunction("bezier-curve-to", "bezier_curve_to", "bezierCurveTo",
-    [ opt("cp1x", 1), opt("cp1y", 0), opt("cp2x", 0), opt("cp2y", 1), opt("x", 1), opt("y", 1) ]);
-  gfxFunction("quadratic_curve_to", "quadratic_curve_to", "quadraticCurveTo",
-    [ opt("cpx", 1), opt("cpy", 0), opt("x", 1), opt("y", 1) ]);
-  gfxFunction("arc", "arc", "arc",
-    [ opt("x", 1), opt("y", 1), opt("radius", .5), opt("startAngle", 0), opt("endAngle", 2*pi), opt("counterclockwise", false) ]);
-  gfxFunction("arc-to", "arc_to", "arcTo",
-    [ opt("x1", 1), opt("y1", 0), opt("x2", 1), opt("y2", 1), opt("radius", 1) ]);
-  gfxFunction("ellipse", "ellipse", "ellipse", // defaults to a circle inscribing (0,0,1,1)
-    [ opt("x", .5), opt("y", .5), opt("radiusX", .5), opt("radiusY", .5),
-      opt("rotation", 0), opt("startAngle", 0), opt("endAngle", 2*pi), opt("counterclockwise", false) ]);
-  gfxFunction("rect", "rect", "rect",
-    [ opt("x", 0), opt("y", 0), opt("width", 1), opt("height", 1) ]);
   gfxFunction("fill", "fill", "fill", []);
   gfxFunction("stroke", "stroke", "stroke", []);
   gfxFunction("draw-focus-if-needed", "draw_focus_if_needed", "drawFocusIfNeeded", []);
@@ -162,17 +201,6 @@ export function createInstance(schemeOpts = {}) {
   gfxProp("image-smoothing-enabled", "image_smoothing_enabled", "imageSmoothingEnabled");
   gfxProp("image-smoothing-quality", "image_smoothing_quality", "imageSmoothingQuality");
   
-  gfxProp("xxx", "xxx", "xxx");
-  gfxProp("xxx", "xxx", "xxx");
-  gfxProp("xxx", "xxx", "xxx");
-    gfxFunction("xxx", "xxx", "xxx",
-    []);
-
-  gfxFunction("xxx", "xxx", "xxx", []);
-  gfxFunction("xxx", "xxx", "xxx", []);
-  gfxFunction("xxx", "xxx", "xxx", []);
-
-
   exportAPI("draw_focus_if_needed", draw_focus_if_needed, { compileHook: CtxFnHookHook('drawFocusIfNeeded') });
   function draw_focus_if_needed(...params) { return this[gfxContextAtom].drawFocusIfNeeded(...params) }
 
@@ -193,125 +221,6 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("create_image_data", createImageData, { compileHook: CtxFnHookHook('createImageData') });
   function createImageData(...params) { return this[gfxContextAtom].createImageData(...params) }
-
-
-
-
-  // When there are macros, this can be rewritten as a LET binding, probably
-  exportAPI("gfx_save", gfx_save, { evalArgs: 0, compileHook: gfx_save_hook });
-  function gfx_save(...forms) {
-    let scope = this, canvasRenderingContext = scope[gfxContextAtom];
-    let RETURN_SYMBOL = globalScope.RETURN_SYMBOL;
-    if (!RETURN_SYMBOL) throw "required symbol"
-    canvasRenderingContext.save();
-    try {
-      let res = BOTTOM;
-      for (let form of forms) {
-        res = scope._eval(form);
-        if (this[RETURN_SYMBOL]) return;
-      }
-      return res;
-    } finally {
-      canvasRenderingContext.restore();
-    }
-    return canvasRenderingContext;
-  }
-  function gfx_save_hook(args, ssaScope, tools) {
-    let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    let ssaGfxContext = compileEval(gfxContextAtom, ssaScope, tools);
-    let ssaGfxContextAtom = use(bind(gfxContextAtom));
-    emit(`${ssaGfxContext}.save();`);
-    ssaScope = newScope(ssaScope, 'gfx-save-scope');
-    ssaScope[gfxContextAtom] = ssaGfxContext;
-    let saveSsaScope = ssaScope, scopeLines = [];
-    let ssaTmpScope = newTemp("scope_tmp");
-    scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
-    emit(`try {`);
-    let saveIndent = tools.indent;
-    tools.indent += '  ';
-    scopeLines.push(emit(`let scope = ${ssaTmpScope};`));
-    scopeLines.push(emit(`scope[${ssaGfxContextAtom}] = ${ssaGfxContext};`));
-    for (let arg of args)
-      compileEval(arg, ssaScope, tools);
-    tools.indent = saveIndent;
-    emit(`} finally { ${ssaGfxContext}.restore() }`);
-    if (ssaScope.dynamicScopeUsed)
-      saveSsaScope.dynamicScopeUsed = true;
-    else
-      tools.deleteEmitted(scopeLines);
-    return ssaGfxContext;
-  }
-
-  function CtxFnHookHook(fName, opts = {}) {
-    let dup1 = opts.dup1 ?? false;
-    return function crcHookFn(args, ssaScope, tools) {
-      let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-      let ssaCRC = ssaScope[gfxContextAtom];
-      if (!ssaCRC)
-        ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-      let ssaArgStr = '', sep = '';
-      if (dup1) {
-        let ssaArg1Val = newTemp('dupFirst');
-        emit(`let ${ssaArg1Val} = ${args[1]};`);
-        emit(`if (${ssaArg1Val} === undefined) ${ssaArg1Val} = ${args[0]}`);
-        args[1] = ssaArg1Val;
-      }
-      for (let arg of args)
-        ssaArgStr += `${sep}${arg}`, sep = ', ';
-      emit(`${ssaCRC}.${fName}(${ssaArgStr});`);
-      return ssaCRC;
-    }
-  }
-
-  function CanvasRenderingContextProperty(property) {
-    return function get_set_crc_property(newValue = optional) {
-      let canvasRenderingContext = this[gfxContextAtom];
-      let value = canvasRenderingContext[property];
-      if (newValue !== undefined)
-        canvasRenderingContext[property] = newValue;
-      return value;
-    }
-  }
-
-  function CanvasRenderingContextPropertyHook(propName) {
-    return function crcHookProp(args, ssaScope, tools) {
-      let compileEval = tools.compileEval, emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-      let ssaCRC = ssaScope[gfxContextAtom];
-      if (!ssaCRC)
-        ssaCRC = compileEval(gfxContextAtom, ssaScope, tools);
-      let ssaRes = newTemp(propName + '_value');
-      emit(`let ${ssaRes} = ${ssaCRC}.${propName};`);
-      if (args.length > 0) {
-        let ssaVal = args[0];
-        emit(`if (${ssaVal} !== undefined)`);
-        emit(`  ${ssaCRC}.${propName} = ${ssaVal};`);
-      }
-      return ssaRes;
-    }
-  }
-
-  exportAPI("translate", translate, { compileHook: CtxFnHookHook('translate') });
-  function translate(x, y) { return this[gfxContextAtom].translate(x, y) }
-
-  exportAPI("scale", scale, { compileHook: CtxFnHookHook('scale', { dup1: true }) });
-  function scale(width, height = width) { return this[gfxContextAtom].scale(width, height) }
-
-  exportAPI("rotate", rotate, { compileHook: CtxFnHookHook('rotate') });
-  function rotate(theta) { return this[gfxContextAtom].rotate(theta) }
-
-  // You probably shouldn't be using these (use gfx-save instead!),
-  // but for completeness...
-  exportAPI("save_context", save_context, { compileHook: CtxFnHookHook('save') });
-  function save_context() { return this[gfxContextAtom].save() }
-
-  exportAPI("restore_context", restore_context, { compileHook: CtxFnHookHook('restore') });
-  function restore_context() { return this[gfxContextAtom].restore() }
-
-  exportAPI("canvas_width", canvas_width, { compileHook: CanvasRenderingContextPropertyHook('canvas.width') });
-  function canvas_width() { return this[gfxContextAtom].canvas.width; }
-
-  exportAPI("canvas_height", canvas_height, { compileHook: CanvasRenderingContextPropertyHook('canvas.height') });
-  function canvas_height() { return this[gfxContextAtom].canvas.height }
 
   //
   // Bindings!
