@@ -78,6 +78,7 @@ export function createInstance(schemeOpts = {}) {
         paramName = param[REST][FIRST].description;
         let paramDefault = param[REST][REST][FIRST];
         if (paramDefault === undefined) paramDefault = "optional";
+        if (paramDefault === 2*pi) paramDefault = "2*pi";
         else paramDefault = string(paramDefault);
         defaultStr = ` = ${paramDefault}`;
       }
@@ -126,7 +127,7 @@ export function createInstance(schemeOpts = {}) {
   }
   defineBinding("gfx-save", "gfx_save", { group: "web-gfx", sample: `(gfx-save form ...)`,
     blurb: `Saves the graphics context, executes the forms, then restores the context afterward. ` +
-           `you should generally use this instead of save-gfx-context and restore-gfx-context, though ` +
+           `You should generally use this instead of save-gfx-context and restore-gfx-context, though ` +
            `though those can be useful in a REPL.` });
 
   gfxFunction("translate", "translate", "translate", [ opt("x", 0), opt("y", 0) ]);
@@ -137,8 +138,9 @@ export function createInstance(schemeOpts = {}) {
     let x = params[0] ?? 0, y = params[1] ?? x;
     return list( ((gfx_context, x, y) => gfx_context.scale(x, y)), gfxContextAtom, x, y );
   }
-  defineBinding("scale", "gfx_scale", { group: "web-gfx", sample: `(gfx-save form ...)`,
-    blurb: `Saves the graphics context, executes the forms, then restores the context afterward.` });
+  defineBinding("scale", "gfx_scale", { group: "web-gfx", sample: `(scale x y)`,
+    implStr: `(x, y = x) => gfx_context.scale(x, y)`,
+  });
 
   gfxFunction("save-gfx-context", "save_gfx_context", "save", [], {
     blurb: `Saves the graphics context on a stack which can later be "popped" with ` +
