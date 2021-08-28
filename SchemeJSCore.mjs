@@ -1792,11 +1792,13 @@ export function createInstance(schemeOpts = {}) {
   }
   function js_finally_hook(args, ssaScope, tools) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
-    if (args.length < 2) throw new LogicError(`Bad finally`);
+    if (args.length < 2) throw new LogicError(`bad finally`);
     let finallyClause = args[0];
     let finallyForms = args[1];
     if (!isList(finallyClause))
-      throw new SchemeCompileError(`Bad finally clause ${string(finallyClause)}`);
+      throw new SchemeCompileError(`bad finally clause ${string(finallyClause)}`);
+    let ssaResult = newTemp('js_finally'), ssaValue = `${BOTTOM}`;
+    emit(`let ${ssaResult};`);
     emit(`try {`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
@@ -1806,15 +1808,11 @@ export function createInstance(schemeOpts = {}) {
     tools.indent = saveIndent;
     emit(`} finally {`);
     tools.indent += '  ';
-    ssaScope = newScope(ssaScope, "compiled-js-catch-scope")
-    ssaScope[catchVar] = ssaCatchSym;
-    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-js-catch-scope");`));
-    let ssaCatchAtom = use(bind(catchVar));
-    scopeLines.push(emit(`scope[${ssaCatchAtom}] = ${ssaCatchSym};`));
     for (let form of finallyForms)
       compileEval(form, ssaScope, tools);
     tools.indent = saveIndent;
     emit(`}`);
+    return ssaResult;
   }
 
   // (def variable value)
