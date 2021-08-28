@@ -1694,7 +1694,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
-  // try/catch
+  // throw/catch/finally
   //
 
   const js_throw = value => { throw value; return undefined; }; // "return" lets compiler use template
@@ -1721,8 +1721,8 @@ export function createInstance(schemeOpts = {}) {
     } catch (e) {
       let scope = newScope(this, "js-catch-scope");
       scope[catchVar] = e;
-      for ( ; moreList(catchForms); catchForms = catchForms[REST]) {
-        val = _eval(catchForms[FIRST], scope);
+      for (let form of catchForms) {
+        val = _eval(form, scope);
         if (scope[RETURN_SYMBOL]) return;
       }
     }
@@ -1766,6 +1766,55 @@ export function createInstance(schemeOpts = {}) {
     else
       tools.deleteEmitted(scopeLines);
     return ssaResult;
+  }
+
+  // (finally (forms) forms) -- finally
+  exportAPI("finally", js_finally, { evalArgs: 0, compileHook: js_finally_hook });
+  function js_finally(finallyForms, form, ...forms) {
+    if (!isList(finallyForms))
+      throw new SchemeEvalError(`bad finally forms ${string(finallyForms)}`);
+    let catchVar = finallyForms[FIRST], catchForms = finallyForms[REST];
+    let val;
+    try {
+      val = _eval(form, this);
+      if (this[RETURN_SYMBOL]) return;
+      for (let form of forms) {
+        val = _eval(form, this);
+        if (this[RETURN_SYMBOL]) return;
+      }
+    } finally {
+      for (let form of finallyForms) {
+        _eval(form, scope);
+        if (scope[RETURN_SYMBOL]) return;
+      }
+    }
+    return val;
+  }
+  function js_finally_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    if (args.length < 2) throw new LogicError(`Bad finally`);
+    let finallyClause = args[0];
+    let finallyForms = args[1];
+    if (!isList(finallyClause))
+      throw new SchemeCompileError(`Bad finally clause ${string(finallyClause)}`);
+    emit(`try {`);
+    let saveIndent = tools.indent;
+    tools.indent += '  ';
+    for (let i = 1; i < args.length; ++i)
+      ssaValue = compileEval(args[i], ssaScope, tools);
+    emit(`${ssaResult} = ${ssaValue};`);
+    tools.indent = saveIndent;
+    emit(`} finally {`);
+    tools.indent += '  ';
+    ssaScope = newScope(ssaScope, "compiled-js-catch-scope")
+    ssaScope[catchVar] = ssaCatchSym;
+    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-js-catch-scope");`));
+    let ssaCatchAtom = use(bind(catchVar));
+    scopeLines.push(emit(`scope[${ssaCatchAtom}] = ${ssaCatchSym};`));
+    for (let form of finallyForms)
+      compileEval(form, ssaScope, tools);
+    tools.indent = saveIndent;
+    emit(`}`);
   }
 
   // (def variable value)

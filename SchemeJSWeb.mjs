@@ -75,7 +75,8 @@ export function createInstance(schemeOpts = {}) {
       if (isList(param)) {
         paramName = param[REST][FIRST].description;
         let paramDefault = param[REST][REST][FIRST];
-        if (typeof paramDefault === 'symbol') paramDefault = paramDefault.description;
+        if (paramDefault === undefined) paramDefault = "optional";
+        else paramDefault = string(paramDefault);
         defaultStr = ` = ${paramDefault}`;
       }
       paramStr += `${sep}${paramName}${defaultStr}`;
@@ -83,25 +84,118 @@ export function createInstance(schemeOpts = {}) {
       sep = ', ';
     }
     defineBinding(boundName, name, { group: "web-gfx", gfxApi: functionName,
-      implStr: `(${[paramStr]}) => gfx_context.${functionName}(${argStr})` });
+      implStr: `(${[paramStr]}) => gfx_context.${functionName}(${argStr})`, ...opts });
   }
-  
-  /*
-  exportAPI("gfx_opt", gfx_opt, { tag: MACRO_TAG });
-  function gfx_opt(params) {
-    let param = params[0], dflt = params[1];
-    let paramAtom = Atom(param);
-    return list( ((paramVal, dflt) => paramVal !== undefined ? paramVal : dflt), paramAtom, dflt );
-  }
-  const opt = (...params) => globalScope.gfx_opt(params);
-  */
+
   function opt(param, dflt) {
     let paramAtom = Atom(param);
     return list( ((paramVal, dflt) => paramVal !== undefined ? paramVal : dflt), paramAtom, dflt );
   }
 
-  gfxFunction("move-to", "move_to", "moveTo", [ opt("x", 0), opt("y", 0)]);
-  gfxFunction("line-to", "line_to", "lineTo", [ opt("x", 0), opt("y", 1)]);
+  function gfxProp(boundName, name, propName, opts = {}) {
+    exportAPI(name, macro, { tag: MACRO_TAG });
+    function macro(params) {
+      const fn = (gfx_context, value = optional) => { let oldValue = gfx_context[propName]; if (value !== undefined) gfx_context[propName] = value; return oldValue };
+      return list(fn, gfxContextAtom, ...params);
+    }
+    defineBinding(boundName, name, { group: "web-gfx", gfxApi: propName,
+      implStr: `(value = optional) => { let oldValue = gfx_context.${propName}; if (value !== undefined) gfx_context.${propName} = value; return oldValue }`,
+      ...opts });
+  }
+
+  gfxFunction("move-to", "move_to", "moveTo", [ opt("x", 0), opt("y", 0) ]);
+  gfxFunction("line-to", "line_to", "lineTo", [ opt("x", 0), opt("y", 1) ]);
+  gfxFunction("fill-rect", "fill_rect", "fillRect",
+    [ opt("x", 0), opt("y", 0), opt("width", 1), opt("height", 1) ]);
+  gfxFunction("clear-rect", "clear_rect", "clearRect",
+    [ opt("x", 0), opt("y", 0), opt("width", 1), opt("height", 1) ]);
+  gfxFunction("stroke-rect", "stroke_rect", "strokeRect",
+    [ opt("x", 0), opt("y", 0), opt("width", 1), opt("height", 1) ]);
+  gfxFunction("fill-text", "fill_text", "fillText",
+    [ "text", opt("x", 0), opt("y", 0), opt("maxWidth", optional)]);
+  gfxFunction("measure-text", "measure_text", "measureText", [ "text" ]);
+  gfxProp("line-width", "line_width", "lineWidth");
+  gfxProp("line-cap", "line_cap", "lineCap");
+  gfxProp("line-join", "line_join", "lineJoin");
+  gfxProp("miter-limit", "miter_limit", "miterLimit");
+  gfxFunction("get-line-dash", "get_line_dash", "getLineDash", []);
+  gfxFunction("set-line-dash", "set_line_dash", "setLineDash", ["value"]);
+  gfxProp("line-dash-offset", "line_dash_offset", "lineDashOffset");
+  gfxProp("font", "font", "font");
+  gfxProp("text-align", "text_align", "textAlign");
+  gfxProp("text-baseline", "text_baseline", "textBaseline");
+  gfxProp("direction", "direction", "direction");
+  gfxProp("fill-style", "fill_style", "fillStyle");
+  gfxProp("stroke-style", "stroke_style", "strokeStyle");
+  gfxFunction("create-conic-gradient", "create_conic_gradient", "createConicGradient",
+    [ opt("startAngle", 0), opt("x", 0), opt("y", 1) ]);
+  gfxFunction("create-linear-gradient", "create_linear_gradient", "createLinearGradient",
+    [ opt("x0", 0), opt("y0", 0), opt("x1", 1), opt("y1", 1) ]);
+  gfxFunction("create-radial-gradient", "create_radial_gradient", "createRadialGradient",
+    [ opt("x0", 0), opt("y0", 0), opt("r0", 1), opt("x1", 1), opt("y1", 1), opt("r1", 0) ]);
+  gfxFunction("create-pattern", "create_pattern", "createPattern", [ "image", opt("repetition", "repeat") ]);
+  gfxProp("shadow-color", "shadow_color", "shadowColor");
+  gfxProp("shadow-offset-x", "shadow_offset_x", "shadowOffsetX");
+  gfxProp("shadow-offset-y", "shadow_offset_y", "shadowOffsetY");
+  gfxFunction("begin-path", "begin_path", "beginPath", []);
+  gfxFunction("close-path", "close_path", "closePath", []);
+  gfxFunction("bezier-curve-to", "bezier_curve_to", "bezierCurveTo",
+    [ opt("cp1x", 1), opt("cp1y", 0), opt("cp2x", 0), opt("cp2y", 1), opt("x", 1), opt("y", 1) ]);
+  gfxFunction("quadratic_curve_to", "quadratic_curve_to", "quadraticCurveTo",
+    [ opt("cpx", 1), opt("cpy", 0), opt("x", 1), opt("y", 1) ]);
+  gfxFunction("arc", "arc", "arc",
+    [ opt("x", 1), opt("y", 1), opt("radius", .5), opt("startAngle", 0), opt("endAngle", 2*pi), opt("counterclockwise", false) ]);
+  gfxFunction("arc-to", "arc_to", "arcTo",
+    [ opt("x1", 1), opt("y1", 0), opt("x2", 1), opt("y2", 1), opt("radius", 1) ]);
+  gfxFunction("ellipse", "ellipse", "ellipse", // defaults to a circle inscribing (0,0,1,1)
+    [ opt("x", .5), opt("y", .5), opt("radiusX", .5), opt("radiusY", .5),
+      opt("rotation", 0), opt("startAngle", 0), opt("endAngle", 2*pi), opt("counterclockwise", false) ]);
+  gfxFunction("rect", "rect", "rect",
+    [ opt("x", 0), opt("y", 0), opt("width", 1), opt("height", 1) ]);
+  gfxFunction("fill", "fill", "fill", []);
+  gfxFunction("stroke", "stroke", "stroke", []);
+  gfxFunction("draw-focus-if-needed", "draw_focus_if_needed", "drawFocusIfNeeded", []);
+  gfxProp("global-alpha", "global_alpha", "globalAlpha");
+  gfxProp("global-composite-operation", "global_composite_operation", "globalCompositeOperation");
+  gfxFunction("get-image-data", "get_image_data", "getImageData",
+    [ opt("sx", 0), opt("sy", 0), opt("sw", 1), opt("sh", 1) ]);
+  gfxProp("image-smoothing-enabled", "image_smoothing_enabled", "imageSmoothingEnabled");
+  gfxProp("image-smoothing-quality", "image_smoothing_quality", "imageSmoothingQuality");
+  
+  gfxProp("xxx", "xxx", "xxx");
+  gfxProp("xxx", "xxx", "xxx");
+  gfxProp("xxx", "xxx", "xxx");
+    gfxFunction("xxx", "xxx", "xxx",
+    []);
+
+  gfxFunction("xxx", "xxx", "xxx", []);
+  gfxFunction("xxx", "xxx", "xxx", []);
+  gfxFunction("xxx", "xxx", "xxx", []);
+
+
+  exportAPI("draw_focus_if_needed", draw_focus_if_needed, { compileHook: CtxFnHookHook('drawFocusIfNeeded') });
+  function draw_focus_if_needed(...params) { return this[gfxContextAtom].drawFocusIfNeeded(...params) }
+
+  exportAPI("scroll_path_into_view", scroll_path_into_view, { compileHook: CtxFnHookHook('scrollPathIntoView') });
+  function scroll_path_into_view(...params) { return this[gfxContextAtom].scrollPathIntoView(...params) }
+
+  exportAPI("is_point_in_path", is_point_in_path, { compileHook: CtxFnHookHook('isPointInPath') });
+  function is_point_in_path(...params) { return this[gfxContextAtom].isPointInPath(...params) }
+
+  exportAPI("is_point_in_stroke", is_point_in_stroke, { compileHook: CtxFnHookHook('isPointInStroke') });
+  function is_point_in_stroke(...params) { return this[gfxContextAtom].isPointInStroke(...params) }
+
+  exportAPI("clip", clip, { compileHook: CtxFnHookHook('clip') });
+  function clip(...params) { return this[gfxContextAtom].clip(...params) }
+
+  exportAPI("draw_image", draw_image, { compileHook: CtxFnHookHook('drawImage') });
+  function draw_image(...params) { return this[gfxContextAtom].drawImage(...params) }
+
+  exportAPI("create_image_data", createImageData, { compileHook: CtxFnHookHook('createImageData') });
+  function createImageData(...params) { return this[gfxContextAtom].createImageData(...params) }
+
+
+
 
   // When there are macros, this can be rewritten as a LET binding, probably
   exportAPI("gfx_save", gfx_save, { evalArgs: 0, compileHook: gfx_save_hook });
@@ -219,164 +313,11 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("canvas_height", canvas_height, { compileHook: CanvasRenderingContextPropertyHook('canvas.height') });
   function canvas_height() { return this[gfxContextAtom].canvas.height }
 
-  exportAPI("fill_rect", fill_rect, { compileHook: CtxFnHookHook('fillRect') });
-  function fill_rect(x = 0, y = 0, width = 1, height = 1) { return this[gfxContextAtom].fillRect(x, y, width, height) }
-  
-  exportAPI("clear_rect", clear_rect, { compileHook: CtxFnHookHook('clearRect') });
-  function clear_rect(x = 0, y = 0, width = 1, height = 1) { return this[gfxContextAtom].clearRect(x, y, width, height) }
-  
-  exportAPI("stroke_rect", stroke_rect, { compileHook: CtxFnHookHook('strokeRect') });
-  function stroke_rect(x = 0, y = 0, width = 1, height = 1) { return this[gfxContextAtom].strokeRect(x, y, width, height) }
-
-  exportAPI("fill_text", fill_text, { compileHook: CtxFnHookHook('fillText') });
-  function fill_text(text, x = 0, y = 0 , maxWidth = optional) { return this[gfxContextAtom].fillText(text, x, y , maxWidth) }
-
-  exportAPI("measure_text", measure_text, { compileHook: CtxFnHookHook('measureText') });
-  function measure_text(text) { return this[gfxContextAtom].measureText(text) }
-
-  const line_width = CanvasRenderingContextProperty("lineWidth");
-  exportAPI("line_width", line_width, { compileHook: CanvasRenderingContextPropertyHook('lineWidth') });
-
-  const line_cap = CanvasRenderingContextProperty("lineCap");
-  exportAPI("line_cap", line_cap, { compileHook: CanvasRenderingContextPropertyHook('lineCap') });
-
-  const line_join = CanvasRenderingContextProperty("lineJoin");
-  exportAPI("line_join", line_join, { compileHook: CanvasRenderingContextPropertyHook('lineJoin') });
-
-  const miter_limit = CanvasRenderingContextProperty("miterLimit");
-  exportAPI("miter_limit", miter_limit, { compileHook: CanvasRenderingContextPropertyHook('miterLimit') });
-
-  exportAPI("get_line_dash", get_line_dash, { compileHook: CtxFnHookHook('getLineDash') });
-  function get_line_dash() { return this[gfxContextAtom].getLineDash() }
-
-  exportAPI("set_line_dash", set_line_dash, { compileHook: CtxFnHookHook('setLineDash') });
-  function set_line_dash(segments) { this[gfxContextAtom].setLineDash(segments) }
-
-  const line_dash_offset = CanvasRenderingContextProperty("lineDashOffset");
-  exportAPI("line_dash_offset", line_dash_offset, { compileHook: CanvasRenderingContextPropertyHook('lineDashOffset') });
-  
-  const font = CanvasRenderingContextProperty("font");
-  exportAPI("font", font, { compileHook: CanvasRenderingContextPropertyHook('font') });
-
-  const text_align = CanvasRenderingContextProperty("textAlign");
-  exportAPI("text_align", text_align, { compileHook: CanvasRenderingContextPropertyHook('textAlign') });
-
-  const text_baseline = CanvasRenderingContextProperty("textBaseline");
-  exportAPI("text_baseline", text_baseline, { compileHook: CanvasRenderingContextPropertyHook('textBaseline') });
-
-  const direction = CanvasRenderingContextProperty("direction");
-  exportAPI("direction", direction, { compileHook: CanvasRenderingContextPropertyHook('direction') });
-
-  const fill_style = CanvasRenderingContextProperty("fillStyle");
-  exportAPI("fill_style", fill_style, { compileHook: CanvasRenderingContextPropertyHook('fillStyle') });
-
-  const stroke_style = CanvasRenderingContextProperty("strokeStyle");
-  exportAPI("stroke_style", stroke_style, { compileHook: CanvasRenderingContextPropertyHook('strokeStyle') });
-
-  exportAPI("create_conic_gradient", create_conic_gradient, { compileHook: CtxFnHookHook('createConicGradient') });
-  function create_conic_gradient(startAngle = 0, x = 0, y = 0) { return this[gfxContextAtom].createConicGradient(startAngle, x, y) }
-
-  exportAPI("create_linear_gradient", create_linear_gradient, { compileHook: CtxFnHookHook('createLinearGradient') });
-  function create_linear_gradient(x0 = 0, y0 = 0, x1 = 1, y1 = 1) { return this[gfxContextAtom].createLinearGradient(x0, y0, x1, y1) }
-
-  exportAPI("create_radial_gradient", create_radial_gradient, { compileHook: CtxFnHookHook('createRadialGradient') });
-  function create_radial_gradient(x0 = 0, y0 = 0, r0 = 1, x1 = 0, y1 = 0, r1 = 0) { return this[gfxContextAtom].createRadialGradient(x0, y0, r0, x1, y1, r1) }
-
-  exportAPI("create_pattern", create_pattern, { compileHook: CtxFnHookHook('createPattern') });
-  function create_pattern(image, repetition = "repeat") { this[gfxContextAtom].createPattern(image, repetition) }
-
-  const shadow_color = CanvasRenderingContextProperty("shadowColor");
-  exportAPI("shadow_color", shadow_color, { compileHook: CanvasRenderingContextPropertyHook('shadowColor') });
-
-  const shadow_offset_x = CanvasRenderingContextProperty("shadowOffsetX");
-  exportAPI("shadow_offset_x", shadow_offset_x, { compileHook: CanvasRenderingContextPropertyHook('shadowOffsetX') });
-
-  const shadow_offset_y = CanvasRenderingContextProperty("shadowOffsetY");
-  exportAPI("shadow_offset_y", shadow_offset_y, { compileHook: CanvasRenderingContextPropertyHook('shadowOffsetY') });
-
-  exportAPI("begin_path", begin_path, { compileHook: CtxFnHookHook('beginPath') });
-  function begin_path() { return this[gfxContextAtom].beginPath() }
-
-  exportAPI("close_path", close_path, { compileHook: CtxFnHookHook('closePath') });
-  function close_path() { this[gfxContextAtom].closePath() }
-
-  exportAPI("move_to", move_to, { compileHook: CtxFnHookHook('moveTo') });
-  function move_to(x = 0, y = 0) { return this[gfxContextAtom].moveTo(x, y) }
-
-  // consistency demands defaults of 1,1, but usability suggests 0, 0
-  exportAPI("line_to", line_to, { compileHook: CtxFnHookHook('lineTo') });
-  function line_to(x = 0, y = 0) { return this[gfxContextAtom].lineTo(x, y) }
-
-  exportAPI("bezier_curve_to", bezier_curve_to, { compileHook: CtxFnHookHook('bezierCurveTo') });
-  function bezier_curve_to(cp1x = 1, cp1y = 0, cp2x = 0 , cp2y = 1, x = 1, y = 1) { return this[gfxContextAtom].bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y) }
-
-  exportAPI("quadratic_curve_to", quadratic_curve_to, { compileHook: CtxFnHookHook('quadraticCurveTo') });
-  function quadratic_curve_to(cpx = 1, cpy = 0, x = 1, y = 1) { return this[gfxContextAtom].quadraticCurveTo(cpx, cpy, x, y) }
-
-  exportAPI("arc", arc, { compileHook: CtxFnHookHook('arc') });
-  function arc(x = .5, y = .5, radius = .5, startAngle = 0, endAngle = 2*Math.pi, counterclockwise = false) { return this[gfxContextAtom].arc(x, y, radius, startAngle, endAngle, counterclockwise) }
-
-  exportAPI("arc_to", arc_to, { compileHook: CtxFnHookHook('arcTo') });
-  function arc_to(x1 = 1, y1 = 0, x2 = 1, y2 = 1, radius = 1) { return this[gfxContextAtom].arcTo(x1, y1, x2, y2, radius) }
-
-  // defaults to a circle inscribing (0,0,1,1)
-  exportAPI("ellipse", ellipse, { compileHook: CtxFnHookHook('ellipse') });
-  function ellipse(x = .5, y = .5, radiusX = .5, radiusY = .5, rotation = 0, startAngle = 0, endAngle = 2*pi, counterclockwise = false) { return this[gfxContextAtom].ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise) }
-
-  exportAPI("rect", rect, { compileHook: CtxFnHookHook('rect') });
-  function rect(x = 0, y, width, height) { return this[gfxContextAtom].rect(x, y, width, height) }
-
-  exportAPI("fill", fill, { compileHook: CtxFnHookHook('fill') });
-  function fill(...params) { return this[gfxContextAtom].fill(...params) }
-
-  exportAPI("stroke", stroke, { compileHook: CtxFnHookHook('stroke') });
-  function stroke(...params) { return this[gfxContextAtom].stroke(...params) }
-
-  exportAPI("draw_focus_if_needed", draw_focus_if_needed, { compileHook: CtxFnHookHook('drawFocusIfNeeded') });
-  function draw_focus_if_needed(...params) { return this[gfxContextAtom].drawFocusIfNeeded(...params) }
-
-  exportAPI("scroll_path_into_view", scroll_path_into_view, { compileHook: CtxFnHookHook('scrollPathIntoView') });
-  function scroll_path_into_view(...params) { return this[gfxContextAtom].scrollPathIntoView(...params) }
-
-  exportAPI("is_point_in_path", is_point_in_path, { compileHook: CtxFnHookHook('isPointInPath') });
-  function is_point_in_path(...params) { return this[gfxContextAtom].isPointInPath(...params) }
-
-  exportAPI("is_point_in_stroke", is_point_in_stroke, { compileHook: CtxFnHookHook('isPointInStroke') });
-  function is_point_in_stroke(...params) { return this[gfxContextAtom].isPointInStroke(...params) }
-
-  exportAPI("clip", clip, { compileHook: CtxFnHookHook('clip') });
-  function clip(...params) { return this[gfxContextAtom].clip(...params) }
-
-  const global_alpha = CanvasRenderingContextProperty("globalAlpha");
-  exportAPI("global_alpha", global_alpha, { compileHook: CanvasRenderingContextPropertyHook('globalAlpha') });
-
-  const global_composite_operation = CanvasRenderingContextProperty("globalCompositeOperation");
-  exportAPI("global_composite_operation", global_composite_operation, { compileHook: CanvasRenderingContextPropertyHook('globalCompositeOperation') });
-
-  exportAPI("draw_image", draw_image, { compileHook: CtxFnHookHook('drawImage') });
-  function draw_image(...params) { return this[gfxContextAtom].drawImage(...params) }
-
-  exportAPI("create_image_data", createImageData, { compileHook: CtxFnHookHook('createImageData') });
-  function createImageData(...params) { return this[gfxContextAtom].createImageData(...params) }
-
-  exportAPI("get_image_data", get_image_data, { compileHook: CtxFnHookHook('getImageData') });
-  function get_image_data(sx, sy, sw, sh) { return this[gfxContextAtom].getImageData(sx, sy, sw, sh) }
-
-  exportAPI("put_image_data", put_image_data, { compileHook: CtxFnHookHook('putImageData') });
-  function put_image_data(...params) { return this[gfxContextAtom].putImageData(...params) }
-
-  const image_smoothing_enabled = CanvasRenderingContextProperty("imageSmoothingEnabled");
-  exportAPI("image_smoothing_enabled", image_smoothing_enabled, { compileHook: CanvasRenderingContextPropertyHook('imageSmoothingEnabled') });
-
-  const image_smoothing_quality = CanvasRenderingContextProperty("imageSmoothingQuality");
-  exportAPI("image_smoothing_quality", image_smoothing_quality, { compileHook: CanvasRenderingContextPropertyHook('imageSmoothingQuality') });
-
   //
   // Bindings!
   //
 
   if (defineSchemeBindings) {
-
     defineBinding("VERSION", "VERSION", {
       group: "main", sample: `VERSION`,
       blurb: `The SchemeJSWeb version`
