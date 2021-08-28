@@ -55,7 +55,6 @@ export function createInstance(schemeOpts = {}) {
   const FIRST = globalScope.FIRST ?? required();
   const REST = globalScope.REST ?? required();
   const Atom = globalScope.Atom ?? required();
-  const js_try = globalScope.try ?? required();
   const js_finally = globalScope.finally ?? required();
   const MACRO_TAG = globalScope.MACRO_TAG ?? required();
   const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
@@ -63,6 +62,7 @@ export function createInstance(schemeOpts = {}) {
 
   const gfxContextAtom = Atom("gfx-context");
   const htmlDocumentAtom = Atom("html-document");
+  const pi = Math.PI;
 
   function gfxFunction(boundName, name, functionName, params, opts = {}) {
     const fn = (gfx_context, ...args) => gfx_context[functionName](...args);
@@ -132,7 +132,7 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("translate", "translate", "translate", [ opt("x", 0), opt("y", 0) ]);
   gfxFunction("rotate", "rotate", "rotate", [ opt("angle", 0)]);
 
-  exportAPI("scale", gfx_scale, { tag: MACRO_TAG });
+  exportAPI("gfx_scale", gfx_scale, { tag: MACRO_TAG });
   function gfx_scale(params) {
     let x = params[0] ?? 0, y = params[1] ?? x;
     return list( ((gfx_context, x, y) => gfx_context.scale(x, y)), gfxContextAtom, x, y );
@@ -211,7 +211,6 @@ export function createInstance(schemeOpts = {}) {
   gfxProp("image-smoothing-quality", "image_smoothing_quality", "imageSmoothingQuality");
 
   // Buncha APIs with variable args
-  function gfxVarArgFunction(boundName, name, functionName, opts = {}) {};
   gfxVarArgFunction("draw-focus-if-needed", "draw_focus_if_needed", "drawFocusIfNeeded");
   gfxVarArgFunction("scroll-path-into-view", "scroll_path_into_view", "scrollPathIntoView");
   gfxVarArgFunction("is-point-in-path", "is_point_in_path", "isPointInPath");
