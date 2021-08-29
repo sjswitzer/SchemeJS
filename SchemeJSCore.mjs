@@ -1991,16 +1991,18 @@ export function createInstance(schemeOpts = {}) {
         let argv = [], argCount = 0;
         while (moreList(args)) {
           let arg = args[FIRST];
-          let macroResult = handleParameterMacroIfPresent(arg, args[REST], argCount, evalCount);
-          if (macroResult !== undefined) {
-            let insertForms = macroResult[FIRST];
-            args = macroResult[REST];
-            for (let insertForm of insertForms) {
-              let insertion = _eval(insertForm, scope);
-              argv.push(...insertion);
+          if (argCount < evalCount) {
+            let macroResult = handleParameterMacroIfPresent(arg, args[REST]);
+            if (macroResult !== undefined) {
+              let insertForms = macroResult[FIRST];
+              args = macroResult[REST];
+              for (let insertForm of insertForms) {
+                let insertion = _eval(insertForm, scope);
+                argv.push(...insertion);
+              }
+              argCount = argv.length;
+              continue;
             }
-            argCount = argv.length;
-            continue;
           }
           if (argCount < evalCount) {
             arg = _eval(arg, scope);
@@ -2104,7 +2106,7 @@ export function createInstance(schemeOpts = {}) {
           let res = [];
           while (moreList(form)) {
             let element = form[FIRST];
-            let macroResult = handleParameterMacroIfPresent(element, form[REST], 0, MAX_INTEGER);
+            let macroResult = handleParameterMacroIfPresent(element, form[REST]);
             if (macroResult !== undefined) {
               let insertForms = macroResult[FIRST];
               form = macroResult[REST];
@@ -2153,14 +2155,14 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeEvalError(`Bad form ${string(form)}`);
     }
 
-    function handleParameterMacroIfPresent(arg, args, argCount, evalCount) {
+    function handleParameterMacroIfPresent(arg, args) {
       if (typeof arg === 'symbol') {
         let symVal = scope[arg];
         if (typeof symVal === 'function') {
           let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
-            if ((argCount < evalCount && tag === EVALUATED_PARAMETER_MACRO_TAG)) {
+            if (tag === EVALUATED_PARAMETER_MACRO_TAG) {
               let macroResult = symVal.call(scope, args);
               if (!isList(macroResult))
                 throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
@@ -3093,17 +3095,19 @@ export function createInstance(schemeOpts = {}) {
         let ssaArgv = [], ssaArgStr = '', sep = '', argCount = 0, usesDynamicArgv = false;
         while (moreList(args)) {
           let arg = args[FIRST];
-          let res = handleParameterMacroIfPresent(arg, args[REST], argCount, evalCount);
-          if (res !== undefined) {
-            let ssaInsertArray = res[FIRST];
-            args = res[REST];
-            for (let ssaInsert of ssaInsertArray) {
-              usesDynamicArgv = true;
-              use(ssaInsert);
-              ssaArgStr += `${sep}...${ssaInsert}`;
-              sep = ', ';
+          if (argCount < evalCount) {
+          let macroResult = handleParameterMacroIfPresent(arg, args[REST]);
+            if (macroResult !== undefined) {
+              let ssaInsertArray = macroResult[FIRST];
+              args = macroResult[REST];
+              for (let ssaInsert of ssaInsertArray) {
+                usesDynamicArgv = true;
+                use(ssaInsert);
+                ssaArgStr += `${sep}...${ssaInsert}`;
+                sep = ', ';
+              }
+              continue;
             }
-            continue;
           }
           let ssaArg;
           if (argCount < evalCount)
@@ -3290,7 +3294,7 @@ export function createInstance(schemeOpts = {}) {
           let evalledSsaValues = [];
           while (moreList(form)) {
             let element = form[FIRST];
-            let macroResult = handleParameterMacroIfPresent(element, form[REST], 0, MAX_INTEGER);
+            let macroResult = handleParameterMacroIfPresent(element, form[REST]);
             if (macroResult !== undefined) {
               let ssaInsertionsArray = macroResult[FIRST];
               form = macroResult[REST];
@@ -3362,14 +3366,14 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeCompileError(`BadForm ${string(form)}`);
     }
 
-    function handleParameterMacroIfPresent(arg, args, argCount, evalCount) {  
+    function handleParameterMacroIfPresent(arg, args) {  
       if (typeof arg === 'symbol') {
         let symVal = scope[arg];
         if (typeof symVal === 'function') {
           let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
-            if ((argCount < evalCount && tag === EVALUATED_PARAMETER_MACRO_TAG)) {
+            if (tag === EVALUATED_PARAMETER_MACRO_TAG) {
               let saveMacroCompiled = tools.macroCompiled;
               tools.macroCompiled = false;
               let macroResult = symVal.call(scope, args, ssaScope, tools);
