@@ -1897,8 +1897,6 @@ export function createInstance(schemeOpts = {}) {
   //
   exportAPI("spread", spread, { tag: EVALUATED_PARAMETER_MACRO_TAG });
   function spread(args, ssaScope, tools) {
-    if (!isList(args))
-      throw new SchemeEvalError(`bad spread operator arguments ${string(args)}`);
     let spreadArg = args[FIRST];
     if (ssaScope) {
       tools.macroCompiled = true;
