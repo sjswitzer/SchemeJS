@@ -1685,7 +1685,7 @@ export function createInstance(schemeOpts = {}) {
       blurb: `SIOD-style "catch." Evaluates and returns the sequence of forms and returns the value of the ` +
              `last one, unless (*throw ...) is called, in which case it returns the thrown value.`
     });
-    defineBinding("for-in", "for_in", {
+    defineBinding("for-in", "rationalized_for_in", {
       group: "control-flow", sample: `(for-in key-var value-var obj form ...)`, 
       blurb: `If "obj" is an iterable object, the sequence of forms is evaluated with each item bound to ` +
              `value-var and key-var is a sequence of indices beginning at 0. If "obj" is a non-iteable JavaScript Object ` +

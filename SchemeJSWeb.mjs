@@ -40,10 +40,6 @@ import * as SchemeJS from './SchemeJS.mjs';
 
 export const VERSION = SchemeJS.VERSION;
 export const LogicError = SchemeJS.LogicError;
-const isArray = Array.isArray;
-
-// So that optional parameters show up pretty when printed
-const optional = undefined;
 
 //
 // Creates a SchemeJSWeb instance.
@@ -60,13 +56,9 @@ export function createInstance(schemeOpts = {}) {
   const Atom = globalScope.Atom ?? required();
   function required() { throw "required" }
 
-  const gfxContextAtom = Atom("gfx-context");
-  const htmlDocumentAtom = Atom("html-document");
-  const pi = Math.PI;
   const eval_string = str => globalScope.eval_string(str);
 
-  // Defines the graphics function and a macro to call it.
-  // This is how you write Scheme with no parser or bindings :)
+  // Defines the graphics function and a macro to call it with the context
   function gfxFunction(name, jsFunctionName, functionBody, opts = {}) {
     let schemeGfxContextFnName = `gfx-context-${name}`, schemeGfxContextFnNameAtom = Atom(schemeGfxContextFnName);
     let code =  `let pi = Math.PI, optional = undefined; return ${functionBody}`;

@@ -1484,6 +1484,66 @@ export function createInstance(schemeOpts = {}) {
     if (scope[RETURN_SYMBOL]) return;
     scope = newScope(this, "for-in-scope");
     let val = NIL;
+    for (let key in obj) {
+      let value = obj[key];
+      scope[keySymbol] = key;
+      scope[valueSymbol] = value;
+      val = _eval(form, scope);
+      if (scope[RETURN_SYMBOL]) return;
+      for (let form of forms) {
+        val = _eval(form, scope);
+        if (scope[RETURN_SYMBOL]) return;
+      }
+    }
+    return val;
+  }
+  function for_in_hook(args, ssaScope, tools) {
+    let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
+    if (args.length < 4) throw new SchemeCompileError(`Bad for-in`);
+    let indexVar = args[0], valueVar = args[1];
+    if (!isAtom(indexVar)) throw new SchemeCompileError(`bad index variable in for-in ${indexVar}`);
+    if (!isAtom(valueVar)) throw new SchemeCompileError(`bad value variable in for-in ${valueVar}`);
+    let ssaKeyVarAtom = use(bind(indexVar)), ssaValueVarAtom  = use(bind(valueVar));
+    let ssaObj = compileEval(args[2], ssaScope, tools);
+    let ssaTmpScope = newTemp("scope_tmp");
+    let saveSsaScope = ssaScope, scopeLines = [];
+    scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
+    ssaScope = newScope(ssaScope, "compiler-for-in-scope");
+    let ssaIndexVar = newTemp(indexVar.description), ssaValueVar = newTemp(valueVar.description);
+    ssaScope[indexVar] = ssaIndexVar;
+    ssaScope[valueVar] = ssaValueVar;
+    let ssaFn = newTemp('for_in_fn)');
+    let ssaValue = `${BOTTOM}`;
+    let ssaResult = newTemp('for_in_result');
+    emit(`let ${ssaResult} = ${ssaValue}; {`)
+    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`));
+    emit(`  for (let ${ssaIndexVar} in ${ssaObj}) {`);
+    let saveIndent = tools.indent;
+    tools.indent += '    ';
+    emit(`let ${ssaValueVar} = ${ssaObj}[${ssaIndexVar}];`);
+    scopeLines.push(emit(`scope[${ssaKeyVarAtom}] = ${ssaIndexVar};`));
+    scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
+    for (let i = 3; i < args.length; ++i)
+      ssaValue = compileEval(args[i], ssaScope, tools);
+    emit(`${ssaResult} = ${ssaValue});`);
+    tools.indent = saveIndent;
+    emit(`  }`);
+    emit('}');
+    if (ssaScope.dynamicScopeUsed)
+      saveSsaScope.dynamicScopeUsed = true;
+    else
+      tools.deleteEmitted(scopeLines);
+    return ssaResult;
+  }
+
+  // (for-in key-symbol value-symbol obj form forms...)
+  exportAPI("rationalized_for_in", rationalized_for_in, { evalCount: 0, compileHook: rationalized_for_in_hook });
+  function rationalized_for_in(keySymbol, valueSymbol, obj, form, ...forms) {
+    let scope = this;
+    obj = _eval(obj, scope);
+    if (scope[RETURN_SYMBOL]) return;
+    scope = newScope(this, "rationalized-for-in-scope");
+    let val = NIL;
     if (isIterable(obj)) {
       let index = 0;
       for (let value of obj) {
@@ -1511,7 +1571,7 @@ export function createInstance(schemeOpts = {}) {
     }
     return val;
   }
-  function for_in_hook(args, ssaScope, tools) {
+  function rationalized_for_in_hook(args, ssaScope, tools) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (args.length < 4) throw new SchemeCompileError(`Bad for-in`);
     let indexVar = args[0], valueVar = args[1];
@@ -1522,16 +1582,16 @@ export function createInstance(schemeOpts = {}) {
     let ssaTmpScope = newTemp("scope_tmp");
     let saveSsaScope = ssaScope, scopeLines = [];
     scopeLines.push(emit(`let ${ssaTmpScope} = scope;`));
-    ssaScope = newScope(ssaScope, "compiler-for-in-scope");
+    ssaScope = newScope(ssaScope, "compiler-rationalized-for-in-scope");
     let ssaIndexVar = newTemp(indexVar.description), ssaValueVar = newTemp(valueVar.description);
     ssaScope[indexVar] = ssaIndexVar;
     ssaScope[valueVar] = ssaValueVar;
     let ssaFn = newTemp('for_in_fn)');
     let ssaValue = `${BOTTOM}`;
-    emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (for-in ${string(indexVar)} ${string(valueVar)} ...)`);
+    emit(`function ${ssaFn}(${ssaIndexVar}, ${ssaValueVar}) { // (rationalized-for-in ${string(indexVar)} ${string(valueVar)} ...)`);
     let saveIndent = tools.indent;
     tools.indent += '  ';
-    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-for-in-scope");`));
+    scopeLines.push(emit(`let scope = newScope(${ssaTmpScope}, "compiled-rationalized-for-in-scope");`));
     scopeLines.push(emit(`scope[${ssaIndexVarAtom}] = ${ssaIndexVar};`));
     scopeLines.push(emit(`scope[${ssaValueVarAtom}] = ${ssaValueVar};`));
     for (let i = 3; i < args.length; ++i)
