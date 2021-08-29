@@ -1901,10 +1901,12 @@ export function createInstance(schemeOpts = {}) {
     if (ssaScope) {
       tools.macroCompiled = true;
       spreadArg = compileEval(spreadArg, ssaScope, tools);
-      return new Pair([spreadArg], args[REST]);
+      return new Pair(`...${spreadArg}`, args[REST]);
     }
     let evalled = _eval(spreadArg, this);
     let list = args[REST], last;
+    if (!isIterable(evalled))  // handles ... for object literals
+      return new Pair(evalled, args[REST]);
     for (let item of evalled) {
       if (!isPrimitive(item)) item = new Pair(QUOTE_ATOM, new Pair(item, NIL));
       item = new Pair(item);
@@ -3098,7 +3100,7 @@ export function createInstance(schemeOpts = {}) {
             if (ssaInsert) {
               usesDynamicArgv = true;
               use(ssaInsert);
-              ssaArgStr += `${sep} ...${ssaInsert}`;
+              ssaArgStr += `${sep}${ssaInsert}`;
               sep = ', ';
             }
             continue;
@@ -3264,22 +3266,22 @@ export function createInstance(schemeOpts = {}) {
         }
         // We have a dynamic number of arguments, all evaluated.
         // But we don't know how many at compile time except that there's a minimum
+        if (requiresScope)
+          sseScope.dynamicScopeUsed = true;
         let ssaResult = newTemp(`${fName}_result`);
         use(ssaFunction);
-        let ssaDynamicArgv = newTemp('dynamic_argv');
+        let scopeStr = requiresScope ? 'scope' : "null";
         if (argCount >= requiredCount) {
-          emit(`let ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaArgStr});`);
+          emit(`let ${ssaResult} = ${ssaFunction}.call(${scopeStr}, ${ssaArgStr});`);
           return ssaResult;
         }
         // Here, we have to determine at runtime time whether a closure is required
-        emit(`let ${ssaResult};`);
+        let ssaDynamicArgv = newTemp('dynamic_argv');
+        emit(`let ${ssaResult}, ${ssaDynamicArgv} = [ ${ssaArgStr} ];`);
         emit(`if (${ssaDynamicArgv}.length >= ${requiredCount})`);
-        emit(`  ${ssaResult} = ${ssaFunction}.apply(scope, ${ssaArgStr});`);
+        emit(`  ${ssaResult} = ${ssaFunction}.apply(${scopeStr}, ${ssaDynamicArgv});`);
         emit(`else`);
-        if (requiresScope)
-          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.call(scope, ${ssaArgStr}, ...args);  } `);
-        else
-          emit (`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}(...${ssaArgStr}, ...args);  } `);
+        emit(`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.apply(${scopeStr}, ${ssaDynamicArgv}, ...args);  } `);
         return ssaRessult;
       }
       // Special eval for JS Arrays and Objects
@@ -3294,7 +3296,7 @@ export function createInstance(schemeOpts = {}) {
               form = res[REST];
               if (ssaInsert) {
                 use(ssaInsert);
-                evalledSsaValues.push(`...${ssaInsert}`);
+                evalledSsaValues.push(ssaInsert);
               }
               continue;
             }
@@ -3374,32 +3376,11 @@ export function createInstance(schemeOpts = {}) {
               tools.macroCompiled = saveMacroCompiled;
               if (!isList(macroResult))
                 throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
-              let insert = macroResult[FIRST], ssaInsertValues;
-              let nextArg = macroResult[REST];
               if (macroCompiled) {
-                ssaInsertValues = insert;
-              } else {
-                if (tag === PARAMETER_MACRO_TAG)
-                  return new Pair(undefined, insert);
-                if (insert && insert.length > 0) {
-                  let ssaInsert = use(bind(insert));
-                  ssaInsertValues = newTemp("macro_insert");
-                  emit(`let ${ssaInsertValues} = Array(${insert.length});`);
-                  emit(`for (let i = 0; i < ${insert.length}; ++i) {`);
-                  emit(`  let arg = ${ssaInsert}[i];`);
-                  if (argCount < evalCount && evalCount !== MAX_INTEGER) {
-                    ssaScope.dynamicScopeUsed = true;
-                    tools.bindLiterally(_eval, "_eval");
-                    emit(`if (i < ${evalCount-argCount}) arg = _eval(arg, scope);`);
-                  } else if (argCount >= evalCount || evalCount === MAX_INTEGER) {
-                    ssaScope.dynamicScopeUsed = true;
-                    tools.bindLiterally(_eval, "_eval");
-                    emit(`arg = _eval(arg, scope);`);
-                  }
-                  emit(`  ${ssaInsertValues}[i] = arg;`);
-                }
+                // In this case, FIRST is the SSA value to insert and REST is the remainder of the arg list
+                return macroResult;
               }
-              return new Pair(ssaInsertValues, nextArg);
+              return new Pair(undefined, macroResult);
             }
           }
         }
