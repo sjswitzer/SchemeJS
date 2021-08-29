@@ -3317,10 +3317,8 @@ export function createInstance(schemeOpts = {}) {
         emit(`let ${ssaObjectLiteral} = {};`);
         for (let key of [ ...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form) ]) {
           let value = form[key];
-          let macroResult = handleParameterMacroIfPresentInObjectLiteral(key, value);
-          if (macroResult) {
-            // "REST" is not used here
-            let ssaInsertionsArray = macroResult[FIRST];
+          let ssaInsertionsArray = handleParameterMacroIfPresentInObjectLiteral(key, value);
+          if (ssaInsertionsArray) {
             for (let ssaInsertion of ssaInsertionsArray)
               emit(`Object.assign(${ssaObjectLiteral}, ${ssaInsertion});`);
             continue;
@@ -3410,22 +3408,19 @@ export function createInstance(schemeOpts = {}) {
               if (!isList(macroResult))
                 throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
               // macroResult[REST] isn't used in object literal insertions
-              let insert = macroResult[FIRST], ssaInsertObj;
-              if (macroCompiled) {
-                ssaInsertObj = insert;
-              } else {
-                let ssaInsertArray = use(bind(insert));
-                ssaScope.dynamicScopeUsed = true;
-                ssaInsertObj = newTemp("macro_insert");
-                tools.bindLiterally(_eval, "_eval");
-                emit(`let ${ssaInsertObj} = _eval(${ssaInsert}, scope);`)
-              }
-              return [ssaInsertObj];
+              let ssaInsertionsArray = macroResult[FIRST], ssaInsertObj;
+              if (macroCompiled)
+                return ssaInsertionsArray;
+              let ssaInsertions = macroResult[FIRST], rest = macroResult[REST];
+              let ssaInsertionResultsArray = [];
+              for (let form of ssaInsertions)
+                ssaInsertionResultsArray.push(compileEval(form, ssaScope, tools));
+              return ssaInsertionResultsArray;
             }
           }
         }
       }
-      return undefined
+      return undefined;
     }
 
   }
