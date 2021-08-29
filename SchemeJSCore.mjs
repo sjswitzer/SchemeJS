@@ -1887,16 +1887,23 @@ export function createInstance(schemeOpts = {}) {
   //
   // Spread operator.
   //
-  // The main use of parameter macros will be for the spread operator (...), but it could
-  // also be used for constants like __FILE__, __LINE__, and __DATE__.
+  // The main use of parameter macros will be for the spread operator (...)
+  // and quote notation ('foo) but it could also be used for constants like
+  // __FILE__, __LINE__, and __DATE__.
   //
   // It's never _necessary_ to specialize for the comppiled case.
   // I'm not sure if it's even useful. Maybe do something diabolical with the scope?
   //
   exportAPI("spread", spread, { tag: EVALUATED_PARAMETER_MACRO_TAG });
-  function spread(args, ssaScope, tools) {
+  function spread(args) {
     let spreadArg = args[FIRST], rest = args[REST];
     return new Pair([spreadArg], rest);
+  }
+
+  exportAPI("quote_notation", quote_notation, { tag: EVALUATED_PARAMETER_MACRO_TAG });
+  function quote_notation(args) {
+    let quoteArg = args[FIRST], rest = args[REST];
+    return new Pair([list(QUOTE_ATOM, quoteArg)], rest);
   }
 
   //
