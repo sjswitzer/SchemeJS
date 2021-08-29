@@ -1,6 +1,6 @@
 ;; SchemeJS Demo
 
-(def [factoral x]
+(defn [factoral x]
   (? (<= x 1) 
      (? (bigint? x) 1n 1)
      (* x (factoral (- x (? (bigint? x) 1n 1))))
@@ -12,7 +12,7 @@
 (factoral 171n)
 
 ;; Simpler version using conditional predicate notation
-(def [_factoral x]
+(defn [_factoral x]
   (? (<= x 1) 
      (bigint? x 1n 1)
      (* x (_factoral (- x (bigint? x 1n 1))))
@@ -54,7 +54,7 @@ _factoral
 (_factoral 50n)
 
 ;; Optional parameters
-(def [opt a b [c (+ 2 3)]] (list a b c))
+(defn [opt a b [c (+ 2 3)]] (list a b c))
 (opt 1 2 3)
 (opt 1 2)
 (opt 1)  ;; Note the binding in the closure scope
@@ -74,7 +74,7 @@ _factoral
 ((opt 1) 8)
 
 ;; Rest paramaters
-(def [foo a b ...c] c)
+(defn [foo a b ...c] c)
 foo
 (foo 1 2 3 4 5 6)
 
@@ -90,7 +90,7 @@ foo
   [(< 2 4) "g" "h"])
 
 ;; Lazy lists
-(def a (list-view (apropos)))
+(define a (list-view (apropos)))
 a
 (nth 5 a)
 (nth 15 a)
@@ -101,7 +101,7 @@ a
 /*
  * Lazy maps
  */
-(def b (lazy-map to-string (apropos)))
+(define b (lazy-map to-string (apropos)))
 b
 (nth 8 b)
 (nth 18 b)
@@ -110,20 +110,20 @@ b
 b
 
 ;; Partial evaluation binds a closure
-(def [increment-by n] (\[x] (+ x n)))
+(defn [increment-by n] (\[x] (+ x n)))
 increment-by
-(def increment-by-3 (increment-by 3))
+(define increment-by-3 (increment-by 3))
 increment-by-3  ;; Again, note the binding in the closure scope
 (increment-by-3 4)
 
 ;; Partial evaluation (bound closures) of ordinary builtins
-(def times-3 (* 3))
+(define times-3 (* 3))
 times-3
 (times-3 5)
 
 ;; Define some variables used in literals below
-(def a "foo")
-(def b 20)
+(define a "foo")
+(define b 20)
 
 ;; Array literal
 [1 2 3 4 5 6 7 a 3 b 4]
@@ -155,7 +155,7 @@ times-3
 
 ;; Fungibility of list types
 (cadr [1, 2, 3, 4])
-(def foo (cons 'a '[b c d e]))
+(define foo (cons 'a '[b c d e]))
 foo
 (length foo)
 (nth 3 foo)
