@@ -73,7 +73,7 @@ export function createInstance(schemeOpts = {}) {
   //   MACRO_TAG: Conventional macro
   //      Called with the remainder of the form.
   //      Returns what to replace the form it heads with
-  //   PARAMETER_MACRO_TAG: For every form element, including the first
+  //   PARAMETER_MACRO_TAG: For every form element except the function element
   //      Called with the remainder of the form.
   //      Returns the replacement for itself and successors.
   //   EVALUATED_PARAMETER_MACRO_TAG: For evaluated parameters only
@@ -1446,7 +1446,7 @@ export function createInstance(schemeOpts = {}) {
   }
   function letrec_hook(args, ssaScope, tools) {
     // XXX TODO: This really only implemnents let*.
-    // For "letrec", emit the `let ${ssaBoundVar} = NIL;` segnemts first,
+    // For "letrec", emit the `let ${ssaBoundVar} = BOTTOM;` segnemts first,
     // then the initialization bodies afterwards.
     // For "let" emit the bodies first, then the initializations.
     // For "let*" keep doing this.
@@ -1903,10 +1903,18 @@ export function createInstance(schemeOpts = {}) {
     if (ssaScope) {
       tools.macroCompiled = true;
       spreadArg = compileEval(spreadArg, ssaScope, tools);
+      return new Pair([spreadArg], args[REST]);
     }
-    // Returns Pair of arguments to stuff
-    // and the rewritten (or not) remainder of the arg list.
-    return new Pair(spreadArg, args[REST]);
+    let evalled = _eval(spreadArg, this);
+    let list = args[REST], last;
+    for (let item of evalled) {
+      if (!isPrimitive(item)) item = new Pair(QUOTE_ATOM, new Pair(item, NIL));
+      item = new Pair(item);
+      if (last) last = last[REST] = item;
+      else list = last = item;
+    }
+    if (last) last[REST] = args[REST];
+    return list;
   }
 
   //
@@ -1996,10 +2004,9 @@ export function createInstance(schemeOpts = {}) {
         let argv = [], argCount = 0;
         while (moreList(args)) {
           let arg = args[FIRST];
-          let nextArg = handleParameterMacroIfPresent(argv, arg, args[REST], argCount, evalCount);
+          let nextArg = handleParameterMacroIfPresent(arg, args[REST], argCount, evalCount);
           if (nextArg !== undefined) {
             args = nextArg;
-            argCount = argv.length;
             continue;
           }
           if (argCount < evalCount) {
@@ -2104,7 +2111,7 @@ export function createInstance(schemeOpts = {}) {
           let res = [];
           while (moreList(form)) {
             let element = form[FIRST];
-            let nextArg = handleParameterMacroIfPresent(res, element, form[REST], 0, MAX_INTEGER);
+            let nextArg = handleParameterMacroIfPresent(element, form[REST], 0, MAX_INTEGER);
             if (nextArg !== undefined) {
               form = nextArg;
               continue;
@@ -2143,7 +2150,7 @@ export function createInstance(schemeOpts = {}) {
       throw new SchemeEvalError(`Bad form ${string(form)}`);
     }
 
-    function handleParameterMacroIfPresent(argv, arg, args, argCount, evalCount) {
+    function handleParameterMacroIfPresent(arg, args, argCount, evalCount) {
       if (typeof arg === 'symbol') {
         let symVal = scope[arg];
         if (typeof symVal === 'function') {
