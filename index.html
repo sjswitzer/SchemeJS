@@ -991,7 +991,7 @@
       function buildBuiltinHelp(globalScope) {
         const string = globalScope.string;
         let helpInfo = globalScope._helpInfo_, groups = {}, jsAPI = helpInfo.jsAPI;
-        let COMPILE_INFO = globalScope.COMPILE_INFO;
+        let getFunctionInfo = globalScope.getFunctionInfo;
         let jsAPIMap = new Map();
         // Invert the JS API names
         for (let jsName in jsAPI)
@@ -1065,7 +1065,7 @@
                 dd.appendChild(createElement('p', 'value', string(value)));
               }
               if (jsName) {
-                let fnInfo = value[COMPILE_INFO];
+                let fnInfo = getFunctionInfo(value);
                 let requiresScopeStr = fnInfo?.requiresScope ? " (requires scope)" : "";
                 let jsNamesElement = createElement('p', 'js-names');
                 dd.appendChild(jsNamesElement);

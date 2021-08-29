@@ -54,7 +54,7 @@ export function createInstance(schemeOpts = {}) {
   const bottomIsLNIL = schemeOpts.bottomIsLNIL ?? true;
   const restParamStr = schemeOpts.restParamStr ?? "&";
 
-  const COMPILE_INFO = Symbol("COMPILE-INFO");
+  const FUNCTION_INFO = Symbol("COMPILE-INFO");
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
   const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
@@ -108,7 +108,7 @@ export function createInstance(schemeOpts = {}) {
     helpInfo.jsAPI[name] = value;
   }
 
-  exportAPI("COMPILE_INFO", COMPILE_INFO);
+  exportAPI("FUNCTION_INFO", FUNCTION_INFO);
   exportAPI("FUNCTION_TAG", FUNCTION_TAG  );
   exportAPI("MACRO_TAG", MACRO_TAG);
   exportAPI("EVALUATED_PARAMETER_MACRO_TAG", EVALUATED_PARAMETER_MACRO_TAG);
@@ -545,7 +545,7 @@ export function createInstance(schemeOpts = {}) {
     if (compileHook)
       requiresScope = false;
     fnInfo.requiresScope = requiresScope;
-    fn[COMPILE_INFO] = fnInfo;
+    fn[FUNCTION_INFO] = fnInfo;
   }
 
   exportAPI("augmentFunctionInfo", augmentFunctionInfo, { dontInline: true });
@@ -553,9 +553,14 @@ export function createInstance(schemeOpts = {}) {
     if (typeof fn === 'string') fn = Atom(fn);
     if (isAtom(fn)) fn = globalScope[fn];
     if (typeof fn !== 'function') throw new LogicError(`not a function ${string(fn)}`);
-    let fnInfo = fn[COMPILE_INFO];
+    let fnInfo = fn[FUNCTION_INFO];
     if (fnInfo) Object.assign(fnInfo, info);
-    else fn[COMPILE_INFO] = Object.assign({}, info);
+    else fn[FUNCTION_INFO] = Object.assign({}, info);
+  }
+
+  exportAPI("getFunctionInfo", getFunctionInfo, { dontInline: true });
+  function getFunctionInfo(fn) {
+    return fn[FUNCTION_INFO];
   }
 
   exportAPI("VERSION", VERSION);
@@ -592,9 +597,6 @@ export function createInstance(schemeOpts = {}) {
   const schemeTrue = typeof schemeTrueOverride === 'function' ? schemeTrueOverride :
       (a => a === true || (a !== false && a != null && a[MORELIST] !== false));
   exportAPI("schemeTrue", schemeTrue);
-
-  let quote = quoted => quoted[FIRST];
-  exportAPI("quote", quote, { dontInline: true, evalCount: 0 }, "quote");
 
   exportAPI("this", function scope() { return this }, { requiresScope: true });
 
@@ -2346,7 +2348,7 @@ export function createInstance(schemeOpts = {}) {
     lambdaClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
     // Because the closure has a generic (...args) parameter, the compiler needs more info
     // to be able to create binding closures over it.
-    lambdaClosure[COMPILE_INFO] = { params: paramv, restParam, requiredCount, evalCount };
+    lambdaClosure[FUNCTION_INFO] = { params: paramv, restParam, requiredCount, evalCount };
     return lambdaClosure;
   }
 
@@ -2826,7 +2828,7 @@ export function createInstance(schemeOpts = {}) {
     bindLiterally(MORELIST, "MORELIST");
     bindLiterally(COMPILED, "COMPILED");
     bindLiterally(PARAMETER_DESCRIPTOR, "PARAMETER_DESCRIPTOR");
-    bindLiterally(COMPILE_INFO, "COMPILE_INFO");
+    bindLiterally(FUNCTION_INFO, "FUNCTION_INFO");
     bindLiterally(CLOSURE_ATOM, "CLOSURE_ATOM");
     let ssaFunction = compileLambda(nameAtom, displayName, lambdaForm, ssaScope, tools);
     if (jitFunction && Object.getOwnPropertyNames(guardedSymbols).length > 0) {
@@ -3306,7 +3308,7 @@ export function createInstance(schemeOpts = {}) {
 
     function registerFunctionDescriptor(fn, ssaValue) {
       if (!tools.functionDescriptors[ssaValue]) {
-        let fnInfo = fn[COMPILE_INFO];
+        let fnInfo = fn[FUNCTION_INFO];
         if (!fnInfo) {  // Neither a builtin nor a lambdaClosure
           let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
           let requiredCount = (parameterDescriptor >> 8) & 0xfff;
@@ -3535,7 +3537,7 @@ export function createInstance(schemeOpts = {}) {
     let evalCountStr = evalCount === MAX_INTEGER ? "MAX_INTEGER" : String(evalCount);
     emit(`// evalCount: ${evalCountStr}, requiredCount: ${requiredCount}`)
     emit(`${ssaClosure}[PARAMETER_DESCRIPTOR] = ${parameterDescriptor};`);
-    emit(`${ssaClosure}[COMPILE_INFO] = ${use(bind(fnInfo, "COMPILE_INFO"))};`);
+    emit(`${ssaClosure}[FUNCTION_INFO] = ${use(bind(fnInfo, "FUNCTION_INFO"))};`);
     // The function is simultaneously a Scheme closure object
     let closureStr = string(closureForm);
     for (let str of closureStr.split('\n'))
@@ -3548,7 +3550,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function redecorateCompiledClosure(ssaToFn, ssaFromFn, emit) {
-    emit(`${ssaToFn}[COMPILE_INFO] = ${ssaFromFn}[COMPILE_INFO];`);
+    emit(`${ssaToFn}[FUNCTION_INFO] = ${ssaFromFn}[FUNCTION_INFO];`);
     emit(`${ssaToFn}[PARAMETER_DESCRIPTOR] = ${ssaFromFn}[PARAMETER_DESCRIPTOR];`);
     emit(`${ssaToFn}[FIRST] = ${ssaFromFn}[FIRST];`);
     emit(`${ssaToFn}[REST] = ${ssaFromFn}[REST];`);

@@ -1580,10 +1580,6 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(cddr list)`,
       blurb: `Same as "(cdr (cdr list))".`
     });
-    defineBinding("quote", "quote", {
-      group: "main", sample: `(quote expr)`,
-      blurb: `Typically invoked as " 'expr ", "quote" prevents the evaluation of its argument.`
-    });
     defineBinding("this", "this", {
       group: "main", sample: `(this)`,
       blurb: `The value of the JavaScript "this" variable; typically the scope in SchemeJS.`
