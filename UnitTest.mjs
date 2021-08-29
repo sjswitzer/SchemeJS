@@ -52,7 +52,7 @@ function runTestsInNewInstance(opts = {}) {
   const FIRST = globalScope.FIRST ?? required();
   const REST = globalScope.REST ?? required();
   const Pair = globalScope.Pair ?? required();
-  const _eval = globalScope._eval ?? required();
+  const compileEval = globalScope.compileEval ?? required();
   const compile_lambda = globalScope.compile_lambda ?? required();
   const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   const justTestJIT = opts.justTestJIT;
@@ -716,17 +716,21 @@ function runTestsInNewInstance(opts = {}) {
       endTestScope(savedScope);
     }
 
-    { // Test that spread works OK with a macro that _doesn't_ specialize for the compiled
-      // case.
+    { // Test that spread works OK with a macro that specializes for the compiled case.
       let savedScope = beginTestScope();
 
-      // First, define our own spread macro without compiler specialization
-      globalScope.exportAPI("spread2", spread2, { tag: globalScope.EVALUATED_PARAMETER_MACRO_TAG });
-      function spread2(args) {
-        let spreadArg = args[FIRST];
-        return new Pair([spreadArg], args[REST]);
+      // First, define our own spread macro that uses compiler specialization
+      globalScope.exportAPI("spread_with_compile_specialization", spread_with_compile_specialization, { tag: globalScope.EVALUATED_PARAMETER_MACRO_TAG });
+      function spread_with_compile_specialization(args, ssaScope, tools) {
+        let spreadArg = args[FIRST], rest = args[REST];
+        if (ssaScope) {
+          tools.macroCompiled = true;
+          spreadArg = compileEval(spreadArg, ssaScope, tools);
+          return new Pair([spreadArg], args[REST]);
+        }
+        return new Pair([spreadArg], rest);
       }
-      globalScope.defineBinding("_spread_", "spread2");
+      globalScope.defineBinding("_spread_", "spread_with_compile_specialization");
 
       // Now some tests
       EXPECT(` (compile (foo a ...b) (list _spread_ b a))`, ` 'foo `);

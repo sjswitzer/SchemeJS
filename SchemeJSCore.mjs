@@ -1896,11 +1896,6 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("spread", spread, { tag: EVALUATED_PARAMETER_MACRO_TAG });
   function spread(args, ssaScope, tools) {
     let spreadArg = args[FIRST], rest = args[REST];
-    if (ssaScope) {
-      tools.macroCompiled = true;
-      spreadArg = compileEval(spreadArg, ssaScope, tools);
-      return new Pair([spreadArg], args[REST]);
-    }
     return new Pair([spreadArg], rest);
   }
 
