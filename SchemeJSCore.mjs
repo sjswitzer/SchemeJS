@@ -73,15 +73,13 @@ export function createInstance(schemeOpts = {}) {
   //   MACRO_TAG: Conventional macro
   //      Called with the remainder of the form.
   //      Returns what to replace the form it heads with
+  //   PARAMETER_MACRO_TAG: For every form element, including the first
+  //      Called with the remainder of the form.
+  //      Returns the replacement for itself and successors.
   //   EVALUATED_PARAMETER_MACRO_TAG: For evaluated parameters only
   //      Called with the remainder of the form.
-  //      Returns a pair of what to replace the current item with (undefined if nothing) and
-  //      what to replace the remainder of the argument list with. The returned current item will
-  //      be evaluated.
-  //   FORM_ELEMENT_MACRO_TAG: For every form element, including the first
-  //      Called with the remainder of the form.
-  //      Returns what to replace itself and its successors with.
-  const FUNCTION_TAG = 0, MACRO_TAG = 1, EVALUATED_PARAMETER_MACRO_TAG = 2, FORM_ELEMENT_MACRO_TAG = 3;
+  //      Returns the replacement for itself and successors.
+  const FUNCTION_TAG = 0, MACRO_TAG = 1, EVALUATED_PARAMETER_MACRO_TAG = 2, PARAMETER_MACRO_TAG = 3;
 
   // Create a new scope with newScope(enclosingScope, "description").
   // A new scope's prototype is the enclosing scope.
@@ -113,8 +111,8 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("COMPILE_INFO", COMPILE_INFO);
   exportAPI("FUNCTION_TAG", FUNCTION_TAG  );
   exportAPI("MACRO_TAG", MACRO_TAG);
+  exportAPI("PARAMETER_MACRO_TAG", PARAMETER_MACRO_TAG);
   exportAPI("EVALUATED_PARAMETER_MACRO_TAG", EVALUATED_PARAMETER_MACRO_TAG);
-  
 
   //
   // Unlike most Lisps, the Cons cell (Pair) is not central to this design, but a _list_ is.
@@ -541,7 +539,7 @@ export function createInstance(schemeOpts = {}) {
     }
     if (opts.dontInline) {
       fnInfo.valueTemplate = fnInfo.bodyTemplate = undefined;
-    } else if (fnInfo.native || tag === MACRO_TAG || tag === EVALUATED_PARAMETER_MACRO_TAG || tag === FORM_ELEMENT_MACRO_TAG) {
+    } else if (fnInfo.native || tag !== FUNCTION_TAG) {
       // not an error
     } else if (!compileHook && evalCount !== MAX_INTEGER) {
       throw new LogicError(`Special function requires compile hook ${name}`);
@@ -1978,7 +1976,7 @@ export function createInstance(schemeOpts = {}) {
             let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
             if (parameterDescriptor != null) {
               let tag = parameterDescriptor & 0xff;
-              if (tag === MACRO_TAG || tag === FORM_ELEMENT_MACRO_TAG) {
+              if (tag === MACRO_TAG || tag === PARAMETER_MACRO_TAG) {
                 form = symVal.call(scope, args);
                 continue;
               }
@@ -2152,20 +2150,11 @@ export function createInstance(schemeOpts = {}) {
           let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
-            if (tag === FORM_ELEMENT_MACRO_TAG || (argCount < evalCount && tag === EVALUATED_PARAMETER_MACRO_TAG)) {
+            if (tag === PARAMETER_MACRO_TAG || (argCount < evalCount && tag === EVALUATED_PARAMETER_MACRO_TAG)) {
               let macroResult = symVal.call(scope, args);
-              if (!moreList(macroResult))
+              if (!isList(macroResult))
                 throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
-              let insert = macroResult[FIRST], nextArg = macroResult[REST];
-              if (tag === EVALUATED_PARAMETER_MACRO_TAG)
-                insert = _eval(insert, scope);
-              if (isArray(insert)) {
-                argv.concat(insert);
-              } else {
-                for (let insertion of insert)
-                  argv.push(insertion);
-              }
-              return nextArg;
+              return macroResult;
             }
           }
         }
@@ -2185,9 +2174,8 @@ export function createInstance(schemeOpts = {}) {
               if (!moreList(macroResult))
                 throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
               let insert = macroResult[FIRST];
-              insert = _eval(insert, scope);
-              // return in array so that the undefined case is distinguised
-              return [insert];
+              // macroResult[REST] isn't used in this case
+              return _eval(insert, scope);
             }
           }
         }
@@ -3051,7 +3039,7 @@ export function createInstance(schemeOpts = {}) {
             let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
             if (parameterDescriptor != null) {
               let tag = parameterDescriptor & 0xff;
-              if (tag === MACRO_TAG || tag === FORM_ELEMENT_MACRO_TAG) {
+              if (tag === MACRO_TAG) {
                 let saveMacroCompiled = tools.macroCompiled;
                 tools.macroCompiled = false;
                 form = symVal.call(scope, form[REST], ssaScope, tools);
@@ -3367,13 +3355,13 @@ export function createInstance(schemeOpts = {}) {
     }
 
     function handleParameterMacroIfPresent(arg, args, argCount, evalCount) {  
-      if (typeof arg === 'symbol') { // check for parameter macro
+      if (typeof arg === 'symbol') {
         let symVal = scope[arg];
         if (typeof symVal === 'function') {
           let parameterDescriptor = symVal[PARAMETER_DESCRIPTOR];
           if (parameterDescriptor != null) {
             let tag = parameterDescriptor & 0xff;
-            if (tag === FORM_ELEMENT_MACRO_TAG || (argCount < evalCount && tag === EVALUATED_PARAMETER_MACRO_TAG)) {
+            if (tag === PARAMETER_MACRO_TAG || (argCount < evalCount && tag === EVALUATED_PARAMETER_MACRO_TAG)) {
               let saveMacroCompiled = tools.macroCompiled;
               tools.macroCompiled = false;
               let macroResult = symVal.call(scope, args, ssaScope, tools);
@@ -3383,22 +3371,23 @@ export function createInstance(schemeOpts = {}) {
                 throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
               let insert = macroResult[FIRST], ssaInsertValues;
               let nextArg = macroResult[REST];
-              if (macroCompiled && tag === FORM_ELEMENT_MACRO_TAG)
-                throw new SchemeCompileError(`Form element macros not currently allowed to do compiler extensions`);
               if (macroCompiled) {
                 ssaInsertValues = insert;
               } else {
-                if (insert.length > 0) {
+                if (tag === PARAMETER_MACRO_TAG)
+                  return new Pair(undefined, insert);
+                if (insert && insert.length > 0) {
                   let ssaInsert = use(bind(insert));
-                  ssaScope.dynamicScopeUsed = true;
                   ssaInsertValues = newTemp("macro_insert");
                   emit(`let ${ssaInsertValues} = Array(${insert.length});`);
                   emit(`for (let i = 0; i < ${insert.length}; ++i) {`);
                   emit(`  let arg = ${ssaInsert}[i];`);
                   if (argCount < evalCount && evalCount !== MAX_INTEGER) {
+                    ssaScope.dynamicScopeUsed = true;
                     tools.bindLiterally(_eval, "_eval");
                     emit(`if (i < ${evalCount-argCount}) arg = _eval(arg, scope);`);
                   } else if (argCount >= evalCount || evalCount === MAX_INTEGER) {
+                    ssaScope.dynamicScopeUsed = true;
                     tools.bindLiterally(_eval, "_eval");
                     emit(`arg = _eval(arg, scope);`);
                   }
@@ -3427,18 +3416,18 @@ export function createInstance(schemeOpts = {}) {
               tools.macroCompiled = saveMacroCompiled;
               if (!isList(macroResult))
                 throw new SchemeCompileError(`bad parameter macro result ${string(macroResult)}`);
-              let ssaInsert = macroResult[FIRST], ssaInsertObj;
-              let nextArg = macroResult[REST];
-              if (!macroCompiled) {
-                ssaInsert = use(bind(ssaInsert));
+              let insert = macroResult[FIRST], ssaInsertObj;
+              // macroResult[REST] isn't used in this case
+              if (macroCompiled) {
+                ssaInsertObj = insert;
+              } else {
+                let ssaInsert = use(bind(insert));
                 ssaScope.dynamicScopeUsed = true;
                 ssaInsertObj = newTemp("macro_insert");
                 tools.bindLiterally(_eval, "_eval");
                 emit(`let ${ssaInsertObj} = _eval(${ssaInsert}, scope);`)
-              } else {
-                ssaInsertObj = ssaInsert;
               }
-              return ssaInsertObj;
+              return ssaInsert;
             }
           }
         }
