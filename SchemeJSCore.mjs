@@ -1901,7 +1901,7 @@ export function createInstance(schemeOpts = {}) {
     if (ssaScope) {
       tools.macroCompiled = true;
       spreadArg = compileEval(spreadArg, ssaScope, tools);
-      return new Pair(`...${spreadArg}`, args[REST]);
+      return new Pair([spreadArg], args[REST]);
     }
     let evalled = _eval(spreadArg, this);
     let list = args[REST], last;
@@ -2610,9 +2610,8 @@ export function createInstance(schemeOpts = {}) {
             ch = replace;
           } else {
             let charCode = ch.charCodeAt(0);
-            if (charCode < 0x20 || charCode >= 0x7f) {  // XXX TODO: include Latin-1?
+            if (charCode < 0x20 || charCode >= 0x7f)
               ch = jsChar(charCode);
-            }
           }
           str += ch;
         }
@@ -3098,10 +3097,19 @@ export function createInstance(schemeOpts = {}) {
             let ssaInsert = res[FIRST];
             args = res[REST];
             if (ssaInsert) {
-              usesDynamicArgv = true;
-              use(ssaInsert);
-              ssaArgStr += `${sep}${ssaInsert}`;
-              sep = ', ';
+              if (isArray(ssaInsert)) {
+                for (let ssaIns of ssaInsert) {
+                  usesDynamicArgv = true;
+                  use(ssaIns);
+                  ssaArgStr += `${sep}...${ssaIns}`;
+                  sep = ', ';
+                }
+              } else {
+                usesDynamicArgv = true;
+                use(ssaInsert);
+                ssaArgStr += `${sep}${ssaInsert}`;
+                sep = ', ';
+              }
             }
             continue;
           }
@@ -3295,8 +3303,15 @@ export function createInstance(schemeOpts = {}) {
               let ssaInsert = res[FIRST];
               form = res[REST];
               if (ssaInsert) {
-                use(ssaInsert);
-                evalledSsaValues.push(ssaInsert);
+                if (isArray(ssaInsert)) {
+                  for (let ssaIns of ssaInsert) {
+                    use(ssaIns);
+                    evalledSsaValues.push(`...${ssaIns}`);
+                  }
+                } else {
+                  use(ssaInsert);
+                  evalledSsaValues.push(ssaInsert);
+                }
               }
               continue;
             }
@@ -3319,9 +3334,12 @@ export function createInstance(schemeOpts = {}) {
           let value = form[key];
           let ssaInsertObj = handleParameterMacroIfPresentInObjectLiteral(key, value);
           if (ssaInsertObj) {
-            // This is a terrible hack but I'm going with it for now
-            if (ssaInsertObj.startsWith('...')) ssaInsertObj = ssaInsertObj.substr(3);
-            emit(`Object.assign(${ssaObjectLiteral}, ${ssaInsertObj});`)
+            if (isArray(ssaInsertObj)) {
+              for (let ssaIns of ssaInsertObj)
+                emit(`Object.assign(${ssaObjectLiteral}, ${ssaIns});`);
+            } else {
+              emit(`Object.assign(${ssaObjectLiteral}, ${ssaInsertObj});`)
+            }
             continue;
           }
           let ssaKey;
@@ -3382,7 +3400,10 @@ export function createInstance(schemeOpts = {}) {
                 // In this case, FIRST is the SSA value to insert and REST is the remainder of the arg list
                 return macroResult;
               }
-              return new Pair(undefined, macroResult);
+              if (argCount >= evalCount)
+                return new Pair(undefined, macroResult);
+              // Now we have to deal with the result dynamically
+              throw "TODO XXXXXXXXX";
             }
           }
         }
