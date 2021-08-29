@@ -69,34 +69,36 @@ export function createInstance(schemeOpts = {}) {
   // This is how you write Scheme with no parser or bindings :)
   function gfxFunction(name, jsFunctionName, functionBody, opts = {}) {
     let schemeGfxContextFnName = `gfx-context-${name}`, schemeGfxContextFnNameAtom = Atom(schemeGfxContextFnName);
-    let fnBody =  `let pi = Math.PI, optional = undefined; return ${{functionBody}}`;
-    let fn = (new Function(fnBody))();
+    let code =  `let pi = Math.PI, optional = undefined; return ${functionBody}`;
+    let fn = (new Function(code))();
 
     // Decorate it for "help" purposes and make available to Scheme
     exportAPI(schemeGfxContextFnNameAtom, fn, { dontInline: true, group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
 
-    // Define a macro that adds the graphics context and calls it
-    eval_string(`
-        (defmacro [${name} params] 
-          (cons ${schemeGfxContextFnName} (cons 'gfx-context ...params))) `);
+    if (!opts.omitGfxMacro) {
+      // Define a macro that adds the graphics context and calls it
+      eval_string(`
+          (defmacro [${name} params] 
+            (cons ${schemeGfxContextFnName} (cons 'gfx-context ...params))) `);
 
-    // Decorate it for the help system
-    let nameAtom = Atom(name);
-    augmentFunctionInfo(nameAtom,  { group: "web-gfx", gfxApi: jsFunctionName,
-      implStr: `(${schemeGfxContextFnName} gfx-context ...params)`, ...opts });
+      // Decorate it for the help system
+      let nameAtom = Atom(name);
+      augmentFunctionInfo(nameAtom,  { group: "web-gfx", gfxApi: jsFunctionName,
+        implStr: `(${schemeGfxContextFnName} gfx-context ...params)`, ...opts });
+    }
   }
 
   function gfxProp(schemePropName, jsPropName, opts = {}) {
-    let jsGfxContextPropFnName = `gfx_context_property_${schemePropName.replace('.', '_').replace('-', '_')}`;
+    let jsGfxContextPropFnName = `gfx_context_property_${schemePropName.replace(/\./g, '_').replace(/-/g, '_')}`;
     let schemeGfxContextPropFnName = `gfx-context-property-${schemePropName}`;
     let gfxContextPropName = `gfx-context-${schemePropName}`, gfxContextFnAtom = Atom(gfxContextPropName);
-    let fnBody = `let optional = undefined; ` +
+    let code = `let optional = undefined; ` +
       `return function ${jsGfxContextPropFnName}(gfx_context, value = optional) { ` +
         `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
-    const fn = (new Function(fnBody))();
+    const fn = (new Function(code))();
 
-    let schemeGfxContextPropFnName = Atom(schemeGfxContextPropFnName);
-    exportAPI(schemeGfxContextPropFnName, fn, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
+    let schemeGfxContextPropFnNameAtom = Atom(schemeGfxContextPropFnName);
+    exportAPI(schemeGfxContextPropFnNameAtom, fn, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
 
     // Define a macro that adds the graphics context and calls it
     eval_string(`
@@ -113,8 +115,20 @@ export function createInstance(schemeOpts = {}) {
       (defmacro [gfx-save forms]
         (list
           'finally [ (list gfx-context-save 'gfx-context) ]
-            (list gfx-context-restore ')
+            (list gfx-context-restore 'gfx-context)
             ...forms)) `);
+
+  gfxFunction("save", "save",
+    `function gfx_context_save(gfx_context, x = 0, y = 0) { return gfx_context.translate(x, y) }`, 
+      { blurb: `Pushes the current context on a stack so that it can later be restored using ` +
+                `gfx-context-restore. You should generally use gfx-save instead since it bundles ` +
+                `gfx-context-save and gfx-context-restore in a structured way.`, omitGfxMacro: true });
+
+  gfxFunction("restore", "restore",
+    `function gfx_context_restore(gfx_context, x = 0, y = 0) { return gfx_context.translate(x, y) }`, 
+      { blurb: `Pops the tha context from a stack which has previously been pushed by  ` +
+              `gfx-context-save. You should generally use gfx-save instead since it bundles ` +
+              `gfx-context-save and gfx-context-restore in a structured way.`, omitGfxMacro: true });      
 
   gfxFunction("translate", "translate",
     `function gfx_context_translate(gfx_context, x = 0, y = 0) { return gfx_context.translate(x, y) }`,
@@ -137,7 +151,7 @@ export function createInstance(schemeOpts = {}) {
     {});
 
    gfxFunction("clip", "clip",
-    `function gfx_context_close_clip(gfx_context)  { return gfx_context.clip() }`,
+    `function gfx_context_clip(gfx_context)  { return gfx_context.clip() }`,
     {});
 
   gfxFunction("is-point-in-path", "isPointInPath",
@@ -157,7 +171,7 @@ export function createInstance(schemeOpts = {}) {
     {});
   
   gfxFunction("bezier-curve-to", "bezierCurveTo",
-    `function gfx_context_bezier-curve-to(gfx_context, cpx1 = 1, cpy1 = 0, cpx2 = 0, cpy2 = 1, x = 1, y = 1) {
+    `function gfx_context_bezier_curve_to(gfx_context, cpx1 = 1, cpy1 = 0, cpx2 = 0, cpy2 = 1, x = 1, y = 1) {
        return gfx_context.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, y) }`,
      {});
 
@@ -167,12 +181,12 @@ export function createInstance(schemeOpts = {}) {
      {});
      
   gfxFunction("arc", "arc",
-    `function gfx_context_arc(gfx_context, x = 1, y = 1, radius = .5, startAngle = 0, endAngle = 2*pi) {
+    `function gfx_context_arc(gfx_context, x = .5, y = .5, radius = .5, startAngle = 0, endAngle = 2*pi) {
       return gfx_context.arc(x, y, radius, startAngle, endAngle) }`,
       {});
 
   gfxFunction("arc-to", "arcTo",
-    `function gfx_context_arc-to(gfx_context, x1 = 1, y1 = 0, x2 = 1, y2 = 1, radius = 1) {
+    `function gfx_context_arc_to(gfx_context, x1 = 1, y1 = 0, x2 = 1, y2 = 1, radius = 1) {
        return gfx_context.arcTo(x1, y1, x2, y2, radius) }`,
       {});
 
@@ -256,10 +270,10 @@ export function createInstance(schemeOpts = {}) {
   
   gfxFunction("create-radial-gradient", "createRadialGradient",
     `function gfx_context_create_radial_gradient(gfx_context, x0 = 0, y0 = 0, r0 = 1, x1 = 1, y1 = 1, r1 = 0) {
-      return gfx_context.createRadialGradient(x0, y0, r0 x1, y1, r1) }`,
+      return gfx_context.createRadialGradient(x0, y0, r0, x1, y1, r1) }`,
       {});
     
-  gfxFunction("create-patternt", "createPattern",
+  gfxFunction("create-pattern", "createPattern",
     `function gfx_context_create_pattern(gfx_context, image = optional, repetition = "repeat") {
       return gfx_context.createPattern(image, repetition) }`,
       {});

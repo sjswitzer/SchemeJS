@@ -503,19 +503,6 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  // Substitute for String.prototype.replaceAll until Node.js supports it.
-  // (Maybe I just need to undate Node? Well, I can't be the only one, so...)
-  // This isn't strictly correct since it blows up if newSubstr contains substr,
-  // but it's good enough for our purposes.
-  function replaceAll(str, substr, newSubstr) {
-    let prevStr;
-    do {
-      prevStr = str;
-      str = str.replace(substr, newSubstr);
-    } while (str !== prevStr);
-    return str;
-  }
-
   function examineFunctionForCompilerTemplates(name, fn, opts = {}) {
     let evalCount = opts.evalCount ?? MAX_INTEGER;
     let compileHook = opts.compileHook;
@@ -962,8 +949,8 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function conditionalHooks(args, ssaScope, tools, name, test) {
-    let a = args[0], t = args[1], f = args[2];
-    test = replaceAll(test, '*', a);
+    let predicate = args[0], t = args[1], f = args[2];
+    test = test.replace(/\*/g, predicate);
     let ssaResult = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
     if (t === undefined && f === undefined) {
       tools.emit(`let ${ssaResult} = !!(${test});`);
@@ -2090,7 +2077,7 @@ export function createInstance(schemeOpts = {}) {
         bindingClosure[CLOSURE_ATOM] = true; // marks closure for special "printing"
         requiredCount -= argCount;
         if (requiredCount < 0) throw new LogicError(`Shouldn't happen`);
-        bindingClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
+        bindingClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount, tag);
         return bindingClosure;
       }
 
@@ -2264,7 +2251,7 @@ export function createInstance(schemeOpts = {}) {
   // it as a closure. Closures are also decorated with FIRST, REST, LIST and LIST
   // so that they look exactly like lists to the SchemeJS runtime.
   //
-  function makeLambdaClosure(scope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER) {
+  function makeLambdaClosure(scope, lambdaParams, lambda, forms, schemeClosure, evalCount = MAX_INTEGER, tag = FUNCTION_TAG) {
     // Examine property list and throw any errors now rather than later.
     // In general, do more work here so the closure can do less work when executed.
     let params = lambdaParams, paramCount = 0, requiredCount;
@@ -2341,7 +2328,7 @@ export function createInstance(schemeOpts = {}) {
       }
       return result;
     }
-    lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount);
+    lambdaClosure[PARAMETER_DESCRIPTOR] = makeParameterDescriptor(requiredCount, evalCount, tag);
     lambdaClosure[FIRST] = schemeClosure[FIRST];
     lambdaClosure[REST] = schemeClosure[REST];
     lambdaClosure[LIST] = lambdaClosure[ITERATE_AS_LIST] = lambdaClosure[MORELIST] = true;
@@ -3248,7 +3235,7 @@ export function createInstance(schemeOpts = {}) {
         emit(`  ${ssaResult} = ${ssaFunction}.apply(${scopeStr}, ${ssaDynamicArgv});`);
         emit(`else`);
         emit(`  ${ssaResult} = function vaBound(...args) { return ${ssaFunction}.apply(${scopeStr}, ${ssaDynamicArgv}, ...args);  } `);
-        return ssaRessult;
+        return ssaResult;
       }
       // Special eval for JS Arrays and Objects
       if (form !== null && typeof form === 'object') {
@@ -3531,11 +3518,11 @@ export function createInstance(schemeOpts = {}) {
   
   function decorateCompiledClosure(ssaClosure, displayName, closureForm, fnInfo, tools) {
     let emit = tools.emit, use = tools.use, bind = tools.bind;
-    let requiredCount = fnInfo.requiredCount, evalCount = fnInfo.evalCount;
+    let requiredCount = fnInfo.requiredCount, evalCount = fnInfo.evalCount, tag = fnInfo.tag ?? 0;
     let ssaClosureForm = use(bind(closureForm, "closureForm"));
-    let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount);
+    let parameterDescriptor = makeParameterDescriptor(requiredCount, evalCount, tag);
     let evalCountStr = evalCount === MAX_INTEGER ? "MAX_INTEGER" : String(evalCount);
-    emit(`// evalCount: ${evalCountStr}, requiredCount: ${requiredCount}`)
+    emit(`// evalCount: ${evalCountStr}, requiredCount: ${requiredCount}, tag: ${tag}`);
     emit(`${ssaClosure}[PARAMETER_DESCRIPTOR] = ${parameterDescriptor};`);
     emit(`${ssaClosure}[FUNCTION_INFO] = ${use(bind(fnInfo, "FUNCTION_INFO"))};`);
     // The function is simultaneously a Scheme closure object

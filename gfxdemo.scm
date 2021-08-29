@@ -23,18 +23,18 @@
 ;; but can't be messed up.
 ;;
 
-(def define compile)  ;; compile
-;; (def define defn)     ;; interpret
+(define def compile)  ;; compile
+;; (define def defn)     ;; interpret
 
 ;; Animation helper: a sinusoidal time-varying value of a given magintude,
 ;; period (in seconds) and phase.
 ;; (Date.now) is the number of milliseconds since midnight Jan 1, 1970 (the Unix epoch).
-(define (sinusoidal (magnitude 1) (period 1) (phase 0))
+(def (sinusoidal (magnitude 1) (period 1) (phase 0))
   (* magnitude (sin (+ phase (* 2 *pi* (/ (Date-now) period 1000)))))
 )
 
 ;; Ship Arriving Too Late to Save a Drowning Witch
-(define [satltsadw gfx-context]
+(def [satltsadw gfx-context]
   (gfx-save ;; Saves then restores the graphics state (scale, colors, etc) afterwards
     (scale (/ (canvas-width) 10))  ;; Scale to a 10 x 10 coordinate system
     (line-width .2)
@@ -53,14 +53,14 @@
 
 (println (String satltsadw)) ;; XXX debugging
 
-(def ship-canvas (create-canvas-widget "Too Late!" 300 320))
+(define ship-canvas (create-canvas-widget "Too Late!" 300 320))
 (@= ship-canvas 'draw satltsadw)  ;; Set the draw function
 (@= ship-canvas 'animate true)    ;; Enable animation; otherwise just draws initially and when resized
 (@! ship-canvas 'show 20 20)      ;; Move the canvas widget from its default position
 
 /*
 ;; Now a lissajous figure
-(define [lissajous gfx-context tick]
+(def [lissajous gfx-context tick]
   ;; Fade the canvas by drawing over it with black and a very low alpha every several ticks.
   ;; If the alpha is too low, things won't fade things completely; they just converge on light
   ;; gray. So instead use a slightly higer alpha and only apply it every several frames.
@@ -82,7 +82,7 @@
 (println (String lissajous)) ;; XXX debugging
 
 
-(def lissajous-canvas (create-canvas-widget "Lissajous"  300 300))
+(define lissajous-canvas (create-canvas-widget "Lissajous"  300 300))
 (@= lissajous-canvas 'draw lissajous)         ;; Set the draw function
 (@= lissajous-canvas 'animate true)           ;; Enable animation
 (@! lissajous-canvas 'show 300 30)            ;; Move the canvas widget from its default position
@@ -94,7 +94,7 @@
 (println (String lissajous))
 
 ;; Spirograph
-(define [spirograph gfx-context tick]
+(def [spirograph gfx-context tick]
   (let ((angle (* 2 *pi* (/ (Date-now) 1000 period))))
     ;; Fade the canvas by drawing over it with white and a very low alpha every several ticks
     (fill-style "#ffffff0c")
@@ -112,13 +112,13 @@
     (stroke-style sc) (stroke)
   )
 )
-(def period 2)  ;; You can play with these numbers in the console!
-(def r1 25)
-(def r2 14)
-(def r3 20)
-(def sc "magenta")
+(define period 2)  ;; You can play with these numbers in the console!
+(define r1 25)
+(define r2 14)
+(define r3 20)
+(define sc "magenta")
 
-(def spirograph-canvas (create-canvas-widget "Spirograph"  300 300))
+(define spirograph-canvas (create-canvas-widget "Spirograph"  300 300))
 (@= spirograph-canvas 'draw spirograph)
 (@= spirograph-canvas 'animate true)
 (@! spirograph-canvas 'show 600 40)
@@ -135,7 +135,7 @@
 ;; Again, the commands are all documented at
 ;;    https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
 ;; Try it!
-(def gfx-context (canvas-gfx-context scribble))
+(define gfx-context (canvas-gfx-context scribble))
 (stroke-style "blue")
 (stroke-rect 10 10 40 40)
 (fill-text "Try it! Just enter drawing commands below." 10 65)
