@@ -1,3 +1,3 @@
 import * as UnitTest from './UnitTest.mjs';
 
-UnitTest.run({ dumpAlphaMap: false, latin1: false, supplemental: false, traceCompilerCode: true });
+UnitTest.run({ dumpAlphaMap: false, latin1: false, supplemental: false, traceCompilerCode: false });

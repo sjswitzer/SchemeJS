@@ -51,22 +51,13 @@ const optional = undefined;
 export function createInstance(schemeOpts = {}) {
   let globalScope = SchemeJS.createInstance(schemeOpts);
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
-  const defineBinding = defineSchemeBindings? (globalScope.defineBinding ?? required()) : _ => undefined;
+  if (!defineSchemeBindings)
+    return globalScope;
+
   const string = globalScope.string ?? required();
   const exportAPI = globalScope.exportAPI ?? required();
-  const list = globalScope.list ?? required();
-  const Pair = globalScope.Pair ?? required();
-  const call = globalScope.call ?? required();
-  const isList = globalScope.isList ?? required();
-  const isAtom = globalScope.isAtom ?? required();
   const augmentFunctionInfo = globalScope.augmentFunctionInfo ?? required();
-  const FIRST = globalScope.FIRST ?? required();
-  const REST = globalScope.REST ?? required();
   const Atom = globalScope.Atom ?? required();
-  const js_finally = globalScope.finally ?? required();
-  const MACRO_TAG = globalScope.MACRO_TAG ?? required();
-  const REST_PARAM_ATOM = globalScope.REST_PARAM_ATOM ?? required();
-  const BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
   function required() { throw "required" }
 
   const gfxContextAtom = Atom("gfx-context");
@@ -76,181 +67,246 @@ export function createInstance(schemeOpts = {}) {
 
   // Defines the graphics function and a macro to call it.
   // This is how you write Scheme with no parser or bindings :)
-  function gfxFunction(boundName, name, jsFunctionName, params, opts = {}) {
-    let paramStr = '', argStr = '', sep = '', nextIsRest = false;
-    for (let param of params) {
-      let paramName = param;
-      let defaultStr = '';
-      if (isList(param)) {
-        paramName = param[FIRST].description;
-        let paramDefault = param[REST][FIRST];
-        if (paramDefault === pi) paramDefault = "pi";
-        else if (paramDefault === 2*pi) paramDefault = "2*pi";
-        else if (paramDefault === undefined) paramDefault = "optional";
-        else paramDefault = string(paramDefault);
-        defaultStr = ` = ${paramDefault}`;
-      } else if (param === REST_PARAM_ATOM) {
-        nextIsRest = true;
-        continue;
-      } else if (nextIsRest) {
-        paramName = `...${param.description}`;
-      } else {
-        paramName = param.description;
-      }
-      paramStr += `${sep}${paramName}${defaultStr}`;
-      argStr += `${sep}${paramName}`;
-      sep = ', ';
-    }
-    let commaParamStr = paramStr ? `, ${paramStr}` : ''
-    let jsGfxContextFnName = `gfx_context_${jsFunctionName}`;
-    let gfxContextFnName = `gfx-context-${boundName}`, gfxContextFnAtom = Atom(gfxContextFnName);
-    let fnBody =  `let pi = Math.PI, optional = undefined; ` +
-      `return function ${jsGfxContextFnName} (gfx_context${commaParamStr}) { ` +
-      `let result = gfx_context.${jsFunctionName}(${argStr}); return result }`;
+  function gfxFunction(name, jsFunctionName, functionBody, opts = {}) {
+    let schemeGfxContextFnName = `gfx-context-${name}`, schemeGfxContextFnNameAtom = Atom(schemeGfxContextFnName);
+    let fnBody =  `let pi = Math.PI, optional = undefined; return ${{functionBody}}`;
     let fn = (new Function(fnBody))();
 
-    // Compile the wrapper function (so that default paraameters specified in Scheme are processed)
-    let definedAtom = Atom(jsGfxContextFnName);
-    globalScope.compile_function([definedAtom, gfxContextAtom, ...params], list(fn, gfxContextAtom, ...stripOptional(params)));
-    // Decorate it for "help" purposes and make available to JavaScript
-    augmentFunctionInfo(definedAtom, { group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
+    // Decorate it for "help" purposes and make available to Scheme
+    exportAPI(schemeGfxContextFnNameAtom, fn, { dontInline: true, group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
 
     // Define a macro that adds the graphics context and calls it
-    let macroAtom = Atom(name), paramsAtom = Atom("params");
-    globalScope.define_macro([macroAtom, paramsAtom],
-      list(params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params), paramsAtom)));
-    
+    eval_string(`
+        (defmacro [${name} params] 
+          (cons ${schemeGfxContextFnName} (cons 'gfx-context ...params))) `);
+
     // Decorate it for the help system
-    paramStr = string(params);
-    if (paramStr) paramStr = ' ' + paramStr;
-    paramStr = paramStr.replace(String(2*pi), '(* 2 *pi*)');
-    augmentFunctionInfo(macroAtom,  { group: "web-gfx", gfxApi: jsFunctionName,
-      implStr: `(${gfxContextFnName} ${gfxContextAtom.description} ${paramStr})`, ...opts });
+    let nameAtom = Atom(name);
+    augmentFunctionInfo(nameAtom,  { group: "web-gfx", gfxApi: jsFunctionName,
+      implStr: `(${schemeGfxContextFnName} gfx-context ...params)`, ...opts });
   }
 
-  function stripOptional(params) {
-    let res = [];
-    for (let param of params) {
-      if (isList(param))
-        param = param[FIRST];
-      res.push(param);
-    }
-    return res;
-  }
-
-  function gfxProp(boundName, name, jsPropName, opts = {}) {
-    let jsGfxContextPropFnName = `gfx_context_${name}`;
-    let gfxContextPropName = `gfx-context-${boundName}`, gfxContextFnAtom = Atom(gfxContextPropName);
+  function gfxProp(schemePropName, jsPropName, opts = {}) {
+    let jsGfxContextPropFnName = `gfx_context_property_${schemePropName.replace('.', '_').replace('-', '_')}`;
+    let schemeGfxContextPropFnName = `gfx-context-property-${schemePropName}`;
+    let gfxContextPropName = `gfx-context-${schemePropName}`, gfxContextFnAtom = Atom(gfxContextPropName);
     let fnBody = `let optional = undefined; ` +
       `return function ${jsGfxContextPropFnName}(gfx_context, value = optional) { ` +
-      `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
-    const fn = (new Function(fnBody))()
-    defineBinding(gfxContextPropName, fn, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
+        `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
+    const fn = (new Function(fnBody))();
+
+    let schemeGfxContextPropFnName = Atom(schemeGfxContextPropFnName);
+    exportAPI(schemeGfxContextPropFnName, fn, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
 
     // Define a macro that adds the graphics context and calls it
-    let macroAtom = Atom(name), paramsAtom = Atom("params");
-    globalScope.define_macro([macroAtom, paramsAtom],
-      list(params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params), paramsAtom)));
+    eval_string(`
+        (defmacro [${schemePropName} opt-value]
+          (cons ${jsGfxContextPropFnName} (cons 'gfx-contsxt ...opt-value))) `);
+
     // Decorate it for the help system
-    augmentFunctionInfo(macroAtom,  { group: "web-gfx", gfxApi: jsPropName,
-      implStr:`(${gfxContextPropName} ${gfxContextAtom.description} [value])`, ...opts });
-    }
-
-  exportAPI("gfx_save", gfx_save, { tag: MACRO_TAG });
-  function gfx_save(params) {
-    let forms = params;
-    return list( js_finally, [ list( (gfx_context => gfx_context.restore()), gfxContextAtom ) ],
-      list( (gfx_context => gfx_context.save()), gfxContextAtom ),
-      ...forms );
+    let nameAtom = Atom(schemePropName);
+    augmentFunctionInfo(nameAtom, { group: "web-gfx", gfxApi: jsPropName,
+      implStr:`(${jsGfxContextPropFnName} gfx-context [value])`, ...opts });
   }
-  defineBinding("gfx-save", "gfx_save", { group: "web-gfx", sample: `(gfx-save form ...)`,
-    blurb: `Saves the graphics context, executes the forms, then restores the context afterward. ` +
-           `You should generally use this instead of save-gfx-context and restore-gfx-context, though ` +
-           `though those can be useful in a REPL.` });
 
-  gfxFunction("translate", "translate", "translate", [ [Atom("x"), 0], [Atom("y"), 0] ], {
-    blurb: `Translates the origin by "x" and "y"`});
-  gfxFunction("rotate", "rotate", "rotate", [ [Atom("angle"), 0] ], {
-    blurb: `Rotates the coordinate system by "angle"`});
-  gfxFunction("scale", "scale", "scale", [ [Atom("width"), 1], [Atom("height"), Atom("width")] ], {
-    blurb: `Scales the coordinate system by "width" and "height`});
-  gfxFunction("save-gfx-context", "save_gfx_context", "save", [], {
-    blurb: `Saves the graphics context on a stack which can later be "popped" with ` +
-           `pop-gfx-context. You should generally use gfx-save instead, but these operations ` +
-           `can be useful in a REPL.` });
-  gfxFunction("restore-gfx-context", "restore_gfx_context", "restore", [], {
-    blurb: `Saves the graphics context on a stack which can later be "popped" with ` +
-           `pop-gfx-context. You should generally use gfx-save instead, but these operations ` +
-           `can be useful in a REPL.` });
-  gfxFunction("begin-path", "begin_path", "beginPath", []);
-  gfxFunction("close-path", "close_path", "closePath", []);
-  gfxFunction("clip", "clip", "clip", []);
-  gfxFunction("is-point-in-path", "is_point_in_path", "isPointInPath", [REST_PARAM_ATOM, Atom("params")]);
-  gfxFunction("is-point-in-stroke", "is_point_in_stroke", "isPointInStroke", [REST_PARAM_ATOM, Atom("params")]);
-  gfxFunction("move-to", "move_to", "moveTo", [ [Atom("x"), 0], [Atom("y"), 0] ]);
-  gfxFunction("line-to", "line_to", "lineTo", [ [Atom("x"), 1], [Atom("y"), 1] ]);
-  gfxFunction("bezier-curve-to", "bezier_curve_to", "bezierCurveTo",
-    [ [Atom("cp1x"), 1], [Atom("cp1y"), 0], [Atom("cp2x"), 0], [Atom("cp2y"), 1], [Atom("x"), 1], [Atom("y"), 1] ]);
-  gfxFunction("quadratic_curve_to", "quadratic_curve_to", "quadraticCurveTo",
-    [ [Atom("cpx"), 1], [Atom("cpy"), 0], [Atom("x"), 1], [Atom("y"), 1] ]);
-  gfxFunction("arc", "arc", "arc",
-    [ [Atom("x"), 1], [Atom("y"), 1], [Atom("radius"), .5], [Atom("startAngle"), 0], [Atom("endAngle"), 2*pi], [Atom("counterclockwise"), false] ]);
-  gfxFunction("arc-to", "arc_to", "arcTo",
-    [ [Atom("x1"), 1], [Atom("y1"), 0], [Atom("x2"), 1], [Atom("y2"), 1], [Atom("radius"), 1] ]);
-  gfxFunction("ellipse", "ellipse", "ellipse", // defaults to a circle inscribing (0,0,1,1)
-    [ [Atom("x"), .5], [Atom("y"), .5], [Atom("radiusX"), .5], [Atom("radiusY"), .5],
-      [Atom("rotation"), 0], [Atom("startAngle"), 0], [Atom("endAngle"), 2*pi], [Atom("counterclockwise"), false] ]);
-  gfxFunction("rect", "rect", "rect",
-    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
-  gfxFunction("round-rect", "round_rect", "roundRect",
-    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1], [Atom("radii"), 0] ]);
-  gfxFunction("fill-rect", "fill_rect", "fillRect",
-    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
-  gfxFunction("clear-rect", "clear_rect", "clearRect",
-    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
-  gfxFunction("stroke-rect", "stroke_rect", "strokeRect",
-    [ [Atom("x"), 0], [Atom("y"), 0], [Atom("width"), 1], [Atom("height"), 1] ]);
-  gfxFunction("fill-text", "fill_text", "fillText",
-    [ Atom("text"), [Atom("x"), 0], [Atom("y"), 0], [Atom("maxWidth"), optional]]);
-  gfxFunction("measure-text", "measure_text", "measureText", [ Atom("text") ]);
-  gfxProp("canvas-element", "canvas_element", "canvas");
-  gfxProp("canvas-width", "canvas_width", "canvas.width");
-  gfxProp("canvas-height", "canvas_height", "canvas.height");
-  gfxProp("line-width", "line_width", "lineWidth");
-  gfxProp("line-cap", "line_cap", "lineCap");
-  gfxProp("line-join", "line_join", "lineJoin");
-  gfxProp("miter-limit", "miter_limit", "miterLimit");
-  gfxFunction("get-line-dash", "get_line_dash", "getLineDash", []);
-  gfxFunction("set-line-dash", "set_line_dash", "setLineDash", [Atom("value")]);
-  gfxProp("line-dash-offset", "line_dash_offset", "lineDashOffset");
-  gfxProp("font", "font", "font");
-  gfxProp("text-align", "text_align", "textAlign");
-  gfxProp("text-baseline", "text_baseline", "textBaseline");
-  gfxProp("direction", "direction", "direction");
-  gfxProp("fill-style", "fill_style", "fillStyle");
-  gfxProp("stroke-style", "stroke_style", "strokeStyle");
-  gfxFunction("create-conic-gradient", "create_conic_gradient", "createConicGradient",
-    [ [Atom("startAngle"), 0], [Atom("x"), 0], [Atom("y"), 1] ]);
-  gfxFunction("create-linear-gradient", "create_linear_gradient", "createLinearGradient",
-    [ [Atom("x0"), 0], [Atom("y0"), 0], [Atom("x1"), 1], [Atom("y1"), 1] ]);
-  gfxFunction("create-radial-gradient", "create_radial_gradient", "createRadialGradient",
-    [ [Atom("x0"), 0], [Atom("y0"), 0], [Atom("r0"), 1], [Atom("x1"), 1], [Atom("y1"), 1], [Atom("r1"), 0] ]);
-  gfxFunction("create-pattern", "create_pattern", "createPattern", [ Atom("image"), [Atom("repetition"), "repeat"] ]);
-  gfxProp("shadow-color", "shadow_color", "shadowColor");
-  gfxProp("shadow-offset-x", "shadow_offset_x", "shadowOffsetX");
-  gfxProp("shadow-offset-y", "shadow_offset_y", "shadowOffsetY");
-  gfxFunction("fill", "fill", "fill", []);
-  gfxFunction("stroke", "stroke", "stroke", []);
-  gfxFunction("draw-focus-if-needed", "draw_focus_if_needed", "drawFocusIfNeeded", [REST_PARAM_ATOM, Atom("params")]);
-  gfxFunction("scroll-path-into-view", "scroll_path_into_view", "scrollPathIntoView", [REST_PARAM_ATOM, Atom("params")]);
-  gfxProp("global-alpha", "global_alpha", "globalAlpha");
-  gfxProp("global-composite-operation", "global_composite_operation", "globalCompositeOperation");
-  gfxFunction("draw-image", "draw_image", "drawImage", [REST_PARAM_ATOM, Atom("params")]);
-  gfxFunction("create-image-data", "create_image_data", "createImageData", [REST_PARAM_ATOM, Atom("params")]);
-  gfxFunction("get-image-data", "get_image_data", "getImageData",
-    [ [Atom("sx"), 0], [Atom("sy"), 0], [Atom("sw"), 1], [Atom("sh"), 1] ]);
-  gfxProp("image-smoothing-enabled", "image_smoothing_enabled", "imageSmoothingEnabled");
-  gfxProp("image-smoothing-quality", "image_smoothing_quality", "imageSmoothingQuality");
+  eval_string(`
+      (defmacro [gfx-save forms]
+        (list
+          'finally [ (list gfx-context-save 'gfx-context) ]
+            (list gfx-context-restore ')
+            ...forms)) `);
+
+  gfxFunction("translate", "translate",
+    `function gfx_context_translate(gfx_context, x = 0, y = 0) { return gfx_context.translate(x, y) }`,
+     { blurb: `Translates the origin by "x" and "y".`});
+
+  gfxFunction("scale", "scale",
+     `function gfx_context_scale(gfx_context, width = 1, height = width) { return gfx_context.scale(width, height) }`,
+      { blurb: `Scales the coordinate system by "width" and "height".`});
+ 
+  gfxFunction("rotate", "rotate",
+    `function gfx_context_rotate(gfx_context, angle = 0) { return gfx_context.rotate(angle) }`,
+     { blurb: `Rotates the coordinate system by "angle"`});
+
+  gfxFunction("begin-path", "beginPath",
+    `function gfx_context_begin_path(gfx_context)  { return gfx_context.beginPath() }`,
+    {});
+
+  gfxFunction("close-path", "closePath",
+    `function gfx_context_close_path(gfx_context)  { return gfx_context.closePath() }`,
+    {});
+
+   gfxFunction("clip", "clip",
+    `function gfx_context_close_clip(gfx_context)  { return gfx_context.clip() }`,
+    {});
+
+  gfxFunction("is-point-in-path", "isPointInPath",
+    `function gfx_is_point_in_path(gfx_context, ...params) { return gfx_context.isPointInPath(...params) }`,
+    {});
+
+  gfxFunction("is-point-in-stroke", "isPointInStroke",
+    `function gfx_is_point_in_stroke(gfx_context, ...params) { return gfx_context.isPointInStroke(...params) }`,
+    {});
+  
+  gfxFunction("move-to", "moveTo",
+    `function gfx_context_move_to(gfx_context, x = 0, y = 0) { return gfx_context.moveTo(x, y) }`,
+    {});
+  
+  gfxFunction("move-to", "lineTo",
+    `function gfx_context_line_to(gfx_context, x = 1, y = 1) { return gfx_context.lineTo(x, y) }`,
+    {});
+  
+  gfxFunction("bezier-curve-to", "bezierCurveTo",
+    `function gfx_context_bezier-curve-to(gfx_context, cpx1 = 1, cpy1 = 0, cpx2 = 0, cpy2 = 1, x = 1, y = 1) {
+       return gfx_context.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, y) }`,
+     {});
+
+  gfxFunction("quadratic_curve_to", "quadraticCurveTo",
+    `function gfx_context_quadratic_curve_to(gfx_context, cpx = 1, cpy = 0, x = 1, y = 1) {
+       return gfx_context.quadraticCurveTo(cpx, cpy, x, y) }`,
+     {});
+     
+  gfxFunction("arc", "arc",
+    `function gfx_context_arc(gfx_context, x = 1, y = 1, radius = .5, startAngle = 0, endAngle = 2*pi) {
+      return gfx_context.arc(x, y, radius, startAngle, endAngle) }`,
+      {});
+
+  gfxFunction("arc-to", "arcTo",
+    `function gfx_context_arc-to(gfx_context, x1 = 1, y1 = 0, x2 = 1, y2 = 1, radius = 1) {
+       return gfx_context.arcTo(x1, y1, x2, y2, radius) }`,
+      {});
+
+  gfxFunction("ellipse", "ellipse", // defaults to a circle inscribing (0,0,1,1)
+    `function gfx_context_ellipse(gfx_context, x = .5, y = .5, radiusX = .5, radiusY = .5, startAngle = 0, endAngle = 2*pi, counterclockwise = false) {
+      return gfx_context.ellipse(x, y, radiusX, radiusY, startAngle, endAngle) }`,
+      {});
+  
+  gfxFunction("rect", "rect",
+    `function gfx_context_rect(gfx_context, x = 0, y = 0, width = 1, height = 1) {
+      return gfx_context.rect(x, y, width, height) }`,
+      {});
+    
+  gfxFunction("round-rect", "roundRect",  // MDN doesn't show it but the spec says it exists!
+    `function gfx_context_round_rect(gfx_context, x = 0, y = 0, width = 1, height = 1, radii = 0) {
+      return gfx_context.roundRect(x, y, width, height, radii) }`,
+      {});
+      
+  gfxFunction("fill-rect", "fillRect",
+    `function gfx_context_fill_rect(gfx_context, x = 0, y = 0, width = 1, height = 1) {
+      return gfx_context.fillRect(x, y, width, height) }`,
+      {});
+      
+  gfxFunction("clear-rect", "clearRect",
+    `function gfx_context_clear_rect(gfx_context, x = 0, y = 0, width = 1, height = 1) {
+      return gfx_context.clearRect(x, y, width, height) }`,
+      {});
+        
+  gfxFunction("stroke-rect", "strokeRect",
+    `function gfx_context_stroke_rect(gfx_context, x = 0, y = 0, width = 1, height = 1) {
+      return gfx_context.strokeRect(x, y, width, height) }`,
+      {});
+          
+  gfxFunction("fill-text", "fillText",
+    `function gfx_context_fill_text(gfx_context, x = 0, y = 0, text = "", maxWidth = optional) {
+      return gfx_context.fillText(x, y, text, maxWidth) }`,
+      {});
+            
+  gfxFunction("measure-text", "measureText",
+    `function gfx_context_measure_text(gfx_context, text = "") {
+      return gfx_context.measureText(text) }`,
+      {});
+              
+    
+  gfxProp("canvas-element", "canvas", {});
+  gfxProp("canvas-width", "canvas.width", {});
+  gfxProp("canvas-height", "canvas.height", {});
+  gfxProp("line-width", "lineWidth", {});
+  gfxProp("line-cap", "lineCcap", {});
+  gfxProp("line-join", "lineJoin", {});
+  gfxProp("miter-limit","miterLimit", {});
+
+  gfxFunction("get-line-dash", "getLineDash",
+    `function gfx_context_get_line_dash(gfx_context) {
+      return gfx_context.getLineDash() }`,
+      {});
+
+  gfxFunction("set-line-dash", "setLineDash",
+    `function gfx_context_set_line_dash(gfx_context, value = []) {
+      return gfx_context.setLineDash(value) }`,
+      {});
+  
+
+  gfxProp("line-dash-offset", "lineDashOffset", {});
+  gfxProp("font", "font", {});
+  gfxProp("text-align", "textAlign", {});
+  gfxProp("text-baseline", "textBaseline", {});
+  gfxProp("direction", "direction", {});
+  gfxProp("fill-style", "fillStyle", {});
+  gfxProp("stroke-style", "strokeStyle", {});
+
+  gfxFunction("create-conic-gradient", "createConicGradient",
+    `function gfx_context_create_conic_gradient(gfx_context, startAngle = 0, x = 0, y = 1) {
+      return gfx_context.createConicGradient(startAngle, x, y) }`,
+      {});
+
+  gfxFunction("create-linear-gradient", "createLinearGradient",
+    `function gfx_context_create_linear_gradient(gfx_context, x0 = 0, y0 = 0, x1 = 1, y1 = 1) {
+      return gfx_context.createLinearGradient(x0, y0, x1, y1) }`,
+      {});
+  
+  gfxFunction("create-radial-gradient", "createRadialGradient",
+    `function gfx_context_create_radial_gradient(gfx_context, x0 = 0, y0 = 0, r0 = 1, x1 = 1, y1 = 1, r1 = 0) {
+      return gfx_context.createRadialGradient(x0, y0, r0 x1, y1, r1) }`,
+      {});
+    
+  gfxFunction("create-patternt", "createPattern",
+    `function gfx_context_create_pattern(gfx_context, image = optional, repetition = "repeat") {
+      return gfx_context.createPattern(image, repetition) }`,
+      {});
+      
+  gfxProp("shadow-color", "shadowColor", {});
+  gfxProp("shadow-offset-x", "shadowOffsetX", {});
+  gfxProp("shadow-offset-y", "shadowOffsetY", {});
+  gfxFunction("fill", "fill",
+    `function gfx_context_fill(gfx_context) {
+      return gfx_context.fill() }`,
+      {});
+
+  gfxFunction("stroke", "stroke",
+    `function gfx_context_stroke(gfx_context) {
+      return gfx_context.stroke() }`,
+     {});
+
+  gfxFunction("draw-focus-if-needed", "drawFocusIfNeeded",
+    `function gfx_context_draw_focus_if_needed(gfx_context, ...params) {
+      return gfx_context.drawFocusIfNeeded(...params) }`,
+      {});
+
+  gfxFunction("scroll-path-into-view", "scrollPathIntoView",
+    `function gfx_context_scroll_path_into_view(gfx_context, ...params) {
+      return gfx_context.scrollPathIntoView(...params) }`,
+      {});
+  
+  gfxProp("global-alpha", "globalAlpha", {});
+  gfxProp("global-composite-operation", "globalCompositeOperation", {});
+
+  gfxFunction("draw-image", "drawImage",
+    `function gfx_context_draw_image(gfx_context, ...params) {
+      return gfx_context.drawImage(...params) }`,
+      {});
+  
+  gfxFunction("create-image-data", "createImageData",
+    `function gfx_context_create_image_data(gfx_context, ...params) {
+      return gfx_context.createImageData(...params) }`,
+      {});
+    
+  gfxFunction("get-image-data", "getImageData",
+    `function gfx_context_get_image_data(gfx_context, sx = 0, sy = 0, sw = 1, sh = 1) {
+      return gfx_context.getImageData(sx, sy, sw, sh) }`,
+      {});
+      
+  gfxProp("image-smoothing-enabled", "imageSmoothingEnabled", {});
+  gfxProp("image-smoothing-quality", "imageSmoothingQuality", {});
 
   return globalScope;
 }
