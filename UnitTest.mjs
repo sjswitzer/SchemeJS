@@ -208,26 +208,23 @@ function runTestsInNewInstance(opts = {}) {
     EXPECT(` (to-upper-case "AbCd") `, expectString("ABCD"));
     EXPECT(` (to-upper-case "AbCd" ["en-US"]) `, expectString("ABCD"));
     EXPECT(` (to-upper-case "AbCd" "en-US") `, expectString("ABCD"));
-    // TODO: Make parser accept unicode escapes \uxxxx and \u{xxxxxx},
-    // then test Turkish locale:
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/toLocaleLowerCase
 
     { // Unbound variables in functions
       let savedScope = beginTestScope();
-      EXPECT(` (def (a x) (+ x y)) `, ` 'a `);
+      EXPECT(` (defn (a x) (+ x y)) `, ` 'a `);
       EXPECT_ERROR(` (a 3) `, SchemeEvalError);
-      EXPECT(` (def y 5) `, ` 'y `);
+      EXPECT(` (define y 5) `, ` 'y `);
       EXPECT(` (a 3) `, 8);
-      EXPECT(` (def (a x y) (plus* x y)) `, ` 'a `);
+      EXPECT(` (defn (a x y) (plus* x y)) `, ` 'a `);
       EXPECT_ERROR(` (plus 4 5) `, SchemeEvalError);
-      EXPECT(` (def plus* +) `, ` 'plus* `);
+      EXPECT(` (define plus* +) `, ` 'plus* `);
       EXPECT(` (plus* 4 5) `, 9)
       endTestScope(savedScope);
     }
 
     { // Object and Array literals
       let savedScope = beginTestScope();
-      EXPECT(` (def a 2) `, ` 'a `);
+      EXPECT(` (define a 2) `, ` 'a `);
       EXPECT(` { [a]: 3, "b": 4, "c": a } `, ` '{ "2": 3, "b": 4, "c": 2 } `)
       EXPECT(` [ a, 3 ] `, ` '[2, 3] `);
       endTestScope(savedScope);
@@ -542,7 +539,7 @@ function runTestsInNewInstance(opts = {}) {
 
     { // "Rest" parameters
       let savedScope = beginTestScope();
-      EXPECT(` (def [foo a b ...c] c) `, ` 'foo `)
+      EXPECT(` (defn [foo a b ...c] c) `, ` 'foo `)
       EXPECT(` (foo 1 2 3 (+ 2 2) 5) `, ` '[3 4 5] `);
       endTestScope(savedScope);
     }
@@ -556,7 +553,7 @@ function runTestsInNewInstance(opts = {}) {
 
     { // optional paramaters
       let savedScope = beginTestScope();
-      EXPECT(` (def (opt a b (c (+ 2 3))) (list a b c)) `, ` 'opt `)
+      EXPECT(` (defn (opt a b (c (+ 2 3))) (list a b c)) `, ` 'opt `)
       EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
       EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
       EXPECT(` (opt 1) `, isClosure);
@@ -576,7 +573,7 @@ function runTestsInNewInstance(opts = {}) {
 
     { // optional paramaters with []
       let savedScope = beginTestScope();
-      EXPECT(` (def (opt a b [c (+ 2 3)]%) (list a b c)) `, ` 'opt `)
+      EXPECT(` (defn (opt a b [c (+ 2 3)]%) (list a b c)) `, ` 'opt `)
       EXPECT(` (opt 1 2 3) `, ` '(1 2 3) `);
       EXPECT(` (opt 1 2) `, ` '(1 2 5) `);
       EXPECT(` (opt 1) `, isClosure);
@@ -596,17 +593,17 @@ function runTestsInNewInstance(opts = {}) {
 
     { // special lambdas
       let savedScope = beginTestScope();
-      EXPECT(` (def a 1) `, ` 'a `);
-      EXPECT(` (def b 2) `, ` 'b `);
-      EXPECT(` (def c 3) `, ` 'c `);
-      EXPECT(` (def d 4) `, ` 'd `);
-      EXPECT(` (def e 5) `, ` 'e `);
+      EXPECT(` (define a 1) `, ` 'a `);
+      EXPECT(` (define b 2) `, ` 'b `);
+      EXPECT(` (define c 3) `, ` 'c `);
+      EXPECT(` (define d 4) `, ` 'd `);
+      EXPECT(` (define e 5) `, ` 'e `);
       // \\ Because of string literal syntax. It's really \#
-      EXPECT(` (def x (\\# 2 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'x `)
+      EXPECT(` (define x (\\# 2 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'x `)
       EXPECT(` (x a b c d e) `, ` '(1 2 c d e) `);
-      EXPECT(` (def y (\\# 1 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'y `)
+      EXPECT(` (define y (\\# 1 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'y `)
       EXPECT(` (y a b c d e) `, ` '(1 b c d e) `);
-      EXPECT(` (def z (\\# 0 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'z `)
+      EXPECT(` (define z (\\# 0 (p1 p2 p3 p4 p5) (list p1 p2 p3 p4 p5))) `, ` 'z `)
       EXPECT(` (z a b c d e) `, ` '(a b c d e) `);
       endTestScope(savedScope);
     }
@@ -615,16 +612,16 @@ function runTestsInNewInstance(opts = {}) {
 
     { // Partial application returning closures
       let savedScope = beginTestScope();
-      EXPECT(` (def mul-by-5 (* 5)) `, ` 'mul-by-5 `);
+      EXPECT(` (define mul-by-5 (* 5)) `, ` 'mul-by-5 `);
       EXPECT(` mul-by-5 `, isClosure);
       EXPECT(` (mul-by-5 3) `, 15);
-      EXPECT(` (def (_add a b) (+ a b)) `, ` '_add `);
+      EXPECT(` (defn (_add a b) (+ a b)) `, ` '_add `);
       EXPECT(` (_add 5 6) `, 11);
-      EXPECT(` (def add-4 (_add 4)) `, ` 'add-4 `);
+      EXPECT(` (define add-4 (_add 4)) `, ` 'add-4 `);
       EXPECT(` add-4 `, isClosure);
       EXPECT(` (add-4 3) `, 7);
-      EXPECT(` (def (increment-by n) (\\(x)(+ x n))) `, ` 'increment-by `);
-      EXPECT(` (def increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
+      EXPECT(` (defn (increment-by n) (\\(x)(+ x n))) `, ` 'increment-by `);
+      EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
       EXPECT(` increment-by-3 `, isClosure);
       EXPECT(` (increment-by-3 4) `, 7);
       endTestScope(savedScope);
@@ -633,7 +630,7 @@ function runTestsInNewInstance(opts = {}) {
     { // Partial application returning closures, compiled
       let savedScope = beginTestScope();
       EXPECT(` (compile (increment-by n) (\\(x)(+ x n))) `, ` 'increment-by `);
-      EXPECT(` (def increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
+      EXPECT(` (define increment-by-3 (increment-by 3)) `, ` 'increment-by-3 `);
       EXPECT(` increment-by-3 `, isClosure);
       EXPECT(` (increment-by-3 4) `, 7);
       endTestScope(savedScope);
@@ -646,7 +643,7 @@ function runTestsInNewInstance(opts = {}) {
     {
       let savedScope = beginTestScope();
       EXPECT(`
-        (def [factoral x]
+        (defn [factoral x]
           (? (<= x 1) 
             (? (bigint? x) 1n 1)
             (* x (factoral (- x (? (bigint? x) 1n 1))))
@@ -709,7 +706,7 @@ function runTestsInNewInstance(opts = {}) {
 
     { // Test spread parameters in array literals
       let savedScope = beginTestScope();
-      EXPECT(` (def a [1 2 'z "foo" {} 10n]) `, ` 'a `);
+      EXPECT(` (define a [1 2 'z "foo" {} 10n]) `, ` 'a `);
       EXPECT(` ["x" 'x ...a 100] `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
       EXPECT(` (defn (b ...a) ["x" 'x ...a 100]) `, ` 'b `)
       EXPECT(` (b 1 2 'z "foo" {} 10n) `, ` '["x" x 1 2 z "foo" {} 10n 100] `);
@@ -720,7 +717,7 @@ function runTestsInNewInstance(opts = {}) {
 
     { // Test spread parameters in object literals
       let savedScope = beginTestScope();
-      EXPECT(` (def a { foo: "bar" bar: 2 "z": 10n } ) `, ` 'a `);
+      EXPECT(` (define a { foo: "bar" bar: 2 "z": 10n } ) `, ` 'a `);
       EXPECT(` { "x": 1, ...: a, 100: "hundred" } `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
       EXPECT(` (defn (b a) { "x": 1, ...: a, 100: "hundred" }) `, ` 'b `)
       EXPECT(` (b { foo: "bar" bar: 2 "z": 10n }) `, ` '{ "x": 1, foo: "bar", bar: 2, "z": 10n, 100: "hundred" } `);
@@ -733,7 +730,10 @@ function runTestsInNewInstance(opts = {}) {
       let savedScope = beginTestScope();
 
       // First, define our own spread macro that uses compiler specialization
-      globalScope.exportAPI("spread_with_compile_specialization", spread_with_compile_specialization, { tag: globalScope.EVALUATED_PARAMETER_MACRO_TAG });
+      globalScope.define_evaluated_parameter_macro(
+        [Atom("_spread_"), Atom("args"), Atom("ssaScope"), Atom("tools")],
+        list(spread_with_compile_specialization, Atom("args"), Atom("ssaScope"), Atom("tools")))
+      // globalScope.exportAPI("spread_with_compile_specialization", spread_with_compile_specialization, { tag: globalScope.EVALUATED_PARAMETER_MACRO_TAG });
       function spread_with_compile_specialization(args, ssaScope, tools) {
         let spreadArg = args[FIRST], rest = args[REST];
         if (ssaScope) {
@@ -743,7 +743,7 @@ function runTestsInNewInstance(opts = {}) {
         }
         return new Pair([spreadArg], rest);
       }
-      globalScope.defineBinding("_spread_", "spread_with_compile_specialization");
+      // globalScope.defineBinding("_spread_", "spread_with_compile_specialization");
 
       // Now some tests
       EXPECT(` (compile (foo a ...b) (list _spread_ b a))`, ` 'foo `);
@@ -758,10 +758,10 @@ function runTestsInNewInstance(opts = {}) {
 
     { // Test that when a when a bound function changes, the JIT's guards catch it.
       let savedScope = beginTestScope();
-      EXPECT(` (def op +) `, ` 'op `);
-      EXPECT(` (def (run-op a b c) (op a b c))`, ` 'run-op `);
+      EXPECT(` (define op +) `, ` 'op `);
+      EXPECT(` (defn (run-op a b c) (op a b c))`, ` 'run-op `);
       EXPECT(` (run-op 2 3 4) `, 9);
-      EXPECT(` (def op *) `, ` 'op `);
+      EXPECT(` (define op *) `, ` 'op `);
       EXPECT(` (run-op 2 3 4) `, 24);
       endTestScope(savedScope);
      }

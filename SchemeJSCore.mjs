@@ -58,6 +58,7 @@ export function createInstance(schemeOpts = {}) {
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
   const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
+  const RETURN_SYMBOL = Symbol("RETURNS"), RETURNS_VALUE_SYMBOL = Symbol("RETURNS-VALUE"), RETURN_SCOPE_SYMBOL = Symbol('RETURN-SCOPE');
   const analyzedFunctions = new WeakMap(), namedObjects = new WeakMap();
   const JSIDENT1 = {}, JSIDENT2 = Object.create(JSIDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$`)
@@ -111,6 +112,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("FUNCTION_TAG", FUNCTION_TAG  );
   exportAPI("MACRO_TAG", MACRO_TAG);
   exportAPI("EVALUATED_PARAMETER_MACRO_TAG", EVALUATED_PARAMETER_MACRO_TAG);
+  exportAPI("RETURN_SYMBOL", RETURN_SYMBOL);
 
   //
   // Unlike most Lisps, the Cons cell (Pair) is not central to this design, but a _list_ is.
@@ -1836,53 +1838,73 @@ export function createInstance(schemeOpts = {}) {
     return ssaResult;
   }
 
-  // (def variable value)
-  // (def (fn args) forms)
-  exportAPI("def", def, { requiresScope: true, evalCount: 0, dontInline: true });
-  function def(defined, value, ...rest) {
-    let scope = this, name = defined;
-    if (isList(defined)) {
-      name = defined[FIRST];
-      let params = defined[REST];
-      value = lambda.call(scope, params, value, ...rest);
-    } else {
-      value = _eval(value, scope);
-      if (scope[RETURN_SYMBOL]) return;
-    }
-    if (typeof name === 'string') name = Atom(name);
-    // Prevent a tragic mistake that's easy to make by accident. (Ask me how I know!)
-    if (name === QUOTE_ATOM) throw new SchemeEvalError("Can't redefine quote");
-    if (typeof name !== 'symbol')
-      throw new TypeError(`Must define symbol or string ${string(defined)}`);
+  // (define variable value)
+  exportAPI("define", define, { evalCount: 0, dontInline: true });
+  function define(name, value) {
+    if (!(typeof name !== 'string' || typeof name !== 'symbol'))
+      throw new SchemeEvalError(`name must be an atom or string ${string(name)}`);
+    value = _eval(value, globalScope);
     if (value != null &(typeof value === 'function' || typeof value === 'object'))
       namedObjects.set(value, name.description);
     globalScope[name] = value;
-    // Make available to JavaScript as well
-    let jsName = normalizeExportToJavaScriptName(name);
-    if (jsName)
-      globalScope[jsName] = value;
     return name;
   }
 
-  function normalizeExportToJavaScriptName(name) {
-    if (typeof name === 'symbol')
-      name = name.description;
-    let jsName = replaceAll(name, "-", "_");
-    if (!JSIDENT1[jsName[0]]) {
-      jsName = undefined;
-    } else {
-      for (let ch of jsName) {
-        if (!JSIDENT2[ch]) {
-          jsName = undefined;
-          break;
-        }
-      }
-    }
-    return jsName;
+  // (define_function [fn args] forms)
+  exportAPI("define_function", define_function, { evalCount: 0, dontInline: true });
+  function define_function(nameAndParams, ...forms) {
+    if (!isList(nameAndParams))
+      throw new SchemeEvalError(`bad function definition ${string(nameAndParams)}`)
+    let name = nameAndParams[FIRST], params = nameAndParams[REST];
+    if (!(typeof name !== 'string' || typeof name !== 'symbol'))
+      throw new SchemeEvalError(`name must be an atom or string ${string(name)}`);
+    if (!isList(params))
+      throw new SchemeEvalError(`bad parameter list ${string(nameAndParams)}`)
+    let value = globalScope.lambda(params, ...forms);
+    namedObjects.set(value, string(name));
+    globalScope[name] = value;
+    return name;
   }
 
-  const RETURN_SYMBOL = Symbol("RETURNS"), RETURNS_VALUE_SYMBOL = Symbol("RETURNS-VALUE"), RETURN_SCOPE_SYMBOL = Symbol('RETURN-SCOPE');
-  exportAPI("RETURN_SYMBOL", RETURN_SYMBOL);
+  //
+  // Macros
+  //
+
+  exportAPI("define_evaluated_parameter_macro", define_evaluated_parameter_macro, { evalCount: 0, dontInline: true });
+  function define_evaluated_parameter_macro(nameAndParams, ...forms) {
+    if (!isList(nameAndParams))
+      throw new SchemeEvalError(`bad macro definition ${string(nameAndParams)}`)
+    let name = Atom(nameAndParams[FIRST]), params = nameAndParams[REST];
+    if (!(typeof name !== 'string' || typeof name !== 'symbol'))
+      throw new SchemeEvalError(`name must be an atom or string ${string(name)}`);
+    if (!isList(params))
+      throw new SchemeEvalError(`bad parameter list ${string(nameAndParams)}`)
+    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
+    let nameStr = typeof name === 'symbol' ? name.description : name;
+    let compiledFunction = globalScope.compile_lambda(name, nameStr, lambda);
+    examineFunctionForCompilerTemplates(name, compiledFunction, { tag: EVALUATED_PARAMETER_MACRO_TAG });
+    namedObjects.set(compiledFunction, string(name));
+    globalScope[name] = compiledFunction;
+    return name;
+  }
+
+  exportAPI("define_macro", define_macro, { evalCount: 0, dontInline: true });
+  function define_macro(nameAndParams, ...forms) {
+    if (!isList(nameAndParams))
+      throw new SchemeEvalError(`bad macro definition ${string(nameAndParams)}`)
+    let name = Atom(nameAndParams[FIRST]), params = nameAndParams[REST];
+    if (!(typeof name !== 'string' || typeof name !== 'symbol'))
+      throw new SchemeEvalError(`name must be an atom or string ${string(name)}`);
+    if (!isList(params))
+      throw new SchemeEvalError(`bad parameter list ${string(nameAndParams)}`)
+    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
+    let nameStr = typeof name === 'symbol' ? name.description : name;
+    let compiledFunction = globalScope.compile_lambda(name, nameStr, lambda);
+    examineFunctionForCompilerTemplates(name, compiledFunction, { tag: MACRO_TAG });
+    namedObjects.set(compiledFunction, string(name));
+    globalScope[name] = compiledFunction;
+    return name;
+  }
 
   //
   // Spread operator.
@@ -1906,29 +1928,6 @@ export function createInstance(schemeOpts = {}) {
     return new Pair([list(QUOTE_ATOM, quoteArg)], rest);
   }
 
-  //
-  // Macros
-  //
-
-  exportAPI("defmacro", defmacro, { requiresScope: true, evalCount: 0, dontInline: true });
-  function defmacro(nameAndParams, ...forms) {
-    if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
-    let name = Atom(nameAndParams[FIRST]);
-    let params = nameAndParams[REST];
-    if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
-    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
-    let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
-    examineFunctionForCompilerTemplates(name, compiledFunction, { tag: MACRO_TAG });
-    namedObjects.set(compiledFunction, name.description);
-    globalScope[name] = compiledFunction;
-    // Make available to JavaScript as well
-    let jsName = normalizeExportToJavaScriptName(name);
-    if (jsName)
-      globalScope[jsName] = compiledFunction;
-    globalScope[name] = compiledFunction;
-    return name;
-  }
-
   // (when (cond) form...) => (if (cond) (begin form...))
   // Not using defmacro since that creates a binding, and the core doesn't do that.
   exportAPI("when", when, { tag: MACRO_TAG });
@@ -1942,7 +1941,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // This is where the magic happens
   //
-  // Beware that compileEval closely parallels this function, if you make a change
+  // Beware that compileEval closely parallels this function. If you make a change
   // here you almost certainly need to make a corresponding one there.
   //
 
@@ -2262,7 +2261,7 @@ export function createInstance(schemeOpts = {}) {
   }
 
   //
-  // Beware that compileClosure closely parallels this function. If you make a change
+  // Beware that compileLambda closely parallels this function. If you make a change
   // here, you almost certainly need to make a change there. "string" also
   // has special handling for "printing" closures. In particular, closures are
   // decorated with a CLOSURE_ATOM symbol to clue the string function to print
@@ -2804,20 +2803,19 @@ export function createInstance(schemeOpts = {}) {
 
   // (compile (fn args) forms) -- defines a compiled function
   // (compile lambda) -- returns a compiled lambda expression
-  exportAPI("compile", compile, { requiresScope: true, evalCount: 0, dontInline: true });
-  function compile(nameAndParams, ...forms) {
+  exportAPI("compile_function", compile_function, { requiresScope: true, evalCount: 0, dontInline: true });
+  function compile_function(nameAndParams, ...forms) {
     if (!isList(nameAndParams)) new TypeError(`First parameter must be a list ${forms}`);
     let name = Atom(nameAndParams[FIRST]);
     let params = nameAndParams[REST];
-    if (typeof name !== 'symbol') new TypeError(`Function name must be an atom or string ${forms}`)    
+    if (!(typeof name !== 'string' || typeof name !== 'symbol'))
+      throw new SchemeEvalError(`name must be an atom or string ${string(name)}`);
+    if (!isList(params))
+      throw new SchemeEvalError(`bad parameter list ${string(nameAndParams)}`)
     let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
     let compiledFunction = compile_lambda.call(this, name, name.description, lambda);
     namedObjects.set(compiledFunction, name.description);
     globalScope[name] = compiledFunction;
-    // Make available to JavaScript as well
-    let jsName = normalizeExportToJavaScriptName(name);
-    if (jsName)
-      globalScope[jsName] = compiledFunction;
     globalScope[name] = compiledFunction;
     return name;
   }

@@ -110,13 +110,13 @@ export function createInstance(schemeOpts = {}) {
 
     // Compile the wrapper function (so that default paraameters specified in Scheme are processed)
     let definedAtom = Atom(jsGfxContextFnName);
-    globalScope.compile([definedAtom, gfxContextAtom, ...params], list(fn, gfxContextAtom, ...stripOptional(params)));
+    globalScope.compile_function([definedAtom, gfxContextAtom, ...params], list(fn, gfxContextAtom, ...stripOptional(params)));
     // Decorate it for "help" purposes and make available to JavaScript
     augmentFunctionInfo(definedAtom, { group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
 
     // Define a macro that adds the graphics context and calls it
     let macroAtom = Atom(name), paramsAtom = Atom("params");
-    globalScope.defmacro([macroAtom, paramsAtom],
+    globalScope.define_macro([macroAtom, paramsAtom],
       list(params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params), paramsAtom)));
     
     // Decorate it for the help system
@@ -148,7 +148,7 @@ export function createInstance(schemeOpts = {}) {
 
     // Define a macro that adds the graphics context and calls it
     let macroAtom = Atom(name), paramsAtom = Atom("params");
-    globalScope.defmacro([macroAtom, paramsAtom],
+    globalScope.define_macro([macroAtom, paramsAtom],
       list(params => new Pair(gfxContextFnAtom, new Pair(gfxContextAtom, params), paramsAtom)));
     // Decorate it for the help system
     augmentFunctionInfo(macroAtom,  { group: "web-gfx", gfxApi: jsPropName,
