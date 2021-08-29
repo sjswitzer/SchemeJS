@@ -774,7 +774,7 @@
       let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, SchemeEvalError;
       let NIL, BOTTOM, Atom, string, newScope, exportAPI, defineBinding, originalLoad;
       let varNo = 0, WS, NL;
-      const NBSP = '\u00a0', lambdaStr = "\u03BB";
+      const NBSP = '\u00a0', functionStr = "\u03BB";
       const optional = undefined;  // so that parameters show up pretty when printed
       let traceCompilerCode = true, traceInterpreter = false;
       let printBoxElement;
@@ -783,7 +783,7 @@
       async function importSchemeAndRunREPL() {
         let SchemeJSWeb = await(import("./SchemeJSWeb.mjs"));
         globalScope = SchemeJSWeb.createInstance({
-          lambdaStr, readFile, linePrinter, traceCompilerCode, traceInterpreter,
+          functionStr, readFile, linePrinter, traceCompilerCode, traceInterpreter,
           reportLoadResult, reportLoadInput, reportSchemeError, reportSystemError
         });
         SCHEME_VERSION = globalScope.VERSION ?? required();

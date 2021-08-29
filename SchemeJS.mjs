@@ -32,9 +32,9 @@ export function createInstance(schemeOpts = {}) {
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
   const restParamStr = schemeOpts.restParamStr ?? "..."; // override the default "&"
-  const lambdaStr = schemeOpts.lambdaStr ?? "lambda";
+  const functionStr = schemeOpts.functionStr ?? "lambda";
 
-  schemeOpts = { ... schemeOpts, restParamStr, lambdaStr };
+  schemeOpts = { ... schemeOpts, restParamStr, functionStr };
   const globalScope = SchemeJSCore.createInstance(schemeOpts);
 
   const string = globalScope.string ?? required();
@@ -1895,8 +1895,8 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(<stuff> ${restParamStr} value <more stuff>)`, 
       blurb: `Spread macro. Expands the value (an iterable), into a list literal or argument list .`
     });
-    globalScope.eval_string(` (defmacro [\\  args] (cons ' ${lambdaStr}   args)) `);
-    globalScope.eval_string(` (defmacro [\\# args] (cons ' ${lambdaStr}#  args)) `);
+    globalScope.eval_string(` (defmacro [\\  args] (cons ' ${functionStr}   args)) `);
+    globalScope.eval_string(` (defmacro [\\# args] (cons ' ${functionStr}#  args)) `);
     defineBinding("bigint?", "is_bigint", {
       group: "pred-op", sample: `(?bigint value [t-expr true] [f-expr false])`, 
       blurb: `If the value's type is "bigint," ` +

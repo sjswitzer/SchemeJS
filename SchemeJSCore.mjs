@@ -46,7 +46,7 @@ export function createInstance(schemeOpts = {}) {
   const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? false);
   const generatorsAreLists = schemeOpts.generatorsAreLists ?? true;
   const standardIterablesAreLists = schemeOpts.standardIterablesAreLists ?? true;
-  const lambdaStr = schemeOpts.lambdaStr ?? "function";
+  const functionStr = schemeOpts.functionStr ?? "function";
   const firstName = schemeOpts.firstName ?? "first";
   const restName = schemeOpts.firstName ?? "rest";
   const nilName = schemeOpts.nilName ?? "NIL";
@@ -458,7 +458,7 @@ export function createInstance(schemeOpts = {}) {
     return atom;
   }
 
-  const LAMBDA_ATOM = Atom(lambdaStr), SLAMBDA_ATOM = Atom(`${lambdaStr}#`);
+  const LAMBDA_ATOM = Atom(functionStr), SLAMBDA_ATOM = Atom(`${functionStr}#`);
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%closure#");
   const QUOTE_ATOM = Atom("quote");
