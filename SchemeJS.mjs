@@ -11,7 +11,7 @@ import * as SchemeJSCore from './SchemeJSCore.mjs';
 export const VERSION = SchemeJSCore.VERSION;
 export const LogicError = SchemeJSCore.LogicError;
 const isArray = Array.isArray;
-const MUL = '\u00d7', DIV = '\u00f7';
+const MUL = '\u00d7', DIV = '\u00f7', LAMBDA_CHAR = "\u03BB";
 
 // So that optional parameters show up pretty when printed
 const optional = undefined;
@@ -32,8 +32,9 @@ export function createInstance(schemeOpts = {}) {
   const reportLoadResult = schemeOpts.reportLoadResult ?? ((result, expr) => console.log(string(result)));
   const linePrinter = schemeOpts.linePrinter ?? (line => console.log(line));
   const restParamStr = schemeOpts.restParamStr ?? "..."; // override the default "&"
+  const lambdaStr = schemeOpts.lambdaStr ?? "lambda";
 
-  schemeOpts = { ... schemeOpts, restParamStr };
+  schemeOpts = { ... schemeOpts, restParamStr, lambdaStr };
   const globalScope = SchemeJSCore.createInstance(schemeOpts);
 
   const string = globalScope.string ?? required();
@@ -48,7 +49,6 @@ export function createInstance(schemeOpts = {}) {
   const FIRST = globalScope.FIRST ?? required();
   const REST = globalScope.REST ?? required();
   const NIL = globalScope.NIL ?? required();
-  const LAMBDA_CHAR = globalScope.LAMBDA_CHAR ?? required();
   const QUOTE_ATOM = globalScope.QUOTE_ATOM ?? required();
   const LAMBDA_ATOM = globalScope.LAMBDA_ATOM ?? required();
   const SLAMBDA_ATOM = globalScope.SLAMBDA_ATOM ?? required();
@@ -1895,6 +1895,8 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(<stuff> ${restParamStr} value <more stuff>)`, 
       blurb: `Spread macro. Expands the value (an iterable), into a list literal or argument list .`
     });
+    globalScope.eval_string(` (defmacro [\\  args] (cons ' ${lambdaStr}   args)) `);
+    globalScope.eval_string(` (defmacro [\\# args] (cons ' ${lambdaStr}#  args)) `);
     defineBinding("bigint?", "is_bigint", {
       group: "pred-op", sample: `(?bigint value [t-expr true] [f-expr false])`, 
       blurb: `If the value's type is "bigint," ` +

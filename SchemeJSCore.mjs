@@ -46,7 +46,7 @@ export function createInstance(schemeOpts = {}) {
   const TRACE_COMPILER_CODE = !!(schemeOpts.traceCompilerCode ?? false);
   const generatorsAreLists = schemeOpts.generatorsAreLists ?? true;
   const standardIterablesAreLists = schemeOpts.standardIterablesAreLists ?? true;
-  const lambdaStr = schemeOpts.lambdaStr ?? "\\";
+  const lambdaStr = schemeOpts.lambdaStr ?? "function";
   const firstName = schemeOpts.firstName ?? "first";
   const restName = schemeOpts.firstName ?? "rest";
   const nilName = schemeOpts.nilName ?? "NIL";
@@ -458,15 +458,11 @@ export function createInstance(schemeOpts = {}) {
     return atom;
   }
 
-  const LAMBDA_ATOM = Atom("lambda"), SLAMBDA_ATOM = Atom("lambda#"), LAMBDA_CHAR = "\u03BB";
-  // Atomic-level aliases for "lambda" and "lambda#"
-  ATOMS["\\"]  = ATOMS[LAMBDA_CHAR]     = ATOMS[lambdaStr]     = LAMBDA_ATOM;
-  ATOMS["\\#"] = ATOMS[LAMBDA_CHAR+"#"] = ATOMS[lambdaStr+"#"] = SLAMBDA_ATOM;
+  const LAMBDA_ATOM = Atom(lambdaStr), SLAMBDA_ATOM = Atom(`${lambdaStr}#`);
   const CLOSURE_ATOM = Atom("%%closure");
   const SCLOSURE_ATOM = Atom("%%closure#");
   const QUOTE_ATOM = Atom("quote");
   const REST_PARAM_ATOM = Atom(restParamStr);
-  exportAPI("LAMBDA_CHAR", LAMBDA_CHAR);
   exportAPI("LAMBDA_ATOM", LAMBDA_ATOM);
   exportAPI("SLAMBDA_ATOM", SLAMBDA_ATOM);
   exportAPI("QUOTE_ATOM", QUOTE_ATOM);
@@ -1868,6 +1864,23 @@ export function createInstance(schemeOpts = {}) {
   //
   // Macros
   //
+  exportAPI("define_macro", define_macro, { evalCount: 0, dontInline: true });
+  function define_macro(nameAndParams, ...forms) {
+    if (!isList(nameAndParams))
+      throw new SchemeEvalError(`bad macro definition ${string(nameAndParams)}`)
+    let name = Atom(nameAndParams[FIRST]), params = nameAndParams[REST];
+    if (!(typeof name !== 'string' || typeof name !== 'symbol'))
+      throw new SchemeEvalError(`name must be an atom or string ${string(name)}`);
+    if (!isList(params))
+      throw new SchemeEvalError(`bad parameter list ${string(nameAndParams)}`)
+    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
+    let nameStr = typeof name === 'symbol' ? name.description : name;
+    let compiledFunction = globalScope.compile_lambda(name, nameStr, lambda);
+    examineFunctionForCompilerTemplates(name, compiledFunction, { tag: MACRO_TAG });
+    namedObjects.set(compiledFunction, string(name));
+    globalScope[name] = compiledFunction;
+    return name;
+  }
 
   exportAPI("define_evaluated_parameter_macro", define_evaluated_parameter_macro, { evalCount: 0, dontInline: true });
   function define_evaluated_parameter_macro(nameAndParams, ...forms) {
@@ -1882,24 +1895,6 @@ export function createInstance(schemeOpts = {}) {
     let nameStr = typeof name === 'symbol' ? name.description : name;
     let compiledFunction = globalScope.compile_lambda(name, nameStr, lambda);
     examineFunctionForCompilerTemplates(name, compiledFunction, { tag: EVALUATED_PARAMETER_MACRO_TAG });
-    namedObjects.set(compiledFunction, string(name));
-    globalScope[name] = compiledFunction;
-    return name;
-  }
-
-  exportAPI("define_macro", define_macro, { evalCount: 0, dontInline: true });
-  function define_macro(nameAndParams, ...forms) {
-    if (!isList(nameAndParams))
-      throw new SchemeEvalError(`bad macro definition ${string(nameAndParams)}`)
-    let name = Atom(nameAndParams[FIRST]), params = nameAndParams[REST];
-    if (!(typeof name !== 'string' || typeof name !== 'symbol'))
-      throw new SchemeEvalError(`name must be an atom or string ${string(name)}`);
-    if (!isList(params))
-      throw new SchemeEvalError(`bad parameter list ${string(nameAndParams)}`)
-    let lambda = new Pair(LAMBDA_ATOM, new Pair(params, forms));
-    let nameStr = typeof name === 'symbol' ? name.description : name;
-    let compiledFunction = globalScope.compile_lambda(name, nameStr, lambda);
-    examineFunctionForCompilerTemplates(name, compiledFunction, { tag: MACRO_TAG });
     namedObjects.set(compiledFunction, string(name));
     globalScope[name] = compiledFunction;
     return name;
@@ -2568,8 +2563,6 @@ export function createInstance(schemeOpts = {}) {
         return put("}", true);
       }
       if (objType === 'symbol') {
-        if (obj === LAMBDA_ATOM) return put(lambdaStr);
-        if (obj === SLAMBDA_ATOM) return put(lambdaStr+"#");
         if (isAtom(obj)) return put(obj.description);
         return put(`Symbol(${obj.description})`);
       }
