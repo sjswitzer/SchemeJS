@@ -2123,11 +2123,13 @@ export function createInstance(schemeOpts = {}) {
           let res = {};
           for (let key of [...Object.getOwnPropertyNames(form), ...Object.getOwnPropertySymbols(form)]) {
             let value = form[key];
-            let insertion = handleParameterMacroIfPresentInObjectLiteral(key, value);
-            if (insertion !== undefined) {
-              for (let ins of insertion) {
-                ins = _eval(ins, scope);
-                Object.assign(res, ins);
+            let macroResult = handleParameterMacroIfPresentInObjectLiteral(key, value);
+            if (macroResult !== undefined) {
+              // macroResult[REST] is not used in this case
+              let insertions = macroResult[FIRST];
+              for (let insertion of insertions) {
+                insertion = _eval(insertion, scope);
+                Object.assign(res, insertion);
               }
               continue;
             }
@@ -2179,7 +2181,7 @@ export function createInstance(schemeOpts = {}) {
             let tag = parameterDescriptor & 0xff;
             if (tag === EVALUATED_PARAMETER_MACRO_TAG) {
               let macroResult = symVal.call(scope, new Pair(value, NIL));
-              if (!moreList(macroResult))
+              if (!isList(macroResult))
                 throw new SchemeEvalError(`bad parameter macro result ${string(macroResult)}`);
               return macroResult;
             }
@@ -3381,10 +3383,11 @@ export function createInstance(schemeOpts = {}) {
                 // In this case, FIRST is the SSA value to insert and REST is the remainder of the arg list
                 return macroResult;
               }
-              let ssaInsertsArray = []
-              for (let form of forms)
-                ssaInsertsArray.push(compileEval(form, ssaScope, tools));
-              return new Pair(ssaInsertsArray, macroResult[REST]);
+              let ssaInsertions = macroResult[FIRST], rest = macroResult[REST];
+              let ssaInsertionResultsArray = [];
+              for (let form of ssaInsertions)
+                ssaInsertionResultsArray.push(compileEval(form, ssaScope, tools));
+              return new Pair(ssaInsertionResultsArray, rest);
             }
           }
         }
