@@ -33,9 +33,7 @@ export function run(opts = {}) {
   runTestsInNewInstance({ ... opts, bottomIsLNIL: false });
 
   // Make sure we can at least instantiate a SchemeJSWeb instance
-  {
-    const globalScope = SchemeJSWeb.createInstance(opts);
-  }
+  const globalScope = SchemeJSWeb.createInstance(opts);
 
   console.info("UNIT TESTS COMPLETE", "Succeeded:", succeeded, "Failed:", failed);
   return { succeeded, failed };

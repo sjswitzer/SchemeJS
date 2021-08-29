@@ -72,6 +72,7 @@ export function createInstance(schemeOpts = {}) {
   const gfxContextAtom = Atom("gfx-context");
   const htmlDocumentAtom = Atom("html-document");
   const pi = Math.PI;
+  const eval_string = str => globalScope.eval_string(str);
 
   // Defines the graphics function and a macro to call it.
   // This is how you write Scheme with no parser or bindings :)

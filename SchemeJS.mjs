@@ -789,7 +789,7 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("to_string", (obj, maxCarDepth = 100, maxCdrDepth = 10000) => string(obj, { maxCarDepth, maxCdrDepth }));
 
-  exportAPI("eval_string", eval_string, { dontInline: true });
+  exportAPI("eval_string", eval_string, { dontInline: true, requiresScope: true });
   function eval_string(str, scope = this) {
     let expr = parseSExpr(str);
     return _eval(expr, scope);
