@@ -10,6 +10,13 @@ import * as SchemeJS from './SchemeJS.mjs';
 
 export let succeeded = 0, failed = 0;
 
+// This is just to ensure that everything in this module compiles;
+// There's little that can actually be tested outside the browser.
+// Perhaps eventually run some extra tests when running tests from
+// the browser?
+import * as SchemeJSWeb from './SchemeJSWeb.mjs';
+export const SchemeJSWeb_VERSION = SchemeJSWeb.VERSION;
+
 export class TestFailureError extends Error {
   constructor(message, test, result, expected, report) {
     super(message);
