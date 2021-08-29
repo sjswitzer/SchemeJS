@@ -3319,7 +3319,9 @@ export function createInstance(schemeOpts = {}) {
           let value = form[key];
           let ssaInsertObj = handleParameterMacroIfPresentInObjectLiteral(key, value);
           if (ssaInsertObj) {
-            emit(`Object.assign( ${ssaObjectLiteral}, (${ssaInsertObj});`)
+            // This is a terrible hack but I'm going with it for now
+            if (ssaInsertObj.startsWith('...')) ssaInsertObj = ssaInsertObj.substr(3);
+            emit(`Object.assign(${ssaObjectLiteral}, ${ssaInsertObj});`)
             continue;
           }
           let ssaKey;
@@ -3413,7 +3415,7 @@ export function createInstance(schemeOpts = {}) {
                 tools.bindLiterally(_eval, "_eval");
                 emit(`let ${ssaInsertObj} = _eval(${ssaInsert}, scope);`)
               }
-              return ssaInsert;
+              return ssaInsertObj;
             }
           }
         }

@@ -715,7 +715,7 @@ function runTestsInNewInstance(opts = {}) {
       endTestScope(savedScope);
     }
 
-    { // Test that spread works OK with a macro that _doesn_ specialize for the compiled
+    { // Test that spread works OK with a macro that _doesn't_ specialize for the compiled
       // case.
       let savedScope = beginTestScope();
 
