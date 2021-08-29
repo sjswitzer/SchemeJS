@@ -466,7 +466,6 @@ export function createInstance(schemeOpts = {}) {
   const SCLOSURE_ATOM = Atom("%%closure#");
   const QUOTE_ATOM = Atom("quote");
   const REST_PARAM_ATOM = Atom(restParamStr);
-  ATOMS["'"] = QUOTE_ATOM;
   exportAPI("LAMBDA_CHAR", LAMBDA_CHAR);
   exportAPI("LAMBDA_ATOM", LAMBDA_ATOM);
   exportAPI("SLAMBDA_ATOM", SLAMBDA_ATOM);
