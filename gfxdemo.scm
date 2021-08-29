@@ -58,7 +58,6 @@
 (@= ship-canvas 'animate true)    ;; Enable animation; otherwise just draws initially and when resized
 (@! ship-canvas 'show 20 20)      ;; Move the canvas widget from its default position
 
-/*
 ;; Now a lissajous figure
 (def [lissajous gfx-context tick]
   ;; Fade the canvas by drawing over it with black and a very low alpha every several ticks.
@@ -128,7 +127,7 @@
 (println (String spirograph))
 
 ;; Here's a widget to scribble in interactively
-(def scribble (create-canvas-widget "Scribble" 300))
+(define scribble (create-canvas-widget "Scribble" 300))
 
 ;; Set the gfx-context variable to the canvas's drawing context so you can now
 ;; enter drawing commands into the command window and draw interactively.
@@ -139,4 +138,3 @@
 (stroke-style "blue")
 (stroke-rect 10 10 40 40)
 (fill-text "Try it! Just enter drawing commands below." 10 65)
-*/

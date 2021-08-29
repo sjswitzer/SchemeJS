@@ -1669,6 +1669,12 @@ export function createInstance(schemeOpts = {}) {
              `last one, unless (throw ...) is called, in which case it the error-forms are evaluated with the thrown ` +
              `value bound to error-var and the value of the last form is returned.`
     });
+    defineBinding("finally", "finally", {
+      group: "control-flow", sample: `(finally [finally-forms] form ...)`, 
+      blurb: `JavaScript-style "finally." Evaluates and returns the sequence of forms and returns the value of the ` +
+             `last one, unless (throw ...) is called, but in any case, the forms in the "finally" clause .` +
+             `are executed at completion, whether an exception is thrown or not.`
+    });
     defineBinding("*throw", "siod_throw", {
       group: "control-flow", sample: `(*throw form ...)`, 
       blurb: `SIOD-style "throw." Evaluates the sequence of forms and and throws the value of the ` +

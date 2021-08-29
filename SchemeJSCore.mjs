@@ -1780,7 +1780,6 @@ export function createInstance(schemeOpts = {}) {
   function js_finally(finallyForms, form, ...forms) {
     if (!isList(finallyForms))
       throw new SchemeEvalError(`bad finally forms ${string(finallyForms)}`);
-    let catchVar = finallyForms[FIRST], catchForms = finallyForms[REST];
     let val;
     try {
       val = _eval(form, this);
@@ -1800,9 +1799,8 @@ export function createInstance(schemeOpts = {}) {
   function js_finally_hook(args, ssaScope, tools) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use;
     if (args.length < 2) throw new LogicError(`bad finally`);
-    let finallyClause = args[0];
-    let finallyForms = args[1];
-    if (!isList(finallyClause))
+    let finallyForms = args[0];
+    if (!isList(finallyForms))
       throw new SchemeCompileError(`bad finally clause ${string(finallyClause)}`);
     let ssaResult = newTemp('js_finally'), ssaValue = `${BOTTOM}`;
     emit(`let ${ssaResult};`);

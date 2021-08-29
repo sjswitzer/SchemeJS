@@ -30,7 +30,7 @@
 // it at (15, 20) and have it be 30 x 40 in size, they can write
 //     (gfx-save (translate 15 20) (scale 30 40) (your-function))
 //
-// To faclitatee this convention, the defaults of all of the drawing primitives have been
+// To faclitate this convention, the defaults of all of the drawing primitives have been
 // set so that, assuming the current point is (0,0) the resulting figure will be bounded
 // by (0,0,1,1). This occasionally leads to strange defaults, for instance the defaults
 // for line-to are (1,1).
@@ -73,13 +73,13 @@ export function createInstance(schemeOpts = {}) {
     let fn = (new Function(code))();
 
     // Decorate it for "help" purposes and make available to Scheme
-    exportAPI(schemeGfxContextFnNameAtom, fn, { dontInline: true, group: "web-gfx-context", gfxApi: jsFunctionName, ...opts });
+    exportAPI(schemeGfxContextFnNameAtom, fn, { dontInline: true, group: "web-gfx-context", gfxApi: jsFunctionName, requiredCount: 0,  ...opts });
 
     if (!opts.omitGfxMacro) {
       // Define a macro that adds the graphics context and calls it
       eval_string(`
           (defmacro [${name} params] 
-            (cons ${schemeGfxContextFnName} (cons 'gfx-context ...params))) `);
+            (cons ${schemeGfxContextFnName} (cons 'gfx-context params))) `);
 
       // Decorate it for the help system
       let nameAtom = Atom(name);
@@ -98,34 +98,34 @@ export function createInstance(schemeOpts = {}) {
     const fn = (new Function(code))();
 
     let schemeGfxContextPropFnNameAtom = Atom(schemeGfxContextPropFnName);
-    exportAPI(schemeGfxContextPropFnNameAtom, fn, { group: "web-gfx-context", gfxApi: jsPropName, ...opts });
+    exportAPI(schemeGfxContextPropFnNameAtom, fn, { group: "web-gfx-context", gfxApi: jsPropName, requiredCount: 1, ...opts });
 
     // Define a macro that adds the graphics context and calls it
     eval_string(`
         (defmacro [${schemePropName} opt-value]
-          (cons ${jsGfxContextPropFnName} (cons 'gfx-contsxt ...opt-value))) `);
+          (cons ${schemeGfxContextPropFnName} (cons 'gfx-context opt-value))) `);
 
     // Decorate it for the help system
     let nameAtom = Atom(schemePropName);
     augmentFunctionInfo(nameAtom, { group: "web-gfx", gfxApi: jsPropName,
-      implStr:`(${jsGfxContextPropFnName} gfx-context [value])`, ...opts });
+      implStr:`(${schemeGfxContextPropFnName} gfx-context [value])`, ...opts });
   }
 
   eval_string(`
       (defmacro [gfx-save forms]
         (list
-          'finally [ (list gfx-context-save 'gfx-context) ]
-            (list gfx-context-restore 'gfx-context)
+          'finally [ (list gfx-context-restore 'gfx-context) ]
+            (list gfx-context-save 'gfx-context)
             ...forms)) `);
 
   gfxFunction("save", "save",
-    `function gfx_context_save(gfx_context, x = 0, y = 0) { return gfx_context.translate(x, y) }`, 
+    `function gfx_context_save(gfx_context, x = 0, y = 0) { return gfx_context.save() }`, 
       { blurb: `Pushes the current context on a stack so that it can later be restored using ` +
                 `gfx-context-restore. You should generally use gfx-save instead since it bundles ` +
                 `gfx-context-save and gfx-context-restore in a structured way.`, omitGfxMacro: true });
 
   gfxFunction("restore", "restore",
-    `function gfx_context_restore(gfx_context, x = 0, y = 0) { return gfx_context.translate(x, y) }`, 
+    `function gfx_context_restore(gfx_context, x = 0, y = 0) { return gfx_context.restore() }`, 
       { blurb: `Pops the tha context from a stack which has previously been pushed by  ` +
               `gfx-context-save. You should generally use gfx-save instead since it bundles ` +
               `gfx-context-save and gfx-context-restore in a structured way.`, omitGfxMacro: true });      
@@ -166,7 +166,7 @@ export function createInstance(schemeOpts = {}) {
     `function gfx_context_move_to(gfx_context, x = 0, y = 0) { return gfx_context.moveTo(x, y) }`,
     {});
   
-  gfxFunction("move-to", "lineTo",
+  gfxFunction("line-to", "lineTo",
     `function gfx_context_line_to(gfx_context, x = 1, y = 1) { return gfx_context.lineTo(x, y) }`,
     {});
   
@@ -221,8 +221,8 @@ export function createInstance(schemeOpts = {}) {
       {});
           
   gfxFunction("fill-text", "fillText",
-    `function gfx_context_fill_text(gfx_context, x = 0, y = 0, text = "", maxWidth = optional) {
-      return gfx_context.fillText(x, y, text, maxWidth) }`,
+    `function gfx_context_fill_text(gfx_context, text = "", x = 0, y = 0, maxWidth = optional) {
+      return gfx_context.fillText(text, x, y, maxWidth) }`,
       {});
             
   gfxFunction("measure-text", "measureText",
