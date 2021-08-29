@@ -2473,38 +2473,6 @@ export function createInstance(schemeOpts = {}) {
           put("(");
           indent += indentMore;
           sep = "";
-          if (!obj[LAZYFIRST]) {
-            let objCar = obj[FIRST];
-            if ((objCar === LAMBDA_ATOM || objCar === SLAMBDA_ATOM ||
-                objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)) {
-              if (objCar === LAMBDA_ATOM)
-                put(lambdaStr)
-              else if (objCar === SLAMBDA_ATOM)
-                put(lambdaStr + "#");
-              else
-                toString(objCar); //%%closure or %%%closure
-              sep = " ";
-              obj = obj[REST];
-              if (isList(obj) && (objCar === CLOSURE_ATOM || objCar === SCLOSURE_ATOM)) {
-                toString(obj[FIRST]);  // scope
-                sep = " ";
-                obj = obj[REST];
-              }
-              if (isList(obj) && (objCar === SLAMBDA_ATOM || objCar === SCLOSURE_ATOM)) {
-                toString(obj[FIRST]);  // evalCount
-                sep = " ";
-                obj = obj[REST];
-              }
-              if (isList(obj)) {
-                if (typeof obj[FIRST] === 'symbol')
-                  put(`(. ${obj[FIRST].description})`); // Special printing for initial "rest" param
-                else
-                  toString(obj[FIRST])
-                sep = " ";
-                obj = obj[REST];
-              }
-            }
-          }
           // displayAsList here so that hybrid lists will print as "(a b . [c d])"
           while (moreList(obj) && displayAsList(obj)) {
             if (obj[LAZYFIRST]) {
