@@ -51,7 +51,8 @@
   (fill-text "Ship Arriving Too Late to Save a Drowning Witch" 0.1 (canvas-width))
 )
 
-(println (String satltsadw)) ;; what it compiles into
+;; What it looks like compiled
+(println (String satltsadw))
 
 (define ship-canvas (create-canvas-widget "Too Late!" 300 320))
 (@= ship-canvas 'draw satltsadw)  ;; Set the draw function
@@ -77,8 +78,6 @@
   (line-to-stashed)
   (stroke-style "green") (line-width 1.5) (stroke)
 )
-
-(println (String lissajous)) ;; what it compiles into
 
 (define lissajous-canvas (create-canvas-widget "Lissajous"  300 300))
 (@= lissajous-canvas 'draw lissajous)         ;; Set the draw function

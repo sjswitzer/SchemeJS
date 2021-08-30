@@ -61,8 +61,7 @@ export function createInstance(schemeOpts = {}) {
   const eval_string = str => globalScope.eval_string(str);
 
   // Defines the graphics function and a macro to call it with the context
-  function gfxFunction(name, jsFunctionName, schemeParamStr, functionBody, opts = {}) {
-
+  function gfxFunction(name, jsFunctionName, schemeParamStr, opts = {}) {
     let parsedParams = parseSExpr(`[ ${schemeParamStr} ]`);
     let schemeGfxContextFnName = `gfx-context-${name}`, argStr = "";
     let fnNameAndParamStr = `[${schemeGfxContextFnName} gfx-context`;
@@ -75,15 +74,6 @@ export function createInstance(schemeOpts = {}) {
     let contextFunctionStr = `(compile ${fnNameAndParamStr} (@! gfx-context "${jsFunctionName}" ${argStr}) )`;
     console.log(`CONTEXT FUNCTION FOR ${name}`, contextFunctionStr);
     eval_string(contextFunctionStr);
-
-/*
-    let schemeGfxContextFnName = `gfx-context-${name}`, schemeGfxContextFnNameAtom = Atom(schemeGfxContextFnName);
-    let code =  `let pi = Math.PI, optional = undefined; return ${functionBody}`;
-    let fn = (new Function(code))();
-
-    // Decorate it for "help" purposes and make available to Scheme
-    exportAPI(schemeGfxContextFnNameAtom, fn, { dontInline: true, group: "web-gfx-context", gfxApi: jsFunctionName, requiredCount: 0,  ...opts });
-    */
 
     if (!opts.omitGfxMacro) {
       // Define a macro that adds the graphics context and calls it
@@ -129,117 +119,81 @@ export function createInstance(schemeOpts = {}) {
             ...forms)) `);
 
   gfxFunction("save", "save", '',
-    `function gfx_context_save(gfx_context) { return gfx_context.save() }`, 
       { blurb: `Pushes the current context on a stack so that it can later be restored using ` +
                 `gfx-context-restore. You should generally use gfx-save instead since it bundles ` +
                 `gfx-context-save and gfx-context-restore in a structured way.`, omitGfxMacro: true });
 
   gfxFunction("restore", "restore", '',
-    `function gfx_context_restore(gfx_context) { return gfx_context.restore() }`, 
       { blurb: `Pops the tha context from a stack which has previously been pushed by  ` +
               `gfx-context-save. You should generally use gfx-save instead since it bundles ` +
               `gfx-context-save and gfx-context-restore in a structured way.`, omitGfxMacro: true });      
 
   gfxFunction("translate", "translate", '[x 0] [y 0]',
-    `function gfx_context_translate(gfx_context, x = 0, y = 0) { return gfx_context.translate(x, y) }`,
      { blurb: `Translates the origin by "x" and "y".`});
 
   gfxFunction("scale", "scale", '[width 1] [height width]',
-     `function gfx_context_scale(gfx_context, width = 1, height = width) { return gfx_context.scale(width, height) }`,
       { blurb: `Scales the coordinate system by "width" and "height".`});
  
   gfxFunction("rotate", "rotate", '[angle 0]',
-    `function gfx_context_rotate(gfx_context, angle = 0) { return gfx_context.rotate(angle) }`,
      { blurb: `Rotates the coordinate system by "angle"`});
 
   gfxFunction("begin-path", "beginPath", '',
-    `function gfx_context_begin_path(gfx_context)  { return gfx_context.beginPath() }`,
     {});
 
   gfxFunction("close-path", "closePath", '',
-    `function gfx_context_close_path(gfx_context)  { return gfx_context.closePath() }`,
     {});
 
    gfxFunction("clip", "clip", '',
-    `function gfx_context_clip(gfx_context)  { return gfx_context.clip() }`,
     {});
 
   gfxFunction("is-point-in-path", "isPointInPath", '...params',
-    `function gfx_is_point_in_path(gfx_context, ...params) { return gfx_context.isPointInPath(...params) }`,
     {});
 
   gfxFunction("is-point-in-stroke", "isPointInStroke", '...params',
-    `function gfx_is_point_in_stroke(gfx_context, ...params) { return gfx_context.isPointInStroke(...params) }`,
     {});
   
   gfxFunction("move-to", "moveTo", '[x 0] [y 0]',
-    `function gfx_context_move_to(gfx_context, x = 0, y = 0) { return gfx_context.moveTo(x, y) }`,
     {});
   
   gfxFunction("line-to", "lineTo", '[x 1] [y 1]',
-    `function gfx_context_line_to(gfx_context, x = 1, y = 1) { return gfx_context.lineTo(x, y) }`,
     {});
   
   gfxFunction("bezier-curve-to", "bezierCurveTo", '[cpx1 1] [cpy1 0] [cpx2 0] [cpy2 1] [x 1] [y 1]',
-    `function gfx_context_bezier_curve_to(gfx_context, cpx1 = 1, cpy1 = 0, cpx2 = 0, cpy2 = 1, x = 1, y = 1) {
-       return gfx_context.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, y) }`,
      {});
 
   gfxFunction("quadratic-curve-to", "quadraticCurveTo", '[cpx 1] [cpy 0] [x 1] [y 1]',
-    `function gfx_context_quadratic_curve_to(gfx_context, cpx = 1, cpy = 0, x = 1, y = 1) {
-       return gfx_context.quadraticCurveTo(cpx, cpy, x, y) }`,
      {});
      
   gfxFunction("arc", "arc", '[x .5] [y .5] [radius .5] [start-angle 0] [end-angle (* 2 *pi*)]',
-    `function gfx_context_arc(gfx_context, x = .5, y = .5, radius = .5, startAngle = 0, endAngle = 2*pi) {
-      return gfx_context.arc(x, y, radius, startAngle, endAngle) }`,
       {});
 
   gfxFunction("arc-to", "arcTo", '[x1 1] [y1 0] [x2 1] [y2 1] [radius 1]',
-    `function gfx_context_arc_to(gfx_context, x1 = 1, y1 = 0, x2 = 1, y2 = 1, radius = 1) {
-       return gfx_context.arcTo(x1, y1, x2, y2, radius) }`,
       {});
 
   // defaults to a circle inscribing (0,0,1,1)
   gfxFunction("ellipse", "ellipse", '[x .5] [y .5] [radius-x .5] [radius-y .5] [start-angle 0] [end-angle (* 2 *pi*)] [counterclockwise false]',
-    `function gfx_context_ellipse(gfx_context, x = .5, y = .5, radiusX = .5, radiusY = .5, startAngle = 0, endAngle = 2*pi, counterclockwise = false) {
-      return gfx_context.ellipse(x, y, radiusX, radiusY, startAngle, endAngle) }`,
       {});
   
   gfxFunction("rect", "rect", '[x 0] [y 0] [width 1] [height 1]',
-    `function gfx_context_rect(gfx_context, x = 0, y = 0, width = 1, height = 1) {
-      return gfx_context.rect(x, y, width, height) }`,
       {});
     
   // MDN doesn't show it but the spec says it exists!
   gfxFunction("round-rect", "roundRect", '[x 0] [y 0] [width 1] [height 1] [radii .1]',
-    `function gfx_context_round_rect(gfx_context, x = 0, y = 0, width = 1, height = 1, radii = 0) {
-      return gfx_context.roundRect(x, y, width, height, radii) }`,
       {});
       
   gfxFunction("fill-rect", "fillRect", '[x 0] [y 0] [width 1] [height 1]',
-    `function gfx_context_fill_rect(gfx_context, x = 0, y = 0, width = 1, height = 1) {
-      return gfx_context.fillRect(x, y, width, height) }`,
       {});
       
   gfxFunction("clear-rect", "clearRect", '[x 0] [y 0] [width 1] [height 1]',
-    `function gfx_context_clear_rect(gfx_context, x = 0, y = 0, width = 1, height = 1) {
-      return gfx_context.clearRect(x, y, width, height) }`,
       {});
         
   gfxFunction("stroke-rect", "strokeRect", '[x 0] [y 0] [width 1] [height 1]',
-    `function gfx_context_stroke_rect(gfx_context, x = 0, y = 0, width = 1, height = 1) {
-      return gfx_context.strokeRect(x, y, width, height) }`,
       {});
           
   gfxFunction("fill-text", "fillText", '[text ""] [x 0] [y 0] [max-width]',
-    `function gfx_context_fill_text(gfx_context, text = "", x = 0, y = 0, maxWidth = optional) {
-      return gfx_context.fillText(text, x, y, maxWidth) }`,
       {});
             
   gfxFunction("measure-text", "measureText", '[text]',
-    `function gfx_context_measure_text(gfx_context, text = "") {
-      return gfx_context.measureText(text) }`,
       {});
               
     
@@ -252,13 +206,9 @@ export function createInstance(schemeOpts = {}) {
   gfxProp("miter-limit","miterLimit", {});
 
   gfxFunction("get-line-dash", "getLineDash", '',
-    `function gfx_context_get_line_dash(gfx_context) {
-      return gfx_context.getLineDash() }`,
       {});
 
   gfxFunction("set-line-dash", "setLineDash", '[value []]',
-    `function gfx_context_set_line_dash(gfx_context, value = []) {
-      return gfx_context.setLineDash(value) }`,
       {});
   
 
@@ -271,64 +221,42 @@ export function createInstance(schemeOpts = {}) {
   gfxProp("stroke-style", "strokeStyle", {});
 
   gfxFunction("create-conic-gradient", "createConicGradient", '[start-angle 0] [x 0] [y 1]',
-    `function gfx_context_create_conic_gradient(gfx_context, startAngle = 0, x = 0, y = 1) {
-      return gfx_context.createConicGradient(startAngle, x, y) }`,
       {});
 
   gfxFunction("create-linear-gradient", "createLinearGradient", '[x0 0] [y0 0] [x1 1] [y1 1]',
-    `function gfx_context_create_linear_gradient(gfx_context, x0 = 0, y0 = 0, x1 = 1, y1 = 1) {
-      return gfx_context.createLinearGradient(x0, y0, x1, y1) }`,
       {});
   
   gfxFunction("create-radial-gradient", "createRadialGradient", '[x0 0] [y0 0] [r0 1] [x1 1] [y1 1] [r1 0]',
-    `function gfx_context_create_radial_gradient(gfx_context, x0 = 0, y0 = 0, r0 = 1, x1 = 1, y1 = 1, r1 = 0) {
-      return gfx_context.createRadialGradient(x0, y0, r0, x1, y1, r1) }`,
       {});
     
   gfxFunction("create-pattern", "createPattern", '[image] [repetition "repeat"]',
-    `function gfx_context_create_pattern(gfx_context, image = optional, repetition = "repeat") {
-      return gfx_context.createPattern(image, repetition) }`,
       {});
       
   gfxProp("shadow-color", "shadowColor", {});
   gfxProp("shadow-offset-x", "shadowOffsetX", {});
   gfxProp("shadow-offset-y", "shadowOffsetY", {});
   gfxFunction("fill", "fill", '',
-    `function gfx_context_fill(gfx_context) {
-      return gfx_context.fill() }`,
       {});
 
   gfxFunction("stroke", "stroke", '',
-    `function gfx_context_stroke(gfx_context) {
-      return gfx_context.stroke() }`,
      {});
 
   gfxFunction("draw-focus-if-needed", "drawFocusIfNeeded", '...params',
-    `function gfx_context_draw_focus_if_needed(gfx_context, ...params) {
-      return gfx_context.drawFocusIfNeeded(...params) }`,
       {});
 
   gfxFunction("scroll-path-into-view", "scrollPathIntoView", '...params',
-    `function gfx_context_scroll_path_into_view(gfx_context, ...params) {
-      return gfx_context.scrollPathIntoView(...params) }`,
       {});
   
   gfxProp("global-alpha", "globalAlpha", {});
   gfxProp("global-composite-operation", "globalCompositeOperation", {});
 
   gfxFunction("draw-image", "drawImage", '...params',
-    `function gfx_context_draw_image(gfx_context, ...params) {
-      return gfx_context.drawImage(...params) }`,
       {});
   
   gfxFunction("create-image-data", "createImageData", '...params',
-    `function gfx_context_create_image_data(gfx_context, ...params) {
-      return gfx_context.createImageData(...params) }`,
       {});
     
   gfxFunction("get-image-data", "getImageData", '[sx 0] [sy 0] [sw 1] [sh 1]',
-    `function gfx_context_get_image_data(gfx_context, sx = 0, sy = 0, sw = 1, sh = 1) {
-      return gfx_context.getImageData(sx, sy, sw, sh) }`,
       {});
       
   gfxProp("image-smoothing-enabled", "imageSmoothingEnabled", {});
