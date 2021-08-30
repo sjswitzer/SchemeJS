@@ -61,9 +61,10 @@ export function createInstance(schemeOpts = {}) {
 
   const eval_string = str => globalScope.eval_string(str);
 
-  // Defines the graphics function and a macro to call it with the context
-  function gfxFunction(name, jsFunctionName, paramStr, opts = {}) {
-    let schemeGfxContextFnName = `gfx-context-${name}`;
+  // Defines the context function and a macro to call it with the context
+  function contextFunction(category, name, jsFunctionName, paramStr, opts = {}) {
+    let context = `${category}-context`;
+    let schemeGfxContextFnName = `${context}-${name}`;
     // Maka an arg string from the param str
     let parsedParams = parseSExpr(`[ ${paramStr} ]`), argStr = '';
     for (let param of parsedParams) {
@@ -72,35 +73,44 @@ export function createInstance(schemeOpts = {}) {
     }
 
     eval_string(`
-        (compile [${schemeGfxContextFnName} gfx-context ${paramStr}]
-          (@! gfx-context "${jsFunctionName}" ${argStr}) )`);
+        (compile [${schemeGfxContextFnName} ${context} ${paramStr}]
+          (@! ${context} "${jsFunctionName}" ${argStr}) )`);
 
     if (webApiMacros) {
       // Define a macro that adds the graphics context and calls it
       eval_string(`
           (defmacro [${name} params] 
-            (cons ${schemeGfxContextFnName} (cons 'gfx-context params))) `);
+            (cons ${schemeGfxContextFnName} (cons '${context} params))) `);
 
       // Decorate it for the help system
       let nameAtom = Atom(name);
-      augmentFunctionInfo(nameAtom,  { group: "web-gfx", gfxApi: jsFunctionName,
-        implStr: `(${schemeGfxContextFnName} gfx-context ...params)`, ...opts });
+      augmentFunctionInfo(nameAtom,  { group: `web-${category}`, [`${context}Api`]: jsFunctionName,
+        implStr: `(${schemeGfxContextFnName} ${context} ...params)`, ...opts });
     }
   }
-
-  function gfxProp(schemePropName, jsPropName, opts = {}) {
+  
+  function contextProp(category, schemePropName, jsPropName, opts = {}) {
+    let context = `${category}-context`;
     eval_string(`
         (defmacro [${schemePropName} args]
           (? (> 0 (length args))
-            (list '@ 'gfx-context "${jsPropName}")
+            (list '@ '${context} "${jsPropName}")
             (list 'prog1
-              (list '@ 'gfx-context "${jsPropName}")
-              (list '@= 'gfx-context "${jsPropName}" (car args))
+              (list '@ '${context} "${jsPropName}")
+              (list '@= '${context} "${jsPropName}" (car args))
             )
           )) `);
     // Decorate it for the help system
     let nameAtom = Atom(schemePropName);
-    augmentFunctionInfo(nameAtom, { group: "web-gfx", gfxApi: jsPropName, ...opts });
+    augmentFunctionInfo(nameAtom, { group: `web-${category}`, [`${context}Api`]: jsPropName, ...opts });
+  }
+
+  function gfxFunction(name, jsFunctionName, paramStr, opts = {}) {
+    return contextFunction("gfx", name, jsFunctionName, paramStr, opts);
+  }
+
+  function gfxProp(schemePropName, jsPropName, opts = {}) {
+    return contextProp("gfx", schemePropName, jsPropName, opts);
   }
 
   eval_string(`
