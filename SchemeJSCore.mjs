@@ -54,7 +54,7 @@ export function createInstance(schemeOpts = {}) {
   const bottomIsLNIL = schemeOpts.bottomIsLNIL ?? true;
   const restParamStr = schemeOpts.restParamStr ?? "&";
 
-  const FUNCTION_INFO = Symbol("COMPILE-INFO");
+  const FUNCTION_INFO = Symbol("SchemeJS-FUNCTION-INFO");
   const COMPILED = Symbol("SchemeJS-COMPILED"), JITCOMPILED = Symbol("SchemeJS-JITCOMPILED");
   const PARAMETER_DESCRIPTOR = Symbol('SchemeJS-PARAMETER-DESCRIPTOR');
   const MAX_INTEGER = (2**31-1)|0;  // Presumably allows JITs to do small-int optimizations
@@ -950,6 +950,10 @@ export function createInstance(schemeOpts = {}) {
 
   function conditionalHooks(args, ssaScope, tools, name, test) {
     let predicate = args[0], t = args[1], f = args[2];
+    // TODO: I hate using regexps where replaceAll would do because I suspect using RegExp at all
+    // causes JS to load a dynamic library. Why impose that overhead on clients for something
+    // so simple? But my version of Node.js doesn't support it yet and while I could probably
+    // fix that by updating, I cen't be the only one in that boat. But revisit this in a while.
     test = test.replace(/\*/g, predicate);
     let ssaResult = tools.newTemp(name);  // It's like a PHI node in SSA compilers. Sorta.
     if (t === undefined && f === undefined) {
@@ -1998,7 +2002,7 @@ export function createInstance(schemeOpts = {}) {
       if (isPrimitive(form)) return form;
       if (typeof form === 'symbol') { // atom resolution is the most common case
         let val = scope[form];
-        if (val === undefined) checkUndefinedInScope(form, scope);
+        if (val === undefined) return checkUndefinedInScope(form, scope);
         return val;
       }
       if (TRACE_INTERPRETER)
@@ -2242,9 +2246,42 @@ export function createInstance(schemeOpts = {}) {
     // This is a bit costly but it doesn't happen often and the alternative is to just throw
     // an error. The advantage is that the compiler and interpreter have the same semantics
     // around "undefined."
-    while (scope) {
-      if (scope.hasOwnProperty(sym)) return;
-      scope = Object.getPrototypeOf(scope);
+    // Moreover, this gives a cheap way to handle "namespaces" since it only
+    // occurs in what would otherwise be an error condition.
+    for (let s = scope; s != null; s = Object.getPrototypeOf(s))
+      if (s.hasOwnProperty(sym)) return undefined;
+    // Otherwise it might be a namespace ref
+    let nameStr = isAtom(sym) ? sym.description : typeof sym === 'string' ? sym : undefined;
+    if (nameStr !== undefined) {
+      let names = nameStr.split('.');
+      let i = 0, length = names.lenght;
+      if (length > 1) {
+        let namespaceOrRef = scope;
+        if (names[0] === '') {
+          namespaceOrRef = globalScope;
+          i = 1;
+        }
+        nameloop: for ( ; i < length; ++i) {
+          let name = names[i];
+          if (name === '') throw new SchemeEvalError(`Undefined ${string(sym)}`);;
+          for (let s = namespaceOrRef; s != null; s = Object.getPrototypeOf(s)) {
+            if (s.hasOwnProperty(name)) {
+              namespaceOrRef = s[name]; 
+              continue nameloop;             
+            }
+          }
+          // No good reason to do atoms after strings but why call Atom if you don't need to?
+          // But maybe revisit this.
+          name = Atom(name);
+          for (let s = namespaceOrRef; s != null; s = Object.getPrototypeOf(s)) {
+            if (s.hasOwnProperty(name)) {
+              namespaceOrRef = s[name]; 
+              continue nameloop;             
+            }
+          }
+          break;
+        }
+      }
     }
     throw new SchemeEvalError(`Undefined ${string(sym)}`);
   }
@@ -2839,7 +2876,7 @@ export function createInstance(schemeOpts = {}) {
     return compiledFunction;
     function resolveUnbound(symbol) {
       let val = scope[symbol];
-      if (val === undefined) checkUndefinedInScope(symbol, scope);
+      if (val === undefined) return checkUndefinedInScope(symbol, scope);
       return val;
     }
     function invokeUnbound(fn, args) {

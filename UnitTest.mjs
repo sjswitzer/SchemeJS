@@ -115,7 +115,7 @@ function runTestsInNewInstance(opts = {}) {
     EXPECT(` (cdr '[1 2 3]) `, ` '(2 3) `);
     EXPECT_ERROR( ` (car nil) `, TypeError );
     EXPECT_ERROR( ` (cdr nil) `, TypeError );
-    const testList = ` '(((aaa.daa).(ada.dda)).((aad.dad).(add.ddd))) `;
+    const testList = ` '(((aaa . daa).(ada . dda)) . ((aad . dad).(add . ddd))) `;
     EXPECT(` (caaar ${testList}) `, ` 'aaa `);
     EXPECT(` (cdaar ${testList}) `, ` 'daa `);
     EXPECT(` (cadar ${testList}) `, ` 'ada `);
@@ -124,10 +124,10 @@ function runTestsInNewInstance(opts = {}) {
     EXPECT(` (cdadr ${testList}) `, ` 'dad `);
     EXPECT(` (caddr ${testList}) `, ` 'add `);
     EXPECT(` (cdddr ${testList}) `, ` 'ddd `);
-    EXPECT(` (caar ${testList}) `, ` '(aaa.daa) `);
-    EXPECT(` (cdar ${testList}) `, ` '(ada.dda) `);
-    EXPECT(` (cadr ${testList}) `, ` '(aad.dad) `);
-    EXPECT(` (cddr ${testList}) `, ` '(add.ddd) `);
+    EXPECT(` (caar ${testList}) `, ` '(aaa . daa) `);
+    EXPECT(` (cdar ${testList}) `, ` '(ada . dda) `);
+    EXPECT(` (cadr ${testList}) `, ` '(aad . dad) `);
+    EXPECT(` (cddr ${testList}) `, ` '(add . ddd) `);
 
     EXPECT(` (sqrt 2) `, Math.sqrt(2));
     EXPECT(` NaN `, isNaN);

@@ -902,6 +902,8 @@ export function createInstance(schemeOpts = {}) {
   const IDENT1 = {}, IDENT2 = Object.create(IDENT1), WS = {}, WSNL = Object.create(WS);
   for (let ch of `0123456789`)
     DIGITS[ch] = IDENT2[ch] = NUM1[ch] = ch.codePointAt(0);
+  for (let ch of `.`)
+    IDENT1[ch] = ch.codePointAt(0);
   for (let ch of `abcdefABCDEF'`)
     HEXDIGITS[ch] = ch.codePointAt(0);
   for (let ch of `+-.`)
@@ -910,18 +912,18 @@ export function createInstance(schemeOpts = {}) {
     NUM2[ch] = ch.codePointAt(0);
   for (let ch of ` \t${VTAB}${FORMFEED}${NBSP}`) WS[ch] = ch.codePointAt(0);
   for (let ch of `\n\r`) NL[ch] = WSNL[ch] = ch.codePointAt(0);
-  for (let ch of `()[]{}'.:,`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
+  for (let ch of `()[]{}':,`) SINGLE_CHAR_TOKENS[ch] = ch.codePointAt(0);
   for (let ch of `\`"`) QUOTES[ch] = ch.codePointAt(0);
   globalScope.WS = WS;
   globalScope.NL = NL;
 
-  // Drag Unicode character properties out of the RegExp engine.
-  // This can take a bit of time and a LOT of memory, but people should
-  // be able to use their own languages. By default it includes the
-  // the Basic Multilingual Plane, but you can option it down to Latin-1
-  // or up to include all the supplemental planes.
-  // In addition to the memory used by the table I suspect the RegExp engine
-  // drags in some libraries dynamically when the "u" flag is specified.
+  // Drag Unicode character properties out of the RegExp engine since there's no
+  // other API for them. This can take a bit of time and a LOT of memory, but
+  // people should be able to program in their own languages. By default it
+  // includes the the Basic Multilingual Plane, but you can option it down to
+  // Latin-1 or up to include all the supplemental planes.
+  // In addition to the memory used by the table I suspect the RegExp engines
+  // drag in some libraries dynamically when the "u" flag is specified.
   // And for that matter using RegExp at all probably drags in a dynammic library
   // so, to reduce memory footprint, don't use it for Latin-1.
 
@@ -1111,7 +1113,7 @@ export function createInstance(schemeOpts = {}) {
         continue;
       }
 
-      if (ch === '.' && !DIGITS[peekc()]) {
+      if (ch === '.' && !DIGITS[peekc()] && !IDENT1[peekc()]) {
         yield { type: ch, position, line, lineChar };
         nextc();
         continue;

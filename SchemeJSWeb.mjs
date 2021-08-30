@@ -89,7 +89,7 @@ export function createInstance(schemeOpts = {}) {
     }
   }
   
-  function contextProp(category, schemePropName, jsPropName, opts = {}) {
+  function contextProperty(category, schemePropName, jsPropName, opts = {}) {
     let context = `${category}-context`;
     eval_string(`
         (defmacro [${schemePropName} args]
@@ -105,12 +105,17 @@ export function createInstance(schemeOpts = {}) {
     augmentFunctionInfo(nameAtom, { group: `web-${category}`, [`${context}Api`]: jsPropName, ...opts });
   }
 
+  //
+  // CanvasRenderingContext2D API
+  //    https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
+  //
+
   function gfxFunction(name, jsFunctionName, paramStr, opts = {}) {
     return contextFunction("gfx", name, jsFunctionName, paramStr, opts);
   }
 
-  function gfxProp(schemePropName, jsPropName, opts = {}) {
-    return contextProp("gfx", schemePropName, jsPropName, opts);
+  function gfxProperty(schemePropName, jsPropName, opts = {}) {
+    return contextProperty("gfx", schemePropName, jsPropName, opts);
   }
 
   eval_string(`
@@ -160,38 +165,38 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("stroke-rect", "strokeRect", '[x 0] [y 0] [width 1] [height 1]');
   gfxFunction("fill-text", "fillText", '[text ""] [x 0] [y 0] [max-width]');
   gfxFunction("measure-text", "measureText", '[text]');
-  gfxProp("canvas-element", "canvas");
-  gfxProp("line-width", "lineWidth");
-  gfxProp("line-cap", "lineCcap");
-  gfxProp("line-join", "lineJoin");
-  gfxProp("miter-limit","miterLimit");
+  gfxProperty("canvas-element", "canvas");
+  gfxProperty("line-width", "lineWidth");
+  gfxProperty("line-cap", "lineCcap");
+  gfxProperty("line-join", "lineJoin");
+  gfxProperty("miter-limit","miterLimit");
   gfxFunction("get-line-dash", "getLineDash", '');
   gfxFunction("set-line-dash", "setLineDash", '[value []]');
-  gfxProp("line-dash-offset", "lineDashOffset");
-  gfxProp("font", "font");
-  gfxProp("text-align", "textAlign");
-  gfxProp("text-baseline", "textBaseline");
-  gfxProp("direction", "direction");
-  gfxProp("fill-style", "fillStyle");
-  gfxProp("stroke-style", "strokeStyle");
+  gfxProperty("line-dash-offset", "lineDashOffset");
+  gfxProperty("font", "font");
+  gfxProperty("text-align", "textAlign");
+  gfxProperty("text-baseline", "textBaseline");
+  gfxProperty("direction", "direction");
+  gfxProperty("fill-style", "fillStyle");
+  gfxProperty("stroke-style", "strokeStyle");
   gfxFunction("create-conic-gradient", "createConicGradient", '[start-angle 0] [x 0] [y 1]');
   gfxFunction("create-linear-gradient", "createLinearGradient", '[x0 0] [y0 0] [x1 1] [y1 1]');
   gfxFunction("create-radial-gradient", "createRadialGradient", '[x0 0] [y0 0] [r0 1] [x1 1] [y1 1] [r1 0]');
   gfxFunction("create-pattern", "createPattern", '[image] [repetition "repeat"]');
-  gfxProp("shadow-color", "shadowColor");
-  gfxProp("shadow-offset-x", "shadowOffsetX");
-  gfxProp("shadow-offset-y", "shadowOffsetY");
+  gfxProperty("shadow-color", "shadowColor");
+  gfxProperty("shadow-offset-x", "shadowOffsetX");
+  gfxProperty("shadow-offset-y", "shadowOffsetY");
   gfxFunction("fill", "fill", '');
   gfxFunction("stroke", "stroke", '');
   gfxFunction("draw-focus-if-needed", "drawFocusIfNeeded", '...params');
   gfxFunction("scroll-path-into-view", "scrollPathIntoView", '...params');
-  gfxProp("global-alpha", "globalAlpha");
-  gfxProp("global-composite-operation", "globalCompositeOperation");
+  gfxProperty("global-alpha", "globalAlpha");
+  gfxProperty("global-composite-operation", "globalCompositeOperation");
   gfxFunction("draw-image", "drawImage", '...params');
   gfxFunction("create-image-data", "createImageData", '...params');
   gfxFunction("get-image-data", "getImageData", '[sx 0] [sy 0] [sw 1] [sh 1]');
-  gfxProp("image-smoothing-enabled", "imageSmoothingEnabled");
-  gfxProp("image-smoothing-quality", "imageSmoothingQuality");
+  gfxProperty("image-smoothing-enabled", "imageSmoothingEnabled");
+  gfxProperty("image-smoothing-quality", "imageSmoothingQuality");
 
   // canvas-width and canvas-height are actually properties of the context's canvas
   if (webApiMacros) {
@@ -217,6 +222,24 @@ export function createInstance(schemeOpts = {}) {
           )) `);
     augmentFunctionInfo(Atom("canvas-height"), { group: "web-gfx" });
   }
+
+  //
+  // HTML DOM API
+  //
+
+  // Document APIs   https://developer.mozilla.org/en-US/docs/Web/API/Document
+
+  function htmlDocumentFunction(name, jsFunctionName, paramStr, opts = {}) {
+    return contextFunction("document", name, jsFunctionName, paramStr, opts);
+  }
+
+  function htmlDocumentProperty(schemePropName, jsPropName, opts = {}) {
+    return contextProperty("document", schemePropName, jsPropName, opts);
+  }
+
+  // Access from globalThis or it'll fail unit tests in Node.js
+  globalScope[Atom('html-document')] = globalThis.document;
+  globalScope[Atom('browser-window')] = globalThis.window;
 
   return globalScope;
 }
