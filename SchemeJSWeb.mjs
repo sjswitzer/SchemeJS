@@ -237,6 +237,28 @@ export function createInstance(schemeOpts = {}) {
     return contextProperty("document", schemePropName, jsPropName, opts);
   }
 
+  eval_string(`
+      (compile [html-create-element document [tag "div"] ...children]
+        (let [[element (document.createElement tag)]]
+          (for-of child children
+            (cond
+              [ (|| (instanceof child Node) (string? child))
+                (element.append child) ]
+              [ (object? child)
+                (for-in attr value
+                  (element.setAttribute (atom? attr (attr.description) attr) value)
+                ) ]
+              [ true (throw (new Error (+ "Bad element content: " child))) ]
+            )
+          )
+          element
+        )
+      ) `);
+    eval_string(`
+        (defmacro [html-element args]
+          (cons html-create-element (cons 'html-document args))
+        )`);
+
   // Access from globalThis or it'll fail unit tests in Node.js
   globalScope[Atom('html-document')] = globalThis.document;
   globalScope[Atom('browser-window')] = globalThis.window;

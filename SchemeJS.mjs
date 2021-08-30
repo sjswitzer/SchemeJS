@@ -703,7 +703,7 @@ export function createInstance(schemeOpts = {}) {
     path; errorToken; position; line; lineChar
     constructor(msg, path, errorToken) {
       let position = errorToken.position, line = errorToken.line, lineChar = errorToken.lineChar;
-      if (path) msg = `${path}(${line},${lineChar}) ${msg}`;
+      msg = `${path ? path : ''}(${line},${lineChar}) ${msg}`;
       super(msg);
       this.path = path;
       this.errorToken = errorToken;
@@ -1311,14 +1311,6 @@ export function createInstance(schemeOpts = {}) {
         defineBinding(name, value, { dontInline: true, group: "imported" });
     }
 
-    // Object static methods: Object-getOwnPropertyDescriptors, etc.
-    propDescs = Object.getOwnPropertyDescriptors(Object);
-    for (let name in propDescs) {
-      let {value, get} = propDescs[name];
-      if (!get && typeof value === 'function')
-      defineBinding(`Object-${name}`, value, { group: "imported" });
-    }
-
     // Stuff the whole dang Math class in there!
     propDescs = Object.getOwnPropertyDescriptors(Math);
     for (let name in propDescs) {
@@ -1330,7 +1322,7 @@ export function createInstance(schemeOpts = {}) {
         // SIOD defines sin, cos, asin, etc. so I'll just define them all like that,
         // but also as Math-sin, etc.
         if (typeof value === 'function')
-          defineBinding(name, value, `Math-${name}, { group: "math" }`);
+          defineBinding(name, value, { group: "math" });
       }
     }
 
@@ -1351,10 +1343,6 @@ export function createInstance(schemeOpts = {}) {
         blurb: `The JavaScript "${obj.name}" object.`
       });
 
-    defineBinding("Date-now", Date.now, {
-      group: "utility", sample: "(Date-now)",
-      blurb: `Milliseconds since midnight 1 Jan 1970 UTC, the unix epoch.`
-    });
     defineBinding("intern", "Atom", {
       group: "main", sample: `(intern "str")`,
       blurb: `Returns the atom named "str".`

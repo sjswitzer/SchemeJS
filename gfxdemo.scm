@@ -30,7 +30,7 @@
 ;; period (in seconds) and phase.
 ;; (Date.now) is the number of milliseconds since midnight Jan 1, 1970 (the Unix epoch).
 (define-function (sinusoidal (magnitude 1) (period 1) (phase 0))
-  (* magnitude (sin (+ phase (* 2 *pi* (/ (Date-now) period 1000)))))
+  (* magnitude (sin (+ phase (* 2 *pi* (/ (Date.now) period 1000)))))
 )
 
 ;; Ship Arriving Too Late to Save a Drowning Witch
@@ -92,7 +92,7 @@
 
 ;; Spirograph
 (define-function [spirograph gfx-context tick]
-  (let ((angle (* 2 *pi* (/ (Date-now) 1000 period))))
+  (let ((angle (* 2 *pi* (/ (Date.now) 1000 period))))
     ;; Fade the canvas by drawing over it with white and a very low alpha every several ticks
     (fill-style "#ffffff0c")
     (when (== 0 (% tick 30))
