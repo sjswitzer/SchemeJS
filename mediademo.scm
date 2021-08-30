@@ -27,7 +27,7 @@
   )
 )
 
-(define o-scope-canvas (create-canvas-widget "Oscilloscope"  800 300))
+(def o-scope-canvas (create-canvas-widget "Oscilloscope"  800 300))
 (@= o-scope-canvas 'draw o-scope)
 (@= o-scope-canvas 'animate true)
 (@= o-scope-canvas 'user-media { "audio": true })

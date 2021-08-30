@@ -1254,7 +1254,7 @@ export function createInstance(schemeOpts = {}) {
       consumeToken(), consumeToken();
       let assigned = parseExpr();
       parseContext.pop();
-      expr = list(Atom("define"), sym, assigned);
+      expr = list(Atom("def"), sym, assigned);
     } else {
       expr = parseExpr(0);
     }
@@ -1638,7 +1638,7 @@ export function createInstance(schemeOpts = {}) {
       blurb: `Creates a function with the given parameters which evaluates the forms `+
              `and returns the value of the last one, but only the first "n" parameters are evaluated.`
     });
-    defineBinding("define", "define", {
+    defineBinding("def", "define", {
       group: "main", sample: `(define var value)`, 
       blurb: `Defines a global variable.`
     });
