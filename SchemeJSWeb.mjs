@@ -46,6 +46,7 @@ export const VERSION = SchemeJS.VERSION;
 export function createInstance(schemeOpts = {}) {
   let globalScope = SchemeJS.createInstance(schemeOpts);
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
+  const webApiMacros = schemeOpts.webApiMacros ?? true;
   if (!defineSchemeBindings)
     return globalScope;
 
@@ -74,7 +75,7 @@ export function createInstance(schemeOpts = {}) {
         (compile [${schemeGfxContextFnName} gfx-context ${paramStr}]
           (@! gfx-context "${jsFunctionName}" ${argStr}) )`);
 
-    if (!opts.omitGfxMacro) {
+    if (webApiMacros) {
       // Define a macro that adds the graphics context and calls it
       eval_string(`
           (defmacro [${name} params] 
@@ -150,8 +151,6 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("fill-text", "fillText", '[text ""] [x 0] [y 0] [max-width]');
   gfxFunction("measure-text", "measureText", '[text]');
   gfxProp("canvas-element", "canvas");
-  gfxProp("canvas-width", "canvas.width");
-  gfxProp("canvas-height", "canvas.height");
   gfxProp("line-width", "lineWidth");
   gfxProp("line-cap", "lineCcap");
   gfxProp("line-join", "lineJoin");
@@ -183,6 +182,31 @@ export function createInstance(schemeOpts = {}) {
   gfxFunction("get-image-data", "getImageData", '[sx 0] [sy 0] [sw 1] [sh 1]');
   gfxProp("image-smoothing-enabled", "imageSmoothingEnabled");
   gfxProp("image-smoothing-quality", "imageSmoothingQuality");
+
+  // canvas-width and canvas-height are actually properties of the context's canvas
+  if (webApiMacros) {
+    eval_string(`
+        (defmacro [canvas-width args]
+          (? (> 0 (length args))
+            (list '@@ 'gfx-context "canvas" "width")
+            (list 'prog1
+              (list '@@ 'gfx-context "canvas" "width")
+              (list '@@= 'gfx-context "canvas" "width" (car args))
+            )
+          )) `);
+    augmentFunctionInfo(Atom("canvas-width"), { group: "web-gfx" });
+
+    eval_string(`
+        (defmacro [canvas-height args]
+          (? (> 0 (length args))
+            (list '@@ 'gfx-context "canvas" "height")
+            (list 'prog1
+              (list '@@ 'gfx-context "canvas" "height")
+              (list '@@= 'gfx-context "canvas" "height" (car args))
+            )
+          )) `);
+    augmentFunctionInfo(Atom("canvas-height"), { group: "web-gfx" });
+  }
 
   return globalScope;
 }
