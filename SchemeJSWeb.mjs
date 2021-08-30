@@ -89,26 +89,18 @@ export function createInstance(schemeOpts = {}) {
   }
 
   function gfxProp(schemePropName, jsPropName, opts = {}) {
-    let jsGfxContextPropFnName = `gfx_context_property_${schemePropName.replace(/\./g, '_').replace(/-/g, '_')}`;
-    let schemeGfxContextPropFnName = `gfx-context-property-${schemePropName}`;
-    let gfxContextPropName = `gfx-context-${schemePropName}`, gfxContextFnAtom = Atom(gfxContextPropName);
-    let code = `let optional = undefined; ` +
-      `return function ${jsGfxContextPropFnName}(gfx_context, value = optional) { ` +
-        `let oldValue = gfx_context.${jsPropName}; if (value !== optional) gfx_context.${jsPropName} = value; return oldValue }`;
-    const fn = (new Function(code))();
-
-    let schemeGfxContextPropFnNameAtom = Atom(schemeGfxContextPropFnName);
-    exportAPI(schemeGfxContextPropFnNameAtom, fn, { group: "web-gfx-context", gfxApi: jsPropName, requiredCount: 1, ...opts });
-
-    // Define a macro that adds the graphics context and calls it
     eval_string(`
-        (defmacro [${schemePropName} opt-value]
-          (cons ${schemeGfxContextPropFnName} (cons 'gfx-context opt-value))) `);
-
+        (defmacro [${schemePropName} args]
+          (? (> 0 (length args))
+            (list '@ 'gfx-context "${jsPropName}")
+            (list 'prog1
+              (list '@ 'gfx-context "${jsPropName}")
+              (list '@= 'gfx-context "${jsPropName}" (car args))
+            )
+          )) `);
     // Decorate it for the help system
     let nameAtom = Atom(schemePropName);
-    augmentFunctionInfo(nameAtom, { group: "web-gfx", gfxApi: jsPropName,
-      implStr:`(${schemeGfxContextPropFnName} gfx-context [value])`, ...opts });
+    augmentFunctionInfo(nameAtom, { group: "web-gfx", gfxApi: jsPropName, ...opts });
   }
 
   eval_string(`
