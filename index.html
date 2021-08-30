@@ -761,8 +761,11 @@
       </dd>
     </div>
     <script type="module" src="./CloseButton.mjs"></script>
-    <script type="text/javascript">
+    <script type="module">
       "use strict";
+      import * as SchemeJSWeb from './SchemeJSWeb.mjs';
+
+      const optional = undefined;  // so that optional parameters show up pretty when printed
 
       const bodyElement = document.getElementById('body');
       const containerElement = document.getElementById('container');
@@ -770,56 +773,48 @@
       const outputElement = document.getElementById('output');
       const loadFileInputElement = document.getElementById('load-file-dialog');
       const userMediaTemplateElement = document.getElementById("user-media-template");
-      let globalScope, SCHEME_VERSION;
-      let SchemeParseError, SchemeSyntaxError, SchemeParseIncompleteError, SchemeEvalError;
-      let NIL, BOTTOM, Atom, string, newScope, exportAPI, defineBinding, originalLoad;
-      let varNo = 0, WS, NL;
+
       const NBSP = '\u00a0', functionStr = "\u03BB";
-      const optional = undefined;  // so that parameters show up pretty when printed
-      let traceCompilerCode = true, traceInterpreter = false;
-      let printBoxElement;
+      let printBoxElement, varNo = 0;
 
-      onload = importSchemeAndRunREPL();
-      async function importSchemeAndRunREPL() {
-        let SchemeJSWeb = await(import("./SchemeJSWeb.mjs"));
-        globalScope = SchemeJSWeb.createInstance({
-          functionStr, readFile, linePrinter, traceCompilerCode, traceInterpreter,
-          reportLoadResult, reportLoadInput, reportSchemeError, reportSystemError
-        });
-        SCHEME_VERSION = globalScope.VERSION ?? required();
-        SchemeParseError = globalScope.SchemeParseError ?? required();
-        SchemeSyntaxError = globalScope.SchemeSyntaxError ?? required();
-        SchemeParseIncompleteError = globalScope.SchemeParseIncompleteError ?? required();
-        SchemeEvalError = globalScope.SchemeEvalError ?? required();
-        NIL = globalScope.NIL ?? required();
-        BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
-        string = globalScope.string ?? required();
-        Atom = globalScope.Atom ?? required();
-        newScope = globalScope.newScope ?? required();
-        exportAPI = globalScope.exportAPI ?? required();
-        defineBinding = globalScope.defineBinding ?? required();
-        WS = globalScope.WS ?? required();
-        NL = globalScope.NL ?? required();
-        function required() { throw "required" }
+      let traceCompilerCode = false, traceInterpreter = false;
+      let globalScope = SchemeJSWeb.createInstance({
+        functionStr, readFile, linePrinter, traceCompilerCode, traceInterpreter,
+        reportLoadResult, reportLoadInput, reportSchemeError, reportSystemError
+      });
+      let SCHEME_VERSION = globalScope.VERSION ?? required();
+      let SchemeParseError = globalScope.SchemeParseError ?? required();
+      let SchemeSyntaxError = globalScope.SchemeSyntaxError ?? required();
+      let SchemeParseIncompleteError = globalScope.SchemeParseIncompleteError ?? required();
+      let SchemeEvalError = globalScope.SchemeEvalError ?? required();
+      let NIL = globalScope.NIL ?? required();
+      let BOTTOM = globalScope.BOTTOM; // Can't "require" it because "undefined" is indeed a bottom.
+      let string = globalScope.string ?? required();
+      let Atom = globalScope.Atom ?? required();
+      let newScope = globalScope.newScope ?? required();
+      let exportAPI = globalScope.exportAPI ?? required();
+      let defineBinding = globalScope.defineBinding ?? required();
+      let WS = globalScope.WS ?? required();
+      let NL = globalScope.NL ?? required();
+      function required() { throw "required" }
 
-        let loadAtom = Atom("load");
-        originalLoad = globalScope[loadAtom];
-        globalScope[loadAtom] = load;
+      let loadAtom = Atom("load");
+      let originalLoad= globalScope[loadAtom] ?? required();
+      globalScope[loadAtom] = load;
 
-        defineGraphicsFunctions();
+      defineGraphicsFunctions();
 
-        buildBuiltinHelp(globalScope);
+      buildBuiltinHelp(globalScope);
 
-        // The idea here is to let the handleInput exacute after the keypress has been
-        // completely processed. "oninput" is nice, but doesn't indicate the "Enter" key.
-        inputElement.onkeydown = event => setTimeout(() => handleInput(event.key === 'Enter'), 0);
+      // The idea here is to let the handleInput exacute after the keypress has been
+      // completely processed. "oninput" is nice, but doesn't indicate the "Enter" key.
+      inputElement.onkeydown = event => setTimeout(() => handleInput(event.key === 'Enter'), 0);
 
-        // TODO: I'm just looking for selection changes; there's probably a better way
-        inputElement.onmousedown = event => setTimeout(() => handleInput(), 0);
-        
-        inputElement.contentEditable = 'true';
-        inputElement.focus();
-      }
+      // TODO: I'm just looking for selection changes; there's probably a better way
+      inputElement.onmousedown = event => setTimeout(() => handleInput(), 0);
+      
+      inputElement.contentEditable = 'true';
+      inputElement.focus();
 
       // For "load" and "require"
       let capturedInput, loadPath, loadLine, loadLineCount, loadAsyncContent;
