@@ -64,14 +64,13 @@ export function createInstance(schemeOpts = {}) {
   function gfxFunction(name, jsFunctionName, schemeParamStr, opts = {}) {
     let parsedParams = parseSExpr(`[ ${schemeParamStr} ]`);
     let schemeGfxContextFnName = `gfx-context-${name}`, argStr = "";
-    let fnNameAndParamStr = `[${schemeGfxContextFnName} gfx-context`;
+    let fnNameAndParamStr = `${schemeGfxContextFnName} gfx-context`;
     for (let param of parsedParams) {
       fnNameAndParamStr += ` ${string(param)}`;
       if (isList) argStr += ` ${string(param[FIRST])}`;
       else argStr += ` ${string(param)}`;
     }
-    fnNameAndParamStr += `]`;
-    let contextFunctionStr = `(compile ${fnNameAndParamStr} (@! gfx-context "${jsFunctionName}" ${argStr}) )`;
+    let contextFunctionStr = `(compile [${fnNameAndParamStr}] (@! gfx-context "${jsFunctionName}" ${argStr}) )`;
     console.log(`CONTEXT FUNCTION FOR ${name}`, contextFunctionStr);
     eval_string(contextFunctionStr);
 
@@ -80,7 +79,6 @@ export function createInstance(schemeOpts = {}) {
       eval_string(`
           (defmacro [${name} params] 
             (cons ${schemeGfxContextFnName} (cons 'gfx-context params))) `);
-
       // Decorate it for the help system
       let nameAtom = Atom(name);
       augmentFunctionInfo(nameAtom,  { group: "web-gfx", gfxApi: jsFunctionName,
