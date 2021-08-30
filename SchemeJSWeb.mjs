@@ -61,24 +61,25 @@ export function createInstance(schemeOpts = {}) {
   const eval_string = str => globalScope.eval_string(str);
 
   // Defines the graphics function and a macro to call it with the context
-  function gfxFunction(name, jsFunctionName, schemeParamStr, opts = {}) {
-    let parsedParams = parseSExpr(`[ ${schemeParamStr} ]`);
-    let schemeGfxContextFnName = `gfx-context-${name}`, argStr = "";
-    let fnNameAndParamStr = `${schemeGfxContextFnName} gfx-context`;
+  function gfxFunction(name, jsFunctionName, paramStr, opts = {}) {
+    let schemeGfxContextFnName = `gfx-context-${name}`;
+    // Maka an arg string from the param str
+    let parsedParams = parseSExpr(`[ ${paramStr} ]`), argStr = '';
     for (let param of parsedParams) {
-      fnNameAndParamStr += ` ${string(param)}`;
       if (isList) argStr += ` ${string(param[FIRST])}`;
       else argStr += ` ${string(param)}`;
     }
-    let contextFunctionStr = `(compile [${fnNameAndParamStr}] (@! gfx-context "${jsFunctionName}" ${argStr}) )`;
-    console.log(`CONTEXT FUNCTION FOR ${name}`, contextFunctionStr);
-    eval_string(contextFunctionStr);
+
+    eval_string(`
+        (compile [${schemeGfxContextFnName} gfx-context ${paramStr}]
+          (@! gfx-context "${jsFunctionName}" ${argStr}) )`);
 
     if (!opts.omitGfxMacro) {
       // Define a macro that adds the graphics context and calls it
       eval_string(`
           (defmacro [${name} params] 
             (cons ${schemeGfxContextFnName} (cons 'gfx-context params))) `);
+
       // Decorate it for the help system
       let nameAtom = Atom(name);
       augmentFunctionInfo(nameAtom,  { group: "web-gfx", gfxApi: jsFunctionName,

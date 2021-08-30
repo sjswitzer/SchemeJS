@@ -1639,7 +1639,7 @@ export function createInstance(schemeOpts = {}) {
              `and returns the value of the last one, but only the first "n" parameters are evaluated.`
     });
     defineBinding("def", "define", {
-      group: "main", sample: `(define var value)`, 
+      group: "main", sample: `(def var value)`, 
       blurb: `Defines a global variable.`
     });
     defineBinding("defn", "define_function", {
