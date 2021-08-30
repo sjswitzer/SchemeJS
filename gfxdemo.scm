@@ -24,7 +24,7 @@
 ;;
 
 (define def compile)  ;; compile
-;; (define def defn)     ;; interpret
+;; (define def defn)  ;; interpret
 
 ;; Animation helper: a sinusoidal time-varying value of a given magintude,
 ;; period (in seconds) and phase.
@@ -51,7 +51,7 @@
   (fill-text "Ship Arriving Too Late to Save a Drowning Witch" 0.1 (canvas-width))
 )
 
-(println (String satltsadw)) ;; XXX debugging
+(println (String satltsadw)) ;; what it compiles into
 
 (define ship-canvas (create-canvas-widget "Too Late!" 300 320))
 (@= ship-canvas 'draw satltsadw)  ;; Set the draw function
@@ -78,8 +78,7 @@
   (stroke-style "green") (line-width 1.5) (stroke)
 )
 
-(println (String lissajous)) ;; XXX debugging
-
+(println (String lissajous)) ;; what it compiles into
 
 (define lissajous-canvas (create-canvas-widget "Lissajous"  300 300))
 (@= lissajous-canvas 'draw lissajous)         ;; Set the draw function

@@ -1768,7 +1768,7 @@ export function createInstance(schemeOpts = {}) {
   exportAPI("throw", js_throw);
 
   // (catch (var forms) forms) -- JavaScript style
-  exportAPI("catch", js_catch, { evalCount: 0, compileHook: js_catch_hook });
+  exportAPI("catch", js_catch, { requiresScope: true, evalCount: 0, compileHook: js_catch_hook });
   function js_catch(catchClause, form, ...forms) {
     if (!isList(catchClause))
       throw new SchemeEvalError(`Bad catch clause ${string(catchClause)}`);
@@ -1836,8 +1836,9 @@ export function createInstance(schemeOpts = {}) {
   }
 
   // (finally (forms) forms) -- finally
-  exportAPI("finally", js_finally, { evalCount: 0, compileHook: js_finally_hook });
+  exportAPI("finally", js_finally, { requiresScope:true, evalCount: 0, compileHook: js_finally_hook });
   function js_finally(finallyForms, form, ...forms) {
+    let scope = this;
     if (!isList(finallyForms))
       throw new SchemeEvalError(`bad finally forms ${string(finallyForms)}`);
     let val;
