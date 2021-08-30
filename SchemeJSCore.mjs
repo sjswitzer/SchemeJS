@@ -2249,38 +2249,41 @@ export function createInstance(schemeOpts = {}) {
     // Moreover, this gives a cheap way to handle "namespaces" since it only
     // occurs in what would otherwise be an error condition.
     for (let s = scope; s != null; s = Object.getPrototypeOf(s))
-      if (s.hasOwnProperty(sym)) return undefined;
+      if (s.hasOwnProperty(sym)) return s[sym];
     // Otherwise it might be a namespace ref
     let nameStr = isAtom(sym) ? sym.description : typeof sym === 'string' ? sym : undefined;
     if (nameStr !== undefined) {
       let names = nameStr.split('.');
-      let i = 0, length = names.lenght;
-      if (length > 1) {
-        let namespaceOrRef = scope;
+      let length = names.length;
+      maybeNamespace: if (length > 1) {
+        let namespaceOrRef;
         if (names[0] === '') {
           namespaceOrRef = globalScope;
-          i = 1;
+        } else {
+          // First item is only checked as an Atom
+          namespaceOrRef = checkUndefinedInScope(Atom(names[0]), scope);
         }
-        nameloop: for ( ; i < length; ++i) {
+        nameloop: for (let i = 1; i < length; ++i) {
           let name = names[i];
-          if (name === '') throw new SchemeEvalError(`Undefined ${string(sym)}`);;
+          if (name === '')
+            break nameloop;
+          // Atoms first because the compiler will find them in the scope first.
+          let nameAtom = Atom(name);
+          for (let s = namespaceOrRef; s != null; s = Object.getPrototypeOf(s)) {
+            if (s.hasOwnProperty(nameAtom)) {
+              namespaceOrRef = s[nameAtom]; 
+              continue nameloop;             
+            }
+          }
           for (let s = namespaceOrRef; s != null; s = Object.getPrototypeOf(s)) {
             if (s.hasOwnProperty(name)) {
               namespaceOrRef = s[name]; 
               continue nameloop;             
             }
           }
-          // No good reason to do atoms after strings but why call Atom if you don't need to?
-          // But maybe revisit this.
-          name = Atom(name);
-          for (let s = namespaceOrRef; s != null; s = Object.getPrototypeOf(s)) {
-            if (s.hasOwnProperty(name)) {
-              namespaceOrRef = s[name]; 
-              continue nameloop;             
-            }
-          }
-          break;
+          break maybeNamespace;
         }
+        return namespaceOrRef;
       }
     }
     throw new SchemeEvalError(`Undefined ${string(sym)}`);
