@@ -2369,7 +2369,6 @@ export function createInstance(schemeOpts = {}) {
         }
         arg = args[i];  // undefined if i >= length OR if deliberately undefined
         if (arg === undefined) {
-          arg = NIL;
           if (optionalForms) {
           for ( ; moreList(optionalForms); optionalForms = optionalForms[REST])
             arg = _eval(optionalForms[FIRST], scope);
@@ -3524,7 +3523,7 @@ export function createInstance(schemeOpts = {}) {
         emit(`if (${ssaParam} === undefined) {`);
         let saveIndent = tools.indent;
         tools.indent += '  ';
-        let ssaVal = `${BOTTOM}`;
+        let ssaVal;
         for (let form of optionalForms)
           ssaVal = compileEval(form, ssaScope, tools);
         emit(`${ssaParam} = ${ssaVal};`);
