@@ -2501,8 +2501,8 @@ export function createInstance(schemeOpts = {}) {
     let wrapChar = opts.wrapChar ?? "\n";
     let maxCarDepth = opts.maxCarDepth ?? 100;
     let maxCdrDepth = opts.maxCdrDepth ?? 10000;
-    let indentMore = opts.indentMorw ?? "  ";
-    let line = "", lines = [], sep = "", prefix = "", indent = "";
+    let indentMore = opts.indentMore ?? "  ";
+    let line = "", lines = [], sep = "", prefix = "", indent = "", seen = new Map();
     toString(obj, maxCarDepth, maxCdrDepth);
     if (lines.length === 0) return line;
     if (line)
@@ -2514,6 +2514,18 @@ export function createInstance(schemeOpts = {}) {
       if (obj === null) return put( "null");   // remember: typeof null === 'object'!
       let objType = typeof obj;
       let saveIndent = indent;
+
+      // Check for recursion
+      if (objType === 'object') {
+        let seenWhere = seen.get(obj);
+        if (seenWhere !== undefined) return put(`{!${seenWhere}}`);
+        let desc = line;
+        if (lines.length > 0)
+          desc = lines[lines.length-1] + ' ' + line;
+        desc = desc.substr(0, 25) + "...";
+        seen.set(obj, desc);
+      }
+
       if (obj[CLOSURE_ATOM] || objType === 'object') {
         // MUST check SUPERLAZY before the isNil test, which will cause eager evaluation of
         // a LazyIteratorList, cause it to call next() and mutate into something else.
