@@ -267,7 +267,11 @@ export function createInstance(schemeOpts = {}) {
   // Loading
   //
 
+  let loadIntercept;
+
   function readUrlSync(path) {
+    if (loadIntercept !== undefined)
+      return loadIntercept(path);
     let xhr = new XMLHttpRequest();
     // Bypass the cache.
     //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
@@ -282,6 +286,7 @@ export function createInstance(schemeOpts = {}) {
     return xhr.responseText
   };
 
+  exportAPI("load_async", load_async, { dontInline: true });
   function load_async(path, no_eval = false) {
     let xhr = new XMLHttpRequest();
     // Bypass the cache.
@@ -289,12 +294,21 @@ export function createInstance(schemeOpts = {}) {
     let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime();
     let async = true;
     xhr.open('GET', reqPath, async);
+    xhr.onloadend = event => {
+      console.log("ONLOADEND", event);
+      if (xhr.status === 200) {
+        let saveLoadIntercept = loadIntercept;
+        try {
+          loadIntercept = _ => {
+            return xhr.responseText;
+          }
+          globalScope.load(path, no_eval);
+        } finally {
+          loadIntercept = saveLoadIntercept;
+        }
+      }
+    };
     xhr.send(null);
-    if (xhr.status !== 200) {
-        console.log("SchemeJSWeb load failed", xhr.status, path);
-        throw new Error(`Load ${path}, status ${xhr.status}`);
-    }
-    return xhr.responseText;
   }
 
   return globalScope;
