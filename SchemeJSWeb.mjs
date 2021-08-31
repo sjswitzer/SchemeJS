@@ -238,15 +238,15 @@ export function createInstance(schemeOpts = {}) {
   }
 
   eval_string(`
-      (compile [html-create-element document [tag "div"] ...children]
-        (let [[element (document.createElement tag)]]
+      (defn [html-create-element document [tag "div"] ...children]
+        (let [[element (@! document "createElement" tag)]]
           (for-of child children
             (cond
               [ (|| (instanceof child Node) (string? child))
-                (element.append child) ]
+                (@! element "append" child) ]
               [ (object? child)
                 (for-in attr value
-                  (element.setAttribute (atom? attr (attr.description) attr) value)
+                  (@! element "setAttribute" (atom? attr (attr.description) attr) value)
                 ) ]
               [ true (throw (new Error (+ "Bad element content: " child))) ]
             )

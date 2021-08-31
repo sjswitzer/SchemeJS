@@ -441,7 +441,7 @@ export function createInstance(schemeOpts = {}) {
   //
   // Atoms are Symbols that are in the ATOMS dictionary
   //
-  const ATOMS = {};
+  const ATOMS = {}, NAMESPACED_ATOMS = {};
   const isAtom = obj => typeof obj === 'symbol' && ATOMS[obj.description] === obj;
   exportAPI("isAtom", isAtom);
 
@@ -455,6 +455,16 @@ export function createInstance(schemeOpts = {}) {
     if (atom !== undefined) return atom;
     atom = Symbol(name);
     ATOMS[name] = atom;
+    let parts = name.split('.');
+    if (parts.length > 1) {
+      for (let i = 0, lng = parts.length; i < lng; ++i) {
+        let part = parts[i];
+        if (i > 0 && part.length === 0) // Can only have empty at beginning; means globalScope
+          return atom;
+        parts[i] = Atom(part);
+      }
+      NAMESPACED_ATOMS[atom] = parts;
+    }
     return atom;
   }
 
@@ -1728,7 +1738,7 @@ export function createInstance(schemeOpts = {}) {
   }
   function setq_hook(args, ssaScope, tools) {
     let emit = tools.emit, newTemp = tools.newTemp, bind = tools.bind, use = tools.use, scopeLines = tools.scopeLines;
-    if (args.lenght < 1)
+    if (args.length < 1)
       throw new SchemeCompileError(`Bad setq arguments ${args}`);
     let varSym = args[FIRST], valForms = args[REST];
     let ssaValue = `${BOTTOM}`;
@@ -1751,17 +1761,49 @@ export function createInstance(schemeOpts = {}) {
   function set(symbol, value) { let result = setSym(symbol, value, this); return result; }
 
   function setSym(symbol, value, scope) {
-    // Can _almost_ do this using "with." Maybe come back to that.
-    // The hell of it is that JS has such a primitive internally to do
-    // the same operation but you can't seem to get at it as a user.
-    do {
-      if (scope.hasOwnProperty(symbol)) {
-        scope[symbol] = value;
-        return val;
+    // Check for a namespaced "set"
+    let parts = NAMESPACED_ATOMS[symbol], originalSym = symbol, schemeNamespace = true;
+    if (parts !== undefined) {
+      let part = parts[0];
+      if (part.description.length === 0)
+        scope = globalScope;
+      else
+        scope = scope[part];
+      for (let i = 1, end = parts.length-1; i < end; +i) {
+        symbol = parts[i];
+        if (scope == null || !(typeof scope === 'function' || typeof scope === 'object'))
+          break;
+        let val = scope[symbol];
+        if (val !== undefined) {
+          scope = val;
+          schemeNamespace = true;
+          continue;
+        }
+        val = scope[symbol.description];
+        if (val !== undefined) {
+          scope = val;
+          schemeNamespace = false;
+          continue;
+        }
+        break;
       }
-      scope = Object.getPrototypeOf(scope);
-    } while (scope && scope !== globalScope);  // I knew I'd use this someday!
-    throw new EvalError(`set(q), ${string(symbol)} not in scope`)
+    }
+    if (scope === globalScope || !schemeNamespace) {
+      // Always let people set things in globalScope? Why not?
+      return scope[symbol] = value;
+    }
+    if (scope != null && (typeof scope === 'function' || typeof scope === 'object')) {
+      for (let s = scope; s != null; s = Object.getPrototypeOf(s)) {
+        if (s.hasOwnProperty(symbol))
+          return s[symbol] = value;
+      }
+      // Otherwise, for JS interop, if this is a namespace set, just set the string property.
+      // Could potentially call Object.getOwnPropertyDescriptor() (up the inheritance chain)
+      // to find out for sure but for now this is good enough.
+      if (parts !== undefined)
+        return scope[symbol.description] = value;
+    }
+    throw new EvalError(`set(q), ${string(originalSym)} not in scope`);
   }
 
   //
@@ -2061,11 +2103,11 @@ export function createInstance(schemeOpts = {}) {
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled)
           fn = jitCompiled;
-        let fName = namedObjects.get(fn) ?? fn.name; // Used for more than just tracing!
+        let fName;
         if (argCount >= requiredCount) {
           if (TRACE_INTERPRETER) {
-            let logArgs = [ "APPLY (eval)", fName, ...argv ];
-            console.log.apply(scope, logArgs);
+            fName = namedObjects.get(fn) ?? fn.name;
+            console.log("APPLY", fName, ...argv);
           }
           let result = fn.apply(scope, argv);
           if (TRACE_INTERPRETER)
@@ -2079,8 +2121,7 @@ export function createInstance(schemeOpts = {}) {
         // The function itself can decide what to do if it receives "undefined" as its first argument.
         if (argCount === 0) {
           if (TRACE_INTERPRETER) {
-            let logArgs = [ "APPLY (degenerate)", fName, ...argv ];
-            console.log.apply(scope, logArgs);
+            console.log("APPLY", fName, ...argv);
           }
           let result = fn.apply(scope, argv);
           if (TRACE_INTERPRETER)
@@ -2118,6 +2159,8 @@ export function createInstance(schemeOpts = {}) {
             paramStr += sep + params[i], sep = ", ";
           if (restParam)
             paramStr += `${sep}...${restParam}`;
+          if (!fName)
+            fName = namedObjects.get(fn) ?? fn.name;
           closureForms = new Pair(Atom(`{*js-function-${fName}(${paramStr})*}`), NIL);
           if (restParam)
             closureParams = Atom(restParam);
@@ -2241,52 +2284,60 @@ export function createInstance(schemeOpts = {}) {
     }
   }
 
-  function checkUndefinedInScope(sym, scope) {
+  function checkUndefinedInScope(symbol, scope) {
     // We got an "undefined" result and it's probably an unresolved reference, but maybe not!
     // This is a bit costly but it doesn't happen often and the alternative is to just throw
     // an error. The advantage is that the compiler and interpreter have the same semantics
     // around "undefined."
-    // Moreover, this gives a cheap way to handle "namespaces" since it only
+    // Moreover, this gives a cheap way to handle namespaces since it only
     // occurs in what would otherwise be an error condition.
     for (let s = scope; s != null; s = Object.getPrototypeOf(s))
-      if (s.hasOwnProperty(sym)) return s[sym];
-    // Otherwise it might be a namespace ref
-    let nameStr = isAtom(sym) ? sym.description : typeof sym === 'string' ? sym : undefined;
-    if (nameStr !== undefined) {
-      let names = nameStr.split('.');
-      let length = names.length;
-      maybeNamespace: if (length > 1) {
-        let namespaceOrRef;
-        if (names[0] === '') {
-          namespaceOrRef = globalScope;
-        } else {
-          // First item is only checked as an Atom
-          namespaceOrRef = checkUndefinedInScope(Atom(names[0]), scope);
+      if (s.hasOwnProperty(symbol)) return undefined;
+
+    // Maybe it's a namespace ref
+    let originalSym = symbol; // Elvis says there's no such thing. ;)
+    let parts = NAMESPACED_ATOMS[symbol];
+    handleNamespace: if (parts !== undefined) {
+      let val;
+      symbol = parts[0];
+      if (symbol.description === '')
+        val = globalScope;
+      else // First item is only checked as an Atom
+        val = scope[symbol];
+      console.log("ONE", string(symbol), val, string(parts));  // XXXX
+      let schemeNamespace = true;
+      for (let i = 1, lng = parts.length; i < lng; ++i) {
+        symbol = parts[i];
+        scope = val;
+        console.log("TWO", scope, string(symbol));  // XXXX
+        // Reject any "scope" that can't handle scope[x]
+        if (scope == null || !(typeof scope === 'object' || typeof scope === 'function'))
+          break handleNamespace;
+        // Atoms first
+        val = scope[symbol];
+        if (val !== undefined) {
+          scope = val;
+          schemeNamespace = true;
+          continue;
         }
-        nameloop: for (let i = 1; i < length; ++i) {
-          let name = names[i];
-          if (name === '')
-            break nameloop;
-          // Atoms first because the compiler will find them in the scope first.
-          let nameAtom = Atom(name);
-          for (let s = namespaceOrRef; s != null; s = Object.getPrototypeOf(s)) {
-            if (s.hasOwnProperty(nameAtom)) {
-              namespaceOrRef = s[nameAtom]; 
-              continue nameloop;             
-            }
-          }
-          for (let s = namespaceOrRef; s != null; s = Object.getPrototypeOf(s)) {
-            if (s.hasOwnProperty(name)) {
-              namespaceOrRef = s[name]; 
-              continue nameloop;             
-            }
-          }
-          break maybeNamespace;
+        // Then, for JS interop, strings.
+        val = scope[symbol.description];
+        if (val !== undefined) {
+          scope = val;
+          schemeNamespace = false;
+          continue;
         }
-        return namespaceOrRef;
+        console.log("THREE");  // XXXX
+        break;
       }
+      console.log("FOUR", scope);
+      if (val !== undefined || !schemeNamespace)
+        return val;
+      // If we're in a Scheme namespace, the symbol needs to be in the scope
+      for (let s = scope; s != null; s = Object.getPrototypeOf(s))
+        if (s.hasOwnProperty(symbol)) return undefined;
     }
-    throw new SchemeEvalError(`Undefined ${string(sym)}`);
+    throw new SchemeEvalError(`Undefined ${string(originalSym)}`);
   }
 
   function examineFunctionForParameterDescriptor(fn, evalCount = MAX_INTEGER, tag = 0) {
@@ -2315,8 +2366,7 @@ export function createInstance(schemeOpts = {}) {
     let fName;
     if (TRACE_INTERPRETER) {
       fName = namedObjects.get(fn) ?? fn.name;
-      let logArgs = [ "APPLY (api)", fName, ...argv ];
-      console.log.apply(scope, logArgs);
+      console.log("APPLY (API)", fName, ...argv);
     }
     let result = fn.apply(scope, argv);
     if (TRACE_INTERPRETER)

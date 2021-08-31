@@ -1913,6 +1913,14 @@ export function createInstance(schemeOpts = {}) {
       group: "utility", sample: `(apropos ["substr"])`, 
       blurb: `Returns a list of current definitions matching the substring, or all definitions if absent.`
     });
+    defineBinding("set", "set", {
+      group: "main", sample: `(set name-expr value)`, 
+      blurb: `Sets the variable that name-expr returns to "value".`
+    });
+    defineBinding("setq", "setq", {
+      group: "main", sample: `(setq name value)`, 
+      blurb: `Sets the variable "name" to "value".`
+    });
   }
 
   return globalScope;

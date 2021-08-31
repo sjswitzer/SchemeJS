@@ -776,7 +776,7 @@
       const NBSP = '\u00a0', functionStr = "\u03BB";
       let printBoxElement, varNo = 0;
 
-      let traceCompilerCode = false, traceInterpreter = false;
+      let traceCompilerCode = false, traceInterpreter = true;
       let globalScope = SchemeJSWeb.createInstance({
         functionStr, readFile, linePrinter, traceCompilerCode, traceInterpreter,
         reportLoadResult, reportLoadInput, reportSchemeError, reportSystemError
@@ -882,6 +882,8 @@
           let res;
           try {
             res = originalLoad.call(globalScope, path, noEval);
+          } catch (error) {
+            showError(error);
           } finally {
             loadAsyncContent = saveLoadAsyncContent;
             loadPath = savePath;
@@ -1440,7 +1442,7 @@
                   let gainNode = that._gainNode = audioContext.createGain();
                   that._setGain();
                   audioSource.connect(gainNode);
-                } catch(error) {
+                } catch (error) {
                   console.log("GET-USER-MEDIA-ERROR", error);
                 }
               }
