@@ -1258,7 +1258,7 @@ function schemeTokenGenerator(characterSource, opts = {}) {
       if (errorToken.type === 'partial')
         throw new SchemeParseIncompleteError(path, errorToken, parseContext)
       let newline = false;
-      let str = tokenGenerator.currentLine + ' ^ ';
+      let str = tokenGenerator.currentLine + ' {<-error} ';
       /*
       while (_tokens.length > 0) {
         // "detokenize" any lookahead tokens
