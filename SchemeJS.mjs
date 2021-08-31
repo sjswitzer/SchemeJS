@@ -810,7 +810,11 @@ export function createInstance(schemeOpts = {}) {
   }
   
   exportAPI("scheme_token_generator", schemeTokenGenerator, { dontInline: true });
-  function* schemeTokenGenerator(characterSource, opts = {}) {
+function schemeTokenGenerator(characterSource, opts = {}) {
+  let iterator = _schemeTokenGenerator();
+  iterator.currentLine = '';
+  return iterator;
+  function* _schemeTokenGenerator() {
     let parseContext = opts.parseContext ?? [];
     let characterGenerator = iteratorFor(characterSource, LogicError);
     let ch = '', _peek = [], _done = false;
@@ -1024,27 +1028,10 @@ export function createInstance(schemeOpts = {}) {
     return;
 
     function nextc(n = 1) {
-      let value = '';
-      for ( ; n > 0; --n) {
-        if (_peek.length > 0) {
-          value = _peek.shift();
-          continue;
-        }
-        if (_done) return ch = '';
-        ({ _done, value } = characterGenerator.next());
-        if (_done) {
-          return ch = '';
-        }
-        charCount += 1;
-        lineCharCount += 1;
-        // Among the [NL] chars, only use '\n' in the line count;
-        // there may still be CRLFs in the wild.
-        if (ch === '\n') {
-          lineCount += 1;
-          lineCharCount = 0;
-        }
-      }
-      return ch = value;
+      peekc(n-1);
+      for ( ; n > 0; --n)
+        ch = _peek.shift();
+      return ch;
     }
 
     function peekc(n = 0) {
@@ -1056,15 +1043,19 @@ export function createInstance(schemeOpts = {}) {
         }
         charCount += 1;
         lineCharCount += 1;
-        if (NL[ch]) {
+        iterator.currentLine += ch;
+        if (ch === '\n') {
           lineCount += 1;
           lineCharCount = 0;
+          iterator.previousLine = iterator.currentLine;
+          iterator.currentLine = '';
         }
         _peek.push(value);
       }
       return _peek[n];
     }
   }
+}
 
   exportAPI("parseSExpr", parseSExpr, { dontInline: true });
   function parseSExpr(characterSource, opts = {}) {
@@ -1263,17 +1254,19 @@ export function createInstance(schemeOpts = {}) {
     }
 
     function throwSyntaxError() {
-      let str = "", errorToken = token();
+      let errorToken = token();
       if (errorToken.type === 'partial')
         throw new SchemeParseIncompleteError(path, errorToken, parseContext)
       let newline = false;
+      let str = tokenGenerator.currentLine + ' ^ ';
+      /*
       while (_tokens.length > 0) {
         // "detokenize" any lookahead tokens
         let token = _tokens.pop();
         newline = (token.type === 'newline');
         str += (token.value !== undefined ? string(token.value) : token.type);
         str += " ";
-      }
+      } */
       while (!newline) {
         if (_done) break;
         let { done, value: ch } = characterSource.next();
@@ -1283,6 +1276,7 @@ export function createInstance(schemeOpts = {}) {
         }
         if (NL[ch]) break;
         str += ch;
+
       }
       throw new SchemeSyntaxError(str, path, errorToken);
     }

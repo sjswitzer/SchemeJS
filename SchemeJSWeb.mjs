@@ -36,7 +36,6 @@
 // for line-to are (1,1).
 //
 
-import { readFile } from 'fs';
 import * as SchemeJS from './SchemeJS.mjs';
 
 export const VERSION = SchemeJS.VERSION;
@@ -45,7 +44,7 @@ export const VERSION = SchemeJS.VERSION;
 // Creates a SchemeJSWeb instance.
 //
 export function createInstance(schemeOpts = {}) {
-  let globalScope = SchemeJS.createInstance({ readFile: loadUrlSync, ...schemeOpts });
+  let globalScope = SchemeJS.createInstance({ readFile: readUrlSync, ...schemeOpts });
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
   const webApiMacros = schemeOpts.webApiMacros ?? true;
   if (!defineSchemeBindings)
@@ -268,7 +267,7 @@ export function createInstance(schemeOpts = {}) {
   // Loading
   //
 
-  function loadUrlSync(path) {
+  function readUrlSync(path) {
     let xhr = new XMLHttpRequest();
     // Bypass the cache.
     //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
@@ -276,10 +275,27 @@ export function createInstance(schemeOpts = {}) {
     let async = false;
     xhr.open('GET', reqPath, async);
     xhr.send(null);
-    if (xhr.status == 200)
+    if (xhr.status !== 200) {
+        console.log("SchemeJSWeb load failed", xhr.status, path);
         throw new Error(`Load ${path}, status ${xhr.status}`);
+    }
     return xhr.responseText
   };
+
+  function load_async(path, no_eval = false) {
+    let xhr = new XMLHttpRequest();
+    // Bypass the cache.
+    //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
+    let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime();
+    let async = true;
+    xhr.open('GET', reqPath, async);
+    xhr.send(null);
+    if (xhr.status !== 200) {
+        console.log("SchemeJSWeb load failed", xhr.status, path);
+        throw new Error(`Load ${path}, status ${xhr.status}`);
+    }
+    return xhr.responseText;
+  }
 
   return globalScope;
 }
