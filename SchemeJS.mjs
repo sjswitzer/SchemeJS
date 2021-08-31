@@ -810,252 +810,254 @@ export function createInstance(schemeOpts = {}) {
   }
   
   exportAPI("scheme_token_generator", schemeTokenGenerator, { dontInline: true });
-function schemeTokenGenerator(characterSource, opts = {}) {
-  let iterator = _schemeTokenGenerator();
-  iterator.currentLine = '';
-  return iterator;
-  function* _schemeTokenGenerator() {
-    let parseContext = opts.parseContext ?? [];
-    let characterGenerator = iteratorFor(characterSource, LogicError);
-    let ch = '', _peek = [], _done = false;
-    let position = 0, charCount = 0, line = 0, lineCount = 0, lineChar = 0, lineCharCount = 0;
-    if (!parseContext) parseContext = [];
-    nextc();
+  function schemeTokenGenerator(characterSource, opts = {}) {
+    // A trick to intercept the iterator and make it available to the
+    // generator function for further annotation. In this case, iterator.currentLine.
+    let iterator = _schemeTokenGenerator();
+    iterator.currentLine = '';
+    return iterator;
+    function* _schemeTokenGenerator() {
+      let parseContext = opts.parseContext ?? [];
+      let characterGenerator = iteratorFor(characterSource, LogicError);
+      let ch = '', _peek = [], _done = false;
+      let position = 0, charCount = 0, line = 0, lineCount = 0, lineChar = 0, lineCharCount = 0;
+      if (!parseContext) parseContext = [];
+      nextc();
 
-    getToken:
-    while (ch) {
-      while (WS[ch])
-        nextc();
-      position = charCount-1;
-      line = lineCount+1;
-      lineChar = lineCharCount-1;
-
-      if (NL[ch]) {
-        yield { type: 'newline', position, line, lineChar };
-        nextc();
-        continue;
-      }
-
-      if (ch === ';') {  // ; begins a comment
-        parseContext.push({ type: 'comment', value: ch === ';' ? ch : '//', position, line, lineChar });
-        while (ch && !NL[ch])
+      getToken:
+      while (ch) {
+        while (WS[ch])
           nextc();
-        parseContext.currentToken = { type: 'endcomment', value: ';', endPosition: charCount-1, endWidth: 1, line, lineChar };
-        parseContext.pop();
-        yield { type: (ch ? 'newline': 'newline'), position, line, lineChar };
-        continue;
-      }
+        position = charCount-1;
+        line = lineCount+1;
+        lineChar = lineCharCount-1;
 
-      if (ch === '/' && peekc() === '*') {
-        parseContext.push({ type: 'comment', value: '/*', position, line, lineChar });
-        nextc(2);
-        while (ch && !(ch === '*' && peekc() === '/'))
+        if (NL[ch]) {
+          yield { type: 'newline', position, line, lineChar };
           nextc();
-        parseContext.currentToken = { type: 'endcomment', value: '*/', endPosition: charCount-2, endWidth: 2, line, lineChar };
-        parseContext.pop();
-        if (!ch)
-          yield { type: 'partial', position, line, lineChar };
-        nextc(2);
-        continue;
-      }
+          continue;
+        }
 
-      if (ch === '"') {
-        let str = '', multiline = false;
-        let popped = false, tok = { type: 'string', value: '"', position, line, lineChar };
-        parseContext.push(tok);
-        parseContext.currentToken = tok;
-        nextc();
-        while (ch && ch !== '"' && (multiline || !NL[ch])) {
-          if (ch === '\\') {
+        if (ch === ';') {  // ; begins a comment
+          parseContext.push({ type: 'comment', value: ch === ';' ? ch : '//', position, line, lineChar });
+          while (ch && !NL[ch])
             nextc();
-            if (NL[ch]) {  // traditional string continuation
+          parseContext.currentToken = { type: 'endcomment', value: ';', endPosition: charCount-1, endWidth: 1, line, lineChar };
+          parseContext.pop();
+          yield { type: (ch ? 'newline': 'newline'), position, line, lineChar };
+          continue;
+        }
+
+        if (ch === '/' && peekc() === '*') {
+          parseContext.push({ type: 'comment', value: '/*', position, line, lineChar });
+          nextc(2);
+          while (ch && !(ch === '*' && peekc() === '/'))
+            nextc();
+          parseContext.currentToken = { type: 'endcomment', value: '*/', endPosition: charCount-2, endWidth: 2, line, lineChar };
+          parseContext.pop();
+          if (!ch)
+            yield { type: 'partial', position, line, lineChar };
+          nextc(2);
+          continue;
+        }
+
+        if (ch === '"') {
+          let str = '', multiline = false;
+          let popped = false, tok = { type: 'string', value: '"', position, line, lineChar };
+          parseContext.push(tok);
+          parseContext.currentToken = tok;
+          nextc();
+          while (ch && ch !== '"' && (multiline || !NL[ch])) {
+            if (ch === '\\') {
               nextc();
-              continue;
-            } else if (ch === '\\' && NL[peekc()]) {  // Extended string continuation!
-              nextc();
-              multiline = true;
-            } else if (ch === '') {
-              break;
-            } else if (ch === 'x') {  // \xXX
-              nextc();
-              if (!(HEXDIGITS[ch] && HEXDIGITS[peekc()]))
-                throwSyntaxError('Invalid hexadecimal escape sequence');
-              let str = `0x${ch}${peekc()}`;
-              nextc();
-              ch = String.fromCharCode(Number(str));
-            } else if (ch === 'u') {  // \uXXXX or \u{X...}
-              nextc();
-              if (ch === '{') {
-                let pos = 0, str = '0x';
-                for ( ; HEXDIGITS[peekc(pos)]; ++pos)
-                  str += peekc(pos);
-                let codePoint = Number(str);
-                if (peekc(pos) !== '}' || isNaN(codePoint))
-                  yield { type: 'garbage', value: `\\u{${str}${peekc(pos)}`,  position, line, lineChar };
-                if (codePoint >= 0x110000)
-                  yield { type: 'garbage', value: `\\u{${str}}`,  position, line, lineChar };
-                nextc(pos+1);
-                ch = String.fromCodePoint(codePoint);
-              } else {
-                if (!(HEXDIGITS[ch] && HEXDIGITS[peekc(0)] && HEXDIGITS[peekc(1)] && HEXDIGITS[peekc(2)]))
-                  yield { type: 'garbage', value: `\\u${ch}${peekc(0)}${peekc(1)}${peekc(2)}`,  position, line, lineChar };
-                let str = `0x${ch}${peekc(0)}${peekc(1)}${peekc(2)}`;
-                nextc(3);
+              if (NL[ch]) {  // traditional string continuation
+                nextc();
+                continue;
+              } else if (ch === '\\' && NL[peekc()]) {  // Extended string continuation!
+                nextc();
+                multiline = true;
+              } else if (ch === '') {
+                break;
+              } else if (ch === 'x') {  // \xXX
+                nextc();
+                if (!(HEXDIGITS[ch] && HEXDIGITS[peekc()]))
+                  throwSyntaxError('Invalid hexadecimal escape sequence');
+                let str = `0x${ch}${peekc()}`;
+                nextc();
                 ch = String.fromCharCode(Number(str));
+              } else if (ch === 'u') {  // \uXXXX or \u{X...}
+                nextc();
+                if (ch === '{') {
+                  let pos = 0, str = '0x';
+                  for ( ; HEXDIGITS[peekc(pos)]; ++pos)
+                    str += peekc(pos);
+                  let codePoint = Number(str);
+                  if (peekc(pos) !== '}' || isNaN(codePoint))
+                    yield { type: 'garbage', value: `\\u{${str}${peekc(pos)}`,  position, line, lineChar };
+                  if (codePoint >= 0x110000)
+                    yield { type: 'garbage', value: `\\u{${str}}`,  position, line, lineChar };
+                  nextc(pos+1);
+                  ch = String.fromCodePoint(codePoint);
+                } else {
+                  if (!(HEXDIGITS[ch] && HEXDIGITS[peekc(0)] && HEXDIGITS[peekc(1)] && HEXDIGITS[peekc(2)]))
+                    yield { type: 'garbage', value: `\\u${ch}${peekc(0)}${peekc(1)}${peekc(2)}`,  position, line, lineChar };
+                  let str = `0x${ch}${peekc(0)}${peekc(1)}${peekc(2)}`;
+                  nextc(3);
+                  ch = String.fromCharCode(Number(str));
+                }
+              } else {
+                ch = ESCAPE_STRINGS[ch] ?? ch;
+              }
+            } else if (NL[ch]) {
+              if (multiline) {
+                nextc();
+                while (WS[nextc()]) {}  // skips WS
+                if (ch === '') break;
+                if (ch === '+') {  // + continues
+                  nextc();
+                  continue;
+                }
+                if (ch === '|') {  // : newline then continues
+                  nextc();
+                  str += '\n';
+                  continue;
+                }
+                if (ch === '"') {  // " ends string
+                  break;
+                }
+              }
+              parseContext.pop();
+              popped = true;
+              yield { type: 'garbage', value: '"' + str,  position, line, lineChar };
+              continue getToken;  
+            }
+            str += ch;
+            nextc();
+          }
+          if (!popped) {
+            parseContext.pop();
+          }
+          if (!ch) {
+            yield { type: 'partial', value: `"${str}`,  position, line, lineChar };
+            return;
+          }
+          if (ch === '"') {
+            yield { type: 'string', value: str, position, endPosition: charCount-1, endWidth: 1, line, lineChar };
+            nextc();
+          }
+          continue;
+        }
+
+        // Special ... token
+        if (ch === '.' && peekc() === '.' && peekc(1) === '.') {
+          yield { type: 'atom', value: Atom('...'), position, line, lineChar };
+          nextc(3);
+          continue;
+        }
+
+        if (ch === '.' && !DIGITS[peekc()] && !IDENT1[peekc()]) {
+          yield { type: ch, position, line, lineChar };
+          nextc();
+          continue;
+        }
+
+        // JS numbers are weird. The strategy here is to match anything that looks vaguely like a number
+        // then let JS sort it all out.
+        if (NUM1[ch]) {
+          // Keep + and - from having to jump through unnecessary hoops
+          let pc = peekc(), falsePlusMinus = (ch === '+' || ch === '-') && !(pc !== '.' || DIGITS[pc]);
+          if (!falsePlusMinus) {
+            let pos = 0, str = ch, value;
+            for (;;) {
+              let ch = peekc(pos++);
+              if (!NUM2[ch])
+                break;
+              str += ch;
+            }
+            if (str.endsWith('n')) {
+              str = str.substr(0, str.length-1);
+              try {  // maybe it's a BigInt?
+                value = BigInt(str);
+              } catch (e) {
+                // eat it
               }
             } else {
-              ch = ESCAPE_STRINGS[ch] ?? ch;
+              let numVal = Number(str);
+              if (!isNaN(numVal))
+                value = numVal;
             }
-          } else if (NL[ch]) {
-            if (multiline) {
-              nextc();
-              while (WS[nextc()]) {}  // skips WS
-              if (ch === '') break;
-              if (ch === '+') {  // + continues
-                nextc();
-                continue;
-              }
-              if (ch === '|') {  // : newline then continues
-                nextc();
-                str += '\n';
-                continue;
-              }
-              if (ch === '"') {  // " ends string
-                break;
-              }
+            if (value !== undefined) {
+              // Consume all the characters that we peeked and succeed
+              while (pos-- > 0) nextc();
+              yield { type: 'literal', value, position, line, lineChar };
+              continue;
             }
-            parseContext.pop();
-            popped = true;
-            yield { type: 'garbage', value: '"' + str,  position, line, lineChar };
-            continue getToken;  
           }
-          str += ch;
+        }
+
+        if (SINGLE_CHAR_TOKENS[ch]) {
+          yield { type: ch, position, line, lineChar };
           nextc();
+          continue;
         }
-        if (!popped) {
-          parseContext.pop();
-        }
-        if (!ch) {
-          yield { type: 'partial', value: `"${str}`,  position, line, lineChar };
-          return;
-        }
-        if (ch === '"') {
-          yield { type: 'string', value: str, position, endPosition: charCount-1, endWidth: 1, line, lineChar };
-          nextc();
-        }
-        continue;
-      }
 
-      // Special ... token
-      if (ch === '.' && peekc() === '.' && peekc(1) === '.') {
-        yield { type: 'atom', value: Atom('...'), position, line, lineChar };
-        nextc(3);
-        continue;
-      }
-
-      if (ch === '.' && !DIGITS[peekc()] && !IDENT1[peekc()]) {
-        yield { type: ch, position, line, lineChar };
-        nextc();
-        continue;
-      }
-
-      // JS numbers are weird. The strategy here is to match anything that looks vaguely like a number
-      // then let JS sort it all out.
-      if (NUM1[ch]) {
-        // Keep + and - from having to jump through unnecessary hoops
-        let pc = peekc(), falsePlusMinus = (ch === '+' || ch === '-') && !(pc !== '.' || DIGITS[pc]);
-        if (!falsePlusMinus) {
-          let pos = 0, str = ch, value;
-          for (;;) {
-            let ch = peekc(pos++);
-            if (!NUM2[ch])
+        if (IDENT1[ch]) {
+          let str = '';
+          while (ch && IDENT2[ch]) {
+            // lambda symbols are special so we can parse \x as \ x
+            if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && IDENT1[ch] && ch !== '#')
               break;
-            str += ch;
+            str += ch, nextc();
           }
-          if (str.endsWith('n')) {
-            str = str.substr(0, str.length-1);
-            try {  // maybe it's a BigInt?
-              value = BigInt(str);
-            } catch (e) {
-              // eat it
-            }
-          } else {
-            let numVal = Number(str);
-            if (!isNaN(numVal))
-              value = numVal;
-          }
-          if (value !== undefined) {
-            // Consume all the characters that we peeked and succeed
-            while (pos-- > 0) nextc();
-            yield { type: 'literal', value, position, line, lineChar };
-            continue;
-          }
+          if (str === 'true')
+            yield { type: 'literal', value: true, position, line, lineChar };
+          else if (str === 'false')
+            yield { type: 'literal', value: false, position, line, lineChar };
+          else if (str === 'undefined')
+            yield { type: 'literal', value: undefined, position, line, lineChar };
+          else if (str === 'null')
+            yield { type: 'literal', value: null, position, line, lineChar };
+          else
+            yield { type: 'atom', value: Atom(str), position, line, lineChar };
+          continue;
         }
-      }
 
-      if (SINGLE_CHAR_TOKENS[ch]) {
-        yield { type: ch, position, line, lineChar };
+        if (!ch) break;
+        yield { type: 'garbage', value: ch, position, line, lineChar };
         nextc();
-        continue;
+      }
+      yield { type: 'end', position, line, lineChar };
+      return;
+
+      function nextc(n = 1) {
+        peekc(n-1);
+        for ( ; n > 0; --n)
+          ch = _peek.shift();
+        return ch;
       }
 
-      if (IDENT1[ch]) {
-        let str = '';
-        while (ch && IDENT2[ch]) {
-          // lambda symbols are special so we can parse \x as \ x
-          if ((str[0] === '\\' || str[0] === LAMBDA_CHAR) && IDENT1[ch] && ch !== '#')
-            break;
-          str += ch, nextc();
+      function peekc(n = 0) {
+        for (let get = n - _peek.length + 1; get > 0; --get) {
+          let { done, value } = characterGenerator.next();
+          if (done) {
+            _done = true;
+            return '';
+          }
+          charCount += 1;
+          lineCharCount += 1;
+          iterator.currentLine += ch;
+          if (ch === '\n') {
+            lineCount += 1;
+            lineCharCount = 0;
+            iterator.previousLine = iterator.currentLine;
+            iterator.currentLine = '';
+          }
+          _peek.push(value);
         }
-        if (str === 'true')
-          yield { type: 'literal', value: true, position, line, lineChar };
-        else if (str === 'false')
-          yield { type: 'literal', value: false, position, line, lineChar };
-        else if (str === 'undefined')
-          yield { type: 'literal', value: undefined, position, line, lineChar };
-        else if (str === 'null')
-          yield { type: 'literal', value: null, position, line, lineChar };
-        else
-          yield { type: 'atom', value: Atom(str), position, line, lineChar };
-        continue;
+        return _peek[n];
       }
-
-      if (!ch) break;
-      yield { type: 'garbage', value: ch, position, line, lineChar };
-      nextc();
-    }
-    yield { type: 'end', position, line, lineChar };
-    return;
-
-    function nextc(n = 1) {
-      peekc(n-1);
-      for ( ; n > 0; --n)
-        ch = _peek.shift();
-      return ch;
-    }
-
-    function peekc(n = 0) {
-      for (let get = n - _peek.length + 1; get > 0; --get) {
-        let { done, value } = characterGenerator.next();
-        if (done) {
-          _done = true;
-          return '';
-        }
-        charCount += 1;
-        lineCharCount += 1;
-        iterator.currentLine += ch;
-        if (ch === '\n') {
-          lineCount += 1;
-          lineCharCount = 0;
-          iterator.previousLine = iterator.currentLine;
-          iterator.currentLine = '';
-        }
-        _peek.push(value);
-      }
-      return _peek[n];
     }
   }
-}
 
   exportAPI("parseSExpr", parseSExpr, { dontInline: true });
   function parseSExpr(characterSource, opts = {}) {
@@ -1259,14 +1261,6 @@ function schemeTokenGenerator(characterSource, opts = {}) {
         throw new SchemeParseIncompleteError(path, errorToken, parseContext)
       let newline = false;
       let str = tokenGenerator.currentLine + ' {<-error} ';
-      /*
-      while (_tokens.length > 0) {
-        // "detokenize" any lookahead tokens
-        let token = _tokens.pop();
-        newline = (token.type === 'newline');
-        str += (token.value !== undefined ? string(token.value) : token.type);
-        str += " ";
-      } */
       while (!newline) {
         if (_done) break;
         let { done, value: ch } = characterSource.next();
