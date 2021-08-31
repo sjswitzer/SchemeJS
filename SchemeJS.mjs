@@ -365,14 +365,9 @@ export function createInstance(schemeOpts = {}) {
       
       if (schemeTrue(evaled)) {
         let res = BOTTOM;
-        for (let form of forms)
+        for (let form of forms) {
           res = _eval(form, this);
-        if (this[RETURN_SYMBOL]) return;
-          if (!isNil(forms)) {
-          for (let form of forms) {
-            res = _eval(form, this);
-            if (this[RETURN_SYMBOL]) return;
-          }
+          if (this[RETURN_SYMBOL]) return;
         }
         return res;
       }

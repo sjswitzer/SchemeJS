@@ -2306,12 +2306,10 @@ export function createInstance(schemeOpts = {}) {
         val = globalScope;
       else // First item is only checked as an Atom
         val = scope[symbol];
-      console.log("ONE", string(symbol), val, string(parts));  // XXXX
       let schemeNamespace = true;
       for (let i = 1, lng = parts.length; i < lng; ++i) {
         symbol = parts[i];
         scope = val;
-        console.log("TWO", scope, string(symbol));  // XXXX
         // Reject any "scope" that can't handle scope[x]
         if (scope == null || !(typeof scope === 'object' || typeof scope === 'function'))
           break handleNamespace;
@@ -2329,10 +2327,8 @@ export function createInstance(schemeOpts = {}) {
           schemeNamespace = false;
           continue;
         }
-        console.log("THREE");  // XXXX
         break;
       }
-      console.log("FOUR", scope);
       if (val !== undefined || !schemeNamespace)
         return val;
       // If we're in a Scheme namespace, the symbol needs to be in the scope
