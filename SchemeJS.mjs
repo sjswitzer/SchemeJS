@@ -862,20 +862,40 @@ export function createInstance(schemeOpts = {}) {
         }
 
         if (ch === '"') {
-          let str = '', multiline = false;
+          let str = '', multiline = false, multilineSkip = false;
           let popped = false, tok = { type: 'string', value: '"', position, line, lineChar };
           parseContext.push(tok);
           parseContext.currentToken = tok;
           nextc();
           while (ch && ch !== '"' && (multiline || !NL[ch])) {
+            if (multilineSkip) {
+              nextc();
+              while (WS[nextc()]) {}  // skips WS
+              if (ch === '') break;
+              multilineSkip = false;
+              if (ch === '+') {  // + continues
+                nextc();
+                continue;
+              }
+              if (ch === '|') {  // : newline then continues
+                nextc();
+                str += '\n';
+                continue;
+              }
+              if (ch === '"') {  // " ends string
+                break;
+              }
+              yield { type: 'garbage', value: '"' + str,  position, line, lineChar };
+              continue getToken;
+            }
             if (ch === '\\') {
               nextc();
               if (NL[ch]) {  // traditional string continuation
                 nextc();
                 continue;
               } else if (ch === '\\' && NL[peekc()]) {  // Extended string continuation!
-                nextc();
-                multiline = true;
+                nextc(1);
+                multiline = multilineSkip = true;
               } else if (ch === '') {
                 break;
               } else if (ch === 'x') {  // \xXX
@@ -910,21 +930,8 @@ export function createInstance(schemeOpts = {}) {
               }
             } else if (NL[ch]) {
               if (multiline) {
-                nextc();
-                while (WS[nextc()]) {}  // skips WS
-                if (ch === '') break;
-                if (ch === '+') {  // + continues
-                  nextc();
-                  continue;
-                }
-                if (ch === '|') {  // : newline then continues
-                  nextc();
-                  str += '\n';
-                  continue;
-                }
-                if (ch === '"') {  // " ends string
-                  break;
-                }
+                multilineSkip = true;
+                continue;
               }
               parseContext.pop();
               popped = true;
@@ -937,8 +944,8 @@ export function createInstance(schemeOpts = {}) {
           if (!popped) {
             parseContext.pop();
           }
-          if (!ch) {
-            yield { type: 'partial', value: `"${str}`,  position, line, lineChar };
+          if (!ch || NL[ch]) {
+            yield { type: 'garbage', value: `"${str}`,  position, line, lineChar };
             return;
           }
           if (ch === '"') {
@@ -1711,6 +1718,7 @@ export function createInstance(schemeOpts = {}) {
       group: "main", sample: `(<stuff> ${restParamStr} value <more stuff>)`, 
       blurb: `Spread macro. Expands the value (an iterable), into a list literal or argument list .`
     });
+    // \ and \# re macros for whatever the function form is named
     globalScope.eval_string(` (defmacro [\\  args] (cons ' ${functionStr}   args)) `);
     globalScope.eval_string(` (defmacro [\\# args] (cons ' ${functionStr}#  args)) `);
     defineBinding("bigint?", "is_bigint", {

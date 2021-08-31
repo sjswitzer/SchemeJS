@@ -245,7 +245,7 @@ export function createInstance(schemeOpts = {}) {
               [ (|| (instanceof child Node) (string? child))
                 (@! element "append" child) ]
               [ (object? child)
-                (for-in attr value
+                (for-in attr value child
                   (@! element "setAttribute" (atom? attr (attr.description) attr) value)
                 ) ]
               [ true (throw (new Error (+ "Bad element content: " child))) ]
@@ -267,7 +267,7 @@ export function createInstance(schemeOpts = {}) {
   // Loading
   //
 
-  let loadIntercept;
+  let loadIntercept, asyncPending = 0, afterAsyncWork = [];
 
   function readUrlSync(path) {
     if (loadIntercept !== undefined)
@@ -295,7 +295,6 @@ export function createInstance(schemeOpts = {}) {
     let async = true;
     xhr.open('GET', reqPath, async);
     xhr.onloadend = event => {
-      console.log("ONLOADEND", event);
       if (xhr.status === 200) {
         let saveLoadIntercept = loadIntercept;
         try {
@@ -305,10 +304,50 @@ export function createInstance(schemeOpts = {}) {
           globalScope.load(path, no_eval);
         } finally {
           loadIntercept = saveLoadIntercept;
+          asyncPending -= 1;
+          if (asyncPending === 0) {
+            while (afterAsyncWork.length > 0) {
+              let fn = afterAsyncWork.shift();  // FIFO, I guess.
+              fn();
+            }
+          }
         }
       }
+      console.log("SchemeJSWeb async_load failed", xhr.status, path);
     };
+    asyncPending += 1;
     xhr.send(null);
+  }
+
+  //
+  // Now find execute any embedded scripts
+  //
+
+  if (globalThis.document) {
+    // Let our caller execute first!
+    setTimeout(_ => {
+      // Then wait until after any async loads
+      if (asyncPending > 0)
+        afterAsyncWork.push(findAndLoadAllEmbeddedSchemeScripts);
+      else
+        findAndLoadAllEmbeddedSchemeScripts();
+    });
+  }
+
+  function findAndLoadAllEmbeddedSchemeScripts() {
+    for (let element of document.getElementsByTagName('script')) {
+      if (!element.getAttribute("src") && element.getAttribute("type") === 'text/scheme-js') {
+        let saveLoadIntercept = loadIntercept;
+        try {
+          loadIntercept = _ => {
+            return element.textContent;
+          }
+          globalScope.load(document.location.href);
+        } finally {
+          loadIntercept = saveLoadIntercept;
+        }
+      }
+    }
   }
 
   return globalScope;

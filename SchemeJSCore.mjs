@@ -1552,9 +1552,9 @@ export function createInstance(schemeOpts = {}) {
 
   // (for-in key-symbol value-symbol obj form forms...)
   exportAPI("rationalized_for_in", rationalized_for_in, { evalCount: 0, compileHook: rationalized_for_in_hook });
-  function rationalized_for_in(keySymbol, valueSymbol, obj, form, ...forms) {
+  function rationalized_for_in(keySymbol, valueSymbol, objectSymbol, form, ...forms) {
     let scope = this;
-    obj = _eval(obj, scope);
+    let obj = _eval(objectSymbol, scope);
     if (scope[RETURN_SYMBOL]) return;
     scope = newScope(this, "rationalized-for-in-scope");
     let val = NIL;
@@ -2109,7 +2109,7 @@ export function createInstance(schemeOpts = {}) {
         if (argCount >= requiredCount) {
           if (TRACE_INTERPRETER) {
             fName = namedObjects.get(fn) ?? fn.name;
-            console.log("APPLY", fName, ...argv);
+            console.log("APPLY", string([fn, argv]), fName, ...argv);
           }
           let result = fn.apply(scope, argv);
           if (TRACE_INTERPRETER)
