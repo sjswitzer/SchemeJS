@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<script type="module" src="./SchemeJSWeb.mjs""></script>
+<script type="text/scheme-js">
+  ;;
+  ;; SchemeJS: Scheme in JavaScript
+  ;;    
+  ;;   Copyright 2021 Stan Switzer -- (sjswitzer [at] gmail [dot] com)
+  ;;     This work is licensed under a Creative Commons Attribution-ShareAlike
+  ;;     4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
+  ;;
+  ;; Look Ma, no HTML!
+  ;;
+  (setq html-document.title "A Web Page entirely in Scheme!")
+  (@! html-document.body "append"
+    (html-element "p" "This is an HTML page entirely in HTML")
+    (html-element "p" "You can generate any HTML at all.")
+    (html-element "ul"
+      (html-element "li" "One")
+      (html-element "li" "Two")
+      (html-element "li" "Three")
+      ...(map (\[str] (html-element "li" (+ "See: " str "!"))) ["Four" "Five" "Six"]
+      )
+    )
+    (html-element "p" "Some more stuff")
+    (html-element "p" { "class": "ta-da" } "That's all folks!")
+)
+  (@! html-document.body "append"
+    (html-element "style" "\\
+      + .ta-da {
+      |   color: blue;
+      |   animation-duration: 2s;
+      |   animation-name: heave;
+      |   animation-iteration-count: infinite;
+      |   animation-direction: alternate;
+      | }
+      |@keyframes heave {
+      |  from {
+      |  }
+      |  to {
+      |    font-size: 120%;
+      |    color: green;
+      |  }
+      "
+    )
+  )
+</script>

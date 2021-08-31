@@ -1,4 +1,4 @@
-;; An HTML page entirely in Scheme
+;; An HTML page almost entirely in Scheme
 
 (setq html-document.title "A Web Page entirely in Scheme!")
 

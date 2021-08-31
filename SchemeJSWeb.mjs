@@ -40,12 +40,17 @@ import * as SchemeJS from './SchemeJS.mjs';
 
 export const VERSION = SchemeJS.VERSION;
 
+// If invoked from a browser, instantiate an instance so it can find text/scheme-js scripts and execute them
+if (globalThis.document)
+  createInstance({ executeScripts: "text/scheme-js" })
+
 //
 // Creates a SchemeJSWeb instance.
 //
 export function createInstance(schemeOpts = {}) {
   let globalScope = SchemeJS.createInstance({ readFile: readUrlSync, ...schemeOpts });
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
+  const executeScripts = schemeOpts.executeScripts ?? undefined;
   const webApiMacros = schemeOpts.webApiMacros ?? true;
   if (!defineSchemeBindings)
     return globalScope;
@@ -323,7 +328,7 @@ export function createInstance(schemeOpts = {}) {
   // Now find execute any embedded scripts
   //
 
-  if (globalThis.document) {
+  if (executeScripts) {
     // Let our caller execute first!
     setTimeout(_ => {
       // Then wait until after any async loads
@@ -336,7 +341,7 @@ export function createInstance(schemeOpts = {}) {
 
   function findAndLoadAllEmbeddedSchemeScripts() {
     for (let element of document.getElementsByTagName('script')) {
-      if (!element.getAttribute("src") && element.getAttribute("type") === 'text/scheme-js') {
+      if (!element.getAttribute("src") && element.getAttribute("type") === executeScripts) {
         let saveLoadIntercept = loadIntercept;
         try {
           loadIntercept = _ => {
