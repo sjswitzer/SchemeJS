@@ -6,13 +6,9 @@
     This work is licensed under a Creative Commons Attribution-ShareAlike
     4.0 International License. https://creativecommons.org/licenses/by-sa/4.0/
 -->
-<html>
-  <body>
-    <script type="module">
-      "use strict";
-      import * as SchemeJSWeb from './SchemeJSWeb.mjs';
-      let globalScope = SchemeJSWeb.createInstance();
-      globalScope.load("scheme-page.scm");
-    </script>
-  </body>
-</html>
+<script type="module">
+  "use strict";
+  import * as SchemeJSWeb from './SchemeJSWeb.mjs';
+  let globalScope = SchemeJSWeb.createInstance();
+  globalScope.load("scheme-page.scm");
+</script>

@@ -9,8 +9,7 @@
     (html-element "li" "One")
     (html-element "li" "Two")
     (html-element "li" "Three")
-    (for-of str ["Four" "Five "Six"]
-      (html-element "li" (+ "See: " str "!"))
+    ...(map (\[str] (html-element "li" (+ "See: " str "!"))) ["Four" "Five" "Six"]
     )
   )
 )
