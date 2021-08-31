@@ -1769,8 +1769,10 @@ export function createInstance(schemeOpts = {}) {
         scope = globalScope;
       else
         scope = scope[part];
-      for (let i = 1, end = parts.length-1; i < end; +i) {
+      for (let i = 1, end = parts.length-1; ; ++i) {
         symbol = parts[i];
+        if (i >= end)
+          break;
         if (scope == null || !(typeof scope === 'function' || typeof scope === 'object'))
           break;
         let val = scope[symbol];
@@ -1785,7 +1787,7 @@ export function createInstance(schemeOpts = {}) {
           schemeNamespace = false;
           continue;
         }
-        break;
+        throw new EvalError(`set(q), ${string(originalSym)} can't resolve ${string(symbol)}`);
       }
     }
     if (scope === globalScope || !schemeNamespace) {
