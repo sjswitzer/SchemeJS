@@ -36,6 +36,7 @@
 // for line-to are (1,1).
 //
 
+import { readFile } from 'fs';
 import * as SchemeJS from './SchemeJS.mjs';
 
 export const VERSION = SchemeJS.VERSION;
@@ -44,7 +45,7 @@ export const VERSION = SchemeJS.VERSION;
 // Creates a SchemeJSWeb instance.
 //
 export function createInstance(schemeOpts = {}) {
-  let globalScope = SchemeJS.createInstance(schemeOpts);
+  let globalScope = SchemeJS.createInstance({ readFile: loadUrlSync, ...schemeOpts });
   const defineSchemeBindings = schemeOpts.defineSchemeBindings ?? true;
   const webApiMacros = schemeOpts.webApiMacros ?? true;
   if (!defineSchemeBindings)
@@ -262,6 +263,23 @@ export function createInstance(schemeOpts = {}) {
   // Access from globalThis or it'll fail unit tests in Node.js
   globalScope[Atom('html-document')] = globalThis.document;
   globalScope[Atom('browser-window')] = globalThis.window;
+
+  //
+  // Loading
+  //
+
+  function loadUrlSync(path) {
+    let xhr = new XMLHttpRequest();
+    // Bypass the cache.
+    //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
+    let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime();
+    let async = false;
+    xhr.open('GET', reqPath, async);
+    xhr.send(null);
+    if (xhr.status == 200)
+        throw new Error(`Load ${path}, status ${xhr.status}`);
+    return xhr.responseText
+  };
 
   return globalScope;
 }

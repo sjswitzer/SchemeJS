@@ -829,7 +829,7 @@
             let request = new XMLHttpRequest();
             // Bypass the cache.
             //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
-            let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime()
+            let reqPath = path + ((/\?/).test(path) ? "&" : "?") + (new Date()).getTime();
             request.onload = _ => {
               if (request.status === 200)
                 resolve(request.responseText);
@@ -909,7 +909,6 @@
         }
         capturedInput = '';
         return captureInput(loadAsyncContent);
-        return null;
         function* captureInput(source) {
           for (let ch of source) {
             // Eat up initial whitespace and newlines so the reported line
