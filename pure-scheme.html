@@ -9,7 +9,7 @@
   ;;
   ;; Look Ma, no HTML!
   ;;
-  (setq html-document.title "A Web Page entirely in Scheme!")
+  (setq html-document.title "A Web Page Entirely in Scheme!")
   (html-document.body.append
     (html-element "p" "This is an HTML page written entirely in Scheme")
     (html-element "p" "You can generate any HTML at all.")
@@ -45,6 +45,7 @@
       |  }
       "
     )
+    (html-element "base" { "target": "_blank" }) ;; so links open in different tabs
   )
 </script>
 <script type="module" src="./SchemeJSWeb.mjs""></script>
