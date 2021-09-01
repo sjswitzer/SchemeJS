@@ -776,6 +776,10 @@
       const NBSP = '\u00a0', functionStr = "\u03BB";
       let printBoxElement, varNo = 0;
 
+      // We're in a module scope so these have to be exported to the global scope
+      globalThis.showHelp = showHelp;
+      globalThis.runUnitTests = runUnitTests;
+
       let traceCompilerCode = false, traceInterpreter = false;
       let globalScope = SchemeJSWeb.createInstance({
         functionStr, readFile, linePrinter, traceCompilerCode, traceInterpreter,
