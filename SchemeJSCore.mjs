@@ -2047,19 +2047,33 @@ export function createInstance(schemeOpts = {}) {
             }
           }
         }
-        let namespaced = NAMESPACED_ATOMS[fn];
+        let requiredCount = 0, evalCount = MAX_INTEGER, tag = FUNCTION_TAG;
+        let namespaced = NAMESPACED_ATOMS[fn], methodCall;
         if (namespaced) {
-          // TODO
+          // TODO: need to do same in compiler!
+          let sym1 = namespaced[0], i = 1, end = namespaced.length-1;
+          if (sym1 === GLOBAL_SCOPE_ATOM)
+            fn = globalScope;
+          else
+            fn = scope[sym1];
+          for ( ; ; ++i) {
+            methodCall = namespaced[i];
+            if (i >= end)
+              break;
+            fn = fn[methodCall];
+          }
+        } else {
+          fn = _eval(fn, scope);
+          if (scope[RETURN_SYMBOL]) return;
+          if (typeof fn !== 'function') throwBadForm();
+          // See makeParameterDescriptor for the truth, but
+          //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
+          let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
+          requiredCount = (parameterDescriptor >> 8) & 0xfff;
+          evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
+          tag = parameterDescriptor & 0xff;
         }
-        fn = _eval(fn, scope);
-        if (scope[RETURN_SYMBOL]) return;
-        if (typeof fn !== 'function') throwBadForm();
-        // See makeParameterDescriptor for the truth, but
-        //   parameterDescriptor = (evalCount << 20) | (requiredCount << 8) | tag
-        let parameterDescriptor = fn[PARAMETER_DESCRIPTOR] ?? examineFunctionForParameterDescriptor(fn);
-        let requiredCount = (parameterDescriptor >> 8) & 0xfff;
-        let evalCount = parameterDescriptor >> 19 >>> 1;  // restores MAX_INTEGER to MAX_INTEGER
-        let tag = parameterDescriptor & 0xff;
+      
         // Run through the arg list evaluating args
         let argv = [], argCount = 0;
         while (moreList(args)) {
@@ -2083,6 +2097,16 @@ export function createInstance(schemeOpts = {}) {
           }
           argv.push(arg), argCount += 1;
           args = args[REST];
+        }
+        if (methodCall) {  // TODO: Same in compiler!
+          if (TRACE_INTERPRETER) {
+            console.log("METHODCALL", string([fn, methodCall, argv]), ...argv);
+          }
+          let result = fn[methodCall](...argv);
+          if (TRACE_INTERPRETER) {
+            console.log("METHODCALL RESULT", result);
+          }
+          return result;
         }
         let jitCompiled = fn[JITCOMPILED];
         if (jitCompiled)
