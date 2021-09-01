@@ -9,7 +9,7 @@
 <script type="module">
   "use strict";
   import * as SchemeJSWeb from './SchemeJSWeb.mjs';
-  let globalScope = SchemeJSWeb.createInstance( { traceInterpreter: true });
+  let globalScope = SchemeJSWeb.createInstance();
   globalScope.load_async("scheme-page.scm");
 </script>
 <script type="text/scheme-js">
