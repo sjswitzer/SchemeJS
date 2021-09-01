@@ -441,7 +441,7 @@
             &#x1F3A4
             <div class="muted">&#x29B8;</div>
         </label>
-        <input class="volume" type="range" value="100" min="0" max="100" step="5">
+        <input class="volume" type="range" value="100" min="0" max="200" step="5">
       </div>
     </div>
     <div class="help" id="help-about">
@@ -1299,7 +1299,8 @@
               this._timeDomainDataArray = new Uint8Array(this._audioAnalyser.fftSize);
             }
             let volume = this._volumeElement ? parseFloat(this._volumeElement.value) / 100 : .5;
-            this._gainNode.gain.setValueAtTime(volume, this._audioContext.currentTime);
+            if (volume > .001) // zero is invalid for exponentialRampToValueAtTime
+              this._gainNode.gain.exponentialRampToValueAtTime(volume, this._audioContext.currentTime+.25);
           }
           _resizeWithoutSmashingContent(newWidth, newHeight) {
             let scratch = createElement('canvas');
