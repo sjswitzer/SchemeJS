@@ -776,7 +776,7 @@
       const NBSP = '\u00a0', functionStr = "\u03BB";
       let printBoxElement, varNo = 0;
 
-      let traceCompilerCode = false, traceInterpreter = true;
+      let traceCompilerCode = false, traceInterpreter = false;
       let globalScope = SchemeJSWeb.createInstance({
         functionStr, readFile, linePrinter, traceCompilerCode, traceInterpreter,
         reportLoadResult, reportLoadInput, reportSchemeError, reportSystemError
@@ -1909,7 +1909,7 @@
             if (localPos <= node.data.length) {
               if (text !== '') {
                 content = content.substr(0, localPos) + text + content.substr(localPos);
-                node.textContent = data;
+                node.textContent = content;
               }
               selection.collapse(node, localPos);
               return true;
