@@ -1159,7 +1159,7 @@
           _staleImage = false; _forceClear = false;
           _drawTime = Date.now(); _tickCount = 0; _stashX; _stashY;
           _volumeElement; _muteElement;
-          _userMedia; _userMediaElement; _userMediaStream; _audioContext;
+          _userMedia; _userMediaElement; _mediaStream; _audioContext;
           _audioAnalyser; _fftSize = 1024 ; _frequencyDataArray = new Uint8Array(1);; _timeDomainDataArray = this._frequencyDataArray;
           constructor(canvasFrameElement, canvasElement) {
             this._canvasFrameElement = canvasFrameElement;
@@ -1277,7 +1277,8 @@
           }
           _attachAnalyser() {
             if (this._audioAnalyser || !this._audioContext || !this._gainNode) return;
-            let audioAnalyser = this._audioAnalyser = this._audioContext.createAnalyser();
+            let fftSize = this.fftSize;
+            let audioAnalyser = this._audioAnalyser = new AnalyserNode(this._audioContext, { fftSize});
             audioAnalyser.fftSize = this._fftSize;
             this._gainNode.connect(audioAnalyser);
             this._setGain();
@@ -1434,15 +1435,15 @@
               muteElement.addEventListener('input', _ => { this._setGain() });
               let volumeElement = this._volumeElement = userMediaElement.querySelector(".volume");
               volumeElement.addEventListener('input',  _ => { this._setGain()});
-              this._userMediaStream = this._audioSource = this._gainNode = undefined;
+              this._mediaStream = this._audioSource = this._gainNode = undefined;
               let audioContext = this._audioContext= new AudioContext();
               let that = this;
               startMedia(userMedia);
               async function startMedia(constraints) {
                 try {
-                  let userMediaStream = that._userMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-                  let audioSource = that._audioSource= audioContext.createMediaStreamSource(userMediaStream);
-                  let gainNode = that._gainNode = audioContext.createGain();
+                  let mediaStream = that._mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                  let audioSource = that._audioSource = new MediaStreamAudioSourceNode(audioContext, { mediaStream });
+                  let gainNode = that._gainNode = new GainNode(audioContext);
                   that._setGain();
                   audioSource.connect(gainNode);
                 } catch (error) {
@@ -1453,7 +1454,7 @@
               if (userMediaElement)
                 canvasFrameElement.removeChild(userMediaElement);
               this._userMediaElement = undefined;
-              this._userMediaStream = this._audioContext = this._audioAnalyser = undefined;
+              this._mediaStream = this._audioContext = this._audioAnalyser = undefined;
               this._frequencyDataArray = this._timeDomainDataArray = new Uint8Array(1);
             }
           }
