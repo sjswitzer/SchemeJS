@@ -263,18 +263,21 @@ export function createInstance(schemeOpts = {}) {
       ) `);
     eval_string(`
         (defmacro [html-element args]
-          (cons html-create-element (cons 'html-document args))
+          (cons html-create-element (cons 'document args))
         )`);
 
   // Access from globalThis or it'll fail unit tests in Node.js
-  globalScope[Atom('html-document')] = globalThis.document;
-  globalScope[Atom('browser-window')] = globalThis.window;
+  // You'd think these'd already be in there, but apparently they're getters
+  // and getters aren't currently adad to the globalScope from globalThis.
+  // TODO: they probably should be!
+  globalScope[Atom('document')] = globalThis.document;
+  globalScope[Atom('window')] = globalThis.window;
 
   //
   // Loading
   //
 
-  let readPathIntercepts, asyncPending = 0, afterAsyncWork = [];
+  let readPathIntercepts = {}, asyncPending = 0, afterAsyncWork = [];
 
   function readUrlSync(path) {
     let readPathIntercept = readPathIntercepts[path];
