@@ -1,8 +1,8 @@
 ;; An HTML page almost entirely in Scheme
 
-(setq html-document.title "A Web Page entirely in Scheme!")
+(setq document.title "A Web Page entirely in Scheme!")
 
-(@! html-document.body "append"
+(@! document.body "append"
   (html-element "p" "This is an HTML page entirely in HTML")
   (html-element "p" "You can generate any HTML at all.")
   (html-element "ul"

@@ -40,6 +40,8 @@ import * as SchemeJS from './SchemeJS.mjs';
 
 export const VERSION = SchemeJS.VERSION;
 
+const optional = undefined;
+
 // If invoked from a browser, instantiate an instance so it can find text/scheme-js scripts and execute them
 if (globalThis.document)
   createInstance({ executeScripts: "text/scheme-js" })
@@ -272,11 +274,12 @@ export function createInstance(schemeOpts = {}) {
   // Loading
   //
 
-  let loadIntercept, asyncPending = 0, afterAsyncWork = [];
+  let readPathIntercepts, asyncPending = 0, afterAsyncWork = [];
 
   function readUrlSync(path) {
-    if (loadIntercept !== undefined)
-      return loadIntercept(path);
+    let readPathIntercept = readPathIntercepts[path];
+    if (readPathIntercept !== undefined)
+      return readPathIntercept(path);
     let xhr = new XMLHttpRequest();
     // Bypass the cache.
     //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
@@ -291,8 +294,22 @@ export function createInstance(schemeOpts = {}) {
     return xhr.responseText
   };
 
+  exportAPI("load_string", load_string, { dontInline: true });
+  function load_string(string, path = '[string]', no_eval = false) {
+    let saveReadPathIntercept = readPathIntercepts[path];
+    try {
+      readPathIntercepts[path] = _ => {
+        return string;
+      }
+      return globalScope.load(path, no_eval);
+    } finally {
+      readPathIntercepts[path] = saveReadPathIntercept;
+    }
+  }
+
   exportAPI("load_async", load_async, { dontInline: true });
-  function load_async(path, no_eval = false) {
+  function load_async(path, dataVar = optional) {
+    let no_eval = typeof dataVar === 'string' || typeof dataVar === 'symbol';
     let xhr = new XMLHttpRequest();
     // Bypass the cache.
     //   https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
@@ -301,14 +318,16 @@ export function createInstance(schemeOpts = {}) {
     xhr.open('GET', reqPath, async);
     xhr.onloadend = event => {
       if (xhr.status === 200) {
-        let saveLoadIntercept = loadIntercept;
+        let saveReadPathIntercept = readPathIntercepts[path];
         try {
-          loadIntercept = _ => {
+          readPathIntercepts[path] = _ => {
             return xhr.responseText;
           }
-          globalScope.load(path, no_eval);
+          let result = globalScope.load(path, no_eval);
+          if (no_eval)
+            globalScope[dataVar] = result;
         } finally {
-          loadIntercept = saveLoadIntercept;
+          readPathIntercepts[path] = saveReadPathIntercept;
           asyncPending -= 1;
           if (asyncPending === 0) {
             while (afterAsyncWork.length > 0) {
@@ -341,17 +360,31 @@ export function createInstance(schemeOpts = {}) {
 
   function findAndLoadAllEmbeddedSchemeScripts() {
     for (let element of document.getElementsByTagName('script')) {
-      if (!element.getAttribute("src") && element.getAttribute("type") === executeScripts) {
-        let saveLoadIntercept = loadIntercept;
+      let src = element.getAttribute("src");
+      let dataVar = element.getAttribute("--data"); // name?
+      if (dataVar) dataVar = Atom(dataVar);
+      else dataVar = undefined;
+      if (element.getAttribute("type") === executeScripts) {
+      if (src) {
         try {
-          loadIntercept = _ => {
-            return element.textContent;
-          }
-          globalScope.load(document.location.href);
-        } finally {
-          loadIntercept = saveLoadIntercept;
+          globalScope.load_async(src, dataVar);
+        } catch (error) {
+          console.error('SCHEME-JS', error);
+        }
+
+      } else {
+        let script = element.textContent;
+        let src = `[script ${document.location.href}]`;
+        try {
+          let no_eval = !!dataVar;
+          let result = globalScope.load_string(script, src, no_eval);
+          if (no_eval)
+            globalScope[dataVar] = result;
+        } catch (error) {
+          console.error('SCHEME-JS', error);
         }
       }
+    }
     }
   }
 

@@ -13,11 +13,11 @@
   globalScope.load_async("scheme-page.scm");
 </script>
 <script type="text/scheme-js">
-  (@! html-document.body "append"
+  (@! document.body "append"
     (html-element "p" "Some more stuff")
     (html-element "p" { "class": "ta-da" } "That's all folks!")
   )
-  (@! html-document.body "append"
+  (@! document.body "append"
     (html-element "style" "\\
       + .ta-da {
       |   color: blue;

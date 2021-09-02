@@ -6,10 +6,10 @@
 ;;   If you have a popup blocker, allow it and try again
 (def window (@! browser-window "open" ""))
 
-(def html-document window.document)
+(def document window.document)
 
-(setq html-document.title "Hello World!")
+(setq document.title "Hello World!")
 
-(@! html-document.body "append"
+(@! document.body "append"
   (html-element "p" "Hello world!")
 )

@@ -9,8 +9,8 @@
   ;;
   ;; Look Ma, no HTML!
   ;;
-  (setq html-document.title "A Web Page Entirely in Scheme!")
-  (html-document.body.append
+  (setq document.title "A Web Page Entirely in Scheme!")
+  (document.body.append
     (html-element "p" "This is an HTML page written entirely in Scheme")
     (html-element "p" "You can generate any HTML at all.")
     (html-element "ul"
@@ -27,7 +27,7 @@
     )
     (html-element "p" { "class": "ta-da" } "That's all folks!")
   )
-  (html-document.head.append
+  (document.head.append
     (html-element "style" "\\
       + .ta-da {
       |   color: blue;
