@@ -1205,8 +1205,13 @@ export function createInstance(schemeOpts = {}) {
               else
                 res[sym] = val;
             } else {
-              // No colon? value is BOTTOM. Can't just drop it!
-              res[sym] = BOTTOM;
+              // No colon? Value is same as key.
+              // This relates in with the evaluation rule for Atom-valued
+              // Object liter elements and results in the same notation supported
+              // in JS.
+              res[sym] = sym;
+              // TODO: How to deal with object literal keys that use namespace
+              // notation? Should that be an error? (yes, probably)
             }
             gotIt = true;
             if (token().type === ',')  // Comma is optional
