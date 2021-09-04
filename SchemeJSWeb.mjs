@@ -312,6 +312,7 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("load_async", load_async, { dontInline: true });
   function load_async(path, dataVar = optional) {
+    // TODO: use Fetch.  https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API
     let no_eval = typeof dataVar === 'string' || typeof dataVar === 'symbol';
     let xhr = new XMLHttpRequest();
     // Bypass the cache.
