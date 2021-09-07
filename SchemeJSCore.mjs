@@ -444,6 +444,8 @@ export function createInstance(schemeOpts = {}) {
   const ATOMS = {}, NAMESPACED_ATOMS = {};
   const isAtom = obj => typeof obj === 'symbol' && ATOMS[obj.description] === obj;
   exportAPI("isAtom", isAtom);
+  const isNamespacedAtom = obj => typeof obj === 'symbol' && NAMESPACED_ATOMS[obj];
+  exportAPI("isNamespacedAtom", isNamespacedAtom);
 
   exportAPI("Atom", Atom, { dontInline: true });
   function Atom(name) {

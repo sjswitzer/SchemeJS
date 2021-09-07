@@ -57,6 +57,7 @@ export function createInstance(schemeOpts = {}) {
   const compare_hooks = globalScope.compare_hooks ?? required();
   const Atom = globalScope.Atom ?? required();
   const isAtom = globalScope.isAtom ?? required();
+  const isNamespacedAtom = globalScope.isNamespacedAtom ?? required();
   const list = globalScope.list ?? required();
   const iteratorFor = globalScope.iteratorFor ?? required();
   const schemeTrue = globalScope.schemeTrue ?? required();
@@ -1206,12 +1207,14 @@ export function createInstance(schemeOpts = {}) {
                 res[sym] = val;
             } else {
               // No colon? Value is same as key.
-              // This relates in with the evaluation rule for Atom-valued
-              // Object liter elements and results in the same notation supported
+              // This relates to the evaluation rule for Atom-valued
+              // Object literal elements, and results in the same notation supported
               // in JS.
-              res[sym] = sym;
-              // TODO: How to deal with object literal keys that use namespace
-              // notation? Should that be an error? (yes, probably)
+              let namespaced = isNamespacedAtom(sym);
+              if (namespaced)
+                res[namespaced[namespaced.length-1]] = sym;
+              else
+                res[sym] = sym;
             }
             gotIt = true;
             if (token().type === ',')  // Comma is optional
