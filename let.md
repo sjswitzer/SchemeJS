@@ -13,7 +13,7 @@ It's less clear what to do with non-directly-contained lets. They aren't really 
 In this notation, things between <...> are the unbound exportedAPI names of the primitives. So <_let> corresponds to the value of "_let" in the globalScope.
 (Primitives that correspond to JS keywords (let_, return_, break_) are those keyword names followed by an _. Those that clash (_eval, _apply), begin with an underscore.
 
-What I'm thinking i the macro <block> rewrites:
+What I'm thinking is that the macro <block> rewrites:
   (<block> ...a...
     (<let_> varname1 ...form... val-form1) ...b...
     (<let_> varname2 ...form... val-form)) ...c...)
@@ -22,8 +22,8 @@ to:
     (varname1 ...a... ...form... val-form1)
     (varname2 ...b... ...form... val-form2)]
     ...c...)
-
-Leaving any non-top-level <let_> forms alone. These will implement a "dynamic let," which is not a JavaScript thing, per se, but an extension useful for languages that have dynamic scopes.
+if there are are any top-level "lets_" and otherwise to a "seq,"
+leaving any non-top-level <let_> forms alone. These will implement a "dynamic let," which is not a JavaScript thing, per se, but an extension useful for languages that have dynamic scopes.
 
 <function_> is a macro that validates there are no parameter/varname dups clashes and rewrites
   (<function_> [params]
@@ -41,7 +41,8 @@ into
   ])
 
 The idea being to erase any top-level let_ expressions. Any that remain can
-interpreted dynamically, if the client language chooses to use that.
+interpreted dynamically, if the client language chooses to use that. It's a it of extra complication, but it allows for the faithful representation of javascript
+function scopes, which encompass the params and top-level lets.
 
 Namespaces are string-keyed entries in the scope. "use-ns", again, adds the namespace to the scope. So, for instance, (use-ns .web-gfx) resolves globalScope["web-gfx"] then adds it to the current scope so that, say, "move-to" resolves to .web-gfx.move-to.
 The mechanics of representing and using namespaces seems clear enough: first, a variable
