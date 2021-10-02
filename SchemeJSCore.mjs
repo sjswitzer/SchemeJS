@@ -449,8 +449,7 @@ export function createInstance(schemeOpts = {}) {
 
   exportAPI("Atom", Atom, { dontInline: true });
   function Atom(name) {
-    // If they pass in an atom, just return it
-    if (isAtom(name)) return name;
+    if (isAtom(name)) return name; // If it's already an atom, just return it
     if (typeof name !== 'string')
       throw new TypeError(`Not a string ${name}`);
     let atom = ATOMS[name];
