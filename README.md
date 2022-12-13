@@ -88,7 +88,7 @@ If you want special handling by the compiler that can also be arranged, but it's
 
 JavaScript iterators appear as lists to SchemeJS but the iterable items are only fetched as needed.
 
-Additionally, the lazy-map operation only applies the mapping function when that item is demanded.
+Additionally, the lazy-map operation applies the mapping function only when that item is demanded.
 Whether the Scheme "map" function is lazy or not is up the the client, who has complete control over
 how core operations are bound to Scheme functions.
 
